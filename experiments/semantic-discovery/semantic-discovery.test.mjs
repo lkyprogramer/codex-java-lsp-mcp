@@ -20,7 +20,6 @@ import {
   embeddingProviderFromEnv,
   readSearchDocumentFacts
 } from "./provider.mjs";
-import { requiredLineRecall } from "./line-recall.mjs";
 import { waitForReadyIndex } from "./provider.mjs";
 import { DatabaseSync } from "node:sqlite";
 import { classifyQueryIntent, gatedDenseSearch, shouldRunDense } from "./gate.mjs";
@@ -561,31 +560,6 @@ test("dense input: the stored ordered text is embedded, own-file documents first
   } finally {
     rmSync(fixture.dir, { recursive: true, force: true });
   }
-});
-
-test("scorer: kit line-set recall; a path-only region scores 0 and an overlap counts only its lines", () => {
-  const gold = { required_evidence: [
-    { path: "A.java", start_line: 10, end_line: 13 },
-    { path: "B.java", start_line: 5, end_line: 5 }
-  ] };
-  const pathOnly = requiredLineRecall([{ path: "A.java", startLine: null, endLine: null }, { path: "B.java" }], gold);
-  assert.equal(pathOnly.recall, 0, "path-only hints are not whole-file credit");
-  assert.equal(pathOnly.pathOnlyRegions, 2);
-  const partial = requiredLineRecall([{ path: "A.java", startLine: 12, endLine: 20 }], gold);
-  assert.equal(partial.recall, 2 / 5, "lines 12-13 of the 5 required lines");
-  assert.deepEqual(partial.complete, []);
-  const full = requiredLineRecall([
-    { path: "A.java", startLine: 1, endLine: 11 },
-    { path: "A.java", startLine: 11, endLine: 13 },
-    { path: "B.java", startLine: 5, endLine: 5 }
-  ], gold);
-  assert.equal(full.recall, 1);
-  assert.deepEqual(full.complete, ["A.java:10-13", "B.java:5-5"]);
-  assert.equal(full.uniqueLines, 14, "overlapping regions are counted once");
-  const malformed = requiredLineRecall([{ path: "A.java", startLine: 13, endLine: 10 }, { path: "A.java", startLine: 0, endLine: 0 }], gold);
-  assert.equal(malformed.recall, 0, "a reversed or zero range covers nothing");
-  assert.equal(malformed.malformedRegions, 2);
-  assert.equal(requiredLineRecall([], { required_evidence: [] }).recall, null);
 });
 
 test("provider from env: vendor keys are bound to their host, dimensions sent and part of the identity", async () => {

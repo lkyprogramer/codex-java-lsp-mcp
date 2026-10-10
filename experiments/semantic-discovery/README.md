@@ -12,7 +12,8 @@ A standalone experiment comparing the product's lexical discovery (A2) with an o
 | `EmbeddingProvider`, `DenseDiscoveryIndex`, `gate.mjs` | Repaired in R10; offline tests plus an optional real-endpoint E2E |
 | `readSearchDocumentFacts` (index → dense input) | Reads the ordered `search_doc_text` (index schema v8+). An older index is refused (`DISABLED_INVALID`) |
 | `compare.mjs`, `agent-ab.mjs` | Runnable. They fail closed: a corpus without a dense index stops the run instead of producing two identical arms. `agent-ab` also stops before any chat call if a query embedding fails. Both wait until the index's `buildState` is `READY` |
-| `line-recall.mjs` | `compare.mjs` scorer with the kit's `required_line_recall` semantics |
+| `pilot-compare.mjs` | Paired frozen-kit comparison of a finished agent pack on the pilot rows, plus agent evidence (QA delta CI, prompt-token median ratio) |
+| `budget.mjs` | R11 equal-budget protocol: RRF fusion, one declaration resolver and evidence renderer for both arms, the frozen kit scorer bridge, `ExperimentProfile` and protocol hash, the four-way decision |
 
 ### Dense input: `search_doc_text`
 
@@ -46,13 +47,32 @@ EMBEDDING_DIMENSIONS=1024 node --env-file=.env experiments/semantic-discovery/co
 
 Query vectors are cached under the same `cacheIdentity`: the provider identity, `QUERY_REPRESENTATION_VERSION` and the query text hash. Measured on SiliconFlow, the same query gives slightly different vectors across runs; the largest top-score difference was 0.0018 cosine, enough to reorder near-tied hints. Caching makes a rerun reproducible. `compare.mjs` records each query vector's sha256 and the top-9 cosine scores.
 
-### Scorer
+### R11 protocol (`budget.mjs`; full description in `docs/next-stage/experiment-v1.1.md`)
 
-`compare.mjs` uses `required_line_recall` = `|pred ∩ req| / |req|` over `(path, line)` points, as `harness/scoring.py` does:
-- A path-only hint contributes no lines.
-- An overlap counts only the lines it covers.
+**Arms**
+- **Fill control** (`a2-seeded-fill`): the lexical list padded to K by a seeded shuffle of the remaining declarations. It separates "more candidates" from dense semantics.
+- **A2**: the product `java_symbol` top-10 declarations.
+- **A3**: `RRF(lexical, dense, k0=60)`, deduplicated by declarationId, top 10. Each channel contributes at most 10 to the pool; the cap applies to the fused list.
 
-The arms are still **not equal-budget**: A3 is A2 plus up to 8 hints, and the pack records both arms' unique covered lines. Equal K/line/byte budgets after fusion are R11 work.
+**Rendering**
+- Both arms go through one `DeclarationResolver`, which reads the product index facts: the locator line is `range.start.line`, as in the product.
+- Both arms use one `renderEvidence`:
+  - up to 10 candidates;
+  - up to `max_regions` regions, each of `floor(max_lines / max_regions)` lines from the declaration start;
+  - clipped to the remaining 160-line / 16,000-byte task budget.
+- A file whose current sha256 differs from the indexed hash is dropped. It is never path-only credit or a stale range.
+
+**Scoring**: the kit itself.
+- `compare.mjs` writes `java-specialist-results/v1` packs and runs `harness score`, then `harness compare` (cluster bootstrap).
+- `agent-ab.mjs` uses `scoreWithFrozenKit` and the frozen repair judge.
+
+**Reported per arm**
+- Macro-task and micro-evidence line recall, each with its numerator and denominator.
+- `decideFourWay` v2 applies the frozen `gates.json` thresholds. GO needs the screen, a win over the fill control, no MRR/line-recall regression and agent evidence. The retrieval layer alone is at most INCONCLUSIVE.
+
+**Agent layer**: both arms receive one candidate block (`formatCandidateBlock`) of the same shape. It holds locators only, never source text; only the list differs.
+
+**Protocol hash**: every pack records `protocolHash`, the sha256 of the canonical `ExperimentProfile`. The earlier unequal-budget protocols are listed as `LEGACY_INVALID_PROTOCOLS`.
 
 ## Cache identity
 
@@ -87,16 +107,18 @@ The cache file layout is `dense-cache/r10`:
 - **Stale hints**: a hint carries `indexedContentHash` and a line range only when **every** source file of the declaration still has its indexed hash (for example, the Java file and the MyBatis XML file). Otherwise it is a path-only hint with `startLine`/`endLine` set to `null`; the caller must re-read the file and locate the declaration again.
 - **Range sources**: the range is taken only from documents in the declaration's own file.
 
-## Known gaps (R11)
+## Known limits
 
-- **Unequal budget.** A2 and A3 are not capped to the same K/lines/bytes after fusion (RRF); R11 defines that profile.
-- **No region validation.** `compare.mjs` scores candidate ranges directly. It does not run the kit's region validation (content hash, byte cost), and a malformed region only contributes nothing instead of invalidating the arm (see `line-recall.mjs`).
 - **READY is not quiescent.** Reads require `buildState=READY` in one snapshot. A reconcile of an existing index commits XML and Java separately while staying READY, so a read can land between them. The stage is frozen during a run, so this is unlikely.
+- **Overlapping regions.** A type and one of its methods can both be rendered, and their regions may overlap. The kit counts both, so the budget is spent twice by the same rule in both arms.
+- **No zvec profile.** A native zvec system profile was not run. It would be a separate system-level comparison.
 
 ## Tests
 
 ```bash
 node --test semantic-discovery.test.mjs repair-judge.test.mjs ab-summary.test.mjs
+# R11 budget/fusion/scorer contract (needs the product build and python3):
+node --test ../../scripts/eval-experiment-budget.test.mjs
 ```
 
 All tests are offline, using a fake `fetch` and no API key. The optional real-endpoint round trip runs only with `EMBEDDING_E2E=1`:

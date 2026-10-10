@@ -593,6 +593,20 @@ export class DenseDiscoveryIndex {
   }
 
   /**
+   * R11 dense channel: declaration ids by cosine (ties keep row order, which
+   * is deterministic), for RRF fusion. Freshness is the renderer's job.
+   */
+  rank(queryVector, { topK = 10 } = {}) {
+    if (!this.vectors) return [];
+    const rows = this.rows ?? this.declarationRows();
+    return rows
+      .map((row, index) => ({ declarationId: row.declarationId, score: cosine(queryVector, this.vectors[index]), index }))
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, topK)
+      .map(({ declarationId, score }, rank) => ({ declarationId, score, rank: rank + 1 }));
+  }
+
+  /**
    * 检索 top-k 提示。hash 能对上（磁盘文件仍等于索引时的 contentHash）才携带
    * indexedContentHash 与行范围；对不上则只给路径，行范围为 null（调用方必须
    * 重读并重新定位，旧行号不可执行）。

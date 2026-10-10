@@ -1,24 +1,47 @@
-// input:  M3 开发语料（24 dev 任务、8 语料）+ 产品 MCP server（dist/server.js，
-//         生产路径）+ OpenAI 兼容 embedding 端点（用户授权，见 embeddingProviderFromEnv）+ 仓库外 index cache。
-// output: A2（产品 java_symbol 词法路线）vs A3（A2 + 外部 dense 提示）的检索层
-//         对比：gold required_evidence 覆盖率（逐证据项 path+范围重叠）、
-//         exact 负对照（0 次 embedding）、dense 建库/查询成本分账。
-// pos:    docs/10 实验控制 —— 同一 SearchDocument 对齐表示上做 lexical/dense 对比；
-//         预算等同，provider schema/token 开销进总账，建库成本另列摊销。
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+// input:  The frozen kit (dev split), its hydrated external-full corpus, the
+//         product MCP server (dist/server.js) and an OpenAI-compatible
+//         embedding endpoint (user-authorized; embeddingProviderFromEnv).
+// output: R11 retrieval-layer experiment: A2 = product java_symbol top-K,
+//         A3 = RRF(lexical, dense, k0=60) top-K, both rendered by one evidence
+//         renderer under the task budget and scored by the kit itself
+//         (harness score + compare), with the ExperimentProfile/protocol hash,
+//         macro-task and micro-evidence totals and the four-way decision.
+// pos:    docs/next-stage/experiment-v1.1.md; kit docs/06-experiment-redesign.md.
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openImpactSession } from "../../scripts/run-agent-trace-live.mjs";
-import { createHash } from "node:crypto";
-import { DenseDiscoveryIndex, cosine, embeddingProviderFromEnv, readSearchDocumentFacts, waitForReadyIndex } from "./provider.mjs";
-import { gatedDenseSearch } from "./gate.mjs";
-import { requiredLineRecall } from "./line-recall.mjs";
+import {
+  DENSE_REPRESENTATION_VERSION,
+  DenseDiscoveryIndex,
+  QUERY_REPRESENTATION_VERSION,
+  embeddingProviderFromEnv,
+  readSearchDocumentFacts,
+  waitForReadyIndex
+} from "./provider.mjs";
+import { shouldRunDense } from "./gate.mjs";
+import {
+  CANDIDATE_K,
+  CHANNEL_POOL_K,
+  DeclarationResolver,
+  decideFourWay,
+  evidenceTotals,
+  experimentProfile,
+  kitCompare,
+  kitHashes,
+  kitResult,
+  kitScorePack,
+  lexicalDeclarationIds,
+  protocolHash,
+  renderEvidence,
+  rrfFuse,
+  seededFill,
+  stratifiedDelta
+} from "./budget.mjs";
 
-// 可搬运：语料根、索引缓存、输出目录、server.js 全部来自 CLI/env；没有个人
-// 绝对路径默认值。STAGE 两种布局自动识别：
-//  - full profile：full-stage/<corpus>/... （每语料一个目录，含全部任务的任务集）
-//  - scoped：stage/<taskId>/repo（按任务 ID 分目录）
+// Every root comes from the CLI or the environment; no personal defaults.
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
 function cliValue(flag) {
@@ -33,18 +56,17 @@ function requiredPath({ flag, env, fallback, label }) {
   return path.resolve(value);
 }
 const KIT = requiredPath({ flag: "--kit-root", env: "JSB_KIT_ROOT", fallback: path.join(REPO_ROOT, "docs/java-specialist-release-audit-v1.1/baseline-kit"), label: "frozen kit root" });
-const STAGE = requiredPath({ flag: "--stage", env: "M3_STAGE", label: "stage root (corpus or per-task repo copies)" });
-const STAGE_FULL = existsSync(path.join(STAGE, "gson")) || existsSync(path.join(STAGE, "ledger", "src"));
-const PROFILE = STAGE_FULL ? "external-full" : "scoped";
-const TASKS_FILES = (cliValue("--tasks") ?? process.env.M3_TASKS ?? "").split(",").filter(Boolean);
-const GOLD_FILES = (cliValue("--gold") ?? process.env.M3_GOLD ?? "").split(",").filter(Boolean);
+const STAGE = requiredPath({ flag: "--stage", env: "M3_STAGE", label: "hydrated external-full corpus root (harness hydrate-public)" });
+const SPLIT = cliValue("--split") ?? "dev";
 const SERVER_JS = requiredPath({ flag: "--server-js", env: "M3_SERVER_JS", fallback: path.join(REPO_ROOT, "dist/server.js"), label: "product dist/server.js" });
 const OUTPUT = requiredPath({ flag: "--out", env: "M3_OUT", label: "run output root (outside the checkout)" });
 const CACHE_ROOT = requiredPath({ flag: "--cache", env: "M3_CACHE", fallback: path.join(OUTPUT, "index-cache"), label: "index cache root (outside the checkout)" });
-
-function overlap(evidence, startLine, endLine) {
-  return startLine <= evidence.end_line && endLine >= evidence.start_line;
-}
+// a2-seeded-fill: the non-semantic control - lexical padded to K by a seeded
+// shuffle, so "A3 fills more slots" is not mistaken for a dense gain.
+const ARMS = ["a2-lexical", "a3-rrf-dense", "a2-seeded-fill"];
+// Optional agent-layer evidence for the decision: an agent-ab.mjs results pack
+// or a pilot-compare.mjs <name>-evidence.json.
+const AGENT_PACK = cliValue("--agent-pack") ? path.resolve(cliValue("--agent-pack")) : null;
 
 function findSqliteFiles(root) {
   const out = [];
@@ -69,217 +91,234 @@ function findSqliteFiles(root) {
   return out;
 }
 
+const jsonl = file => readFileSync(file, "utf8").trim().split("\n").map(line => JSON.parse(line));
+
+function sourceSha() {
+  const run = spawnSync("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT, encoding: "utf8" });
+  const dirty = spawnSync("git", ["status", "--porcelain", "--", "src", "experiments", "scripts"], { cwd: REPO_ROOT, encoding: "utf8" });
+  return `${run.stdout.trim()}${dirty.stdout.trim() ? "+dirty" : ""}`;
+}
+
+/** The task budget is part of the protocol: every task of the run must share it. */
+function sharedBudget(tasks) {
+  const budgets = new Set(tasks.map(task => JSON.stringify({
+    max_regions: task.budget?.max_regions, max_lines: task.budget?.max_lines, max_bytes: task.budget?.max_bytes
+  })));
+  if (budgets.size !== 1) throw new Error(`tasks do not share one evidence budget: ${[...budgets].join(" | ")}`);
+  return JSON.parse([...budgets][0]);
+}
+
 async function main() {
+  if (!existsSync(path.join(STAGE, "gson")) || !existsSync(path.join(STAGE, "payments"))) {
+    throw new Error(`${STAGE} is not a hydrated corpus root (expected <corpus>/ directories from harness hydrate-public)`);
+  }
   const provider = embeddingProviderFromEnv(process.env, { cacheFile: path.join(CACHE_ROOT, "embeddings-cache.json") });
-  const model = provider.model;
   mkdirSync(CACHE_ROOT, { recursive: true });
   mkdirSync(OUTPUT, { recursive: true });
 
-  const taskLines = [...(TASKS_FILES.length ? [] : [path.join(KIT, "dataset/prompts/dev.jsonl")]), ...TASKS_FILES];
-  const goldLines = [...(GOLD_FILES.length ? [] : [path.join(KIT, "dataset/gold/dev.jsonl")]), ...GOLD_FILES];
-  const tasks = [];
-  for (const file of taskLines) tasks.push(...(await readFile(file, "utf8")).trim().split("\n").map(line => JSON.parse(line)));
-  const gold = new Map();
-  for (const file of goldLines) for (const g of (await readFile(file, "utf8")).trim().split("\n").map(line => JSON.parse(line))) gold.set(g.id, g);
-  for (const task of tasks) {
-    if (!gold.get(task.id)) throw new Error(`gold missing for ${task.id}`);
+  const tasks = jsonl(path.join(KIT, `dataset/prompts/${SPLIT}.jsonl`));
+  const gold = new Map(jsonl(path.join(KIT, `dataset/gold/${SPLIT}.jsonl`)).map(row => [row.id, row]));
+  for (const task of tasks) if (!gold.get(task.id)) throw new Error(`gold missing for ${task.id}`);
+  const budget = sharedBudget(tasks);
+  const hashes = kitHashes({ kitRoot: KIT, corporaRoot: STAGE });
+  // The hydrate manifest (when present) pins the corpus; a modified stage is a different corpus.
+  const manifestPath = `${STAGE}-manifest.json`;
+  if (existsSync(manifestPath) && JSON.parse(readFileSync(manifestPath, "utf8")).corpus_hash !== hashes.corpus) {
+    throw new Error(`${STAGE} no longer matches ${manifestPath} (corpus hash changed)`);
   }
+  const profile = experimentProfile({
+    question: "dense mechanism: A2 lexical vs A3 lexical+dense RRF on one SearchDocument representation (retrieval layer)",
+    arms: ARMS,
+    corpus: { mode: "external-full", corpusHash: hashes.corpus, datasetHash: hashes.dataset, split: SPLIT, taskIds: tasks.map(task => task.id) },
+    representation: {
+      searchDocument: "search_doc_text (product index schema v8)",
+      dense: DENSE_REPRESENTATION_VERSION,
+      query: QUERY_REPRESENTATION_VERSION
+    },
+    provider: provider.identityBase(),
+    lexical: { tool: "java_symbol", limit: CANDIDATE_K, mode: "auto" },
+    budget,
+    scorer: { kit: "harness/scoring.py evaluate via harness score/compare", scorerHash: hashes.scorer, corpusMode: "external-full" }
+  });
+  const hash = protocolHash(profile);
+  process.stderr.write(`[r11] protocol ${hash}\n`);
 
   const byCorpus = new Map();
-  for (const task of tasks) {
-    const list = byCorpus.get(task.corpus) ?? [];
-    list.push(task);
-    byCorpus.set(task.corpus, list);
-  }
+  for (const task of tasks) byCorpus.set(task.corpus, [...(byCorpus.get(task.corpus) ?? []), task]);
 
+  const results = Object.fromEntries(ARMS.map(arm => [arm, []]));
   const rows = [];
   const corpusCosts = [];
-  let negativeControlExact = 0;
-  let negativeControlEmbedded = 0;
   const startedWall = Date.now();
 
   for (const [corpus, corpusTasks] of byCorpus) {
-    const first = corpusTasks[0];
-    // full 布局：STAGE/<corpus>；scoped 布局：STAGE/<task-id>/repo。
-    const repoRoot = STAGE_FULL ? path.join(STAGE, corpus) : path.join(STAGE, first.id, "repo");
-    const cacheRoot = path.join(CACHE_ROOT, `${PROFILE}-${corpus}`);
-    process.stderr.write(`[m3] corpus=${corpus} tasks=${corpusTasks.length}\n`);
-
+    const repoRoot = path.join(STAGE, corpus);
+    const cacheRoot = path.join(CACHE_ROOT, `external-full-${corpus}`);
+    process.stderr.write(`[r11] corpus=${corpus} tasks=${corpusTasks.length}\n`);
     const session = await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env });
-    let index = null;
-    let denseBuild = null;
-    let denseReady = false;
+    let resolver = null;
     try {
-      // 产品 server 懒建 SQL 索引：先预热一次，再在 cacheRoot 下递归找 index.sqlite
-      // （部分版本按 repoRoot hash 分子目录）。
       await session.symbol({ query: "java", limit: 1 }).catch(() => undefined);
-      let dbPath = path.join(cacheRoot, "index.sqlite");
-      const found = existsSync(dbPath) ? [dbPath] : findSqliteFiles(cacheRoot);
-      if (found.length > 0) dbPath = found[0];
-      denseBuild = { dbPath };
-      if (found.length > 0) {
-        // Fail closed: without a dense index A3 would equal A2 and the run
-        // would report "no dense gain" as a result.
-        {
-          // The warm-up query returns while the cold build may still run.
-          await waitForReadyIndex(dbPath);
-          const facts = readSearchDocumentFacts(repoRoot, dbPath);
-          index = new DenseDiscoveryIndex({ provider, facts, corpusHash: corpus, repoRoot });
-          const declared = await index.build();
-          denseReady = declared > 0;
-          if (!denseReady) throw new Error(`dense index for ${corpus} has no declarations`);
-          denseBuild = {
-            dbPath,
-            declarations: declared,
-            ...index.buildCost,
-            indexIdentity: index.providerIndexIdentity,
-            indexedAt: index.indexedAt
-          };
-          process.stderr.write(`[m3]   dense index: ${declared} declarations, ${denseBuild.deltaItemsEmbedded} embeddings, ${(denseBuild.wallMs / 1000).toFixed(1)}s\n`);
-        }
-      } else {
-        throw new Error(`dense index UNAVAILABLE for ${corpus}: index.sqlite not found under ${cacheRoot}`);
-      }
-      corpusCosts.push({ corpus, denseBuild });
+      const found = existsSync(path.join(cacheRoot, "index.sqlite")) ? [path.join(cacheRoot, "index.sqlite")] : findSqliteFiles(cacheRoot);
+      // Fail closed: without a dense index A3 would equal A2.
+      if (found.length === 0) throw new Error(`dense index UNAVAILABLE for ${corpus}: index.sqlite not found under ${cacheRoot}`);
+      const dbPath = found[0];
+      // The warm-up query returns while the cold build may still run.
+      await waitForReadyIndex(dbPath);
+      const index = new DenseDiscoveryIndex({ provider, facts: readSearchDocumentFacts(repoRoot, dbPath), corpusHash: corpus, repoRoot });
+      const declared = await index.build();
+      if (declared === 0) throw new Error(`dense index for ${corpus} has no declarations`);
+      corpusCosts.push({ corpus, dbPath, declarations: declared, ...index.buildCost, indexIdentity: index.providerIndexIdentity });
+      process.stderr.write(`[r11]   dense index: ${declared} declarations, ${index.buildCost.deltaItemsEmbedded} embeddings\n`);
+      resolver = new DeclarationResolver(dbPath);
 
       for (const task of corpusTasks) {
-        const g = gold.get(task.id);
-        // A2: production-path java_symbol。候选行范围 = preview 窗口（与 M2
-        // SOURCE_RECEIVED 口径一致：path + startLine..endLine）；无 preview 时
-        // 退化为 selection.line 单行。
-      let a2 = undefined;
-      try {
-        a2 = await session.symbol({ query: task.query });
-      } catch (error) {
-        a2 = { error: error instanceof Error ? error.message : String(error) };
-      }
-        const a2Paths = (a2?.candidates ?? []).map(c => {
-          const decl = c.declaration ?? {};
-          if (typeof c.preview === "string" && c.previewKind === "source" && c.evidenceRange) {
-            // The product reports the preview's own source range (R08).
-            const range = c.evidenceRange;
-            return { path: range.relativePath ?? decl.relativePath ?? c.relativePath, startLine: range.startLine, endLine: range.endLine };
-          }
-          const startLine = decl.selection?.line;
-          return { path: decl.relativePath ?? c.relativePath, startLine, endLine: startLine };
-        });
-        // 行范围取候选的 read 窗口；M2 的 SOURCE_RECEIVED 口径是 (path, line) 命中证据。
-        const a2Coverage = requiredLineRecall(a2Paths, g);
-
-        // A3: A2 + gated dense hints (exact/anchor -> zero embeddings, negative control).
-        // Query vectors are cached under cacheIdentity (the endpoint's output drifts
-        // slightly between runs); the hash and top scores make a rerun attributable.
-        let queryVector = null;
-        const a3 = await gatedDenseSearch({
-          query: task.query,
-          index,
-          provider,
-          topK: 8,
-          queryEmbed: async texts => {
-            queryVector = await provider.embedQuery(texts[0]);
-            return [queryVector];
-          }
-        }).catch(error => ({
-          hints: [],
-          fallback: "A2",
-          reason: `gate_error: ${error instanceof Error ? error.message : String(error)}`,
-          embeddedQueries: 0
-        }));
-        if (a3.reason === "exact_not_embedded") negativeControlExact += 1;
-        else if (a3.embeddedQueries > 0) negativeControlEmbedded += 1;
-        const a3Paths = [
-          ...a2Paths,
-          ...a3.hints.map(hint => ({
-            path: hint.relativePath,
-            startLine: hint.startLine,
-            endLine: hint.endLine
-          }))
-        ];
-        const a3Coverage = requiredLineRecall(a3Paths, g);
+        const lexicalResult = await session.symbol({ query: task.query, limit: CANDIDATE_K });
+        if (lexicalResult?.error) throw new Error(`java_symbol failed for ${task.id}: ${lexicalResult.error}`);
+        // A PARTIAL scope means the index did not cover the request: not a valid A2 answer.
+        if (lexicalResult?.scopeState === "PARTIAL") throw new Error(`java_symbol scope PARTIAL for ${task.id} (stopReason ${lexicalResult.stopReason})`);
+        const lexicalIds = lexicalDeclarationIds(lexicalResult, CHANNEL_POOL_K);
+        // Exact/anchored intents never embed (Z2 gate): A3 then equals A2.
+        const gate = shouldRunDense({ query: task.query });
+        let dense = [];
+        let queryVectorSha256 = null;
+        if (gate.run) {
+          // A failed query embedding stops the run: a silent A2 fallback would
+          // be scored as "no dense gain".
+          const vector = await provider.embedQuery(task.query);
+          queryVectorSha256 = createHash("sha256").update(JSON.stringify(vector)).digest("hex");
+          dense = index.rank(vector, { topK: CHANNEL_POOL_K });
+        }
+        const fused = rrfFuse(lexicalIds, dense.map(entry => entry.declarationId));
+        const a2 = renderEvidence({ declarationIds: lexicalIds, resolver, repoRoot, budget });
+        const a3 = renderEvidence({ declarationIds: fused.map(entry => entry.declarationId), resolver, repoRoot, budget });
+        const fill = renderEvidence({ declarationIds: seededFill(lexicalIds, index.rows.map(row => row.declarationId)), resolver, repoRoot, budget });
+        results["a2-lexical"].push(kitResult(task.id, a2));
+        results["a3-rrf-dense"].push(kitResult(task.id, a3));
+        results["a2-seeded-fill"].push(kitResult(task.id, fill));
         rows.push({
           taskId: task.id,
           corpus,
-          query: task.query,
-          a2Candidates: (a2?.candidates ?? []).length,
-          a2Error: a2?.error ?? null,
-          a2Recall: a2Coverage.recall,
-          a2UniqueLines: a2Coverage.uniqueLines,
-          a2Complete: a2Coverage.complete,
-          a2Incomplete: a2Coverage.incomplete,
-          a3: {
-            denseReason: a3.reason,
-            denseHints: a3.hints.length,
-            embeddedQueries: a3.embeddedQueries,
-            topHint: a3.hints[0] ?? null,
-            queryVectorSha256: queryVector ? createHash("sha256").update(JSON.stringify(queryVector)).digest("hex") : null,
-            // cosine of the 9 best rows: rank 8 vs 9 is the cut, rank 1 vs 2 the top margin
-            topScores: queryVector ? index.vectors.map(vector => cosine(queryVector, vector)).sort((a, b) => b - a).slice(0, 9) : [],
-            recall: a3Coverage.recall,
-            uniqueLines: a3Coverage.uniqueLines,
-            malformedHints: a3Coverage.malformedRegions,
-            pathOnlyHints: a3Coverage.pathOnlyRegions,
-            complete: a3Coverage.complete,
-            a3OnlyComplete: a3Coverage.complete.filter(item => !a2Coverage.complete.includes(item))
+          gate: gate.reason,
+          queryVectorSha256,
+          lexical: { ids: lexicalIds, truncated: lexicalResult?.truncated ?? null, scopeState: lexicalResult?.scopeState ?? null },
+          dense: dense.map(({ declarationId, score, rank }) => ({ declarationId, score, rank })),
+          fused,
+          arms: {
+            "a2-lexical": { finalCandidates: a2.finalCandidates, regions: a2.regions, emitted_lines: a2.emitted_lines, emitted_bytes: a2.emitted_bytes, dropped: a2.dropped },
+            "a3-rrf-dense": { finalCandidates: a3.finalCandidates, regions: a3.regions, emitted_lines: a3.emitted_lines, emitted_bytes: a3.emitted_bytes, dropped: a3.dropped },
+            "a2-seeded-fill": { finalCandidates: fill.finalCandidates, regions: fill.regions, emitted_lines: fill.emitted_lines, emitted_bytes: fill.emitted_bytes, dropped: fill.dropped }
           }
         });
-        process.stderr.write(`[m3]   ${task.id} a2=${a2Coverage.recall?.toFixed(2) ?? "n/a"} a3=${a3Coverage.recall?.toFixed(2) ?? "n/a"} reason=${a3.reason}\n`);
+        process.stderr.write(`[r11]   ${task.id} gate=${gate.reason} a2=${a2.finalCandidates.length}c/${a2.emitted_lines}l a3=${a3.finalCandidates.length}c/${a3.emitted_lines}l dense-only=${fused.filter(entry => entry.lexicalRank === null).length}\n`);
       }
     } finally {
+      resolver?.close();
       await session.close?.().catch(() => undefined);
     }
   }
 
-  // Tasks without required evidence (recall null, as in the kit) are excluded.
-  const mean = values => {
-    const scored = values.filter(value => typeof value === "number");
-    return scored.length ? scored.reduce((sum, value) => sum + value, 0) / scored.length : null;
+  // Score with the kit itself: one results pack per arm, then the paired,
+  // cluster-bootstrap comparison.
+  const scoreDir = path.join(OUTPUT, "kit-score");
+  mkdirSync(scoreDir, { recursive: true });
+  const runProfile = {
+    corpus_mode: "external-full",
+    corpus_hash: hashes.corpus,
+    variant_set: "primary",
+    evaluation_mode: "retrieval",
+    repeats: 1,
+    cache_state: "warm-declaration-and-query-vectors",
+    model_id: null,
+    host_id: "semantic-discovery-compare/r11",
+    budget_profile: "fixed-160-lines-16000-bytes/v1",
+    protocol_hash: hash
   };
-  const micro = {
-    micro_a2: mean(rows.map(row => row.a2Recall)),
-    micro_a3: mean(rows.map(row => row.a3.recall)),
-    // A3 = A2 + hints, so it always emits at least as many lines: this is not
-    // an equal-budget comparison (R11 caps both arms after fusion).
-    mean_unique_lines_a2: mean(rows.map(row => row.a2UniqueLines)),
-    mean_unique_lines_a3: mean(rows.map(row => row.a3.uniqueLines))
-  };
-  const perCorpus = new Map();
-  for (const row of rows) {
-    const entry = perCorpus.get(row.corpus) ?? { a2: [], a3: [] };
-    entry.a2.push(row.a2Recall);
-    entry.a3.push(row.a3.recall);
-    perCorpus.set(row.corpus, entry);
+  const reports = {};
+  const reportPaths = {};
+  for (const arm of ARMS) {
+    const packPath = path.join(scoreDir, `${arm}-results.json`);
+    reportPaths[arm] = path.join(scoreDir, `${arm}-report.json`);
+    writeFileSync(packPath, `${JSON.stringify({
+      schema: "java-specialist-results/v1",
+      dataset_hash: hashes.dataset,
+      run_profile: runProfile,
+      arm,
+      source_sha: sourceSha(),
+      results: results[arm]
+    }, null, 1)}\n`);
+    reports[arm] = kitScorePack({ kitRoot: KIT, corporaRoot: STAGE, packPath, reportPath: reportPaths[arm], split: SPLIT });
   }
-  const corpusAgg = [...perCorpus.entries()].map(([corpus, v]) => ({
-    corpus,
-    a2: mean(v.a2),
-    a3: mean(v.a3)
-  }));
+  const comparison = kitCompare({
+    kitRoot: KIT,
+    baselinePath: reportPaths["a2-lexical"],
+    candidatePath: reportPaths["a3-rrf-dense"],
+    outputPath: path.join(scoreDir, "a2-vs-a3-compare.json")
+  });
+  const fillComparison = kitCompare({
+    kitRoot: KIT,
+    baselinePath: reportPaths["a2-seeded-fill"],
+    candidatePath: reportPaths["a3-rrf-dense"],
+    outputPath: path.join(scoreDir, "fill-vs-a3-compare.json")
+  });
+  const strata = {};
+  for (const [name, base] of [["a2-lexical", "a2-lexical"], ["a2-seeded-fill", "a2-seeded-fill"]]) {
+    strata[`${name}->a3-rrf-dense`] = Object.fromEntries(["origin", "corpus"].map(by => [by, Object.fromEntries(
+      ["declaration_recall_at_10", "mrr", "required_line_recall"].map(metric => [metric, stratifiedDelta(reports[base], reports["a3-rrf-dense"], metric, by)])
+    )]));
+  }
+  const agentPack = AGENT_PACK ? JSON.parse(readFileSync(AGENT_PACK, "utf8")) : null;
+  const gates = JSON.parse(readFileSync(path.join(KIT, "schemas/gates.json"), "utf8"));
+  // An agent-ab results pack (agentEvidence) or a pilot-compare evidence file.
+  const agentEvidence = agentPack?.agentEvidence ?? (agentPack && "qaDeltaLower" in agentPack ? agentPack : null);
+  const decision = decideFourWay({ comparison, fillComparison, reports, gates, agent: agentEvidence });
+  const totals = Object.fromEntries(ARMS.map(arm => [arm, {
+    overall: reports[arm].summary.overall,
+    ...evidenceTotals(reports[arm].rows, gold)
+  }]));
 
   const pack = {
-    schema: "java-specialist-m3-retrieval/v2",
-    scorer: "required_line_recall (kit line_set semantics; path-only regions score 0)",
-    budget: "UNEQUAL: a3 = a2 + up to 8 dense hints; not an R11 equal-budget result",
+    schema: "java-specialist-r11-retrieval/v1",
     generatedAt: new Date().toISOString(),
     wallMs: Date.now() - startedWall,
-    profile: PROFILE,
-    stage: STAGE,
-    taskFiles: TASKS_FILES.length ? TASKS_FILES : ["dev.jsonl(default)"],
-    provider: { ...provider.costReport(), model },
-    arms: {
-      a2: "product java_symbol (lexical, production MCP path)",
-      a3: `a2 + external dense DISCOVERY_HINT (${provider.provider} ${model})`
-    },
-    micro,
-    perCorpus: corpusAgg,
-    negativeControl: { exactTasksNotEmbedded: negativeControlExact, textTasksEmbedded: negativeControlEmbedded },
+    protocolHash: hash,
+    profile,
+    provider: provider.costReport(),
+    decision,
+    agentEvidence: agentEvidence ? { source: AGENT_PACK, ...agentEvidence } : null,
+    comparison,
+    fillComparison,
+    strata,
+    meanCandidates: Object.fromEntries(ARMS.map(arm => [arm, rows.reduce((sum, row) => sum + row.arms[arm].finalCandidates.length, 0) / rows.length])),
+    totals,
     corpusCosts,
     rows
   };
-  await writeFile(path.join(OUTPUT, "results-pack.json"), JSON.stringify(pack, null, 1));
-  process.stdout.write(JSON.stringify({ micro, perCorpus: corpusAgg, negativeControl: pack.negativeControl, rows: rows.length }, null, 1));
+  writeFileSync(path.join(OUTPUT, "results-pack.json"), `${JSON.stringify(pack, null, 1)}\n`);
+  process.stdout.write(JSON.stringify({
+    protocolHash: hash,
+    decision,
+    strataRecallAt10ByOrigin: strata["a2-lexical->a3-rrf-dense"].origin.declaration_recall_at_10,
+    fillVsA3RecallAt10: fillComparison.metrics.declaration_recall_at_10 && {
+      delta: fillComparison.metrics.declaration_recall_at_10.cluster_macro_delta,
+      ci95: fillComparison.metrics.declaration_recall_at_10.cluster_bootstrap_95
+    },
+    totals: Object.fromEntries(Object.entries(totals).map(([arm, value]) => [arm, {
+      recallAt10: value.overall.declaration_recall_at_10,
+      mrr: value.overall.mrr,
+      macroLineRecall: value.macroTask,
+      microEvidence: value.microEvidence,
+      meanEmittedBytes: value.overall.emitted_bytes,
+      invalid: value.overall.invalid,
+      overBudget: value.overall.over_budget
+    }])),
+    comparison: Object.fromEntries(Object.entries(comparison.metrics).map(([metric, value]) => [metric, value && {
+      delta: value.cluster_macro_delta, ci95: value.cluster_bootstrap_95, clusters: value.clusters
+    }]))
+  }, null, 1));
 }
 
 main().catch(error => {
-  process.stderr.write(`[m3] FAILED: ${error?.stack ?? error}\n`);
+  process.stderr.write(`[r11] FAILED: ${error?.stack ?? error}\n`);
   process.exit(1);
 });

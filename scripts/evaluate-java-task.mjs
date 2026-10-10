@@ -566,7 +566,7 @@ export function armOrder(arms, { seed = 1984, taskId, repeat }) {
 
 const REPAIR_BLOCKED_STATES = new Set(["BLOCKED_ENV", "BLOCKED_SETUP", "JUDGE_ERROR"]);
 
-function attemptStateOf(run) {
+export function attemptStateOf(run) {
   if (run.setupError) return "BLOCKED_SETUP";
   if (["FAILED_RUNTIME", "FAILED_CONTEXT_CAP", "MAX_COMPLETION_TOKENS"].includes(run.stopReason)) return "FAILED_RUNTIME";
   if (typeof run.stopReason !== "string") return "MISSING_RESULT";
