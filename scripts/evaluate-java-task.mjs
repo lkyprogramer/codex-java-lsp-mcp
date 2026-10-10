@@ -40,10 +40,11 @@ export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
 /**
  * Eval protocol: v1.2 adds the per-round received-source ledger (QA tasks with
  * a budget), the 80-line default read window and the java_symbol description
- * with head previews / no-vocabulary diagnosis. Results of different protocol
- * versions are not comparable.
+ * with head previews / no-vocabulary diagnosis. v1.3 (product arm only): the
+ * java_symbol description names each declaration's range and says a preview
+ * is not evidence. Results of different protocol versions are not comparable.
  */
-export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.2";
+export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.3";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
@@ -57,7 +58,7 @@ export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
   function: {
     name: "java_symbol",
-    description: "Locate Java declarations (types/methods) by name, FQN, or task intent. Matching is lexical over code identifiers, comments and framework keys: query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. Returns declarations with 1-based locators (the declaration name) and short byte-exact previews (preview=head by default; window or none on request).",
+    description: "Locate Java declarations (types/methods) by name, FQN, or task intent. Matching is lexical over code identifiers, comments and framework keys: query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. Returns declarations with 1-based locators (selection = the declaration name; range = the lines the whole declaration spans) and short byte-exact head previews (preview=head by default; window or none on request). A preview is a discovery aid, not evidence: read the lines your answer relies on. When a range is longer than your remaining source budget, search inside it (rg) instead of reading it whole.",
     parameters: {
       type: "object",
       properties: {

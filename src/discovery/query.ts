@@ -99,6 +99,9 @@ export type DiscoveryLocator = {
   fqn: string;
   signature: string;
   selection: { line: number; column: number };
+  /** Lines the whole declaration spans (annotations to closing brace) in the
+   *  file at contentHash: what to read, beyond the short preview. */
+  range?: { startLine: number; endLine: number };
 };
 
 /** Why a candidate carries no preview; the locator itself stays usable
@@ -556,7 +559,10 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
       kind: hit.kind,
       fqn: hit.fqn,
       signature: hit.signature ?? (hit.kind === "method" ? `${hit.simpleName}(...)` : hit.fqn),
-      selection: { line: hit.line, column: hit.column }
+      selection: { line: hit.line, column: hit.column },
+      ...(hit.declarationStartLine !== undefined && hit.declarationEndLine !== undefined
+        ? { range: { startLine: hit.declarationStartLine, endLine: hit.declarationEndLine } }
+        : {})
     };
     const candidate: DiscoveryCandidate = {
       declaration,

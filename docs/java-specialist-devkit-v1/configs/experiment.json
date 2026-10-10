@@ -82,9 +82,9 @@
  "r11_protocol": {
   "doc": "docs/next-stage/experiment-v1.1.md",
   "questions": {
-   "product_increment": "native (control) vs improved A2 (product), scripts/evaluate-java-task.mjs --arms product,control; paired kit comparison via experiments/semantic-discovery/pilot-compare.mjs",
-   "dense_mechanism_retrieval": "A2 lexical top-K vs A3 RRF(lexical, dense) top-K, plus the non-semantic control a2-seeded-fill, experiments/semantic-discovery/compare.mjs",
-   "dense_mechanism_agent": "same model/prompt/tools/budget; candidate block lexical top-K vs RRF top-K, experiments/semantic-discovery/agent-ab.mjs"
+   "product_increment": "native (control) vs improved A2 (product), scripts/evaluate-java-task.mjs --arms product,control; paired kit comparison via scripts/eval-pilot-compare.mjs",
+   "dense_mechanism_retrieval": "A2 lexical top-K vs A3 RRF(lexical, dense) top-K, plus the non-semantic control a2-seeded-fill (driver removed after NO_GO; history at a2-static-fixes.md / commit d157b58)",
+   "dense_mechanism_agent": "same model/prompt/tools/budget; candidate block lexical top-K vs RRF top-K (driver removed after NO_GO; commit d157b58)"
   },
   "fusion": {
    "method": "RRF",
@@ -105,6 +105,8 @@
   "zvec": "not run: a native zvec system profile would be a separate system-level comparison, never mixed with this same-representation ablation",
   "eval_protocol": "eval-protocol/v1.2 (scripts/evaluate-java-task.mjs EVAL_PROTOCOL_VERSION): per-round received-source ledger for both arms (QA), 80-line default read window, java_symbol head previews and no_vocabulary_overlap diagnosis",
   "retrieval_variants": "all (kit primary + language variants), stratified by variant",
-  "follow_up": "docs/next-stage/a2-static-fixes.md (retrieval dense decision NO_GO under v1.2 with name locators)"
+  "follow_up": "docs/next-stage/a2-static-fixes.md (retrieval dense decision NO_GO under v1.2 with name locators)",
+  "dense_closed": "dense experiment closed: drivers and the product search_doc_text table (index schema v8) removed, schema v9; experiments/semantic-discovery keeps only provider.mjs and repair-judge.mjs, which the frozen audit imports by path",
+  "evidence_pilot": "docs/next-stage/a2-evidence-pilot.md (eval-protocol/v1.3: declaration ranges, preview-is-not-evidence guidance)"
  }
 }
