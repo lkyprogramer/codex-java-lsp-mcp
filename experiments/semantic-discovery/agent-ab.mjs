@@ -23,10 +23,14 @@ import {
   createRecorder,
   scoreRunOutcome
 } from "../../scripts/evaluate-java-task.mjs";
-import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts, cosine } from "./provider.mjs";
+import { DenseDiscoveryIndex, EmbeddingProvider, assertDenseRunnable, readSearchDocumentFacts, cosine } from "./provider.mjs";
 import { gatedDenseSearch, shouldRunDense } from "./gate.mjs";
 import { evaluateRepair } from "../../scripts/eval-repair-adapter.mjs";
 import { redactBackend, summarizeArm } from "./ab-summary.mjs";
+
+// R10: refuse before reading arguments or opening any session, embedding or
+// model call (README: DISABLED_INVALID). Entry scripts only; nothing imports them.
+assertDenseRunnable();
 
 // 可搬运：每个根目录都来自 CLI 参数或环境变量；没有个人绝对路径默认值，
 // 缺参数就直接失败，而不是悄悄写到某个人的家目录。

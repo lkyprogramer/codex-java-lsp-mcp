@@ -10,8 +10,12 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openImpactSession } from "../../scripts/run-agent-trace-live.mjs";
-import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts } from "./provider.mjs";
+import { DenseDiscoveryIndex, EmbeddingProvider, assertDenseRunnable, readSearchDocumentFacts } from "./provider.mjs";
 import { gatedDenseSearch } from "./gate.mjs";
+
+// R10: refuse before reading arguments or opening any session, embedding or
+// model call (README: DISABLED_INVALID). Entry scripts only; nothing imports them.
+assertDenseRunnable();
 
 // 可搬运：语料根、索引缓存、输出目录、server.js 全部来自 CLI/env；没有个人
 // 绝对路径默认值。STAGE 两种布局自动识别：

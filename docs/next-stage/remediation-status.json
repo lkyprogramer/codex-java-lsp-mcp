@@ -58,7 +58,10 @@
       "report": "docs/next-stage/r09-task-result.md"
     },
     "R10": {
-      "state": "NOT_STARTED"
+      "state": "DONE",
+      "commit": "(this commit: fix(experiment): isolate embeddings by representation and provider)",
+      "report": "docs/next-stage/r10-task-result.md",
+      "note": "index-backed dense input DISABLED_INVALID (no ordered SearchDocument text in the product index); compare.mjs scorer path-only coverage recorded as an R11 label challenge"
     },
     "R11": {
       "state": "NOT_STARTED"
@@ -79,7 +82,7 @@
   "r09Followups": {
     "scope": "R09 residual items: cold-build lock, HOL queue order (low-concurrency), scope-filtered deadline, legacy search bound",
     "state": "DONE",
-    "commit": "(this commit)",
+    "commit": "463ba33",
     "report": "docs/next-stage/r09-followups.md"
   }
 }
