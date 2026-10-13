@@ -1,0 +1,46 @@
+{
+  "schema": "ilv2-task-result/v1",
+  "taskId": "P0-T0",
+  "state": "PASS",
+  "source": { "baseSha": "ad412ceb51bc616df3700feca7d3c14ea6dc5ee0", "candidateSha": "34d2f635d072beefae0523ad984322f165081ad2", "dirty": false },
+  "approvals": [
+    { "id": "U1", "at": "2026-10-13", "note": "Agreed as proposed: snapshot the deployed 83aa814049e5 sources as SHA_BASE" },
+    { "id": "U2", "at": "2026-10-13", "note": "Agreed as proposed" },
+    { "id": "U3", "at": "2026-10-13", "note": "Agreed as proposed" },
+    { "id": "U4", "at": "2026-10-13", "note": "No deploy after P0: P0-T3b, P0-T4, P0-T5 NOT_RUN; P0-G3/G4 not run; skip section 7; go to P1A after closeout" },
+    { "id": "PUSH", "at": "2026-10-13", "note": "User asked to commit and push this round; commit only conclusions and necessary evidence (appendix C.3). Later pushes need an explicit request" }
+  ],
+  "red": { "status": "NOT_APPLICABLE", "commands": [], "evidence": [] },
+  "green": {
+    "commands": [
+      "git commit -m \"chore: snapshot deployed 83aa814049e5 sources\"",
+      "git switch -c codex/index-lifecycle-v2 ad412ceb51bc616df3700feca7d3c14ea6dc5ee0",
+      "git commit -m \"docs: add ILV2 execution manual and evidence distillation records\"",
+      "git push -u origin codex/java-specialist-release-audit-v1.1 codex/index-lifecycle-v2 (no tags)",
+      "freeze lishuedu|cipherlink|exam-parent-v3|lishu-v2 (manual P0-T0 step 3)"
+    ],
+    "evidence": ["docs/index-lifecycle-v2/p0/frozen-repos.json"]
+  },
+  "measurements": [],
+  "gates": [
+    { "id": "P0-T0-branch", "target": "codex/index-lifecycle-v2 created from SHA_BASE; git status --short empty", "observed": "34d2f63 on top of ad412ce; status empty", "status": "PASS" },
+    { "id": "P0-T0-frozen", "target": "4 frozen HEADs equal target SHA; git status --porcelain empty", "observed": "4/4 match; 0 dirty entries each", "status": "PASS" },
+    { "id": "P0-T0-public-scan", "target": "0 business-source markers and 0 real secrets in all 548 unpushed blobs; no blob > 1 MiB", "observed": "biz=0; only hit is the redaction test canary AKIAFIXTURE0CANARY42 in src/discovery/query-preview.test.ts; largest blob 770 KiB", "status": "PASS" }
+  ],
+  "verdict": null,
+  "changedFiles": ["docs/index-lifecycle-v2/p0/frozen-repos.json", "docs/index-lifecycle-v2/p0/task-results/P0-T0.json"],
+  "artifacts": [
+    { "path": "/tmp/frozen-java-repos/lishuedu", "class": "INPUT", "bytes": 135368704, "sha256": null, "consumers": ["P0", "P1A", "P1B", "P2", "P3", "P4"], "deleteAt": "PROGRAM_END", "keptAs": ["docs/index-lifecycle-v2/p0/frozen-repos.json"], "disposition": "PENDING", "deletedAt": null },
+    { "path": "/tmp/frozen-java-repos/cipherlink", "class": "INPUT", "bytes": 24629248, "sha256": null, "consumers": ["P0", "P1A", "P1B", "P2", "P3", "P4"], "deleteAt": "PROGRAM_END", "keptAs": ["docs/index-lifecycle-v2/p0/frozen-repos.json"], "disposition": "PENDING", "deletedAt": null },
+    { "path": "/tmp/frozen-java-repos/exam-parent-v3", "class": "INPUT", "bytes": 133230592, "sha256": null, "consumers": ["P0", "P1A", "P1B", "P2", "P3", "P4"], "deleteAt": "PROGRAM_END", "keptAs": ["docs/index-lifecycle-v2/p0/frozen-repos.json"], "disposition": "PENDING", "deletedAt": null },
+    { "path": "/tmp/frozen-java-repos/lishu-v2", "class": "INPUT", "bytes": 600555520, "sha256": null, "consumers": ["P0", "P1A", "P1B", "P2", "P3", "P4"], "deleteAt": "PROGRAM_END", "keptAs": ["docs/index-lifecycle-v2/p0/frozen-repos.json"], "disposition": "PENDING", "deletedAt": null }
+  ],
+  "host": {
+    "load1Before": 11.15, "load1After": 11.15, "availMemGiB": 7.8, "freeDiskGiB": 111.8,
+    "ncpu": 10, "memGiB": 32, "localSnapshots": 5,
+    "nodeDev": "/usr/local/bin/node v22.17.0", "nodeProd": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node v22.16.0", "git": "2.52.0",
+    "productionService": "com.lky.codex-java-lsp-mcp not loaded (disabled)"
+  },
+  "remainingGaps": [],
+  "deploymentPerformed": false
+}

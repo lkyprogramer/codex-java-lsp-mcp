@@ -1483,7 +1483,7 @@ cd /Users/luo/Documents/github/codex-java-lsp-mcp
   - `sha256`：文件填写；目录填 `null`，`bytes` 写目录总字节数。
   - `deleteAt`：`RUN_END`、`LAST_CONSUMER`、`PHASE_CLOSEOUT`、`PROGRAM_END`；`REPO` 填 `NEVER`。
   - `keptAs`：由它提炼出的入库文件路径。
-  - `disposition`：`PENDING`、`DELETED`、`ARCHIVED`（已压缩入库、原件已删）或 `COMMITTED`。由后续 Task 或 Phase 收尾删除时，回到原 task-result 更新 `disposition`、`deletedAt` 和 `keptAs`，随删除者的 commit 一起提交。
+  - `disposition`：`PENDING`、`DELETED`、`ARCHIVED`（已压缩到本机归档、原件已删）或 `COMMITTED`。由后续 Task 或 Phase 收尾删除时，回到原 task-result 更新 `disposition`、`deletedAt` 和 `keptAs`，随删除者的 commit 一起提交。
 
 ### B.2 Phase closeout
 

@@ -1,0 +1,11 @@
+{
+  "schema": "ilv2-frozen-repos/v1",
+  "frozenAt": "2026-10-13T10:00:51Z",
+  "method": "git clone --no-checkout --local <src>, then checkout --detach <sha>; source repos are not written",
+  "repos": [
+    { "name": "lishuedu", "path": "/tmp/frozen-java-repos/lishuedu", "source": "/Users/luo/Documents/program/lishu/lishuedu", "sha": "db63b1a7e393edd90449eb013d7d1c4d65c366f2", "javaFiles": 5312, "xmlFiles": 3 },
+    { "name": "cipherlink", "path": "/tmp/frozen-java-repos/cipherlink", "source": "/Users/luo/Documents/program/cipherlink", "sha": "fa433982e92e52dd610650d1e79f2d041179b1d3", "javaFiles": 633, "xmlFiles": 6 },
+    { "name": "exam-parent-v3", "path": "/tmp/frozen-java-repos/exam-parent-v3", "source": "/Users/luo/Documents/program/exam-parent-v3", "sha": "f90a0b475f7be2ed003703feecec8195bc7eb976", "javaFiles": 1370, "xmlFiles": 26 },
+    { "name": "lishu-v2", "path": "/tmp/frozen-java-repos/lishu-v2", "source": "/Users/luo/Documents/program/lishu-v2", "sha": "fd9c117b4cfad46247757d4c373b9465534fe33f", "javaFiles": 6160, "xmlFiles": 89 }
+  ]
+}
