@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "command": [
+    "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+    "scripts/run-isolated-validation.mjs",
+    "--profile",
+    "targeted",
+    "--",
+    "node",
+    "--test",
+    "dist/discovery/query-worker.test.js"
+  ],
+  "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture",
+  "installerProcessPath": "/Users/luo/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+  "exitCode": 0,
+  "tests": 18,
+  "pass": 18,
+  "fail": 0,
+  "skip": 0,
+  "scope": "failed and previously skipped resource ownership checks plus full query-worker test file",
+  "log": {
+    "path": "native-deployment/production-path-failed-file-recheck.log",
+    "sha256": "f40c16b5ad54ae2692a4b27d26ba060f3e94317f6b13874fbd2f28d1886e6800"
+  },
+  "productOrTestChanges": [],
+  "daemonPathChanged": false,
+  "newFullInstaller": "NOT_RUN"
+}

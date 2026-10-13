@@ -1,0 +1,36 @@
+{
+  "schema": "installer-validation-prerequisite-diagnostic/v1",
+  "status": "CONFIRMED_INSTALLER_PROCESS_PATH_OMITS_LSOF",
+  "observations": [
+    {
+      "name": "preservedDaemonPath",
+      "path": "/Users/luo/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+      "command": [
+        "/bin/sh",
+        "-c",
+        "command -v lsof"
+      ],
+      "exitCode": 1,
+      "resolved": ""
+    },
+    {
+      "name": "completeInstallerProcessPath",
+      "path": "/Users/luo/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+      "command": [
+        "/bin/sh",
+        "-c",
+        "command -v lsof"
+      ],
+      "exitCode": 0,
+      "resolved": "/usr/sbin/lsof"
+    }
+  ],
+  "scope": "process environment only; installer renders daemon PATH independently",
+  "productionCurrentPreserved": true,
+  "sourceChangeRequired": false,
+  "daemonPathChangeRequired": false,
+  "failedAttemptLog": {
+    "path": "native-deployment/production-attempt-7/production-install-candidate.log",
+    "sha256": "0c45cb520a119a6ecad20fac730d50ff5445c99e6baf5cf1464994d66ea8e7a5"
+  }
+}

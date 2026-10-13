@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
+import { killOwnedProcessTree, listProcesses } from "./jdt-process-tree.js";
 import { canonicalPath } from "./path-utils.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import {
@@ -170,6 +171,50 @@ export function touchRepoCache(repoRoot: string, extra: RepoCacheTouch = {}): vo
   } catch {
     // Best-effort cache metadata only; Java navigation must not depend on it.
   }
+}
+
+/**
+ * Kill a recorded JDT when this process is its parent, launchd has reparented
+ * it, or the recorded owner is gone or reused. A child whose parent is some
+ * other live process is left alone, even when `ownerPid` equals this pid.
+ */
+export function reapAbandonedWorkspaceJdtls(cacheBase = repoCacheBase()): number {
+  if (!existsSync(cacheBase)) return 0;
+  let killed = 0;
+  let entries;
+  try {
+    entries = readdirSync(cacheBase, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  const processes = listProcesses();
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    const cacheRoot = path.join(cacheBase, entry.name);
+    const meta = readRepoCacheMeta(cacheRoot);
+    if (!meta?.jdtlsPid || !meta.jdtlsProcessStartIdentity) continue;
+    const workspace = path.join(cacheRoot, "workspace");
+    if (!shouldReapRecordedJdt(meta, processes)) continue;
+    if (killOwnedProcessTree(meta.jdtlsPid, workspace, meta.jdtlsProcessStartIdentity)) {
+      killed += 1;
+    }
+  }
+  return killed;
+}
+
+function shouldReapRecordedJdt(
+  meta: RepoCacheMeta,
+  processes: ReturnType<typeof listProcesses>
+): boolean {
+  const child = processes.find(row => row.pid === meta.jdtlsPid);
+  if (!child) return false;
+  if (child.ppid === process.pid || child.ppid === 1) return true;
+  if (!meta.ownerPid) return false;
+  const owner = processes.find(row => row.pid === meta.ownerPid);
+  if (!owner) return true;
+  if (!meta.ownerProcessStartIdentity) return false;
+  const ownerIdentity = processStartIdentityForPid(meta.ownerPid);
+  return ownerIdentity !== undefined && ownerIdentity !== meta.ownerProcessStartIdentity;
 }
 
 export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions = {}): WorktreeCacheCleanupResult {

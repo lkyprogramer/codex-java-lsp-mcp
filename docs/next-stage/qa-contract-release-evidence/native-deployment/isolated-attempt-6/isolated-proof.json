@@ -1,0 +1,102 @@
+{
+  "schema": "native-release-proof/v1",
+  "stage": "isolated",
+  "status": "PASS",
+  "proofType": "ORIGINAL_OPERATIONS_PLUS_ADDITIVE_CLEANUP_RECOVERY",
+  "isolatedRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-release-install-canary-12py_yni",
+  "label": "com.lky.codex-java-lsp-mcp.qa-release-12py_yni",
+  "cleanup": "STOPPED_JOB_ABSENT_PORTS_FREE",
+  "sourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc",
+  "evaluatedSourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+  "testOnlySourceAdoption": {
+    "path": "native-deployment/package-source-manifest-r3-test-fixture.json",
+    "sha256": "5f3e13cefea457551f69037f06503884714f64815f58a08e0138e908006e3b5f"
+  },
+  "originalDriverExitCode": 1,
+  "recoveryExitCode": 0,
+  "recovery": {
+    "path": "native-deployment/isolated-attempt-6/cleanup-recovery.json",
+    "sha256": "20a20cd5ec388e045e2a7e81b1c6881dae143331bfbeb87a19ab708b48f67e3c"
+  },
+  "mandatoryInstallerTests": {
+    "source": 1366,
+    "scripts": 436,
+    "failed": 0,
+    "skipped": 0
+  },
+  "productionDeploymentPerformed": false,
+  "states": {
+    "previous": {
+      "current": "releases/09b9851e888a-deployed-baseline",
+      "smoke": {
+        "ok": true,
+        "url": "http://127.0.0.1:38561/mcp",
+        "tools": [
+          "java_diagnostics",
+          "java_impact",
+          "java_runtime",
+          "java_status",
+          "java_symbol"
+        ],
+        "buildSha": "09b9851e888a",
+        "state": "ready",
+        "repoScoped": false,
+        "started": false
+      }
+    },
+    "candidate": {
+      "current": "releases/8f737ac7cd14-20261011T120855Z",
+      "smokes": [
+        {
+          "ok": true,
+          "url": "http://127.0.0.1:38562/mcp",
+          "tools": [
+            "java_diagnostics",
+            "java_impact",
+            "java_runtime",
+            "java_status",
+            "java_symbol"
+          ],
+          "buildSha": "8f737ac7cd14",
+          "state": "ready",
+          "repoScoped": false,
+          "started": false
+        },
+        {
+          "ok": true,
+          "url": "http://127.0.0.1:38561/mcp",
+          "tools": [
+            "java_diagnostics",
+            "java_impact",
+            "java_runtime",
+            "java_status",
+            "java_symbol"
+          ],
+          "buildSha": "8f737ac7cd14",
+          "state": "ready",
+          "repoScoped": false,
+          "started": false
+        }
+      ],
+      "previousPointerAssertionPassedInOriginalDriver": true
+    },
+    "rollback": {
+      "current": "releases/09b9851e888a-deployed-baseline",
+      "smoke": {
+        "ok": true,
+        "url": "http://127.0.0.1:38561/mcp",
+        "tools": [
+          "java_diagnostics",
+          "java_impact",
+          "java_runtime",
+          "java_status",
+          "java_symbol"
+        ],
+        "buildSha": "09b9851e888a",
+        "state": "ready",
+        "repoScoped": false,
+        "started": false
+      }
+    }
+  }
+}

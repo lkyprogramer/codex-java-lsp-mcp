@@ -30,7 +30,8 @@ const BUILD_MARKER_RELATIVE_PATHS = [
 // (schema.ts schemaVersionsMatch), like a schema version.
 // Revision 4: type/method facts carry nameRange, the declaration name the
 // discovery locator points at (range starts at the first annotation).
-export const JAVA_FACTS_REVISION = 4;
+// Revision 5: local types/compact record constructors and concrete/super call resolution.
+export const JAVA_FACTS_REVISION = 5;
 const LEGACY_EXTRACTOR_CODE_SUFFIX = /\|extractor-code-[0-9a-f]{7,40}$/i;
 
 // Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION

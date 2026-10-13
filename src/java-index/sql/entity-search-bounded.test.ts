@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
-import { recordsFromBundle, type EntityRecord } from "../entity-search.js";
+import { recordsFromBundle, type EntityRecord, type EntitySearchOptions } from "../entity-search.js";
 import type { JavaFileBundle } from "../index-types.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
 import { searchEntitiesDetailed } from "../../test-support/entity-search-oracle.js";
@@ -520,6 +520,163 @@ test("legacy search() honors the caller deadline and the default posting cap", (
     const top = search.search("ledger", 1, "text", { remainingMs: () => 10_000 });
     assert.equal(top.length, 1);
     assert.notEqual(top[0]!.relativePath, TARGET, "the 20k posting cap stops the scan before the 20,001st posting");
+  } finally {
+    close(db);
+  }
+});
+
+test("K29 bounded ranking preserves locale ties across posting batches and fresh generations", () => {
+  const ids = Array.from({ length: 513 }, (_, i) => `${i % 2 ? "É" : "a"}:${String(512 - i).padStart(4, "0")}`);
+  const records = ids.map(id => r07Record(id, `${id}/A.java`));
+  const db = r07Db(records);
+  try {
+    const loaded: number[] = [];
+    const prepare = db.prepare.bind(db);
+    db.prepare = sql => {
+      const statement = prepare(sql);
+      const all = statement.all.bind(statement);
+      if (sql.includes("FROM entity_token t JOIN entity e")) statement.all = (...params) => {
+        assert.equal(db.isTransaction, true, "both ranked entrypoints read postings inside one snapshot");
+        const rows = Reflect.apply(all, statement, params) as ReturnType<typeof statement.all>;
+        loaded.push(rows.length);
+        return rows;
+      };
+      return statement;
+    };
+    const search = new SqlEntitySearch(db);
+    const result = search.searchDetailed("refund", 20, "text", { budget: { remainingMs: () => 10_000 } });
+    assert.deepEqual(result.hits.map(hit => hit.entityId), ids.slice().sort((a, b) => a.localeCompare(b)).slice(0, 20));
+    assert.equal(result.work.postings, 513, "all cutoff-tied candidates compete across three batches");
+    assert.equal(result.selectionLimited, true);
+    assert.ok(loaded.every(count => count <= 256), "SQL materializes at most one bounded batch");
+    loaded.length = 0;
+    const bounded = search.searchDetailed("refund", 20, "text", { budget: { maxPostings: 7, remainingMs: () => 10_000 } });
+    assert.ok(loaded.every(count => count <= 8), "SQL respects remaining posting budget plus the stop row");
+    assert.equal(bounded.work.postings, 7);
+    assert.equal(bounded.stopReason, "postings");
+    assert.equal(bounded.work.examined, loaded.reduce((sum, count) => sum + count, 0));
+    assert.deepEqual(search.search("refund", 20, "text").map(hit => hit.entityId), result.hits.map(hit => hit.entityId));
+    loaded.length = 0;
+    let checks = 0;
+    const expired = search.searchDetailed("refund", 20, "text", { budget: { remainingMs: () => ++checks < 30 ? 10_000 : 0 } });
+    assert.equal(expired.stopReason, "deadline");
+    assert.ok(expired.work.postings > 0 && expired.work.postings < 256, "deadline interrupts processing of the buffered batch");
+    assert.equal(expired.work.examined, loaded.reduce((sum, count) => sum + count, 0), "examined counts the entire materialized batch at a mid-batch deadline");
+    assert.equal(expired.work.examined, 256);
+    assert.ok(expired.work.examined > expired.work.postings);
+    replaceAllEntities(db, [r07Record("new", "z/A.java")]);
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES ('indexedGeneration','2')").run();
+    const fresh = search.searchDetailed("refund", 20, "text");
+    assert.deepEqual(fresh.hits.map(hit => hit.entityId), ["new"]);
+    assert.equal(fresh.generation, 2);
+  } finally {
+    close(db);
+  }
+});
+
+test("K29 ID resolution visits complete tie tiers across bounded native batches", () => {
+  const ids = Array.from({ length: 1025 }, (_, i) => `${i % 2 ? "É" : "a"}:${String(1024 - i).padStart(4, "0")}`);
+  const db = r07Db(ids.map(id => r07Record(id, `${id}/A.java`)));
+  try {
+    const idBatches: number[] = [];
+    const prepare = db.prepare.bind(db);
+    db.prepare = sql => {
+      const statement = prepare(sql);
+      if (sql.startsWith("SELECT e.sym AS sym, s.text AS entityId FROM entity e JOIN sym s")) {
+        const all = statement.all.bind(statement);
+        statement.all = (...params) => {
+          assert.equal(db.isTransaction, true);
+          idBatches.push(params.length);
+          return Reflect.apply(all, statement, params) as ReturnType<typeof statement.all>;
+        };
+      }
+      return statement;
+    };
+    const result = new SqlEntitySearch(db).searchDetailed("refund", 20, "text", { budget: { remainingMs: () => 10_000 } });
+    assert.deepEqual(result.hits.map(hit => hit.entityId), ids.slice().sort((a, b) => a.localeCompare(b)).slice(0, 20));
+    assert.deepEqual(idBatches, [512, 512, 1]);
+    assert.equal(result.work.postings, 1025);
+    assert.equal(result.selectionLimited, true);
+  } finally {
+    close(db);
+  }
+});
+
+test("K29 posting array rows and pre-22.16 object rows preserve bounded query results", () => {
+  const rows = Array.from({ length: 600 }, (_, i) => r07Record(`id-${i}`, `${i % 2 ? "a" : "b"}/A${i}.java`));
+  const cases: Array<() => EntitySearchOptions> = [
+    () => ({ budget: { remainingMs: () => 10_000 } }),
+    () => ({ budget: { maxPostings: 7, remainingMs: () => 10_000 } }),
+    () => ({ scope: { sourceRoots: ["a"] }, budget: { remainingMs: () => 10_000 } }),
+    () => ({ scope: { sourceRoots: ["missing"] }, budget: { remainingMs: () => 10_000 } }),
+    () => { let checks = 0; return { budget: { remainingMs: () => ++checks < 30 ? 10_000 : 0 } }; }
+  ];
+  const outcomes = [];
+  for (const forceObjectRows of [false, true]) {
+    const db = r07Db(rows);
+    try {
+      for (const row of rows) replaceSearchDocuments(db, row.relativePath, [{
+        documentId: `doc:${row.entityId}`, declarationId: row.entityId, path: row.relativePath,
+        source: { relativePath: row.relativePath, contentHash: "h", startLine: 1, endLine: 1 },
+        contentHash: "h", representationVersion: 2, sourceKind: "comment",
+        startLine: 1, endLine: 1, normalizedText: "orphanword"
+      }]);
+      rebuildSearchDocDf(db);
+      commitSearchDocStats(db);
+      const arrayApiAvailable = typeof db.prepare("SELECT 1").setReturnArrays === "function";
+      const observed = new Set<string>();
+      const prepare = db.prepare.bind(db);
+      db.prepare = sql => {
+        const statement = prepare(sql);
+        if (sql.includes("FROM entity_token t JOIN entity e") || sql.includes("FROM search_doc_token t JOIN search_doc d")) {
+          if (forceObjectRows) Object.defineProperty(statement, "setReturnArrays", { value: undefined });
+          const all = statement.all.bind(statement);
+          statement.all = (...params) => {
+            const batch = Reflect.apply(all, statement, params) as ReturnType<typeof statement.all>;
+            if (batch.length) observed.add(Array.isArray(batch[0]) ? "array" : "object");
+            return batch;
+          };
+        }
+        return statement;
+      };
+      const search = new SqlEntitySearch(db);
+      outcomes.push(["refund", "orphanword", "refund orphanword"].flatMap(query => cases.map(options => {
+        const result = search.searchDetailed(query, 20, "text", options());
+        return { ...result, trace: result.trace?.map(({ beginMs: _begin, endMs: _end, ...stage }) => stage) };
+      })));
+      assert.deepEqual([...observed], [!forceObjectRows && arrayApiAvailable ? "array" : "object"]);
+      replaceAllEntities(db, [r07Record("fresh", "a/Fresh.java")]);
+      db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES ('indexedGeneration','2')").run();
+      const fresh = search.searchDetailed("refund", 20, "text");
+      assert.deepEqual(fresh.hits.map(hit => hit.entityId), ["fresh"]);
+      assert.equal(fresh.generation, 2);
+    } finally {
+      close(db);
+    }
+  }
+  assert.deepEqual(outcomes[0], outcomes[1], "row representation must not change results, accounting or deadline control flow");
+});
+
+test("K29 document ranking refills after whole score tiers with missing entities", () => {
+  const db = r07Db([r07Record("real-a", "a/A.java"), r07Record("real-b", "b/B.java")]);
+  try {
+    for (const [id, normalizedText] of [
+      ...Array.from({ length: 600 }, (_, i) => [`ghost-${i}`, "orphanword"]),
+      ["real-a", "orphanword padding"], ["real-b", "orphanword padding"]
+    ]) {
+      const relativePath = `${id}.java`;
+      replaceSearchDocuments(db, relativePath!, [{
+        documentId: `doc:${id}`, declarationId: id!, path: relativePath,
+        source: { relativePath, contentHash: "h", startLine: 1, endLine: 1 },
+        contentHash: "h", representationVersion: 2, sourceKind: "comment",
+        startLine: 1, endLine: 1, normalizedText: normalizedText!
+      }]);
+    }
+    rebuildSearchDocDf(db);
+    commitSearchDocStats(db);
+    const result = new SqlEntitySearch(db).searchDetailed("orphanword", 2, "text");
+    assert.deepEqual(result.hits.map(hit => hit.entityId), ["real-a", "real-b"]);
+    assert.equal(result.truncated, false);
   } finally {
     close(db);
   }

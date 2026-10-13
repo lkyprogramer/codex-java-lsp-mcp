@@ -299,6 +299,7 @@ export class SqlFactsStore {
     type Candidate = {
       range: SourceRange;
       isMember: boolean;
+      isName: boolean;
       depth: number;
       symbolKind: AnchorFacts["symbolKind"];
       symbolId: string;
@@ -314,12 +315,12 @@ export class SqlFactsStore {
       let depth = 0;
       for (let owner = type.enclosingTypeId; owner; owner = this.typesById.get(owner)?.enclosingTypeId) depth += 1;
       if (rangeContains(type.range, position)) {
-        candidates.push({ range: type.range, isMember: false, depth, symbolKind: "TYPE", symbolId: type.typeId, symbolName: type.simpleName, type });
+        candidates.push({ range: type.range, isMember: false, isName: !!type.nameRange && rangeContains(type.nameRange, position), depth, symbolKind: "TYPE", symbolId: type.typeId, symbolName: type.simpleName, type });
       }
       for (const fieldId of type.fieldIds) {
         const field = this.fieldsById.get(fieldId);
         if (field && rangeContains(field.range, position)) {
-          candidates.push({ range: field.range, isMember: true, depth: depth + 1, symbolKind: "FIELD", symbolId: field.fieldId, symbolName: field.name, type, field });
+          candidates.push({ range: field.range, isMember: true, isName: false, depth: depth + 1, symbolKind: "FIELD", symbolId: field.fieldId, symbolName: field.name, type, field });
         }
       }
       for (const methodId of type.methodIds) {
@@ -328,6 +329,7 @@ export class SqlFactsStore {
           candidates.push({
             range: method.range,
             isMember: true,
+            isName: !!method.nameRange && rangeContains(method.nameRange, position),
             depth: depth + 1,
             symbolKind: method.constructor ? "CONSTRUCTOR" : "METHOD",
             symbolId: method.methodId,
@@ -350,7 +352,10 @@ export class SqlFactsStore {
         confidence: 1
       };
     }
-    candidates.sort((a, b) => (a.isMember !== b.isMember ? (a.isMember ? -1 : 1) : b.depth - a.depth));
+    // A local class name sits inside an outer method range. The exact
+    // declaration name wins there; body positions retain nearest-member rules.
+    candidates.sort((a, b) => a.isName !== b.isName ? (a.isName ? -1 : 1)
+      : a.isMember !== b.isMember ? (a.isMember ? -1 : 1) : b.depth - a.depth);
     const best = candidates[0]!;
     return {
       file,

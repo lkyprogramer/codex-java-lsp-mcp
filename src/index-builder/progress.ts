@@ -1,3 +1,5 @@
+import { computeExtractorVersion } from "../java-index/build-fingerprint.js";
+import type { SourceRootCoverage } from "../java-index/index-types.js";
 import { prepareCached, type IndexDatabase } from "../java-index/sql/driver.js";
 
 export type BuildPhase = "declare" | "resolve";
@@ -94,6 +96,50 @@ export function clearIndexData(db: IndexDatabase): void {
     DELETE FROM resource_scan;
     DELETE FROM source_root_coverage;
     DELETE FROM file;
-    DELETE FROM meta WHERE key != 'schemaVersion';
+    DELETE FROM meta WHERE key NOT IN ('schemaVersion', 'identityVersion', 'factsRevision', 'factsEncoding');
   `);
+}
+
+/** A full source traversal, not a partial watcher update, establishes coverage. */
+export function publishIndexCoverage(
+  db: IndexDatabase,
+  generation: number,
+  roots: readonly string[],
+  discovered?: readonly { sourceRoot: string }[]
+): IndexCounts {
+  const previous = readSourceRootCounts(db);
+  const baselineComplete = readMeta(db, "buildState") === "READY" && readMeta(db, "coverageRevision") === "1";
+  const rows = db.prepare(`SELECT source_root AS root, count(*) AS indexedFiles,
+    sum(parse_state='FAILED') AS failedFiles, sum(parse_state='RECOVERED') AS recoveredFiles
+    FROM file GROUP BY source_root`).all() as Array<{ root: string; indexedFiles: number; failedFiles: number; recoveredFiles: number }>;
+  const indexed = new Map(rows.map(row => [row.root, row]));
+  const counts: Record<string, Omit<SourceRootCoverage, "root" | "state" | "generation">> = {};
+  const upsert = prepareCached(db, `INSERT INTO source_root_coverage(root, state, generation) VALUES (?, ?, ?)
+    ON CONFLICT(root) DO UPDATE SET state=excluded.state, generation=excluded.generation`);
+  let complete = discovered !== undefined || baselineComplete;
+  // A changed layout has unvisited roots, even when the previous layout was complete.
+  const oldRoots = new Set((db.prepare("SELECT root FROM source_root_coverage").all() as Array<{ root: string }>).map(row => row.root));
+  db.exec("DELETE FROM source_root_coverage");
+  for (const root of roots) {
+    const row = indexed.get(root);
+    const indexedFiles = Number(row?.indexedFiles ?? 0);
+    const failedFiles = Number(row?.failedFiles ?? 0);
+    const discoveredFiles = discovered !== undefined
+      ? discovered.filter(file => file.sourceRoot === root).length
+      : baselineComplete && oldRoots.has(root) ? indexedFiles : previous[root]?.discoveredFiles ?? 0;
+    const covered = (discovered !== undefined || baselineComplete && oldRoots.has(root)) && discoveredFiles === indexedFiles && failedFiles === 0 && Number(row?.recoveredFiles ?? 0) === 0;
+    if (!covered) complete = false;
+    const state = covered ? "COMPLETE" : discovered === undefined && readMeta(db, "buildState") === "BUILDING" ? "BUILDING" : "DEGRADED";
+    upsert.run(root, state, generation);
+    counts[root] = { discoveredFiles, indexedFiles, failedFiles, recoveredFiles: Number(row?.recoveredFiles ?? 0), extractorVersion: computeExtractorVersion() };
+  }
+  writeMeta(db, "sourceRootCounts", JSON.stringify(counts));
+  writeMeta(db, "indexedGeneration", String(generation));
+  writeMeta(db, "buildState", complete ? "READY" : readMeta(db, "buildState") === "BUILDING" && discovered === undefined ? "BUILDING" : "DEGRADED");
+  if (discovered !== undefined) writeMeta(db, "coverageRevision", "1");
+  return refreshIndexCounts(db);
+}
+
+export function readSourceRootCounts(db: IndexDatabase): Record<string, Omit<SourceRootCoverage, "root" | "state" | "generation">> {
+  return JSON.parse(readMeta(db, "sourceRootCounts") ?? "{}");
 }

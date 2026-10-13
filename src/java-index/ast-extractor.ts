@@ -39,6 +39,8 @@ export type ExtractedJavaFile = {
   methods: JavaMethodFacts[];
 };
 
+const METHOD_DECL_TYPES = new Set(["method_declaration", "constructor_declaration", "compact_constructor_declaration"]);
+
 const TYPE_DECL_TYPES = new Set([
   "class_declaration",
   "interface_declaration",
@@ -153,7 +155,7 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
   const simpleName = nameNode ? textOf(nameNode, context.source) : "";
   const range = rangeOf(node);
   const parent = context.enclosing[context.enclosing.length - 1];
-  const fqn = isLocal
+  const fqn = isLocal || (parent !== undefined && parent.fqn === undefined)
     ? undefined
     : parent?.fqn
       ? `${parent.fqn}$${simpleName}`
@@ -216,28 +218,45 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
     // Pass 2: methods/constructors (call sites can now resolve sibling
     // field receivers) and nested member types.
     for (const member of memberNodes) {
-      if (member.type === "method_declaration" || member.type === "constructor_declaration") {
-        const method = buildMethod(member, context, typeId);
+      if (METHOD_DECL_TYPES.has(member.type)) {
+        const method = buildMethod(member, context, typeId, node.childForFieldName("parameters"));
         context.methods.push(method);
         methodIds.push(method.methodId);
+        visitLocalTypeDeclarations(member, context);
       } else if (TYPE_DECL_TYPES.has(member.type)) {
         extractType(member, context, false);
       } else if (member.type === "enum_body_declarations") {
         for (const enumMember of member.namedChildren) {
-          if (enumMember.type === "method_declaration" || enumMember.type === "constructor_declaration") {
+          if (METHOD_DECL_TYPES.has(enumMember.type)) {
             const method = buildMethod(enumMember, context, typeId);
             context.methods.push(method);
             methodIds.push(method.methodId);
+            visitLocalTypeDeclarations(enumMember, context);
           } else if (TYPE_DECL_TYPES.has(enumMember.type)) {
             extractType(enumMember, context, false);
+          } else {
+            visitLocalTypeDeclarations(enumMember, context);
           }
         }
+      } else {
+        visitLocalTypeDeclarations(member, context);
       }
     }
   }
 
   context.enclosing.pop();
   return typeFacts;
+}
+
+// Stop at each declaration: extractType owns its nested members and methods.
+// Method and initializer blocks may contain real local declarations; these
+// retain position-based identities rather than inventing a package FQN.
+function visitLocalTypeDeclarations(node: JavaSyntaxNode, context: ExtractContext): void {
+  if (TYPE_DECL_TYPES.has(node.type)) {
+    extractType(node, context, true);
+    return;
+  }
+  for (const child of node.namedChildren) visitLocalTypeDeclarations(child, context);
 }
 
 function typeKindOf(nodeType: string): JavaTypeKind {
@@ -345,14 +364,21 @@ function buildRecordComponentFields(
     });
 }
 
-function buildMethod(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId: string): JavaMethodFacts {
-  const isConstructor = node.type === "constructor_declaration";
+function buildMethod(
+  node: JavaSyntaxNode,
+  context: ExtractContext,
+  ownerTypeId: string,
+  recordParameters?: JavaSyntaxNode | null
+): JavaMethodFacts {
+  const isCompactConstructor = node.type === "compact_constructor_declaration";
+  const isConstructor = node.type === "constructor_declaration" || isCompactConstructor;
   const modifiersNode = findChildOfType(node, "modifiers");
   const nameNode = node.childForFieldName("name");
   const name = nameNode ? textOf(nameNode, context.source) : "<init>";
   const typeParametersNode = node.childForFieldName("type_parameters");
   const typeNode = node.childForFieldName("type");
-  const parametersNode = node.childForFieldName("parameters");
+  // A compact constructor implicitly declares the canonical record parameters.
+  const parametersNode = isCompactConstructor ? recordParameters : node.childForFieldName("parameters");
   const throwsNode = findChildOfType(node, "throws");
   const bodyNode = node.childForFieldName("body");
 
@@ -532,6 +558,9 @@ function collectCallSites(
   callSites: JavaCallSiteFact[],
   localTypes: JavaTypeRef[]
 ): void {
+  // A local type's methods own their calls; do not attribute them to the
+  // containing method while recursively walking its body.
+  if (TYPE_DECL_TYPES.has(node.type)) return;
   switch (node.type) {
     case "local_variable_declaration": {
       const typeNode = node.childForFieldName("type");

@@ -1,0 +1,13 @@
+{
+  "status": "COMPLETE",
+  "reason": null,
+  "planned": 24,
+  "attempts": 24,
+  "executedBlocks": 24,
+  "missing": [],
+  "overallMs": 232504.562084,
+  "blockWallMs": 203768.326334,
+  "scoringMs": 21105.873750000035,
+  "publicScoringMs": 0,
+  "completedAt": "2026-10-11T10:50:46.291Z"
+}

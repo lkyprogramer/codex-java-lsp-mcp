@@ -1,0 +1,29 @@
+{
+  "gitSha": "48bad915c854569f570ffa8d283e364646afe578",
+  "baselineSha": "8f737ac7cd141d0eb07de37bb212d4d6648d96a3",
+  "sourceSnapshotRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-agent-guidance-i7fjv7b9/package",
+  "sourceManifestSha256": "739c403f72f32fa57c46e7d0bc6f101a0700dc8386e0dcb3e7e580eec9bb1055",
+  "changedFiles": [
+    {
+      "path": "src/hooks/hook-gate.ts",
+      "sha256": "2d8ffd9ad5df18d58e0db36d827b1711f96689b9e7c415d56373422d3215ee86"
+    },
+    {
+      "path": "src/hooks/hook-gate.test.ts",
+      "sha256": "5668186e7e443674d692cf753f483b8d6e25ca8ab30496c69ca6e08c348ee088"
+    },
+    {
+      "path": "README.md",
+      "sha256": "9fbf7986f4f58caaa262a6ca30ddfd7c6fbcb105c307c536190e3b29f6979189"
+    },
+    {
+      "path": "docs/phase-f/production-operations.md",
+      "sha256": "aca8225699227c1637fe5e6fcb63ba15157528b308d437d1c3f9c83755e7406c"
+    },
+    {
+      "path": "docs/next-stage/java-agent-guidance-review.md",
+      "sha256": "c0e759e5200c4a9f5d5b85035537803a0127fd412c6689064df49910fc594656"
+    }
+  ],
+  "reportAfterExecutionIsNotPartOfImmutableRelease": true
+}

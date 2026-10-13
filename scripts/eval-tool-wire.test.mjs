@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import { runLiveAgentTask } from "./run-agent-trace-live.mjs";
-import { createRecorder, EVAL_SYSTEM_PROMPT } from "./evaluate-java-task.mjs";
+import { createRecorder, EVAL_SYSTEM_PROMPT, boundSourceResult } from "./evaluate-java-task.mjs";
 import { runEvalToolWire, fakeChat, serializeModelToolResult, splitSourceLines, MODEL_TOOL_MESSAGE_MAX_BYTES } from "./eval-tool-wire.mjs";
 
 const sha256 = text => createHash("sha256").update(text, "utf8").digest("hex");
@@ -36,6 +36,7 @@ test("eval-tool-wire driver: payload delivered; RECEIVED comes only from attache
 async function wire(name, raw, { maxBytes } = {}) {
   const recorder = createRecorder();
   const requests = [];
+  const rawResults = [];
   let step = 0;
   const run = await runLiveAgentTask({
     task: { taskId: "sentinel", taskText: "Return the source value.", projectId: "fixture", anchor: { file: "A.java", line: 1, column: 1 }, requiredContextFiles: [] },
@@ -44,6 +45,7 @@ async function wire(name, raw, { maxBytes } = {}) {
     toolResultMaxBytes: maxBytes,
     tools: [{ type: "function", function: { name, parameters: { type: "object" } } }],
     invoke: async (toolName, _args, callId) => {
+      rawResults.push({ callId, toolName, result: structuredClone(raw) });
       recorder.recordToolResult({ callId, toolName, result: raw });
       return raw;
     },
@@ -59,13 +61,30 @@ async function wire(name, raw, { maxBytes } = {}) {
   });
   assert.notEqual(run.stopReason, "FAILED_RUNTIME", run.error);
   const last = requests[requests.length - 1];
-  return { run, recorder, requests, toolMessages: last.messages.filter(m => m.role === "tool"), receipts: last.receipts };
+  return { run, recorder, requests, rawResults, toolMessages: last.messages.filter(m => m.role === "tool"), receipts: last.receipts };
 }
 
 test("W01: read source survives the final model-message boundary", async () => {
   const { toolMessages, receipts } = await wire("read", { path: "A.java", text: "int auditSentinel=73619;\n", startLine: 1, endLine: 1 });
   assert.ok(toolMessages.some(m => m.content.includes("auditSentinel=73619")));
   assert.ok(receipts.some(r => r.callId === "c1" && r.toolName === "read" && r.contentHash === sha256(toolMessages[0].content)));
+});
+
+test("read file length survives wire clipping without becoming source or exhausting the file", () => {
+  const raw = { path: "A.java", startLine: 1, endLine: 80, totalLines: 500, text: "int field;\n".repeat(80), remainingSourceBudget: { lines: 80, bytes: 15000 } };
+  const full = serializeModelToolResult("read", raw);
+  const model = JSON.parse(full.content);
+  assert.equal(model.totalLines, 500);
+  assert.equal(model.hasMore, true);
+  assert.equal(model.truncated, undefined, "a complete requested window is distinct from an incomplete file");
+  const clipped = serializeModelToolResult("read", raw, { maxBytes: 450 });
+  const result = JSON.parse(clipped.content);
+  assert.equal(result.totalLines, 500);
+  assert.equal(result.hasMore, true);
+  assert.ok(result.endLine < 80);
+  assert.equal(result.remainingSourceBudget.lines, 160 - result.endLine);
+  assert.equal(clipped.slices[0].text, result.text);
+  assert.equal(clipped.slices[0].endLine, result.endLine);
 });
 
 test("W02: every java_symbol field survives (locators, completeness flags, previews)", async () => {
@@ -100,6 +119,27 @@ test("W02: every java_symbol field survives (locators, completeness flags, previ
 test("W03: write acknowledgement survives the final model-message boundary", async () => {
   const { toolMessages } = await wire("write_file", { path: "A.java", written: true, bytes: 61 });
   assert.deepEqual(JSON.parse(toolMessages[0].content), { path: "A.java", written: true, bytes: 61 });
+});
+
+test("replace_file acknowledgements and errors reach the model without source credit; raw records remain intact", async () => {
+  for (const raw of [
+    { path: "A.java", written: true, bytes: 61, replacements: 1, debugDetail: "raw-only" },
+    { error: "replace failed: before has multiple matches", errorClass: "REPLACE_MATCH", debugDetail: "raw-only" }
+  ]) {
+    const { toolMessages, receipts, recorder, rawResults } = await wire("replace_file", raw);
+    const expected = raw.error
+      ? { error: raw.error, errorClass: raw.errorClass }
+      : { path: raw.path, written: true, bytes: raw.bytes, replacements: 1 };
+    assert.deepEqual(JSON.parse(toolMessages[0].content), expected);
+    assert.deepEqual(rawResults, [{ callId: "c1", toolName: "replace_file", result: raw }]);
+    assert.equal(receipts.length, 1);
+    assert.equal(receipts[0].toolName, "replace_file");
+    assert.equal(receipts[0].contentHash, sha256(toolMessages[0].content));
+    assert.equal(receipts[0].rawHash, serializeModelToolResult("replace_file", raw).rawHash);
+    assert.deepEqual(receipts[0].slices, []);
+    assert.equal(recorder.events().filter(event => event.type === "MODEL_PAYLOAD_ATTACHED").length, 1);
+    assert.equal(recorder.events().filter(event => event.type.startsWith("SOURCE_")).length, 0);
+  }
 });
 
 test("W04: a lossy payload credits exactly the retained whole lines", async () => {
@@ -335,4 +375,104 @@ test("R08: a java_symbol preview is credited against its evidence source; a reda
   }], "the XML slice with the XML hash; the redacted preview is not source evidence");
   assert.equal(slices[0].sliceHash, sha256(raw.candidates[0].preview));
   assert.equal(splitSourceLines(raw.candidates[0].preview).length, 2, "CRLF counts one terminator per line");
+});
+
+
+test("read source-budget clipping and exhaustion keep terminal status and exact continuation on wire", () => {
+  const partial = serializeModelToolResult("read", { path: "A.java", startLine: 7, endLine: 7, text: "x\r\n", truncated: true,
+    nextStartLine: 8, sourceBudgetLimited: true, remainingSourceBudget: { lines: 0, bytes: 9 }, terminal: true });
+  const payload = JSON.parse(partial.content);
+  assert.equal(payload.text, "x\r\n");
+  assert.equal(payload.nextStartLine, 8);
+  assert.equal(payload.sourceBudgetLimited, true);
+  assert.equal(payload.terminal, true);
+  assert.deepEqual(payload.remainingSourceBudget, { lines: 0, bytes: 9 });
+  assert.equal(partial.slices[0].endLine, 7);
+  const exhausted = serializeModelToolResult("read", { error: "SOURCE_BUDGET_EXHAUSTED", errorClass: "SOURCE_BUDGET",
+    remainingSourceBudget: { lines: 2, bytes: 0 }, terminal: true });
+  assert.deepEqual(exhausted.slices, []);
+  assert.equal(JSON.parse(exhausted.content).terminal, true);
+  assert.deepEqual(JSON.parse(exhausted.content).remainingSourceBudget, { lines: 2, bytes: 0 });
+});
+
+
+test("source and wire caps charge only retained read/symbol slices and remain stable on reserialization", () => {
+  const preview = "//" + "a".repeat(1997) + "\n";
+  const candidates = Array.from({ length: 21 }, (_, i) => ({ declaration: { relativePath: `A${i}.java`, contentHash: "a".repeat(64), name: `A${i}` },
+    previewKind: "source", preview, evidenceRange: { startLine: 1, endLine: 1 } }));
+  const readLine = "\\".repeat(100) + "\n";
+  const cases = [
+    { name: "java_symbol", raw: { schemaVersion: "java-discovery/v1", candidates }, budget: { lines: 20, bytes: 40000 }, options: {} },
+    { name: "read", raw: { path: "A.java", startLine: 1, text: readLine.repeat(151), contentHash: "a".repeat(64) }, budget: { lines: 150, bytes: 15150 }, options: { maxBytes: 2000 } }
+  ];
+  for (const { name, raw, budget, options } of cases) {
+    const bounded = boundSourceResult(name, raw, budget);
+    assert.equal(bounded.sourceBudgetLimited, true, "source cap removes at least one line");
+    assert.deepEqual(bounded.remainingSourceBudget, { lines: 0, bytes: 0 });
+    const wire = serializeModelToolResult(name, bounded, options);
+    const payload = JSON.parse(wire.content);
+    const delivered = wire.slices.reduce((sum, slice) => ({ lines: sum.lines + splitSourceLines(slice.text).length, bytes: sum.bytes + Buffer.byteLength(slice.text) }), { lines: 0, bytes: 0 });
+    assert.ok(delivered.lines > 0 && delivered.lines < budget.lines, "wire cap removes additional source");
+    assert.deepEqual(payload.remainingSourceBudget, { lines: budget.lines - delivered.lines, bytes: budget.bytes - delivered.bytes });
+    assert.equal(payload.terminal, undefined, "wire omissions cannot claim an exhausted source budget");
+    assert.equal(payload.sourceBudgetLimited, true);
+    const second = serializeModelToolResult(name, payload, options);
+    assert.equal(second.content, wire.content);
+    assert.equal(second.modelPayloadHash, wire.modelPayloadHash);
+    assert.deepEqual(second.slices, wire.slices, "second serialization must not refund or duplicate delivered lines");
+    assert.deepEqual(boundSourceResult(name, raw, payload.remainingSourceBudget).remainingSourceBudget, { lines: 0, bytes: 0 }, "repeated source still consumes remaining budget");
+  }
+});
+
+
+test("wire budget rejection refunds all undelivered source and keeps budget metadata on second serialization", () => {
+  for (const name of ["read", "java_symbol"]) {
+    const text = "x".repeat(3000) + "\n";
+    const raw = name === "read" ? { path: "A.java", startLine: 1, text }
+      : { candidates: [{ declaration: { relativePath: "A.java", name: "n".repeat(3000) }, previewKind: "source", preview: text, evidenceRange: { startLine: 1, endLine: 1 } }] };
+    const bounded = boundSourceResult(name, raw, { lines: 1, bytes: 3001 });
+    const wire = serializeModelToolResult(name, bounded, { maxBytes: 512 });
+    assert.deepEqual(wire.slices, []);
+    const payload = JSON.parse(wire.content);
+    assert.equal(payload.error, "MODEL_BUDGET_EXCEEDED");
+    assert.deepEqual(payload.remainingSourceBudget, { lines: 1, bytes: 3001 });
+    assert.equal(payload.terminal, undefined);
+    const second = serializeModelToolResult(name, payload, { maxBytes: 512 });
+    assert.deepEqual(JSON.parse(second.content).remainingSourceBudget, payload.remainingSourceBudget);
+    assert.equal(JSON.parse(second.content).terminal, undefined);
+    assert.deepEqual(second.slices, []);
+  }
+});
+
+test("evidence wire receipts retain exact CRLF ranges and hashes; omitted metadata is never source", async () => {
+  const text = '<resultMap>\r\n  汉字\r\n</resultMap>\r\n';
+  const raw = { schemaVersion: "java-evidence-unit/v1", generation: 3, scopeState: "PARTIAL", reasons: ["STALE"], omitted: [{ path: "stale.xml", contentHash: "s" }],
+    units: [{ relation: "result-map-type", sourceKind: "mybatis", path: "mapper.xml", contentHash: "f".repeat(64), startLine: 2, endLine: 4, text, complete: true }] };
+  const out = await runEvalToolWire({ name: "java_evidence", raw, chat: fakeChat({ toolName: "java_evidence" }) });
+  assert.equal(out.sourceFetched.length, 1);
+  assert.equal(out.sourceReceived.length, 1);
+  const received = out.sourceReceived[0];
+  assert.equal(received.text, text); assert.equal(received.startLine, 2); assert.equal(received.endLine, 4);
+  assert.equal(received.fileContentHash, "f".repeat(64)); assert.equal(received.contentHash, sha256(text));
+  const payload = JSON.parse(out.received.toolMessages[0].content);
+  assert.equal(payload.scopeState, "PARTIAL"); assert.deepEqual(payload.omitted, raw.omitted);
+  const noSource = await runEvalToolWire({ name: "java_evidence", raw: { ...raw, units: [] }, chat: fakeChat({ toolName: "java_evidence" }) });
+  assert.equal(noSource.sourceReceived.length, 0);
+});
+
+test("evidence message clipping is incomplete, refunds actual removed source and is idempotent", () => {
+  const text = Array.from({ length: 30 }, (_, i) => `  <row id="${i}">${"x".repeat(60)}</row>\r\n`).join("");
+  const raw = { schemaVersion: "java-evidence-unit/v1", generation: 5, scopeState: "PARTIAL", omitted: [{ reason: "STALE" }], units: [{ relation: "result-map-type", sourceKind: "xml",
+    path: "mapper.xml", contentHash: "f".repeat(64), startLine: 2, endLine: 31, text, complete: true }] };
+  const limited = boundSourceResult("java_evidence", raw, { lines: 30, bytes: Buffer.byteLength(text) });
+  const wire = serializeModelToolResult("java_evidence", limited, { maxBytes: 1100 });
+  const payload = JSON.parse(wire.content);
+  assert.equal(payload.units[0].complete, false); assert.equal(payload.units[0].originalEndLine, 31);
+  assert.ok(wire.slices.length === 1); assert.ok(wire.slices[0].endLine < 31);
+  const kept = wire.slices[0].text;
+  assert.equal(payload.remainingSourceBudget.lines, 30 - splitSourceLines(kept).length);
+  assert.equal(payload.remainingSourceBudget.bytes, Buffer.byteLength(text) - Buffer.byteLength(kept));
+  const twice = serializeModelToolResult("java_evidence", payload, { maxBytes: 1100 });
+  assert.equal(twice.content, wire.content); assert.deepEqual(twice.slices, wire.slices);
+  assert.deepEqual(payload.omitted, raw.omitted); assert.equal(payload.scopeState, "PARTIAL");
 });

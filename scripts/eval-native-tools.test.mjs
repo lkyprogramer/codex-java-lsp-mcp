@@ -54,14 +54,14 @@ test("symmetric arms: native names are identical; only java_symbol differs", () 
     // repair arms: both get write_file and the compile-check test tool - still symmetric.
     const controlRepair = buildToolSet("control", "repair", { candidateRoot: createAttemptWorkspace(fixture, "b:control:r1", fixture + "-out") });
     const productRepair = buildToolSet("product", "repair", { candidateRoot: createAttemptWorkspace(fixture, "b:product:r1", fixture + "-out") });
-    assert.deepEqual(controlRepair.tools.map(t => t.function.name), ["write_file", "test", ...nativeToolNames()]);
+    assert.deepEqual(controlRepair.tools.map(t => t.function.name), ["write_file", "replace_file", "test", ...nativeToolNames()]);
     assert.deepEqual(productRepair.tools.map(t => t.function.name), controlRepair.tools.map(t => t.function.name));
     // The evaluate host exposes the same native set to both arms; product adds
     // exactly one tool: java_symbol.
     // The prompt no longer restricts any arm to a single unavailable tool and
     // states the shared surface.
     assert.ok(!EVAL_SYSTEM_PROMPT.includes("java_impact tool only"));
-    assert.ok(EVAL_SYSTEM_PROMPT.includes("both arms share the native list, rg and read tools"));
+    assert.ok(EVAL_SYSTEM_PROMPT.includes("Use only the tools actually provided"));
   } finally {
     rmSync(fixture + "-out", { recursive: true, force: true });
   }
@@ -150,6 +150,29 @@ async function runRg(set, pattern) {
   const result = await set.invoke("rg", { pattern });
   return { result, blockedEnv: typeof result?.error === "string" && result.error.includes("BLOCKED_ENV") };
 }
+
+test("rg accepts files and directories while missing paths never masquerade as missing binary", async () => {
+  const { tmp, fixture } = makeFixture();
+  const set = buildToolSet("control", "qa", { candidateRoot: fixture });
+  try {
+    for (const searchPath of ["src/A.java", "src", "."]) {
+      const result = await set.invoke("rg", { pattern: "alpha", path: searchPath });
+      assert.equal(result.error, undefined, searchPath);
+      assert.equal(result.matches, 1);
+      assert.ok(result.output.includes("src/A.java:2:"), "matches keep root-relative locators for every path scope");
+    }
+    const missing = await set.invoke("rg", { pattern: "alpha", path: "missing/A.java" });
+    assert.equal(missing.errorClass, "PATH_NOT_FOUND");
+    assert.ok(!missing.error.includes("BLOCKED_ENV"));
+    for (const searchPath of ["src/escape-link.txt", "../outside.txt"]) {
+      const rejected = await set.invoke("rg", { pattern: "OUTSIDE", path: searchPath });
+      assert.ok(rejected.error);
+      assert.ok(!rejected.output?.includes("OUTSIDE-SECRET"));
+    }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
 
 test("write (repair kind) is confined to the candidate and re-readable", async () => {
   const { fixture } = makeFixture();
@@ -312,4 +335,134 @@ test("R03 test tool: compile check reports diagnostics and never touches the can
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
+});
+
+test("native dispatch rejects unknown, missing and incorrectly typed parameters before execution", async () => {
+  const { tmp, fixture } = makeFixture();
+  try {
+    const set = buildToolSet("control", "repair", { candidateRoot: fixture });
+    for (const tool of set.tools) assert.equal(tool.function.parameters.additionalProperties, false);
+    const badWindow = await set.invoke("read", { path: "src/A.java", path_start: 2 });
+    assert.equal(badWindow.errorClass, "INVALID_ARGUMENTS");
+    assert.match(badWindow.error, /path_start/);
+    assert.equal(badWindow.text, undefined);
+    assert.equal((await set.invoke("read", { path: "src/A.java", startLine: "2" })).errorClass, "INVALID_ARGUMENTS");
+    assert.equal((await set.invoke("read", {})).errorClass, "INVALID_ARGUMENTS");
+    assert.equal((await set.invoke("test", { path: "src" })).errorClass, "INVALID_ARGUMENTS");
+    const bytes = readFileSync(path.join(fixture, "src/A.java"));
+    assert.equal((await set.invoke("write_file", { path: "src/A.java", content: "x", extra: 1 })).errorClass, "INVALID_ARGUMENTS");
+    assert.deepEqual(readFileSync(path.join(fixture, "src/A.java")), bytes);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("replace_file preserves unrelated bytes and fails without writing for ambiguous or unsafe targets", async () => {
+  const { tmp, fixture, outside } = makeFixture();
+  try {
+    const set = buildToolSet("product", "repair", { candidateRoot: fixture });
+    const target = path.join(fixture, "src/A.java");
+    const original = Buffer.concat([Buffer.from([0xff]), Buffer.from("// 中文\r\nclass A { int x = 7; }\r\n")]);
+    writeFileSync(target, original);
+    const result = await set.invoke("replace_file", { path: "src/A.java", before: "x = 7", after: "x = 42" });
+    assert.equal(result.written, true);
+    assert.equal(result.replacements, 1);
+    assert.deepEqual(readFileSync(target), Buffer.concat([original.subarray(0, original.indexOf("x = 7")), Buffer.from("x = 42"), original.subarray(original.indexOf("x = 7") + 5)]));
+    for (const args of [
+      { path: "src/A.java", before: "missing", after: "x" },
+      { path: "src/A.java", before: "", after: "x" },
+      { path: "src/Nope.java", before: "x", after: "y" },
+      { path: "src", before: "x", after: "y" },
+      { path: "../outside.txt", before: "SECRET", after: "x" },
+      { path: "src/escape-link.txt", before: "SECRET", after: "x" }
+    ]) {
+      const before = readFileSync(target);
+      assert.ok((await set.invoke("replace_file", args)).error);
+      assert.deepEqual(readFileSync(target), before);
+    }
+    writeFileSync(target, "aaaa\n");
+    assert.ok((await set.invoke("replace_file", { path: "src/A.java", before: "aa", after: "x" })).error);
+    assert.equal(readText(target), "aaaa\n");
+    assert.equal(readText(outside), "OUTSIDE-SECRET\n");
+    assert.ok((await buildToolSet("control", "qa", { candidateRoot: fixture }).invoke("replace_file", { path: "src/A.java", before: "aa", after: "x" })).error);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+function javacAvailable(t) {
+  try { execFileSync(process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin/javac") : "javac", ["-version"], { stdio: "ignore" }); return true; }
+  catch { t.skip("javac unavailable (BLOCKED_ENV)"); return false; }
+}
+function put(root, file, content) {
+  mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  writeFileSync(path.join(root, file), content);
+}
+const SIMPLE_POM = '<project><modelVersion>4.0.0</modelVersion><properties><maven.compiler.source>8</maven.compiler.source><maven.compiler.target>8</maven.compiler.target></properties></project>';
+
+test("Maven root uses production sources and release, ignoring unrelated duplicate modules and test sources", async t => {
+  if (!javacAvailable(t)) return;
+  const root = mkdtempSync(path.join(os.tmpdir(), "eval-maven-root-"));
+  try {
+    put(root, "pom.xml", SIMPLE_POM);
+    put(root, "src/main/java/A.java", "class A {}\n");
+    put(root, "src/test/java/Broken.java", "not java at all");
+    for (const mod of ["graduate", "undergrad"]) {
+      put(root, `modules/${mod}/pom.xml`, SIMPLE_POM);
+      put(root, `modules/${mod}/src/main/java/demo/Shared.java`, "package demo; public class Shared {}\n");
+    }
+    const set = buildToolSet("control", "repair", { candidateRoot: root });
+    const result = await set.invoke("test", {});
+    assert.equal(result.status, "COMPILED", result.output);
+    assert.equal(result.compiledFiles, 1);
+    assert.equal(result.units[0].release, "8");
+    put(root, "src/main/java/A.java", "class A { int broken( }\n");
+    assert.equal((await set.invoke("test", {})).status, "COMPILE_FAILED");
+    put(root, "src/main/java/A.java", 'class A { String x = "x".repeat(2); }\n');
+    const newerApi = await set.invoke("test", {});
+    assert.equal(newerApi.status, "COMPILE_FAILED", "Java 8 configuration must exclude newer JDK APIs");
+    put(root, "pom.xml", "<project><properties><maven.compiler.release>8</maven.compiler.release></properties><build><sourceDirectory>java</sourceDirectory></build></project>");
+    put(root, "java/Custom.java", "class Custom {}\n");
+    const customRoot = await set.invoke("test", {});
+    assert.equal(customRoot.status, "COMPILED", customRoot.output);
+    assert.equal(customRoot.compiledFiles, 1);
+    assert.equal(customRoot.units[0].release, "8");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("declared Maven modules compile separately; unsupported dependencies and unsafe roots are explicit", async t => {
+  if (!javacAvailable(t)) return;
+  const root = mkdtempSync(path.join(os.tmpdir(), "eval-maven-modules-"));
+  try {
+    put(root, "pom.xml", "<project><modules><module>modules/a</module><module>modules/b</module></modules></project>");
+    for (const mod of ["a", "b"]) {
+      put(root, `modules/${mod}/pom.xml`, SIMPLE_POM);
+      put(root, `modules/${mod}/src/main/java/demo/Shared.java`, "package demo; public class Shared {}\n");
+    }
+    const set = buildToolSet("product", "repair", { candidateRoot: root });
+    const result = await set.invoke("test", {});
+    assert.equal(result.status, "COMPILED", result.output);
+    assert.equal(result.compiledFiles, 2);
+    assert.equal(result.units.length, 2);
+    put(root, "modules/a/src/main/java/demo/Shared.java", "package demo; public class Shared { invalid }\n");
+    assert.equal((await set.invoke("test", {})).status, "COMPILE_FAILED");
+    put(root, "pom.xml", "<project><dependencies><dependency/></dependencies></project>");
+    assert.equal((await set.invoke("test", {})).status, "UNSUPPORTED");
+    put(root, "pom.xml", "<project><build><sourceDirectory>../outside</sourceDirectory></build></project>");
+    assert.equal((await set.invoke("test", {})).status, "UNSUPPORTED");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("standalone compile refuses a source-root symlink outside the candidate", async () => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "eval-compile-symlink-"));
+  try {
+    const candidate = path.join(tmp, "candidate");
+    const outside = path.join(tmp, "outside");
+    mkdirSync(candidate);
+    mkdirSync(outside);
+    put(outside, "External.java", "class External { invalid syntax }\n");
+    symlinkSync(outside, path.join(candidate, "src"));
+    const result = await buildToolSet("control", "repair", { candidateRoot: candidate }).invoke("test", {});
+    assert.equal(result.status, "UNSUPPORTED");
+    assert.match(result.output, /symlink escape/);
+    assert.ok(!result.output.includes("External.java"));
+    assert.ok(!result.output.includes(outside));
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
 });

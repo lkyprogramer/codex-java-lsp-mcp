@@ -2,13 +2,14 @@
 // output: bounded DetailedEntitySearchResult rows computed off the main thread.
 // pos: R09. Profile evidence (r09-task-result.md): a broad query at the
 //      default posting budget blocks synchronous SQLite for 25-50ms, over the
-//      20ms event-loop gate, and SQLite itself needs ~1us/posting. So ONE
-//      shared read-only worker runs the scans: queue <= 32, one query at a
+//      20ms event-loop gate, and SQLite itself needs ~1us/posting. So the shared
+//      read-only pool defaults to one reader (explicit experiment: two),
+//      queue <= 32 globally, one query per reader at a
 //      time (waiting exact lookups ahead of waiting broad scans), expired
 //      waiters leave the queue without running SQL, and a query
 //      stalled past its deadline + grace (between native steps) is
 //      terminated; its result settles only after the thread (and its
-//      connections) exited, and no second thread starts meanwhile. The worker
+//      connections) exited, and its slot cannot be reused meanwhile. The worker
 //      opens its own read-only connections and never shares the writer's.
 import { statSync } from "node:fs";
 import { performance } from "node:perf_hooks";
@@ -58,7 +59,7 @@ export type QueryWorkerStats = {
   expiredInQueue: number;
   terminated: number;
   spawned: number;
-  /** Live worker threads (0 or 1). */
+  /** Live worker threads, including terminating threads (0..workerCount). */
   threads: number;
 };
 
@@ -70,11 +71,15 @@ type Pending = {
   resolve: (result: DetailedEntitySearchResult) => void;
   reject: (error: Error) => void;
   expiry?: NodeJS.Timeout;
+  dispatchedAt?: number;
+  workerSlot?: number;
+  workerStartedAt?: number;
+  workerFinishedAt?: number;
 };
 
 type WorkerReply =
-  | { id: number; ok: true; result: DetailedEntitySearchResult }
-  | { id: number; ok: false; error: string }
+  | { id: number; ok: true; result: DetailedEntitySearchResult; workerStartedAt: number; workerFinishedAt: number }
+  | { id: number; ok: false; error: string; workerStartedAt: number; workerFinishedAt: number }
   | { released: number };
 
 /** Same intent rule as the scan itself (searchDetailed); never throws. */
@@ -94,65 +99,103 @@ function stoppedResult(stopReason: "deadline" | "queue_full"): DetailedEntitySea
   return { hits: [], truncated: true, selectionLimited: false, work: { postings: 0 }, generation: 0, stopReason, trace: [] };
 }
 
+export type QueryWorkerTiming = {
+  id: number;
+  request: QueryWorkerRequest;
+  queuedMs: number;
+  enqueueAt: number;
+  dispatchedAt: number | null;
+  settledAt: number;
+  workerStartedAt: number | null;
+  workerFinishedAt: number | null;
+  actualServiceMs: number | null;
+  /** Dispatch to settlement, including worker startup and termination. */
+  dispatchReplyMs: number;
+  totalMs: number;
+  started: boolean;
+  workerSlot?: number;
+  outcome: "completed" | "deadline" | "queue_full" | "error" | "closed";
+};
+export type QueryWorkerOptions = {
+  workerCount?: 1 | 2;
+  queueMax?: number;
+  killGraceMs?: number;
+  allowTestHooks?: boolean;
+  onTiming?: (timing: QueryWorkerTiming) => void;
+};
+type Slot = {
+  worker?: Worker;
+  exited?: Promise<void>;
+  running?: Pending;
+  killTimer?: NodeJS.Timeout;
+  terminating?: Promise<void>;
+};
+
 export class QueryWorkerPool {
   private readonly queue: Pending[] = [];
-  private running: Pending | undefined;
-  private worker: Worker | undefined;
-  private workerExited: Promise<void> | undefined;
-  private killTimer: NodeJS.Timeout | undefined;
+  private readonly slots: Slot[];
   private nextId = 1;
   private closed = false;
-  // Pending release acks, per thread: a thread that exits settles only its own.
+  private closePromise?: Promise<void>;
   private readonly releases = new Map<Worker, Map<number, () => void>>();
-  // A thread being terminated is still alive (it may be finishing a native
-  // step): no second thread is spawned until it has exited.
-  private terminating: Promise<void> | undefined;
   private readonly counters = { queuePeak: 0, completed: 0, rejectedQueueFull: 0, expiredInQueue: 0, terminated: 0, spawned: 0 };
 
-  constructor(private readonly options: { queueMax?: number; killGraceMs?: number; allowTestHooks?: boolean } = {}) {}
+  private readonly options: QueryWorkerOptions;
 
-  isClosed(): boolean {
-    return this.closed;
+  constructor(options: QueryWorkerOptions = {}) {
+    this.options = { ...options };
+    if (options.workerCount !== undefined && options.workerCount !== 1 && options.workerCount !== 2) {
+      throw new Error("query workerCount must be 1 or 2");
+    }
+    if (options.queueMax !== undefined && (!Number.isInteger(options.queueMax) || options.queueMax < 1 || options.queueMax > QUERY_WORKER_QUEUE_MAX)) {
+      throw new Error("query queueMax must be 1..32");
+    }
+    this.slots = Array.from({ length: options.workerCount ?? 1 }, () => ({}));
   }
+
+  /** True only after close has settled every thread and request. */
+  isClosed(): boolean { return this.closed && this.slots.every(slot => !slot.worker && !slot.terminating && !slot.running); }
 
   stats(): QueryWorkerStats {
-    return {
-      queued: this.queue.length,
-      running: this.running !== undefined,
-      ...this.counters,
-      threads: (this.worker ? 1 : 0) + (this.terminating ? 1 : 0)
-    };
+    return { queued: this.queue.length, running: this.slots.some(slot => !!slot.running), ...this.counters,
+      threads: this.slots.filter(slot => !!slot.worker).length };
   }
 
-  /**
-   * Resolves with a bounded result; never rejects for deadline or overload
-   * (those are `stopReason`s). Rejects only for a worker failure.
-   */
   search(request: QueryWorkerRequest): Promise<DetailedEntitySearchResult> {
     if (this.closed) return Promise.reject(new Error("query worker pool is closed"));
-    if (request.deadlineAt !== undefined && absoluteNow() >= request.deadlineAt) return Promise.resolve(stoppedResult("deadline"));
+    const enqueuedAt = absoluteNow();
+    const id = this.nextId++;
+    const emit = (outcome: QueryWorkerTiming["outcome"], dispatchedAt?: number, workerSlot?: number, workerStartedAt?: number, workerFinishedAt?: number) => {
+      const endedAt = absoluteNow();
+      // Instrumentation must never affect query or resource settlement.
+      try { this.options.onTiming?.({ id, request, queuedMs: (dispatchedAt ?? endedAt) - enqueuedAt,
+        dispatchReplyMs: dispatchedAt === undefined ? 0 : endedAt - dispatchedAt, totalMs: endedAt - enqueuedAt,
+        enqueueAt: enqueuedAt, dispatchedAt: dispatchedAt ?? null, settledAt: endedAt,
+        workerStartedAt: workerStartedAt ?? null, workerFinishedAt: workerFinishedAt ?? null,
+        actualServiceMs: workerStartedAt === undefined || workerFinishedAt === undefined ? null : workerFinishedAt - workerStartedAt,
+        started: dispatchedAt !== undefined, workerSlot, outcome }); } catch { /* observer only */ }
+    };
+    if (request.deadlineAt !== undefined && enqueuedAt >= request.deadlineAt) {
+      emit("deadline"); return Promise.resolve(stoppedResult("deadline"));
+    }
     if (this.queue.length >= (this.options.queueMax ?? QUERY_WORKER_QUEUE_MAX)) {
       this.counters.rejectedQueueFull += 1;
-      return Promise.resolve(stoppedResult("queue_full"));
+      emit("queue_full"); return Promise.resolve(stoppedResult("queue_full"));
     }
     return new Promise((resolve, reject) => {
-      const pending: Pending = { id: this.nextId++, request, point: isPointLookup(request), resolve, reject };
+      const pending: Pending = { id, request, point: isPointLookup(request),
+        resolve: result => { emit(result.stopReason === "deadline" ? (this.closed ? "closed" : "deadline") : "completed", pending.dispatchedAt, pending.workerSlot, pending.workerStartedAt, pending.workerFinishedAt); resolve(result); },
+        reject: error => { emit("error", pending.dispatchedAt, pending.workerSlot, pending.workerStartedAt, pending.workerFinishedAt); reject(error); } };
       if (request.deadlineAt !== undefined) {
-        // An expired waiter leaves the queue; it never reaches the worker.
         pending.expiry = setTimeout(() => {
           const index = this.queue.indexOf(pending);
           if (index < 0) return;
           this.queue.splice(index, 1);
           this.counters.expiredInQueue += 1;
-          resolve(stoppedResult("deadline"));
+          pending.resolve(stoppedResult("deadline"));
           this.updateRef();
         }, Math.max(0, request.deadlineAt - absoluteNow()));
       }
-      // Low-concurrency HOL fix: one thread, no preemption of the running
-      // scan, but a waiting point lookup goes ahead of waiting scans (FIFO
-      // within each class). A scan with a deadline cannot starve past it; one
-      // without a deadline could in principle wait behind a steady stream of
-      // point lookups (not a concern for a single-user server).
       const firstScan = pending.point ? this.queue.findIndex(waiting => !waiting.point) : -1;
       if (firstScan >= 0) this.queue.splice(firstScan, 0, pending);
       else this.queue.push(pending);
@@ -161,170 +204,159 @@ export class QueryWorkerPool {
     });
   }
 
-  /** Restart queuePeak measurement (load steps report their own peak). */
-  resetPeak(): void {
-    this.counters.queuePeak = this.queue.length;
+  resetPeak(): void { this.counters.queuePeak = this.queue.length; }
+
+  /** Release all current readers; a terminating thread settles on exit. */
+  async release(dbPath: string): Promise<void> {
+    await Promise.all(this.slots.map(slot => {
+      if (slot.terminating) return slot.terminating;
+      const worker = slot.worker;
+      if (!worker) return Promise.resolve();
+      const id = this.nextId++;
+      return new Promise<void>(resolve => {
+        const pending = this.releases.get(worker) ?? new Map<number, () => void>();
+        pending.set(id, resolve); this.releases.set(worker, pending);
+        worker.postMessage({ type: "release", dbPath, id });
+        this.updateRef();
+      });
+    }));
   }
 
-  /**
-   * Close the worker's cached connection for `dbPath` (repo close / idle
-   * drop). Resolves once the worker closed it (after any scan already in
-   * flight), or at once when no worker is alive.
-   */
-  release(dbPath: string): Promise<void> {
-    const worker = this.worker;
-    if (!worker || this.closed) return Promise.resolve();
-    const id = this.nextId++;
-    return new Promise(resolve => {
-      const pending = this.releases.get(worker) ?? new Map<number, () => void>();
-      pending.set(id, resolve);
-      this.releases.set(worker, pending);
-      worker.postMessage({ type: "release", dbPath, id });
-      this.updateRef();
-    });
-  }
-
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closePromise) return this.closePromise;
     this.closed = true;
     for (const pending of this.queue.splice(0)) {
       if (pending.expiry) clearTimeout(pending.expiry);
       pending.resolve(stoppedResult("deadline"));
     }
-    await this.terminate();
-    if (this.running) {
-      this.running.resolve(stoppedResult("deadline"));
-      this.running = undefined;
-    }
+    this.closePromise = Promise.all(this.slots.map(async slot => {
+      await this.terminate(slot);
+      const pending = slot.running;
+      slot.running = undefined;
+      pending?.resolve(stoppedResult("deadline"));
+    })).then(() => undefined);
+    return this.closePromise;
   }
 
   private pump(): void {
-    if (this.running || this.closed || this.terminating) {
-      this.updateRef();
-      return;
-    }
-    const next = this.queue.shift();
-    if (!next) {
-      this.updateRef();
-      return;
-    }
-    if (next.expiry) clearTimeout(next.expiry);
-    if (next.request.deadlineAt !== undefined && absoluteNow() >= next.request.deadlineAt) {
-      this.counters.expiredInQueue += 1;
-      next.resolve(stoppedResult("deadline"));
-      this.pump();
-      return;
-    }
-    this.running = next;
-    const worker = this.ensureWorker();
-    const request = this.options.allowTestHooks ? next.request : { ...next.request, testBlockMs: undefined };
-    worker.postMessage({ type: "search", id: next.id, request });
-    if (next.request.deadlineAt !== undefined) {
-      const killAfter = Math.max(0, next.request.deadlineAt - absoluteNow()) + (this.options.killGraceMs ?? QUERY_WORKER_KILL_GRACE_MS);
-      this.killTimer = setTimeout(() => void this.killRunning(next), killAfter);
+    if (!this.closed) for (const [index, slot] of this.slots.entries()) {
+      if (slot.running || slot.terminating) continue;
+      let next: Pending | undefined;
+      while ((next = this.queue.shift())) {
+        if (next.expiry) clearTimeout(next.expiry);
+        if (next.request.deadlineAt !== undefined && absoluteNow() >= next.request.deadlineAt) {
+          this.counters.expiredInQueue += 1; next.resolve(stoppedResult("deadline")); continue;
+        }
+        break;
+      }
+      if (!next) continue;
+      slot.running = next;
+      next.dispatchedAt = absoluteNow(); next.workerSlot = index;
+      const worker = this.ensureWorker(slot);
+      worker.postMessage({ type: "search", id: next.id,
+        request: this.options.allowTestHooks ? next.request : { ...next.request, testBlockMs: undefined } });
+      if (next.request.deadlineAt !== undefined) {
+        const killAfter = Math.max(0, next.request.deadlineAt - absoluteNow()) + (this.options.killGraceMs ?? QUERY_WORKER_KILL_GRACE_MS);
+        const pending = next;
+        slot.killTimer = setTimeout(() => void this.killRunning(slot, pending), killAfter);
+      }
     }
     this.updateRef();
   }
 
-  private ensureWorker(): Worker {
-    if (this.worker) return this.worker;
+  private ensureWorker(slot: Slot): Worker {
+    if (slot.worker) return slot.worker;
     const worker = new Worker(new URL(import.meta.url), { workerData: { role: QUERY_WORKER_ROLE } });
     this.counters.spawned += 1;
-    this.worker = worker;
-    this.workerExited = new Promise(resolve => worker.once("exit", () => resolve()));
-    worker.on("message", (reply: WorkerReply) => this.onReply(worker, reply));
-    worker.on("error", error => this.onWorkerGone(worker, error));
-    worker.on("exit", code => this.onWorkerGone(worker, new Error(`query worker exited with code ${code}`)));
+    slot.worker = worker;
+    slot.exited = new Promise(resolve => worker.once("exit", () => resolve()));
+    worker.on("message", (reply: WorkerReply) => this.onReply(slot, worker, reply));
+    // Error precedes exit: preserve the slot until exit has closed connections.
+    let failure: Error | undefined;
+    worker.on("error", error => { failure = error; });
+    worker.on("exit", code => {
+      this.settleReleases(worker);
+      if (slot.worker !== worker || slot.terminating) return;
+      slot.worker = undefined; slot.exited = undefined; this.clearKillTimer(slot);
+      const current = slot.running; slot.running = undefined;
+      current?.reject(failure ?? new Error(`query worker exited with code ${code}`));
+      this.pump();
+    });
     return worker;
   }
 
-  private onReply(worker: Worker, reply: WorkerReply): void {
+  private onReply(slot: Slot, worker: Worker, reply: WorkerReply): void {
     if ("released" in reply) {
       const pending = this.releases.get(worker);
-      pending?.get(reply.released)?.();
-      pending?.delete(reply.released);
+      pending?.get(reply.released)?.(); pending?.delete(reply.released);
       if (pending?.size === 0) this.releases.delete(worker);
-      this.updateRef();
-      return;
+      this.updateRef(); return;
     }
-    const current = this.running;
-    if (!current || current.id !== reply.id) return;
-    this.clearKillTimer();
-    this.running = undefined;
-    this.counters.completed += 1;
-    if (reply.ok) current.resolve(reply.result);
-    else current.reject(new Error(reply.error));
+    const current = slot.running;
+    if (slot.worker !== worker || slot.terminating || !current || current.id !== reply.id) return;
+    current.workerStartedAt = reply.workerStartedAt; current.workerFinishedAt = reply.workerFinishedAt;
+    this.clearKillTimer(slot); slot.running = undefined; this.counters.completed += 1;
+    if (reply.ok) current.resolve(reply.result); else current.reject(new Error(reply.error));
     this.pump();
   }
 
-  private onWorkerGone(worker: Worker, error: Error): void {
-    this.settleReleases(worker);
-    if (this.worker !== worker) return;
-    this.worker = undefined;
-    this.clearKillTimer();
-    const current = this.running;
-    this.running = undefined;
-    current?.reject(error);
-    this.pump();
-  }
-
-  // The deadline passed and the worker is still inside one statement:
-  // terminate it. The request settles only after the thread exited, so its
-  // read snapshot and connections are gone; the next request respawns.
-  private async killRunning(pending: Pending): Promise<void> {
-    if (this.running !== pending) return;
+  private async killRunning(slot: Slot, pending: Pending): Promise<void> {
+    if (slot.running !== pending || slot.terminating) return;
     this.counters.terminated += 1;
-    this.running = undefined;
-    await this.terminate();
-    pending.resolve(stoppedResult("deadline"));
+    await this.terminate(slot);
+    if (slot.running === pending) { slot.running = undefined; pending.resolve(stoppedResult("deadline")); }
     this.pump();
   }
 
-  private async terminate(): Promise<void> {
-    this.clearKillTimer();
-    const worker = this.worker;
-    const exited = this.workerExited;
-    this.worker = undefined;
-    this.workerExited = undefined;
-    if (!worker) return;
+  private terminate(slot: Slot): Promise<void> {
+    this.clearKillTimer(slot);
+    if (slot.terminating) return slot.terminating;
+    const worker = slot.worker;
+    if (!worker) return Promise.resolve();
+    const exited = slot.exited;
+    // Keep the worker attached until termination AND exit complete. This is
+    // the slot reservation that bounds both running and terminating threads.
     const done = (async () => {
-      await worker.terminate();
-      await exited;
+      await worker.terminate(); await exited;
       this.settleReleases(worker);
+      slot.worker = undefined; slot.exited = undefined;
     })();
-    this.terminating = done;
-    try {
-      await done;
-    } finally {
-      if (this.terminating === done) this.terminating = undefined;
-    }
+    slot.terminating = done.finally(() => { slot.terminating = undefined; });
+    return slot.terminating;
   }
 
-  // A gone thread holds no connection: its pending releases are done.
   private settleReleases(worker: Worker): void {
     const pending = this.releases.get(worker);
     if (!pending) return;
     for (const resolve of pending.values()) resolve();
     this.releases.delete(worker);
   }
-
-  private clearKillTimer(): void {
-    if (this.killTimer) clearTimeout(this.killTimer);
-    this.killTimer = undefined;
+  private clearKillTimer(slot: Slot): void {
+    if (slot.killTimer) clearTimeout(slot.killTimer);
+    slot.killTimer = undefined;
   }
-
-  // An idle worker never keeps the process alive; a busy one does.
   private updateRef(): void {
-    if (!this.worker) return;
-    if (this.running || this.queue.length > 0 || this.releases.has(this.worker)) this.worker.ref();
-    else this.worker.unref();
+    for (const slot of this.slots) if (slot.worker) {
+      if (slot.running || slot.terminating || this.queue.length > 0 || this.releases.has(slot.worker)) slot.worker.ref();
+      else slot.worker.unref();
+    }
   }
 }
 
 let shared: QueryWorkerPool | undefined;
+let sharedOptions: QueryWorkerOptions = {};
 
-/** The process-wide static query worker (one thread for every repository). */
+/** Explicit experimental configuration; an active pool cannot be replaced. */
+export function configureSharedQueryWorker(options: QueryWorkerOptions): void {
+  if (shared && !shared.isClosed()) throw new Error("shared query worker is active; close it before configuring");
+  if (options.workerCount !== undefined && options.workerCount !== 1 && options.workerCount !== 2) throw new Error("query workerCount must be 1 or 2");
+  if (options.queueMax !== undefined && (!Number.isInteger(options.queueMax) || options.queueMax < 1 || options.queueMax > QUERY_WORKER_QUEUE_MAX)) throw new Error("query queueMax must be 1..32");
+  sharedOptions = { ...options };
+}
+
+/** Process-wide static readers; production default remains one thread. */
 export function sharedQueryWorker(): QueryWorkerPool {
-  if (!shared || shared.isClosed()) shared = new QueryWorkerPool();
+  if (!shared || shared.isClosed()) shared = new QueryWorkerPool(sharedOptions);
   return shared;
 }
 
@@ -365,6 +397,7 @@ async function runWorker(): Promise<void> {
       return;
     }
     const { id, request } = message;
+    const workerStartedAt = absoluteNow();
     try {
       const conn = connFor(request.dbPath);
       if (request.testBlockMs) {
@@ -388,9 +421,9 @@ async function runWorker(): Promise<void> {
         conn.idle = setTimeout(() => drop(request.dbPath), request.idleMs);
         conn.idle.unref();
       }
-      parentPort!.postMessage({ id, ok: true, result } satisfies WorkerReply);
+      parentPort!.postMessage({ id, ok: true, result, workerStartedAt, workerFinishedAt: absoluteNow() } satisfies WorkerReply);
     } catch (error) {
-      parentPort!.postMessage({ id, ok: false, error: error instanceof Error ? error.message : String(error) } satisfies WorkerReply);
+      parentPort!.postMessage({ id, ok: false, error: error instanceof Error ? error.message : String(error), workerStartedAt, workerFinishedAt: absoluteNow() } satisfies WorkerReply);
     }
   });
 }

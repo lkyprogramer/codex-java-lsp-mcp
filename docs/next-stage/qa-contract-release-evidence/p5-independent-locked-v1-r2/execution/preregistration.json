@@ -1,0 +1,876 @@
+{
+  "schema": "independent-locked-live-plan/v1",
+  "phase": "locked",
+  "candidate": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-zlPTg7/candidate",
+  "identity": {
+    "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+    "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+    "files": 611,
+    "dirty": true,
+    "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+  },
+  "publicRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p5-independent-locked-v1-r2",
+  "publicManifestSha256": "0f1faaab3dfecc2b53bc59b24dc7a0b29037547696996d330f87c654e35a2528",
+  "independentVersion": "independent-locked-release/v1.0-r2",
+  "datasetHash": "899e17bc24434f826e1bb06b81a0311788992f48418312b49df00f9b11a30969",
+  "corpusHash": "b7bb78dc354286cb74ebabb5ce52b4e3a842c931e84909b4aa26f438100e824c",
+  "publicInputs": {
+    "publicFiles": {
+      "corpora/lease-pool/pom.xml": "c395586c6e9706c49171dfd0017e0796d9ba8ac2575dd9d7f40b90ff56dec998",
+      "corpora/lease-pool/src/main/java/holdout/leasepool/PoolEndpoint.java": "08e7cd081ac68bc17947ab3734117a3e1bab8fdf4235a44a56163e5fb97df02a",
+      "corpora/lease-pool/src/main/java/holdout/leasepool/PoolStatus.java": "f4a2af3749bab7b88b46454740b9b9c0a8bdae91ea957efd7389a835a79ef261",
+      "corpora/lease-pool/src/main/java/holdout/leasepool/ReservationBook.java": "e4b9a4c06967329d9e1fdec22764acc606c339bbef07ad55bac57cc20933ec84",
+      "corpora/lease-pool/src/main/java/holdout/leasepool/Waiter.java": "d9db79cc143909c4b37a15c0c383f6926fa6b27b79e64897c0b93b3c883bbc33",
+      "corpora/lease-pool/src/main/java/holdout/leasepool/WaiterCodec.java": "978cb5dc8ab1bae4b67e23710ccce448ad0aff7944ca5fa235612adbcf06f558",
+      "corpora/lease-pool/src/main/java/holdout/leasepool/WaitingPool.java": "e397e21f7d8473b44099a50655594e71fd65d658d9e736593a47cbb6ea2e824e",
+      "corpora/parcel-grid/pom.xml": "9f5cafc6eb146af80bb3d264b1769c4e342eb9f6794dd5c94a8377db760c9070",
+      "corpora/parcel-grid/src/main/java/holdout/parcelgrid/BinCounter.java": "195485820321d2f3531188519a1ce0e235c0593151494381a77b88731ca9ae61",
+      "corpora/parcel-grid/src/main/java/holdout/parcelgrid/LabelAliases.java": "999888f642b5ca32ed9af99eb1fcc1ea513fccefb3b9845e65057797bce09e4a",
+      "corpora/parcel-grid/src/main/java/holdout/parcelgrid/LaneRegistry.java": "bcb91d12007e782f60e10ffe36623d964de13eef840ec8b2cb3120a203b9d369",
+      "corpora/parcel-grid/src/main/java/holdout/parcelgrid/MassRounding.java": "f17cdfdbace71e82f96ae81dabc3ec98985c9da0ad91f24358e90132d6fb9ad5",
+      "corpora/parcel-grid/src/main/java/holdout/parcelgrid/ParcelIngress.java": "0053f3a8594ac8969ceb05a33b23703d8f764f460b1241d78dd9660a8819813c",
+      "corpora/parcel-grid/src/main/java/holdout/parcelgrid/ParcelWeigher.java": "b1789c3a2bfe1dd0acd70ea29c0c84a306eb509fc4f4c2b99d3d64b775ad845f",
+      "corpora/stencil-book/pom.xml": "d2cdb6311444b3ca553e6b6b0366c62f5c7a0b1f951263617bb1ea84f9215abd",
+      "corpora/stencil-book/src/main/java/holdout/stencilbook/CatalogLookup.java": "36c0a8ba7e268ed1f71fee9f737b6aa028a41cfbd4f38018e74295498c7eadc2",
+      "corpora/stencil-book/src/main/java/holdout/stencilbook/StencilCache.java": "4701bab58780d37be70e95ba0a48eeb48bc1c8fef7e4c5e2743ac2d0286dcc78",
+      "corpora/stencil-book/src/main/java/holdout/stencilbook/StencilInfo.java": "2c7b08070c3c9b2f6269a3298e02477ea1704704cf4cf335799672b4baea1988",
+      "corpora/stencil-book/src/main/java/holdout/stencilbook/StencilNames.java": "2c473a14f203b38cebb2101897c67b0c4bed2727885efb16da324406c7e06f3a",
+      "corpora/stencil-book/src/main/java/holdout/stencilbook/StencilRepository.java": "42d493a330e97bf9d0ea40a23d47b00f699c27dec9ba93146789d1c63602f69a",
+      "corpora/stencil-book/src/main/java/holdout/stencilbook/ToneDecoder.java": "7341f8a6773cf65cba371601048c7bae8c3090ff4aa89774e9bc7e7ffdbbe832",
+      "corpora/stencil-book/src/main/resources/mapper/StencilRepository.xml": "90725cb1f182bba5ea2d081f18e6bb1fb36193f1ce242dfa5ebc5093add10481",
+      "owner-interface.mjs": "82133f37fd2197de71dcece7f03586e580e57dc80a4efe0b3de9483fee0340ad",
+      "public-answer-contract-v1.0.json": "ea9d7d2a6ed63b6c85e7187d40501950f3b2289b296ae412f142301a898e4627",
+      "tasks.jsonl": "f7f8010e19e61c83c0060b3c02c27f27b6b4c6309fae585698599ff389dbfbe0"
+    },
+    "ownerSeal": {
+      "privateManifestSha256": "dd3b011017a028b920a1ed86033870e26b5146414115ef21387865cc8cb60748",
+      "harnessSha256": "f7da5634e2eeed6591d86fac22e1a94ac373f570c39520f5fc0bdbfa24a6b5b2",
+      "fileCount": 79,
+      "sealHash": "259a0d158e1fc300f3533816769ad2e304ef98ca996a9d1d7b24b8872d9248d7"
+    }
+  },
+  "launcherSha256": "92d57fc50218ecd85c6f37038a67a75f960f5d85110efb32de7a19b59f8ba9af",
+  "executorSha256": "93439e4c6ecd08742eaf281abbf7d42d7a467f8bada2d05eff9b56d66a4d82d1",
+  "oldHelperSha256": "cf0af3f61bfa021eaab66a10d5c659580e600a40a03f9140ce8bdcb405247b02",
+  "originalLauncherSha256": "3d9a23dc73bddc3c52224fd1542599e69fcb14c7a95faa4d15a01557c30d55b4",
+  "evaluatorSha256": "0b4fa9855d38fef389d9839b9a9282c62ab983e28e04df166927820362492cc4",
+  "frozenAdapterSha256": "e6e6842051a3d12aa41c5edc2d47943ad3e77f0ce457a59df9435c12e0e3e167",
+  "protocolSha256": "c9c6682b434793707e7538b449a5fb78900e3c95c8f77bda63e6c02e138833c6",
+  "evalProtocol": "eval-protocol/v1.5",
+  "ownerInterfaceSha256": "82133f37fd2197de71dcece7f03586e580e57dc80a4efe0b3de9483fee0340ad",
+  "harnessSha256": "f7da5634e2eeed6591d86fac22e1a94ac373f570c39520f5fc0bdbfa24a6b5b2",
+  "ownerSeal": {
+    "privateManifestSha256": "dd3b011017a028b920a1ed86033870e26b5146414115ef21387865cc8cb60748",
+    "harnessSha256": "f7da5634e2eeed6591d86fac22e1a94ac373f570c39520f5fc0bdbfa24a6b5b2",
+    "fileCount": 79,
+    "sealHash": "259a0d158e1fc300f3533816769ad2e304ef98ca996a9d1d7b24b8872d9248d7"
+  },
+  "publicReview": {
+    "status": "PASS",
+    "path": "p5-independent-locked-v1-r2/review.md",
+    "sha256": "2e158780d70e3b8e1e72aeb695b10f227ada2d41f360c6f06e8f061506cc3b6b"
+  },
+  "plan": [
+    {
+      "taskId": "HLR-PARCEL-Q1",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-Q1",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-Q2",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-Q2",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-Q3",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-Q3",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-Q1",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-Q1",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-Q2",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-Q2",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-Q3",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-Q3",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-Q1",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-Q1",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-Q2",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-Q2",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-Q3",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-Q3",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-R1",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-PARCEL-R1",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-R1",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-STENCIL-R1",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-R1",
+      "arm": "product",
+      "repeat": 1,
+      "productProfile": "broad"
+    },
+    {
+      "taskId": "HLR-LEASE-R1",
+      "arm": "control",
+      "repeat": 1,
+      "productProfile": "broad"
+    }
+  ],
+  "datasetIdentitySource": "Opaque owner private-manifest seal; runner does not read private dataset/gold",
+  "goldSha256": null,
+  "goldBinding": "NO_GOLD_READ; pack dataset identity supplied only by measured original owner scorer",
+  "model": "openclaw/Qwen3.8-next",
+  "productProfile": "broad",
+  "staticReaderCount": 1,
+  "configuration": "production default single worker; no configureSharedQueryWorker override",
+  "requested": {
+    "max_tokens": 2048,
+    "reasoning_effort": "none",
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "maxRounds": 16,
+    "orderingSeed": 1984,
+    "providerSamplingSeed": null
+  },
+  "publicAnswerContract": {
+    "version": "independent-locked-public-qa/v1.0",
+    "sha256": "ea9d7d2a6ed63b6c85e7187d40501950f3b2289b296ae412f142301a898e4627"
+  },
+  "tools": {
+    "product": [
+      {
+        "type": "function",
+        "function": {
+          "name": "java_symbol",
+          "description": "Locate Java declarations (types/methods) by name, FQN, or task intent. Matching is lexical over code identifiers, comments and framework keys: query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. Returns declarations with 1-based locators (the declaration name) and short byte-exact previews (preview=none by default; head or window on explicit request).",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Symbol name, FQN, owner#method, or free task text"
+              },
+              "terms": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Alternative search terms"
+              },
+              "searchMode": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "exact",
+                  "text"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "module": {
+                "type": "string"
+              },
+              "sourceSet": {
+                "type": "string",
+                "enum": [
+                  "main",
+                  "test"
+                ]
+              },
+              "preview": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "head",
+                  "window"
+                ]
+              }
+            },
+            "required": [
+              "query"
+            ]
+          }
+        }
+      }
+    ],
+    "native": {
+      "qa": [
+        {
+          "type": "function",
+          "function": {
+            "name": "list",
+            "description": "List directory entries (file/dir names, repo-relative paths) under a repo-relative directory.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "maxEntries": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "rg",
+            "description": "Locate a fixed-string pattern in the working copy; returns bounded repo-relative 'path:line:content' navigation output. These matches do not count as source evidence; read the relevant exact windows before submission.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "repo-relative file or directory to search (default: root)"
+                },
+                "maxResults": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "read",
+            "description": "Read an exact file window from the working copy (repo-relative path).",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "startLine": {
+                  "type": "integer"
+                },
+                "maxLines": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path"
+              ]
+            }
+          }
+        }
+      ],
+      "repair": [
+        {
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "description": "Write the full corrected content of a repo-relative source file (repair tasks only).",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "content"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "replace_file",
+            "description": "Replace exactly one occurrence of before with after in an existing repo-relative file. Zero or multiple matches fail without writing.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "after": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "before",
+                "after"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "test",
+            "description": "Compile production Java sources selected by the public Maven configuration (or standalone src tree). Unsupported builds are reported explicitly. Evaluator tests are not available.",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "list",
+            "description": "List directory entries (file/dir names, repo-relative paths) under a repo-relative directory.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "maxEntries": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "rg",
+            "description": "Locate a fixed-string pattern in the working copy; returns bounded repo-relative 'path:line:content' navigation output. These matches do not count as source evidence; read the relevant exact windows before submission.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string",
+                  "description": "repo-relative file or directory to search (default: root)"
+                },
+                "maxResults": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "read",
+            "description": "Read an exact file window from the working copy (repo-relative path).",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "startLine": {
+                  "type": "integer"
+                },
+                "maxLines": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "path"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "submission": {
+      "HLR-PARCEL-Q1": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "entry": {
+                "type": "string",
+                "description": "Ingress entry method. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "rounder": {
+                "type": "string",
+                "description": "Helper method performing numeric rounding. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "massResult": {
+                "type": "integer",
+                "description": "Actual integer returned for the requested current-source call."
+              }
+            },
+            "required": [
+              "entry",
+              "rounder",
+              "massResult"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-PARCEL-Q2": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "collision": {
+                "type": "string",
+                "description": "Positive predicate meaning a collision exists. Preserve source expression; do not add negation or explanation."
+              },
+              "mapping": {
+                "type": "string",
+                "description": "Field written on successful registration. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "returnType": {
+                "type": "string",
+                "description": "Declared return type. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              }
+            },
+            "required": [
+              "collision",
+              "mapping",
+              "returnType"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-PARCEL-Q3": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "collectionType": {
+                "type": "string",
+                "description": "Declared field type expression including generic arguments, preserving source spelling."
+              },
+              "laneNames": {
+                "type": "array",
+                "description": "Distinct lane names sorted by Unicode code point order.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "collectionType",
+              "laneNames"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-STENCIL-Q1": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "converter": {
+                "type": "string",
+                "description": "Name conversion method. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "token": {
+                "type": "string",
+                "description": "Exact returned string. Preserve case, digits and punctuation."
+              }
+            },
+            "required": [
+              "converter",
+              "token"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-STENCIL-Q2": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "statement": {
+                "type": "string",
+                "description": "XML statement ID selected by delegated repository method. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "mapping": {
+                "type": "string",
+                "description": "Referenced XML resultMap ID. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "properties": {
+                "type": "array",
+                "description": "Mapped property names sorted by Unicode code point order.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "toneColumn": {
+                "type": "string",
+                "description": "Column mapped to the requested property. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              }
+            },
+            "required": [
+              "statement",
+              "mapping",
+              "properties",
+              "toneColumn"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-STENCIL-Q3": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "firstByte": {
+                "type": "integer",
+                "description": "First actual decoded integer."
+              },
+              "secondByte": {
+                "type": "integer",
+                "description": "Second actual decoded integer."
+              },
+              "separator": {
+                "type": "string",
+                "description": "Exact source delimiter literal content, without quotes or normalization."
+              }
+            },
+            "required": [
+              "firstByte",
+              "secondByte",
+              "separator"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-LEASE-Q1": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "scoreOrder": {
+                "type": "string",
+                "description": "Semantic score sort direction. Select one advertised token.",
+                "enum": [
+                  "LOW_SCORE_FIRST",
+                  "HIGH_SCORE_FIRST"
+                ]
+              },
+              "tieMethod": {
+                "type": "string",
+                "description": "Accessor used for secondary comparison. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              }
+            },
+            "required": [
+              "scoreOrder",
+              "tieMethod"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-LEASE-Q2": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "entry": {
+                "type": "string",
+                "description": "Endpoint entry method. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "resolver": {
+                "type": "string",
+                "description": "Delegated status decision method. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "state": {
+                "type": "string",
+                "description": "Exact enum constant, omitting owner. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              }
+            },
+            "required": [
+              "entry",
+              "resolver",
+              "state"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-LEASE-Q3": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "encoder": {
+                "type": "string",
+                "description": "Encoding method. Use only the simple identifier.",
+                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+              },
+              "formatLiteral": {
+                "type": "string",
+                "description": "Exact source format literal content, without surrounding quotes."
+              },
+              "rendered": {
+                "type": "string",
+                "description": "Exact returned string for the call."
+              }
+            },
+            "required": [
+              "encoder",
+              "formatLiteral",
+              "rendered"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-PARCEL-R1": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "patchApplied": {
+                "type": "boolean"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "patchApplied",
+              "summary"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-STENCIL-R1": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "patchApplied": {
+                "type": "boolean"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "patchApplied",
+              "summary"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "HLR-LEASE-R1": {
+        "type": "function",
+        "function": {
+          "name": "submit_answer",
+          "description": "Submit the final answer as the only tool action in this response. All public keys, types and advertised field constraints are required. Ordinary assistant content is a draft.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "patchApplied": {
+                "type": "boolean"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "patchApplied",
+              "summary"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  },
+  "limitations": [
+    "9 new QA + 3 new repair; 24 planned single paired independent locked attempts.",
+    "No private gold/evidence coordinates/reference tests read or exposed by runner.",
+    "Frozen owner judgment is the sole score authority; no gate PASS inferred by runner.",
+    "This run is separate from original exposed full/public denominators."
+  ]
+}

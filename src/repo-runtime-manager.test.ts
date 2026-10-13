@@ -718,6 +718,37 @@ test("a session that breaks releases its slot to a queued waiter", async () => {
   await second;
   assert.equal(bRan, true);
   assert.equal(sessions.get("/repo-a")!.stops, 0, "a BROKEN session releases without being stopped again");
+  assert.equal(sessions.get("/repo-a")!.reaps >= 1, true, "breaking the session still reaps a surviving child");
+});
+
+test("BROKEN keeps its machine slot until an abandoned child is reaped", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000
+  }, resolved => fakeContext(resolved, sessions), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const broken = deferred<void>();
+  const releaseHandler = deferred<void>();
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    const session = context.session as unknown as FakeSession;
+    await session.ensureStarted();
+    session.liveChild = true;
+    session.reapGate = deferred<void>();
+    session.transition("BROKEN");
+    broken.resolve();
+    await releaseHandler.promise;
+  }, { mayStartLsp: true });
+  await broken.promise;
+  let ran = false;
+  const second = manager.withContext({ repoRoot: "/repo-b" }, async () => { ran = true; }, { mayStartLsp: true });
+  releaseHandler.resolve();
+  await first;
+  await delay(20);
+  assert.equal(ran, false, "a surviving child still consumes the machine slot");
+  const session = sessions.get("/repo-a")!;
+  session.liveChild = false;
+  session.reapGate!.resolve();
+  await second;
+  await manager.shutdownAll();
 });
 
 test("activeRepos exposes lifecycle state and reservation", async () => {
@@ -1638,6 +1669,9 @@ async function waitFor(condition: () => boolean): Promise<void> {
 class FakeSession {
   state: JdtlsLifecycleState = "NEW";
   stops = 0;
+  reaps = 0;
+  liveChild = false;
+  reapGate?: Deferred<void>;
   ensureStartedCalls = 0;
   startGate?: Deferred<void>;
   repoChangeError?: Error;
@@ -1671,6 +1705,13 @@ class FakeSession {
   async stop(): Promise<void> {
     this.stops += 1;
     this.transition("STOPPED");
+  }
+
+  hasLiveChildren(): boolean { return this.liveChild; }
+
+  async reapAbandonedChildren(): Promise<void> {
+    this.reaps += 1;
+    if (this.reapGate) await this.reapGate.promise;
   }
 
   bindGenerationClock(clock?: GenerationClock): void {

@@ -26,7 +26,9 @@ function relativePathOfFileId(fileId: string): string {
 }
 
 function typeNameOf(type: JavaTypeFacts): string {
-  return type.fqn || type.simpleName;
+  // Local types (and their nested types) have position-based JavaIndex IDs;
+  // their simple names may repeat in different methods of the same file.
+  return type.fqn || type.typeId;
 }
 
 export function knowledgeIdForType(type: JavaTypeFacts): string {

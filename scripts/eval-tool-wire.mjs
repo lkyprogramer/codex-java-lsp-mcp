@@ -71,6 +71,21 @@ function budgetError(toolName, maxBytes, detail) {
   return { error: "MODEL_BUDGET_EXCEEDED", errorClass: "MODEL_BUDGET", tool: toolName, maxBytes, detail };
 }
 
+/** Source clamping charges its retained input. The wire charges only source
+ * it actually keeps; refund only what this serialization removes. A second
+ * serialization sees that kept input, so it cannot refund it again. */
+function wireSourceBudget(domain, suppliedSlices, retainedSlices) {
+  if (!domain?.remainingSourceBudget) return {};
+  const totals = slices => slices.reduce((sum, slice) => ({ lines: sum.lines + splitSourceLines(slice.text).length, bytes: sum.bytes + byteLength(slice.text) }), { lines: 0, bytes: 0 });
+  const supplied = totals(suppliedSlices);
+  const retained = totals(retainedSlices);
+  const remainingSourceBudget = {
+    lines: domain.remainingSourceBudget.lines + supplied.lines - retained.lines,
+    bytes: domain.remainingSourceBudget.bytes + supplied.bytes - retained.bytes
+  };
+  return { remainingSourceBudget, ...(remainingSourceBudget.lines === 0 || remainingSourceBudget.bytes === 0 ? { terminal: true } : {}) };
+}
+
 function serializeRead(domain, maxBytes) {
   const text = joinTextBlocks(domain?.text);
   const lines = splitSourceLines(text);
@@ -78,15 +93,20 @@ function serializeRead(domain, maxBytes) {
   const base = {
     path: typeof domain?.path === "string" ? domain.path : "",
     startLine,
-    ...(typeof domain?.contentHash === "string" ? { contentHash: domain.contentHash } : {})
+    ...(Number.isInteger(domain?.totalLines) && domain.totalLines >= 0 ? { totalLines: domain.totalLines } : {}),
+    ...(typeof domain?.contentHash === "string" ? { contentHash: domain.contentHash } : {}),
+    ...(domain?.sourceBudgetLimited === true ? { sourceBudgetLimited: true } : {}),
+    ...(typeof domain?.sourceBudgetReason === "string" ? { sourceBudgetReason: domain.sourceBudgetReason } : {}),
   };
   const build = kept => ({
     ...base,
+    ...wireSourceBudget(domain, [{ text }], [{ text: lines.slice(0, kept).join("") }]),
     endLine: kept === 0 ? startLine - 1 : startLine + kept - 1,
+    ...(Number.isInteger(domain?.totalLines) && domain.totalLines >= 0 ? { hasMore: startLine + kept - 1 < domain.totalLines } : {}),
     text: lines.slice(0, kept).join(""),
     // Truncation already applied by the tool (its own source cap) stays visible.
     ...(kept < lines.length || domain?.truncated === true ? { truncated: true } : {}),
-    ...(kept < lines.length ? { nextStartLine: startLine + kept } : {})
+    ...(kept < lines.length ? { nextStartLine: startLine + kept } : Number.isInteger(domain?.nextStartLine) ? { nextStartLine: domain.nextStartLine } : {})
   });
   // Largest whole-line prefix that fits (binary search over line count).
   let low = 0;
@@ -97,7 +117,7 @@ function serializeRead(domain, maxBytes) {
     else high = mid - 1;
   }
   if (low === 0 && lines.length > 0) {
-    return { payload: budgetError("read", maxBytes, `line ${startLine} alone exceeds the model message budget; read a different window`), slices: [], truncated: true };
+    return { payload: { ...budgetError("read", maxBytes, `line ${startLine} alone exceeds the model message budget; read a different window`), ...wireSourceBudget(domain, [{ text }], []) }, slices: [], truncated: true };
   }
   const payload = build(low);
   const slices = low > 0 && base.path
@@ -139,13 +159,21 @@ function serializeSymbol(domain, maxBytes) {
   let candidates = payload.candidates;
   let droppedPreviews = 0;
   let droppedCandidates = 0;
-  if (!fits(payload, maxBytes)) {
+  const suppliedSlices = all.map(candidateSlice).filter(Boolean);
+  const fitsPayload = () => {
+    if (domain.remainingSourceBudget) {
+      delete payload.terminal;
+      Object.assign(payload, wireSourceBudget(domain, suppliedSlices, candidates.map(candidateSlice).filter(Boolean)));
+    }
+    return fits(payload, maxBytes);
+  };
+  if (!fitsPayload()) {
     candidates = [];
     payload.candidates = candidates;
     payload.modelBudget = { droppedPreviews: 0, droppedCandidates: 0, maxBytes };
     for (let i = 0; i < all.length; i += 1) {
       candidates.push({ ...all[i] });
-      if (fits(payload, maxBytes)) continue;
+      if (fitsPayload()) continue;
       const locator = { ...all[i] };
       if (typeof locator.preview === "string") {
         delete locator.preview;
@@ -153,7 +181,7 @@ function serializeSymbol(domain, maxBytes) {
         locator.previewDropped = "MODEL_BUDGET";
         candidates[candidates.length - 1] = locator;
         payload.modelBudget.droppedPreviews = droppedPreviews + 1;
-        if (fits(payload, maxBytes)) {
+        if (fitsPayload()) {
           droppedPreviews += 1;
           continue;
         }
@@ -164,11 +192,70 @@ function serializeSymbol(domain, maxBytes) {
     }
     payload.modelBudget = { droppedPreviews, droppedCandidates, maxBytes };
   }
-  if (!fits(payload, maxBytes) || (all.length > 0 && candidates.length === 0)) {
-    return { payload: budgetError("java_symbol", maxBytes, "not even one candidate locator fits the model message budget"), slices: [], truncated: true };
+  if (!fitsPayload() || (all.length > 0 && candidates.length === 0)) {
+    return { payload: { ...budgetError("java_symbol", maxBytes, "not even one candidate locator fits the model message budget"), ...wireSourceBudget(domain, suppliedSlices, []) }, slices: [], truncated: true };
   }
   const slices = candidates.map(candidateSlice).filter(Boolean);
   return { payload, slices, truncated: droppedPreviews > 0 || droppedCandidates > 0 };
+}
+
+function evidenceSlice(unit) {
+  if (typeof unit?.path !== "string" || !unit.path || typeof unit.text !== "string" || !unit.text
+    || !Number.isInteger(unit.startLine) || unit.startLine < 1 || !Number.isInteger(unit.endLine)
+    || splitSourceLines(unit.text).length !== unit.endLine - unit.startLine + 1) return null;
+  return { path: unit.path, startLine: unit.startLine, endLine: unit.endLine, text: unit.text,
+    ...(typeof unit.contentHash === "string" ? { fileContentHash: unit.contentHash } : {}) };
+}
+
+/** Evidence metadata is not a receipt. Admit only exact whole-line text;
+ * shortening a unit always preserves its original range and incompleteness. */
+function serializeEvidence(domain, maxBytes) {
+  if (domain?.schemaVersion !== "java-evidence-unit/v1" || !Array.isArray(domain.units)) return {
+    payload: { error: "UNSUPPORTED_TOOL_RESULT", errorClass: "PROTOCOL", tool: "java_evidence", detail: "missing evidence units" }, slices: [], truncated: false
+  };
+  const suppliedSlices = domain.units.map(evidenceSlice).filter(Boolean);
+  const payload = { ...domain, units: domain.units.map(unit => ({ ...unit })) };
+  const updateBudget = () => {
+    if (domain.remainingSourceBudget) {
+      delete payload.terminal;
+      Object.assign(payload, wireSourceBudget(domain, suppliedSlices, payload.units.map(evidenceSlice).filter(Boolean)));
+    }
+    return fits(payload, maxBytes);
+  };
+  // Invalid ranges must never show source text that the recorder cannot charge.
+  let truncated = false;
+  for (const unit of payload.units) if (unit.text && !evidenceSlice(unit)) {
+    delete unit.text; unit.complete = false; unit.sourceOmitted = "INVALID_SOURCE_RANGE"; truncated = true;
+  }
+  if (!updateBudget()) {
+    payload.modelBudget = { maxBytes };
+    // First remove text, retaining all stale/omitted flags and original ranges.
+    payload.units = payload.units.map(unit => {
+      if (!unit.text) return unit;
+      return { ...unit, text: "", endLine: unit.startLine - 1, originalEndLine: unit.originalEndLine ?? unit.endLine,
+        complete: false, sourceOmitted: "MODEL_BUDGET" };
+    });
+    if (!updateBudget()) return { payload: { ...budgetError("java_evidence", maxBytes, "evidence metadata exceeds the model message budget"),
+      ...wireSourceBudget(domain, suppliedSlices, []) }, slices: [], truncated: true };
+    for (let i = 0; i < domain.units.length; i += 1) {
+      const unit = domain.units[i];
+      if (!evidenceSlice(unit)) continue;
+      const lines = splitSourceLines(unit.text);
+      const build = kept => kept === lines.length ? { ...unit } : { ...unit,
+        text: lines.slice(0, kept).join(""), endLine: unit.startLine + kept - 1,
+        originalEndLine: unit.originalEndLine ?? unit.endLine, complete: false, sourceOmitted: "MODEL_BUDGET" };
+      let low = 0, high = lines.length;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        payload.units[i] = build(mid);
+        if (updateBudget()) low = mid; else high = mid - 1;
+      }
+      payload.units[i] = build(low);
+    }
+    truncated = true;
+  }
+  updateBudget();
+  return { payload, slices: payload.units.map(evidenceSlice).filter(Boolean), truncated };
 }
 
 /** Bounded text field (list entries / rg output / test output): trimmed by
@@ -206,7 +293,9 @@ export function serializeModelToolResult(toolName, raw, options = {}) {
   if (isError || (domain && typeof domain === "object" && !Array.isArray(domain) && domain.error)) {
     const payload = {
       error: String(domain?.error ?? "tool error").slice(0, ERROR_TEXT_LIMIT),
-      ...(typeof domain?.errorClass === "string" ? { errorClass: domain.errorClass } : {})
+      ...(typeof domain?.errorClass === "string" ? { errorClass: domain.errorClass } : {}),
+      ...(domain?.remainingSourceBudget ? { remainingSourceBudget: domain.remainingSourceBudget } : {}),
+      ...(domain?.terminal === true ? { terminal: true } : {})
     };
     result = { payload, slices: [], truncated: false };
   } else {
@@ -217,12 +306,17 @@ export function serializeModelToolResult(toolName, raw, options = {}) {
       case "java_symbol":
         result = serializeSymbol(domain, maxBytes);
         break;
+      case "java_evidence":
+        result = serializeEvidence(domain, maxBytes);
+        break;
       case "write_file":
+      case "replace_file":
         result = {
           payload: {
             path: typeof domain?.path === "string" ? domain.path : "",
             written: domain?.written === true,
-            ...(Number.isFinite(domain?.bytes) ? { bytes: domain.bytes } : {})
+            ...(Number.isFinite(domain?.bytes) ? { bytes: domain.bytes } : {}),
+            ...(toolName === "replace_file" && Number.isInteger(domain?.replacements) ? { replacements: domain.replacements } : {})
           },
           slices: [],
           truncated: false
@@ -259,7 +353,8 @@ export function serializeModelToolResult(toolName, raw, options = {}) {
   }
   let content = JSON.stringify(result.payload);
   if (byteLength(content) > maxBytes) {
-    content = JSON.stringify(budgetError(toolName, maxBytes, "serialized result exceeds the model message budget"));
+    const suppliedSlices = toolName === "read" ? [{ text: joinTextBlocks(domain?.text) }] : toolName === "java_symbol" ? (domain?.candidates ?? []).map(candidateSlice).filter(Boolean) : toolName === "java_evidence" ? (domain?.units ?? []).map(evidenceSlice).filter(Boolean) : [];
+    content = JSON.stringify({ ...budgetError(toolName, maxBytes, "serialized result exceeds the model message budget"), ...wireSourceBudget(domain, suppliedSlices, []) });
     result = { ...result, slices: [], truncated: true };
   }
   return {

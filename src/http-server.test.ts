@@ -520,15 +520,20 @@ function fakeJdtlsProgram(): string {
   return `#!${process.execPath}
 let buffer = Buffer.alloc(0);
 
-function send(id, result) {
-  if (id === undefined) return;
-  const body = JSON.stringify({ jsonrpc: "2.0", id, result });
+function sendMessage(message) {
+  const body = JSON.stringify(message);
   process.stdout.write("Content-Length: " + Buffer.byteLength(body) + "\\r\\n\\r\\n" + body);
+}
+
+function send(id, result) {
+  if (id !== undefined) sendMessage({ jsonrpc: "2.0", id, result });
 }
 
 function handle(message) {
   if (message.method === "initialize") {
     send(message.id, { capabilities: {} });
+  } else if (message.method === "initialized") {
+    sendMessage({ jsonrpc: "2.0", method: "language/status", params: { type: "ServiceReady", message: "ServiceReady" } });
   } else if (message.method === "shutdown") {
     send(message.id, null);
   } else if (message.method === "workspace/symbol") {

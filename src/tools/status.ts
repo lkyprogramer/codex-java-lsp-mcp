@@ -26,7 +26,7 @@ type SessionStatus = ReturnType<ToolContext["session"]["status"]>;
  * session state, only on options.semanticPolicy/mode/anchor.profile.
  */
 const AUTO_SEMANTIC_POLICY_EXPLANATION =
-  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors, never merely because JDT reports READY (READY precedes real project import, which can take tens of seconds on a cold workspace - see docs/phase-v3/phase5-semantic-first-touch-decision.md). semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
+  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors, never merely because JDT reports READY (READY requires the initial project import notification; later build/index work can still be pending). semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
 
 type DisabledStatus = {
   readonly repoRoot: string;
@@ -273,6 +273,7 @@ function summarizeProgress(progress: JdtlsProgressStatus): Record<string, unknow
     active: progress.active,
     activeMessageCount: progress.activeMessages.length,
     lastProgressAt: progress.lastProgressAt,
-    lastLanguageStatus: progress.lastLanguageStatus
+    lastLanguageStatus: progress.lastLanguageStatus,
+    importState: progress.importState
   });
 }

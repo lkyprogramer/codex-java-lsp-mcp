@@ -1,0 +1,62 @@
+{
+  "schema": "java-agent-guidance-check/v1",
+  "mode": "fresh codex exec sessions, configured default model/settings, actual configured hook/MCP/global AGENTS",
+  "modelOverride": null,
+  "toolSequenceSpecifiedInPrompts": false,
+  "globalAgentsSha256": "4cfc3ace7e7b2e457196269139f596049faa13ddd51687dad4e9d8f650f1417d",
+  "buildSha": "48bad915c854",
+  "cases": [
+    {
+      "id": "static-primary",
+      "cwd": "/Users/luo/Documents/program/exam-parent-v3",
+      "prompt": "请定位 CandidateLoginSessionService 的声明，核实它有哪些公开方法以及各方法的用途。这里只需要声明和方法体核对，不要求完整引用分析。只读，不修改任何文件，不执行构建，不启动业务应用，不连接业务数据库，不读取凭据或写入记忆，不委派其他代理。请以实际源码给出简洁结论和位置；无法核实时说明缺口。",
+      "timeoutSeconds": 360,
+      "criteria": [
+        "status start=false validates exact repoRoot",
+        "static symbol query obtains actual declaration",
+        "actual method source is read",
+        "no JDT prestart or semantic query for this static-only task"
+      ],
+      "gitStatusBeforeSha256": "6dcf1a7eb2a31183228a36a65625653a600f7f6b0c1d9aef1e8ce54e4c595d00"
+    },
+    {
+      "id": "semantic-primary",
+      "cwd": "/Users/luo/Documents/program/cipherlink",
+      "prompt": "请核实 ClientUpdateAppService 接口的真实实现和生产代码引用，说明哪些位置调用它，以及实现方法做了什么。只读，不修改任何文件，不执行构建，不启动业务应用，不连接业务数据库，不读取凭据或写入记忆，不委派其他代理。请以实际源码给出简洁结论和位置；无法核实时说明缺口。",
+      "timeoutSeconds": 600,
+      "criteria": [
+        "exact repoRoot validated",
+        "real precision operation obtains implementation or references",
+        "implementation and caller source verified",
+        "partial/deadline gaps disclosed; no unsupported complete coverage claim"
+      ],
+      "gitStatusBeforeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "static-worktree",
+      "cwd": "/Users/luo/Documents/program/cipherlink-worktrees/fix-brooks-audit",
+      "prompt": "请定位 ClientReleaseRepository 的声明，核实它公开的方法和各方法用途。这里只需要声明与源码核对，不要求完整引用分析。只读，不修改任何文件，不执行构建，不启动业务应用，不连接业务数据库，不读取凭据或写入记忆，不委派其他代理。请以实际源码给出简洁结论和位置；无法核实时说明缺口。",
+      "timeoutSeconds": 360,
+      "criteria": [
+        "all repo-scoped MCP calls use this exact worktree root",
+        "static symbol query and source read",
+        "no JDT prestart or semantic query for static task"
+      ],
+      "gitStatusBeforeSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "documentation-only",
+      "cwd": "/Users/luo/Documents/program/exam-parent-v3",
+      "prompt": "请排查根目录 README 文档的构建指引：核对它的一级标题，以及它是否写明构建命令。只报告已有内容，不运行命令。只读，不修改任何文件，不执行构建，不启动业务应用，不连接业务数据库，不读取凭据或写入记忆，不委派其他代理。请以实际源码给出简洁结论和位置；无法核实时说明缺口。",
+      "timeoutSeconds": 240,
+      "criteria": [
+        "README source read",
+        "no Java MCP or JDT calls",
+        "no source modification"
+      ],
+      "gitStatusBeforeSha256": "6dcf1a7eb2a31183228a36a65625653a600f7f6b0c1d9aef1e8ce54e4c595d00"
+    }
+  ],
+  "revision": 2,
+  "preExecutionRefinement": "Documentation case includes the existing advisory keyword 排查; criteria unchanged; no test agent requests executed."
+}

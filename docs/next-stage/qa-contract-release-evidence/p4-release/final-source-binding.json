@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "identities": {
+    "workspace": {
+      "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "files": 611,
+      "dirty": true,
+      "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+    },
+    "measured": {
+      "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "files": 611,
+      "dirty": true,
+      "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+    },
+    "privatePackage": {
+      "baseSha": "a77b6428ca432259c4008ead6c5e58cdc5e53cef",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "files": 611,
+      "dirty": false,
+      "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+    }
+  },
+  "note": "Private packaging commit and measured base differ; executable source digest and 611 file universe match"
+}

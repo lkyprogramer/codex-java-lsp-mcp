@@ -1,0 +1,195 @@
+{
+  "schema": "independent-locked-results-review/v1",
+  "reviewer": "p3_independent_review",
+  "reviewMode": "READ_ONLY_ORIGINAL_EVIDENCE_AUDIT",
+  "status": "PASS",
+  "qualification": "INDEPENDENT_LOCKED",
+  "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+  "candidateFiles": 611,
+  "datasetHash": "899e17bc24434f826e1bb06b81a0311788992f48418312b49df00f9b11a30969",
+  "resultsPackSha256": "d88449ef2e3926b300877d066d2c8f3fcf4e9da9d31300591a1407965716927e",
+  "preregistrationSha256": "a4591fdcd6e1c08d15cccb94e7ffefc61f9dec0afd7063c53b7e77563bb7513b",
+  "privateSeal": {
+    "privateManifestSha256": "dd3b011017a028b920a1ed86033870e26b5146414115ef21387865cc8cb60748",
+    "harnessSha256": "f7da5634e2eeed6591d86fac22e1a94ac373f570c39520f5fc0bdbfa24a6b5b2",
+    "fileCount": 79,
+    "sealHash": "259a0d158e1fc300f3533816769ad2e304ef98ca996a9d1d7b24b8872d9248d7"
+  },
+  "scope": {
+    "slots": 24,
+    "qa": 18,
+    "repair": 6,
+    "newTaskIds": 12,
+    "newCorpora": 3,
+    "repeats": 1,
+    "productProfile": "broad",
+    "staticReaderCount": 1
+  },
+  "counts": {
+    "requestsAndResponses": 112,
+    "rawToolResults": 95,
+    "typedSubmissions": 24,
+    "sourceReceivedEvents": 45,
+    "distinctSnapshotsPerAttemptTotal": 40,
+    "privateFrozenFiles": 79,
+    "privateJudgeMappings": 6,
+    "qaFieldComparisons": 50,
+    "qaEvidenceSetAudits": 18,
+    "productLocatorsChecked": 54,
+    "modelEditsReplayedInMemory": 8,
+    "maxReceivedLines": 34,
+    "maxReceivedBytes": 1303
+  },
+  "byArm": {
+    "product": {
+      "qa": {
+        "scheduled": 9,
+        "actual": 9,
+        "missing": 0,
+        "measured": 9,
+        "successes": 9,
+        "successRate": 1
+      },
+      "repair": {
+        "scheduled": 3,
+        "actual": 3,
+        "missing": 0,
+        "measured": 3,
+        "successes": 2,
+        "successRate": 0.6666666666666666
+      }
+    },
+    "control": {
+      "qa": {
+        "scheduled": 9,
+        "actual": 9,
+        "missing": 0,
+        "measured": 9,
+        "successes": 9,
+        "successRate": 1
+      },
+      "repair": {
+        "scheduled": 3,
+        "actual": 3,
+        "missing": 0,
+        "measured": 3,
+        "successes": 2,
+        "successRate": 0.6666666666666666
+      }
+    }
+  },
+  "gates": {
+    "independentTaskEvaluation": "PASS",
+    "qaFloor": 0.8,
+    "qaProductObserved": 1,
+    "qaControlObserved": 1,
+    "newCriticalProductRegression": "NONE_FOUND_IN_AUDITED_SCOPE",
+    "originalEightRepairGate": "UNCHANGED_SEPARATE_PRIOR_EVIDENCE_NOT_REPLACED",
+    "newRepairPerfectScoreRequired": false
+  },
+  "failedAttempts": [
+    {
+      "taskId": "HLR-PARCEL-R1",
+      "arm": "control",
+      "block": 19,
+      "classification": "MODEL_GENERATED_REPAIR_DEFECT",
+      "state": "TEST_FAILED",
+      "sourceFile": "src/main/java/holdout/parcelgrid/BinCounter.java",
+      "line": 5,
+      "observedModelExpression": "(parcels + binSize - 1) / binSize",
+      "impact": "int intermediate addition can overflow; candidate does not satisfy full input contract",
+      "evidence": [
+        "complete original source delivered",
+        "model replace_file arguments equal final candidate bytes",
+        "native test reported COMPILED only",
+        "original private judge compile exit 0 and business assertion run exit 1",
+        "no timeout or output limit",
+        "public safe receipt matches original private artifact and verdict"
+      ]
+    },
+    {
+      "taskId": "HLR-PARCEL-R1",
+      "arm": "product",
+      "block": 20,
+      "classification": "MODEL_GENERATED_REPAIR_DEFECT",
+      "state": "TEST_FAILED",
+      "sourceFile": "src/main/java/holdout/parcelgrid/BinCounter.java",
+      "line": 5,
+      "observedModelExpression": "(parcels + binSize - 1) / binSize",
+      "impact": "int intermediate addition can overflow; candidate does not satisfy full input contract",
+      "evidence": [
+        "complete original source delivered",
+        "model replace_file arguments equal final candidate bytes",
+        "native test reported COMPILED only",
+        "original private judge compile exit 0 and business assertion run exit 1",
+        "no timeout or output limit",
+        "public safe receipt matches original private artifact and verdict"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "id": "AUX_REPAIR_METRICS",
+      "severity": "NON_BLOCKING_REPORTING_LIMITATION",
+      "blocks": [
+        20,
+        24
+      ],
+      "details": "Frozen retrieval scorer validates read receipts against original corpus, so post-edit reads produce stale-hash or range errors. Chronological source replay and snapshot validation pass. Scorer repair_pass is null; original external judge is repair authority. Do not claim all 24 retrieval-score rows valid.",
+      "action": "Preserve original rows; keep repair judge results and auxiliary retrieval validity separate."
+    },
+    {
+      "id": "PRELIMINARY_NO_GOLD",
+      "severity": "INFORMATIONAL",
+      "count": 18,
+      "details": "QA runtime preliminary NO_GOLD label is retained; frozenScore fields and taskSuccess are final authority. All 18 QA values/types/evidence sets audited privately."
+    },
+    {
+      "id": "RECOVERED_MODEL_INPUT",
+      "severity": "INFORMATIONAL",
+      "pathNotFoundBlocks": [
+        13,
+        23,
+        24
+      ],
+      "typedRecoveryBlocks": [
+        8
+      ],
+      "details": "Three rg requests used nonexistent relative corpus paths and recovered. One ordinary-text draft used the single frozen public-contract recovery. All costs remain in measured attempts."
+    }
+  ],
+  "usage": {
+    "control": {
+      "promptTokens": 100123,
+      "completionTokens": 2899,
+      "cachedInputTokens": 77923
+    },
+    "product": {
+      "promptTokens": 120888,
+      "completionTokens": 2676,
+      "cachedInputTokens": 85652
+    }
+  },
+  "verification": {
+    "rawHashesSchemasReceipts": "PASS",
+    "chronologicalSourceAndEdits": "PASS",
+    "canonicalFieldsAndDenominators": "PASS",
+    "providerUsageArithmetic": "PASS",
+    "privateSealAndPublicInputs": "PASS",
+    "originalJudgeCandidateTestWrapperBinding": "PASS",
+    "sixUniqueNonceAndCompletionGuards": "PASS",
+    "privateVerdictPermissions": "PASS",
+    "privateMarkerScanInModelPayloads": "PASS",
+    "originalScoreJudgeModelRerun": false,
+    "engineeringTestsRun": false
+  },
+  "limitations": [
+    "Single paired run on three authored corpora; no production incidence or statistical superiority claim.",
+    "No new 100 percent supplementary repair gate was introduced. Two actual model failures remain failures.",
+    "Raw payload logs contain tool names; complete schemas are in frozen preregistration and bound runtime generators. Independent provider transport capture is unavailable.",
+    "Private values, required coordinates, private test source, raw diagnostics, argv and nonces are not included in this public review.",
+    "No persistent nonce marker is retained after original temporary judge cleanup; this audit checks frozen wrapper semantics, six unique original run arguments and original completion flags.",
+    "Original eight repair groups remain governed by prior release evidence; this review does not rerun or replace them."
+  ],
+  "nextAction": "Parent may close INDEPENDENT_LOCKED for this exact source and evidence set; retain model failure and auxiliary metric qualifications."
+}

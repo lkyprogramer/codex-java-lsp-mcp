@@ -1,0 +1,204 @@
+{
+  "status": "PASS",
+  "runtimeBuildCandidate": "83aa814049e5",
+  "baseline": "48bad915c854",
+  "sourceBinding": {
+    "README.md": "f89200bdf39a5c353a3bb4f4ae0d97ddcb5bac678d1b27f33511374249037d51",
+    "src/jdtls-semantic-backend.ts": "3158c59700cfbb7403e80b0d33a5e1789a5139ffde82e54c5475f41e1a94052d",
+    "src/jdtls-session.ts": "67f386ca383b5baa25ca8c936897b4de70944c6b40179c4936f6d1942728b99b",
+    "src/jdtls-session.test.ts": "8051f4125a6665833c132f82e407c066ec76bf71c5ccd1f8bda033fa0066336f",
+    "src/test-support/fake-jdtls.test.ts": "bfa9253760f3ea58dacfcb527ea2dd7361f058649b801bd5d93097052aca04d4",
+    "src/tools/status.ts": "1c393b2fcb243a72d73ea988a0173eb7011214c9d582203b65bad583e005a356",
+    "src/tools/symbol.ts": "da734e21a7de2ac347f099bb6c9f65725c5b033af1cfc66b1f2172f706d94858",
+    "src/http-server.test.ts": "f600c1b8a951143b9fa90258ee7d69af8378856e1e6643ca0ff3df57be1a8f47",
+    "src/tools/output-shape.test.ts": "90baaf3aceecff211fad0443995ca38b7178c28f7e110866eb9cd04c9236298b"
+  },
+  "tests": {
+    "focused": 6,
+    "targeted": 146,
+    "redReadinessFailures": 2,
+    "redReviewFailures": 3,
+    "releaseFixtureFailuresRetained": 3,
+    "releaseFixtureNarrowRerunPass": 3,
+    "sourceReleasePass": 1371,
+    "scriptReleasePass": 436,
+    "releaseFail": 0,
+    "releaseSkip": 0
+  },
+  "gradleAptModelConfiguration": "PASS",
+  "factoryPaths": 13,
+  "aptGeneratedSemantics": "NOT_CLAIMED",
+  "freshWorkspaceRecovery": {
+    "status": "PASS",
+    "firstRequest": "JDT_NOT_READY",
+    "firstRequestMs": 3003.2539159999997,
+    "harnessCumulativeObservedReadyMs": 25332.550792000002,
+    "harnessCumulativeIndexProbeReadyMs": 34654.059125,
+    "separateIndexProbeUsed": true,
+    "recoveredReferences": 11,
+    "recoveredReferenceMs": 240.2912920000017,
+    "warmNewKeyReferences": 10,
+    "warmNewKeyMs": 225.19000000000233,
+    "timeoutMs": 3000
+  },
+  "nativeInstall": "PASS",
+  "originalAgentRerun": "PASS",
+  "historicalPartialPreserved": true,
+  "isolatedColdEvidenceBinding": "frozen source SHA256; pre-commit stamp retained in raw record; actual native build checked separately after install",
+  "native": {
+    "status": "PASS",
+    "buildSha": "83aa814049e5",
+    "productionDeploymentPerformed": true,
+    "current": "releases/83aa814049e5-20261011T152040Z",
+    "previousCurrent": "releases/48bad915c854-20261011T135529Z",
+    "mcpUrl": "http://127.0.0.1:38456/mcp",
+    "health": {
+      "healthz": {
+        "status": "ok",
+        "state": "ready",
+        "activeRequests": 0,
+        "uptimeMs": 3519,
+        "buildSha": "83aa814049e5",
+        "instanceId": "managed-83aa814049e5-20261011T152040Z-023bee64-35da-4e62-a622-95f5557154c2"
+      },
+      "readyz": {
+        "status": "ok",
+        "state": "ready",
+        "activeRequests": 0,
+        "uptimeMs": 3530,
+        "buildSha": "83aa814049e5",
+        "instanceId": "managed-83aa814049e5-20261011T152040Z-023bee64-35da-4e62-a622-95f5557154c2"
+      }
+    },
+    "environmentPreserved": {
+      "JAVA_HOME": true,
+      "JAVA_LSP_CACHE_BASE": true,
+      "JAVA_LSP_HTTP_PORT": true,
+      "JAVA_LSP_IDLE_TTL_MS": true,
+      "JAVA_LSP_OWNERSHIP_BASE": true,
+      "JDTLS_BIN": true,
+      "NODE_BIN": true,
+      "PATH": true
+    },
+    "projectConfigurationPreserved": true,
+    "installedSourceFilesChecked": 1781,
+    "excludedDocumentationLogs": 63,
+    "sourceTests": 1371,
+    "scriptTests": 436,
+    "fail": 0,
+    "skip": 0,
+    "finalSmokeExit": 0,
+    "installer": {
+      "command": [
+        "bash",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-jdt-readiness-ua9mfgpr/package/install-runtime.sh",
+        "--port",
+        "38456",
+        "--canary-port",
+        "38457"
+      ],
+      "exitCode": 0,
+      "seconds": 411.817
+    },
+    "readinessSourceBinding": {
+      "README.md": "f89200bdf39a5c353a3bb4f4ae0d97ddcb5bac678d1b27f33511374249037d51",
+      "src/jdtls-semantic-backend.ts": "3158c59700cfbb7403e80b0d33a5e1789a5139ffde82e54c5475f41e1a94052d",
+      "src/jdtls-session.ts": "67f386ca383b5baa25ca8c936897b4de70944c6b40179c4936f6d1942728b99b",
+      "src/jdtls-session.test.ts": "8051f4125a6665833c132f82e407c066ec76bf71c5ccd1f8bda033fa0066336f",
+      "src/test-support/fake-jdtls.test.ts": "bfa9253760f3ea58dacfcb527ea2dd7361f058649b801bd5d93097052aca04d4",
+      "src/tools/status.ts": "1c393b2fcb243a72d73ea988a0173eb7011214c9d582203b65bad583e005a356",
+      "src/tools/symbol.ts": "da734e21a7de2ac347f099bb6c9f65725c5b033af1cfc66b1f2172f706d94858",
+      "src/http-server.test.ts": "f600c1b8a951143b9fa90258ee7d69af8378856e1e6643ca0ff3df57be1a8f47",
+      "src/tools/output-shape.test.ts": "90baaf3aceecff211fad0443995ca38b7178c28f7e110866eb9cd04c9236298b"
+    },
+    "historicalPartialOverwritten": false,
+    "productionRollback": "NOT_RUN_SUCCESSFUL_RELEASE_RETAINED"
+  },
+  "originalAgentRerunDetails": {
+    "status": "PASS",
+    "scope": "original Agent implementation and production-reference task recovered; not every semantic call passed",
+    "buildSha": "83aa814049e5",
+    "historicalResult": "PARTIAL",
+    "historicalResultPreserved": true,
+    "originalPromptByteIdentical": true,
+    "modelAndToolOrderOverridden": false,
+    "globalAgentsAndConfigUnchangedDuringRerun": true,
+    "states": [
+      "NEW",
+      "READY"
+    ],
+    "importStates": [
+      "NOT_STARTED",
+      "READY"
+    ],
+    "coldReferences": {
+      "status": "EXPECTED_NOT_READY",
+      "itemId": "item_27",
+      "backgroundImportContinued": true
+    },
+    "requiredImpact": {
+      "status": "PARTIAL_TIMEOUT",
+      "itemId": "item_28"
+    },
+    "recoveredPrecision": {
+      "status": "PASS",
+      "backend": "jdt",
+      "itemIds": [
+        "item_47",
+        "item_48",
+        "item_50"
+      ],
+      "referenceCounts": [
+        11,
+        9,
+        4
+      ],
+      "truncated": false,
+      "filesVerified": [
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientUpdateAppService.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientReleaseController.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java"
+      ]
+    },
+    "annotationProcessingEnabledInNativeStatus": true,
+    "aptGeneratedSemantics": "NOT_CLAIMED",
+    "run": {
+      "id": "semantic-primary",
+      "command": [
+        "codex",
+        "-a",
+        "never",
+        "exec",
+        "--sandbox",
+        "read-only",
+        "--ephemeral",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/luo/Documents/program/cipherlink",
+        "-o",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-jdt-readiness-ua9mfgpr/agents/semantic-primary/answer.md",
+        "-"
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "seconds": 132.503,
+      "gitStatusUnchanged": true
+    },
+    "rawEvidenceHashes": {
+      "agent-check-protocol.json": "05a814d669bd4ca758517eb49303790175751b8b006be9db30f3fb9991b27a98",
+      "agent-run-records.json": "791090637a90c2a55bf5fb0f272eb17a5d2062a5a3d40fd18fc724a276cbc3db",
+      "agents/semantic-primary/events.jsonl": "9489deab7ea9efdf42f0025763f802f7a917356f01c082163f9ffcdb6d1b7333",
+      "agents/semantic-primary/answer.md": "5c43cfac3f41b388e3fa21e967d7483b26294f7a4c9624bc2f2884afaa8a2ff0",
+      "agents/semantic-primary/stderr.log": "356d61097146171132918f167c00b7fbce37d91413d508ea6503ef22305c80f4"
+    },
+    "limits": [
+      "Initial references was not ready; required impact still PARTIAL_TIMEOUT. Successful later exact references are the task acceptance evidence.",
+      "Original Agent answer says only source and static references, which is imprecise; actual trace contains real JDT references. Original answer is retained unchanged.",
+      "CLI stderr contains existing configuration warnings and another MCP endpoint 14242 connection failure; Java endpoint 38456 succeeded. Zero-error logs are not claimed.",
+      "No application build/start or database operation observed in this Agent trace; runtime business behavior is not claimed.",
+      "Codex config was not byte-identical to the historical run before this rerun; the current existing default configuration was used unchanged."
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+# Native driver r6 static review
+
+**PASS。** Driver SHA `abf3c2819cdd1afcbc5a347e4b7942105b642fe1f4df522659cf0448b741647b`；采用review SHA `b16a9d8d3961e6d848e3d0443bd58c737189109076a318068ea906344604388c`。本结论仅静态设计。
+
+全文与r5对照：变化限于attempt6 namespace、新包manifest/binding、BUILD与release source身份，以及追加adoption guards。原terminal PASS、原verifier、clean-source仍执行；新增采用review PASS和releaseManifestSha256精确匹配、唯一test path、nonTestFilesChanged空、mode无变、oldMeasurementsRelabeled false、source binding一致、实际1843SHA/mode及HEAD检查。新包/BUILD从上述绑定manifest读取。
+
+原canonical root、独立job target、deployed09逐文件克隆/containment、候选完整installer、rollback09 identity/health及stop/jobabsent/portsfree均保留。production只读取attempt6隔离PASS/cleanup，原current/plist/projects nondrift、环境保存、installedfiles和smoke保护保留。新proof明确releaseSourceDigest3ee与evaluatedSourceDigest6d，不伪装原模型重新运行。exist_ok=False保留旧raw。
+
+未运行driver/installer/tests。作者syntax PASS不冒充本review执行证据。需要实际attempt6完整installer与隔离回滚证明才能评估生产步骤。

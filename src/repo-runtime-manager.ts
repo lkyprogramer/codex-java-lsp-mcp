@@ -792,8 +792,10 @@ export class RepoRuntimeManager {
       if (state === "STARTING") entry.lspReservation = "STARTING";
       else if (state === "READY") entry.lspReservation = "READY";
       else {
-        entry.lspReservation = "NONE";
-        this.drainSlotWaiters();
+        this.releaseUnusedReservation(entry);
+        // A BROKEN child can survive SIGKILL. Keep its machine slot reserved
+        // until reaping or the later exit notification proves it is gone.
+        if (state === "BROKEN") void this.reapSession(entry);
       }
     });
     // Register invalidation before start() so the first event cannot be lost.
@@ -1041,7 +1043,7 @@ export class RepoRuntimeManager {
    */
   private releaseUnusedReservation(entry: RuntimeEntry): void {
     const state = entry.context.session.status().state;
-    if (entry.lspReservation === "STARTING" && state !== "STARTING" && state !== "READY") {
+    if (state !== "STARTING" && state !== "READY" && !this.sessionHasLiveChildren(entry)) {
       entry.lspReservation = "NONE";
       this.drainSlotWaiters();
     }
@@ -1054,6 +1056,10 @@ export class RepoRuntimeManager {
   private oldestIdleReservedEntry(exempt?: RuntimeEntry): RuntimeEntry | undefined {
     return this.reservedEntries()
       .filter(entry => entry !== exempt && entry.refCount === 0)
+      .filter(entry => {
+        const state = entry.context.session.status().state;
+        return state === "READY" || state === "STARTING" || !this.sessionHasLiveChildren(entry);
+      })
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
@@ -1108,6 +1114,7 @@ export class RepoRuntimeManager {
 
   private async retireIdleEntry(entry: RuntimeEntry): Promise<void> {
     try {
+      await this.reapSession(entry);
       if (entry.lspReservation !== "NONE") {
         await this.stopEntry(entry);
       }
@@ -1151,6 +1158,22 @@ export class RepoRuntimeManager {
       }
     } finally {
       this.relievingPressure = false;
+    }
+  }
+
+  private sessionHasLiveChildren(entry: RuntimeEntry): boolean {
+    const session = entry.context.session as { hasLiveChildren?: () => boolean };
+    return session.hasLiveChildren?.() ?? false;
+  }
+
+  private async reapSession(entry: RuntimeEntry): Promise<void> {
+    const session = entry.context.session as { reapAbandonedChildren?: () => Promise<void> };
+    if (typeof session.reapAbandonedChildren !== "function") return;
+    try {
+      await session.reapAbandonedChildren();
+      this.releaseUnusedReservation(entry);
+    } catch (error) {
+      console.error("[codex-java-lsp] failed to reap abandoned JDT", error);
     }
   }
 

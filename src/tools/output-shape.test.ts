@@ -105,6 +105,7 @@ test("java_symbol (query/position/references operations) omits raw uri ranges un
   const context = {
     repoRoot,
     session: {
+      status() { return { state: "READY" }; },
       async workspaceSymbols(_query: string, _limit: number, budget: DeadlineBudget) {
         observedBudgets.push(budget);
         return {
@@ -173,6 +174,7 @@ test("semantic tools never emit locations from outside the repository", async ()
   const context = {
     repoRoot,
     session: {
+      status() { return { state: "READY" }; },
       async workspaceSymbols() {
         return {
           truncated: false,

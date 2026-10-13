@@ -1,0 +1,1105 @@
+{
+  "schema": "java-specialist-release-evidence/v1.1",
+  "candidateSha": "a77b6428ca432259c4008ead6c5e58cdc5e53cef",
+  "datasetHash": "c34a7c7c2f261bb273bc622739eae6beff8479ca96512c48942638cd912b8c4d",
+  "scorerHash": "5c41e12a994a7a9269725e94646bfb691e6929c2d3dba7c306255754095d4a28",
+  "protocolHash": "c9c6682b434793707e7538b449a5fb78900e3c95c8f77bda63e6c02e138833c6",
+  "gates": [
+    {
+      "id": "DATASET",
+      "status": "PASS",
+      "reason": "Original 36 tasks, gold and frozen harness preserved; 357-file bundle validated after exact historical ignored-file restoration.",
+      "evidence": [
+        {
+          "path": "p4-release/frozen-selfcheck/dataset.stdout.log",
+          "sha256": "567a302cbc7fec120bcf67f8de46718fcea4a6599ed5ea22bf87c14f2bfa929e"
+        },
+        {
+          "path": "p4-release/frozen-selfcheck/bundle-r2.stdout.log",
+          "sha256": "d24d58506a247f8c5872ee8cb9e14b597c25ca08d816bb2ede44bb18a6940383"
+        },
+        {
+          "path": "p4-release/final-frozen-preservation.json",
+          "sha256": "4e8b64db58dd973dac64f13586729190e8ee83ef3c455a4923e4f8d30aa634b2"
+        }
+      ]
+    },
+    {
+      "id": "ORIGINAL_PROBES",
+      "status": "PASS",
+      "reason": "12 original probes executed on final source.",
+      "evidence": [
+        {
+          "path": "p4-release/frozen-selfcheck/original-probes.stdout.log",
+          "sha256": "443e0c1443104bad5178152b591c7f3d09f26cf226ac5ebc007eebc0a04786bf"
+        }
+      ]
+    },
+    {
+      "id": "WIRE_SENTINEL",
+      "status": "PASS",
+      "reason": "Actual full script tests and frozen negative tests preserve sent/received source, payload and budget boundaries.",
+      "evidence": [
+        {
+          "path": "p4-release/gate-release-summary.json",
+          "sha256": "3be26376eba31885aefb2a2401eabb585b94d81da46186ecc7955546c7be3c38"
+        },
+        {
+          "path": "p4-release/gate-release.log",
+          "sha256": "bb0230b75261d2e4d74ea40d8e3f349c99ded6474365fcab56a72ae99c598cd7"
+        },
+        {
+          "path": "p4-release/frozen-selfcheck/canonical-fault.stdout.log",
+          "sha256": "4b3fa0cd963809da2419e44b72e1a249b69c0a427b8f670682ee809a767f3484"
+        }
+      ]
+    },
+    {
+      "id": "CANONICAL_SCORER",
+      "status": "PASS",
+      "reason": "56 frozen unit tests and faultcheck executed; all final model runs use unchanged canonical scorer.",
+      "evidence": [
+        {
+          "path": "p4-release/frozen-selfcheck/canonical-unit.stderr.log",
+          "sha256": "86404a7286d6c171e19260166f58b31324b84a909174e9c62e75866176312518"
+        },
+        {
+          "path": "p4-release/frozen-selfcheck/canonical-fault.stdout.log",
+          "sha256": "4b3fa0cd963809da2419e44b72e1a249b69c0a427b8f670682ee809a767f3484"
+        },
+        {
+          "path": "p4-release/final-qa/review.md",
+          "sha256": "be4d203a521285d00954d83e523aa17e4196d5838512da92ba88d4193b0f751b"
+        }
+      ]
+    },
+    {
+      "id": "REPAIR_JUDGE",
+      "status": "PASS",
+      "reason": "8 original oracle checks validate the judge; separate actual model repair proof exists.",
+      "evidence": [
+        {
+          "path": "p4-release/frozen-selfcheck/repair-oracles.stdout.log",
+          "sha256": "6079899aff327180c9bb3221d12719da30858ba20238f5163f4c6ecb873f6a88"
+        },
+        {
+          "path": "p4-release/frozen-selfcheck/repair-oracles.json",
+          "sha256": "f65a50e882a5fe8187656244f19ac44c3b1e5bfda27200fb4aaa48b3b89afccf"
+        },
+        {
+          "path": "p4-release/final-repairs/review.md",
+          "sha256": "361dd895705bc042c8d8260ad79f2b30ea46c68513c62c356b1f93fecc45eabf"
+        }
+      ]
+    },
+    {
+      "id": "PRODUCT_COUNTEREXAMPLES",
+      "status": "PASS",
+      "reason": "27 original mechanism counterexamples executed.",
+      "evidence": [
+        {
+          "path": "p4-release/frozen-selfcheck/counterexamples.stdout.log",
+          "sha256": "51b7a90f28bd2a6b6f1d0b7de21b2a2b16c7fdfd3461677ae361cf8f042299fc"
+        },
+        {
+          "path": "p4-release/counterexamples/run.json",
+          "sha256": "eae1dadb21f819ed64efdd4920ecfb968dd1eeedac8e77561999e8ab9fbfdbd5"
+        }
+      ]
+    },
+    {
+      "id": "MACOS_BUILD",
+      "status": "PASS",
+      "reason": "Final source compiled in isolated release profile; clean immutable package built and HTTP smoke completed.",
+      "evidence": [
+        {
+          "path": "p4-release/gate-release.log",
+          "sha256": "bb0230b75261d2e4d74ea40d8e3f349c99ded6474365fcab56a72ae99c598cd7"
+        },
+        {
+          "path": "p4-release/package-validation.log",
+          "sha256": "eeb19f5dd1c856653ea70c14d056620907a5874218cc606e8e1cf467e3ca31e5"
+        },
+        {
+          "path": "p4-release/final-source-binding.json",
+          "sha256": "2effc03a5e3180b1eaaa3bd4511f2f6689fea9ae5a127067458ca35825a15b0f"
+        }
+      ]
+    },
+    {
+      "id": "MACOS_FULL_TEST",
+      "status": "PASS",
+      "reason": "Final source: 1366 source and 436 script tests pass, zero skipped.",
+      "evidence": [
+        {
+          "path": "p4-release/gate-release-summary.json",
+          "sha256": "3be26376eba31885aefb2a2401eabb585b94d81da46186ecc7955546c7be3c38"
+        },
+        {
+          "path": "p4-release/gate-release.log",
+          "sha256": "bb0230b75261d2e4d74ea40d8e3f349c99ded6474365fcab56a72ae99c598cd7"
+        },
+        {
+          "path": "p4-release/final-engineering-review.md",
+          "sha256": "bb1861a6e41a9542d835e781dee9a45d087cdb8f6caf1114063a28c69428a163"
+        }
+      ]
+    },
+    {
+      "id": "MCP_ROUNDTRIP",
+      "status": "PASS",
+      "reason": "Five-tool HTTP smoke and real JDT K26/K28 executed.",
+      "evidence": [
+        {
+          "path": "p4-release/gate-release.log",
+          "sha256": "bb0230b75261d2e4d74ea40d8e3f349c99ded6474365fcab56a72ae99c598cd7"
+        },
+        {
+          "path": "raw/jdt-evidence.json",
+          "sha256": "fb47246236eefe833f024d985e112410bffc314ed5c5b5013a1a287534ceced5"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K26.real-jdt.json",
+          "sha256": "fb47246236eefe833f024d985e112410bffc314ed5c5b5013a1a287534ceced5"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K28.real-jdt.json",
+          "sha256": "fb47246236eefe833f024d985e112410bffc314ed5c5b5013a1a287534ceced5"
+        }
+      ]
+    },
+    {
+      "id": "INDEPENDENT_LOCKED",
+      "status": "PASS",
+      "reason": "New owner-authored 9 QA + 3 repair frozen and privately reviewed before first model request; 24/24 actual slots. QA both 9/9; repair both 2/3, failures preserved. No observed new product critical regression.",
+      "evidence": [
+        {
+          "path": "p5-independent-locked-v1-r2/freeze-public.json",
+          "sha256": "0f1faaab3dfecc2b53bc59b24dc7a0b29037547696996d330f87c654e35a2528"
+        },
+        {
+          "path": "p5-independent-locked-v1-r2/review.md",
+          "sha256": "2e158780d70e3b8e1e72aeb695b10f227ada2d41f360c6f06e8f061506cc3b6b"
+        },
+        {
+          "path": "p5-independent-locked-v1-r2/execution/preregistration.json",
+          "sha256": "a4591fdcd6e1c08d15cccb94e7ffefc61f9dec0afd7063c53b7e77563bb7513b"
+        },
+        {
+          "path": "p5-independent-locked-v1-r2/execution/run/results-pack.json",
+          "sha256": "d88449ef2e3926b300877d066d2c8f3fcf4e9da9d31300591a1407965716927e"
+        },
+        {
+          "path": "p5-independent-locked-v1-r2/results-review.md",
+          "sha256": "e0abec6fa9f693286cc8e583b3770009ee2408cc96e650bb6d5116dfb23a611e"
+        }
+      ]
+    },
+    {
+      "id": "FULL_PUBLIC",
+      "status": "PASS",
+      "reason": "Separate full upstream repository profile measured 72/72 actual slots. Product QA26/28, control25/28; repair both8/8. Measurement completeness PASS; original CLI qualification FAIL in both arms remains a scoped diagnostic.",
+      "evidence": [
+        {
+          "path": "p4-release/release-inputs.json",
+          "sha256": "ebb85cf9c48ece8e624059e8c48c8fc66c5e8c34e864d58857e371bc5148777d"
+        },
+        {
+          "path": "p4-release/full-public-new/preregistration.json",
+          "sha256": "7addf00c602c964ee776d5cbe922e322f3779b4f89f72a7590dc4eb88a0a170c"
+        },
+        {
+          "path": "p4-release/full-public-new/run/results-pack.json",
+          "sha256": "50a066eb46b4d9523fa05f6e1c02dfd7c91d2dec09d702b460a4ab8c370aa98f"
+        },
+        {
+          "path": "p4-release/full-public-new/review.md",
+          "sha256": "d7580b052c572fdb3f98e47aac0c33e819d0443cfd4ad6e9712107f65747e593"
+        }
+      ]
+    },
+    {
+      "id": "LIVE_PAIRED",
+      "status": "PASS",
+      "reason": "Final exposed 28 QA and eight mandatory repair groups paired, 72/72 completed; product QA26/28, control24/28; repair both8/8. Independent and full-public profiles reported separately.",
+      "evidence": [
+        {
+          "path": "p4-release/final-qa/run/results-pack.json",
+          "sha256": "0ac333e2e211a3968836119145f36ecf03c96bc549820118d66a472bffed822d"
+        },
+        {
+          "path": "p4-release/final-qa/review.md",
+          "sha256": "be4d203a521285d00954d83e523aa17e4196d5838512da92ba88d4193b0f751b"
+        },
+        {
+          "path": "p4-release/final-repairs/run/results-pack.json",
+          "sha256": "e7c24245ed842e93b8d1f3ac74c9e370dace330e644de7181f65c566ddf1cad3"
+        },
+        {
+          "path": "p4-release/final-repairs/review.md",
+          "sha256": "361dd895705bc042c8d8260ad79f2b30ea46c68513c62c356b1f93fecc45eabf"
+        }
+      ]
+    },
+    {
+      "id": "PERFORMANCE",
+      "status": "PASS",
+      "reason": "Original fixed1000-file/100-request profile; default single reader. Final K29 c20P95=125.462ms, updates127.665ms<150; loop1.612/1.555ms<20. No production latency or statistical superiority claim.",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/load/query-load-report.json",
+          "sha256": "384a4fc2b3a32b59f98e2f59d2011d79fd51525f43b4667e808a858184329c16"
+        },
+        {
+          "path": "p4-release/capacity-array-review.md",
+          "sha256": "0329f1f917463bb7b6c26b9b537bfc1ec0e81cbbc8b8ad82ce3f0a9599a5199e"
+        }
+      ]
+    },
+    {
+      "id": "EXISTING_RELEASE_GATE",
+      "status": "PASS",
+      "reason": "Original release profile full isolation tests and HTTP five-tool smoke completed on final source.",
+      "evidence": [
+        {
+          "path": "p4-release/gate-release-summary.json",
+          "sha256": "3be26376eba31885aefb2a2401eabb585b94d81da46186ecc7955546c7be3c38"
+        },
+        {
+          "path": "p4-release/gate-release.log",
+          "sha256": "bb0230b75261d2e4d74ea40d8e3f349c99ded6474365fcab56a72ae99c598cd7"
+        }
+      ]
+    },
+    {
+      "id": "REVIEW",
+      "status": "PASS",
+      "reason": "Separate contract, implementation, engineering, all model outcome and immutable package reviews passed with retained model failures and scoped diagnostic limits.",
+      "evidence": [
+        {
+          "path": "p0-contract/review.md",
+          "sha256": "91bb4e9eedf48b2cf32cb8da02b87a7c7419f5d9fb52520e371edaebc0afb4ae"
+        },
+        {
+          "path": "p1-protocol/review.md",
+          "sha256": "3f62ac1950740686a085507c8e2ede29fbdadc4624ca7dc3bc1de9d1aeedb74a"
+        },
+        {
+          "path": "p4-release/final-engineering-review.md",
+          "sha256": "bb1861a6e41a9542d835e781dee9a45d087cdb8f6caf1114063a28c69428a163"
+        },
+        {
+          "path": "p4-release/package-source-review-r2.md",
+          "sha256": "ebc734d6f52dbbbd5005456e63d5d91ee3267f1bc818f42fc23b7fb05cd6fc4a"
+        },
+        {
+          "path": "p4-release/final-qa/review.md",
+          "sha256": "be4d203a521285d00954d83e523aa17e4196d5838512da92ba88d4193b0f751b"
+        },
+        {
+          "path": "p4-release/final-repairs/review.md",
+          "sha256": "361dd895705bc042c8d8260ad79f2b30ea46c68513c62c356b1f93fecc45eabf"
+        },
+        {
+          "path": "p4-release/full-public-new/review.md",
+          "sha256": "d7580b052c572fdb3f98e47aac0c33e819d0443cfd4ad6e9712107f65747e593"
+        },
+        {
+          "path": "p5-independent-locked-v1-r2/results-review.md",
+          "sha256": "e0abec6fa9f693286cc8e583b3770009ee2408cc96e650bb6d5116dfb23a611e"
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "id": "K01",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "断言两份 type/method/field ID、file_id 不相同；查出的每条边端点存在。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K01.stdout.log",
+          "sha256": "2267648efa8c232f2a6ca6762bc2a8dd9279fd02e101c8b436e4657956b84396"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K01.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K02",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "对实体与归属排序后比对完全一致；不能只比较条数。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K02.stdout.log",
+          "sha256": "273cd5836db70252c3634db7289b23732026b4a9416e6be56765ac29e949dc01"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K02.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K03",
+      "status": "PASS",
+      "level": "runtime-index",
+      "expected": "未指定编译范围保留歧义候选；指定 main 不出现 test；test 的可见性显式遵循 build。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K03.stdout.log",
+          "sha256": "096d40ed8f03d8e9c5bd38e023a0ee3780dde04ebfd2954595f1dd73f2565b60"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K03.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K04",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "named ID 不变，selection 坐标加5；匿名/局部类型允许文件局部 ID 变化。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K04.stdout.log",
+          "sha256": "39f36486883aa5e245289d90d18f1d18fd60fcc3b0500e77157fa8f8c1c7394c"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K04.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K05",
+      "status": "PASS",
+      "level": "runtime-watcher",
+      "expected": "A 的声明、边、search-doc 清除；B 的归属和结果保持；不得手动清整个库假装增量通过。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K05.stdout.log",
+          "sha256": "61a70091a764a56d6923447058d2bd2b3df2a692f135f8eb7d4b05c2a34c2260"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K05.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K06",
+      "status": "PASS",
+      "level": "runtime-worktree",
+      "expected": "局部named ID允许相同，但每个结果repoHash/sourceHash匹配本worktree；无兄弟内容串入。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K06.stdout.log",
+          "sha256": "f722e6e832983d9b05e4fc9cc39a8155057411462fec51c8e408bbc2b5210938"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K06.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K07",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "最终range包含201；provider和最后serializer均检查，不能只中间结果通过。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K07.stdout.log",
+          "sha256": "e94a6864b65f7f40ad78d789602941f1f3afddd9eb68652d704d9df18ebc7bee"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K07.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K08",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "正常预算两行都在；预算不足不得声称完整覆盖。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K08.stdout.log",
+          "sha256": "c7acb84fead42ea0add7d197e0136be63daea7008b9386bc4507e237fb88cb5e"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K08.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K09",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "行号对应一致，源码slice哈希与byte计数基于原始文件；不全局改LF。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K09.stdout.log",
+          "sha256": "4ee5b21f87f7f904b3bdd5a6b19d8fe0fa8a1239b617b84dbd0df68b52a329b1"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K09.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K10",
+      "status": "PASS",
+      "level": "parser-fixture",
+      "expected": "列为1-based UTF-16 code units；与独立字符串编码长度oracle一致，不用同parser反算作oracle。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K10.stdout.log",
+          "sha256": "9deca0f774022ac40552041fdfe58060d3a077b98e426d4382f8ee05ebb76f9e"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K10.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K11",
+      "status": "PASS",
+      "level": "runtime-index",
+      "expected": "显式调用事实不消失；返回的必要证据移动到当前range；不要求排序分数bit-identical。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K11.stdout.log",
+          "sha256": "f39a317742444cc833fb3bd6570b1ef27721279b16f000d50f1075235a7ad82b"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K11.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K12",
+      "status": "PASS",
+      "level": "runtime-MCP",
+      "expected": "明确BUDGET_TOO_SMALL/PARTIAL或现有等价错误；无虚假COMPLETE，无无限等待。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K12.stdout.log",
+          "sha256": "5dca809e659578ddf0194f585e66ef06fa40ec16e66423d2aabcc6fbd2749af8"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K12.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K13",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "相关method参与且可用作anchor；纯type命中不结束text搜索。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K13.stdout.log",
+          "sha256": "f7862f09e6b0051de86d659bfdc1185e175a541f0dde8afa85cbd0832d642f86"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K13.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K14",
+      "status": "PASS",
+      "level": "source-export",
+      "expected": "精确声明命中且dense=0；静态后端JDT=0；不存在不得回退模糊召回。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K14.stdout.log",
+          "sha256": "13da8c577e946a6921df8e0ae50b20d34c8c4dd250fecc4f3cdae1a2e6a18f9d"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K14.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K15",
+      "status": "PASS",
+      "level": "runtime-watcher",
+      "expected": "新词对应当前sourceHash；旧表示被替换；不改Java逻辑仍须刷新文档。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K15.stdout.log",
+          "sha256": "253b0a3f33e7359062a3a6e7b394896e9ffcde05f4a8ccbec5c824e389734f70"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K15.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K16",
+      "status": "PASS",
+      "level": "parser-resource",
+      "expected": "证据source为正确XML path/hash/range，目标declaration为对应Java方法；N01/P01独立断言不能替代真实parser测试。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K16.stdout.log",
+          "sha256": "b66824e15805cdf0340a32f0953ad2f999b933dd6cee58ddab7e72226a10bb67"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K16.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K17",
+      "status": "PASS",
+      "level": "runtime-MCP",
+      "expected": "scope在cap前生效；module与sourceSet AND；未知module不扩大范围；记录物理work与truncated理由。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K17.stdout.log",
+          "sha256": "d0964e8a2528c8bd7d524ae2171d1864ce735734ae9b41da048b81e1f5e043d7"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K17.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K18",
+      "status": "PASS",
+      "level": "parser-resource",
+      "expected": "key可检索，canary不得进入model payload或embedding；不得外发真实凭据。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K18.stdout.log",
+          "sha256": "4395655291ad0fec592f6496030dec3583a57bf04960be163879a155d679cb0d"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K18.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K19",
+      "status": "PASS",
+      "level": "runtime-watcher",
+      "expected": "负缓存随变更失效；新名称可达；旧路径不复活；采用bounded wait，不用任意sleep断言已一致。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K19.stdout.log",
+          "sha256": "d00c4176f38c389eb0bc5f694961b1421ef3b2411981c6ac6817558b2683b174"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K19.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K20",
+      "status": "PASS",
+      "level": "runtime-concurrent",
+      "expected": "返回同snapshot的全部G证据或显式changedDuringRequest/PARTIAL；不拼新status与旧locator。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K20.stdout.log",
+          "sha256": "6057745f123fa4496a0d67240b4f059e67886889d88962035bc75c28a0d703aa"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K20.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K21",
+      "status": "PASS",
+      "level": "runtime-worktree",
+      "expected": "XML-source文档先reconcile再READY；不能因Java相同复用旧SQL证据。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K21.stdout.log",
+          "sha256": "16851db13c6ffc8639b9f3556b7ea6b24c8d3072fe808aba4fbc889e4f07232d"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K21.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K22",
+      "status": "PASS",
+      "level": "parser-fixture",
+      "expected": "输出STATIC_CANDIDATE/AMBIGUOUS而非虚假JDT_BOUND；如主动请求JDT证据另跑真实JDT层。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K22.stdout.log",
+          "sha256": "b482a27ec845918d9e826f4e1aedb3bfb7718b0f8e06be92f811394bf6d2acd8"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K22.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K23",
+      "status": "PASS",
+      "level": "parser-fixture",
+      "expected": "区分静态目标与运行时分派；不声称Parent是唯一运行目标；不需要新建全程序分析器。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K23.stdout.log",
+          "sha256": "a62360609dc4bedc098b77a901dfcb4965672c9c695b26ac2f587ca190a397ae"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K23.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K24",
+      "status": "PASS",
+      "level": "parser-fixture",
+      "expected": "parse/coverage保持PARTIAL；不能写COMPLETE的负缓存。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K24.stdout.log",
+          "sha256": "1b11db2df1e49708f97ef1453613beaa032a60022436bb5c8f0020824d2f3d70"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K24.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K25",
+      "status": "PASS",
+      "level": "runtime-MCP",
+      "expected": "静态结果有效，JDT启动=0；不是用假的MCP factory直接调用函数替代。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K25.stdout.log",
+          "sha256": "447b0568fa3414902bd29605d641b1563b43a79a795bc4e6aadb185a8b3abb03"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K25.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K26",
+      "status": "PASS",
+      "level": "runtime-JDT",
+      "expected": "关闭时明确配置错误；启用时实际绑定/引用可用且同一absolute deadline；记录runtime JDK/project JDK分离。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K26.real-jdt.json",
+          "sha256": "fb47246236eefe833f024d985e112410bffc314ed5c5b5013a1a287534ceced5"
+        }
+      ]
+    },
+    {
+      "id": "K27",
+      "status": "PASS",
+      "level": "runtime-provider",
+      "expected": "lexical仍可用；不写COMPLETE负缓存；关闭时provider调用=0。optional未接核心时记录实际集成边界，不伪造不存在的自动fallback。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K27.stdout.log",
+          "sha256": "f54f4776267f2a7c408f01b27384608a30dacc4d26a23d8bacad4ea8431cc7f8"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K27.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K28",
+      "status": "PASS",
+      "level": "runtime-JDT",
+      "expected": "短caller退出不取消长caller；backend按现有policy结算、资源释放；先fake协议单测，再真实JDT集成证据。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K28.real-jdt.json",
+          "sha256": "fb47246236eefe833f024d985e112410bffc314ed5c5b5013a1a287534ceced5"
+        }
+      ]
+    },
+    {
+      "id": "K29",
+      "status": "PASS",
+      "level": "runtime-load",
+      "expected": "队列有界，超时不遗留无界工作；不得全图prefetch；按原150ms/20ms SLO独立记录，不以机器不同推算通过。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K29.stdout.log",
+          "sha256": "da3d0f311e6edcf1b7d87377b7da668a237c62e31dc9073baf071255be450495"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K29.stderr.log",
+          "sha256": "e05300ce2412feb96bd9808546eb1a0f970db53f6405178dcb419ae3ae99fcaa"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/load/query-load-report.json",
+          "sha256": "384a4fc2b3a32b59f98e2f59d2011d79fd51525f43b4667e808a858184329c16"
+        }
+      ]
+    },
+    {
+      "id": "K30",
+      "status": "PASS",
+      "level": "runtime-SQL",
+      "expected": "WAL在配置的idle TTL+有界grace后收敛；无无限snapshot；不得以删库作为收敛。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K30.stdout.log",
+          "sha256": "b3475cabd159649ffd5ea3bf11ab7f7e9151515fcd1176d80f48e7f7346baec5"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K30.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K31",
+      "status": "PASS",
+      "level": "parser-fixture",
+      "expected": "各声明独立可寻址；不以constructor伪造局部type身份；数据库归属正确。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K31.stdout.log",
+          "sha256": "2afe7b1e52cf7b64f35998c268808f343239976964aeab05dcea2073176b2cf2"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K31.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "id": "K32",
+      "status": "PASS",
+      "level": "parser-fixture",
+      "expected": "真实parser的声明/range正确，文本括号不影响方法边界；JDK8业务源码与fixture目标级别分开。",
+      "evidence": [
+        {
+          "path": "p4-release/k-contracts/raw/K32.stdout.log",
+          "sha256": "e649e3a4a482396daee9e65cbc76a5aa19a63c528b97af6aa68987da4457e04a"
+        },
+        {
+          "path": "p4-release/k-contracts/raw/K32.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "qaContractRate": 0.9285714285714286,
+    "newCriticalRegressions": 0,
+    "actualRepairTaskGroups": 8,
+    "scheduledRuns": 168,
+    "receivedRuns": 168,
+    "runMode": "REAL_AGENT",
+    "scoringProtocol": "FROZEN_CANONICAL",
+    "usageComplete": true
+  },
+  "claims": {
+    "costReduction": false
+  },
+  "optionalExperimentEnabled": false,
+  "optionalExperimentDecision": "N/A",
+  "deploymentAuthorized": true,
+  "deploymentPerformed": false,
+  "sourceIdentity": {
+    "measurementBaseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+    "privatePackagingSha": "a77b6428ca432259c4008ead6c5e58cdc5e53cef",
+    "executableSourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+    "files": 611,
+    "evidence": [
+      {
+        "path": "p4-release/final-source-binding.json",
+        "sha256": "2effc03a5e3180b1eaaa3bd4511f2f6689fea9ae5a127067458ca35825a15b0f"
+      },
+      {
+        "path": "p4-release/package-source-manifest-r2.json",
+        "sha256": "b00582d27051446de7e6cd1e5a0d173bb0091c0365ca538be49ccffbccbda9bd"
+      },
+      {
+        "path": "p4-release/source-a77b6428.bundle",
+        "sha256": "e857888b5f56c242a738a9eff9db5eb9e85e3846f3a205d03a371eaa2f6f6047"
+      }
+    ]
+  },
+  "profiles": {
+    "p4FinalQA": {
+      "status": "PASS",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "report": {
+        "path": "p4-release/final-qa/run/results-pack.json",
+        "sha256": "0ac333e2e211a3968836119145f36ecf03c96bc549820118d66a472bffed822d"
+      },
+      "review": {
+        "path": "p4-release/final-qa/review.md",
+        "sha256": "be4d203a521285d00954d83e523aa17e4196d5838512da92ba88d4193b0f751b",
+        "status": "PASS"
+      },
+      "byArm": {
+        "product": {
+          "qa": {
+            "scheduled": 28,
+            "actual": 28,
+            "missing": 0,
+            "measured": 28,
+            "successes": 26,
+            "successRate": 0.9285714285714286
+          },
+          "repair": {
+            "scheduled": 0,
+            "actual": 0,
+            "missing": 0,
+            "measured": 0,
+            "successes": 0,
+            "successRate": null
+          }
+        },
+        "control": {
+          "qa": {
+            "scheduled": 28,
+            "actual": 28,
+            "missing": 0,
+            "measured": 28,
+            "successes": 24,
+            "successRate": 0.8571428571428571
+          },
+          "repair": {
+            "scheduled": 0,
+            "actual": 0,
+            "missing": 0,
+            "measured": 0,
+            "successes": 0,
+            "successRate": null
+          }
+        }
+      },
+      "floor": 0.8,
+      "floorPass": true,
+      "scope": "EXPOSED_REGRESSION",
+      "modelRequests": 250,
+      "checks": 5458
+    },
+    "p4FinalRepairs": {
+      "status": "PASS",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "actualGroups": 8,
+      "report": {
+        "path": "p4-release/final-repairs/run/results-pack.json",
+        "sha256": "e7c24245ed842e93b8d1f3ac74c9e370dace330e644de7181f65c566ddf1cad3"
+      },
+      "review": {
+        "path": "p4-release/final-repairs/review.md",
+        "sha256": "361dd895705bc042c8d8260ad79f2b30ea46c68513c62c356b1f93fecc45eabf",
+        "status": "PASS"
+      },
+      "byArm": {
+        "product": {
+          "qa": {
+            "scheduled": 0,
+            "actual": 0,
+            "missing": 0,
+            "measured": 0,
+            "successes": 0,
+            "successRate": null
+          },
+          "repair": {
+            "scheduled": 8,
+            "actual": 8,
+            "missing": 0,
+            "measured": 8,
+            "successes": 8,
+            "successRate": 1
+          }
+        },
+        "control": {
+          "qa": {
+            "scheduled": 0,
+            "actual": 0,
+            "missing": 0,
+            "measured": 0,
+            "successes": 0,
+            "successRate": null
+          },
+          "repair": {
+            "scheduled": 8,
+            "actual": 8,
+            "missing": 0,
+            "measured": 8,
+            "successes": 8,
+            "successRate": 1
+          }
+        }
+      },
+      "requests": 98,
+      "checks": 1154,
+      "usageComplete": true
+    },
+    "p4FinalPublic": {
+      "status": "PASS",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "report": {
+        "path": "p4-release/full-public-new/run/results-pack.json",
+        "sha256": "50a066eb46b4d9523fa05f6e1c02dfd7c91d2dec09d702b460a4ab8c370aa98f"
+      },
+      "review": {
+        "path": "p4-release/full-public-new/review.md",
+        "sha256": "d7580b052c572fdb3f98e47aac0c33e819d0443cfd4ad6e9712107f65747e593",
+        "status": "PASS"
+      },
+      "byArm": {
+        "product": {
+          "qa": {
+            "scheduled": 28,
+            "actual": 28,
+            "missing": 0,
+            "measured": 28,
+            "successes": 26,
+            "successRate": 0.9285714285714286
+          },
+          "repair": {
+            "scheduled": 8,
+            "actual": 8,
+            "missing": 0,
+            "measured": 8,
+            "successes": 8,
+            "successRate": 1
+          }
+        },
+        "control": {
+          "qa": {
+            "scheduled": 28,
+            "actual": 28,
+            "missing": 0,
+            "measured": 28,
+            "successes": 25,
+            "successRate": 0.8928571428571429
+          },
+          "repair": {
+            "scheduled": 8,
+            "actual": 8,
+            "missing": 0,
+            "measured": 8,
+            "successes": 8,
+            "successRate": 1
+          }
+        }
+      },
+      "scope": "FULL_PUBLIC_EXPOSED_REGRESSION_NOT_INDEPENDENT_LOCKED",
+      "originalCLIQualification": {
+        "product": "QUALIFICATION_FAIL",
+        "control": "QUALIFICATION_FAIL",
+        "scope": "STRUCTURED_QA_ONLY_NOT_RELEASE"
+      },
+      "measurementOnly": true
+    },
+    "p5IndependentLockedResults": {
+      "status": "PASS",
+      "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+      "report": {
+        "path": "p5-independent-locked-v1-r2/execution/run/results-pack.json",
+        "sha256": "d88449ef2e3926b300877d066d2c8f3fcf4e9da9d31300591a1407965716927e"
+      },
+      "review": {
+        "status": "PASS",
+        "path": "p5-independent-locked-v1-r2/results-review.md",
+        "sha256": "e0abec6fa9f693286cc8e583b3770009ee2408cc96e650bb6d5116dfb23a611e"
+      },
+      "byArm": {
+        "product": {
+          "qa": {
+            "scheduled": 9,
+            "actual": 9,
+            "missing": 0,
+            "measured": 9,
+            "successes": 9,
+            "successRate": 1
+          },
+          "repair": {
+            "scheduled": 3,
+            "actual": 3,
+            "missing": 0,
+            "measured": 3,
+            "successes": 2,
+            "successRate": 0.6666666666666666
+          }
+        },
+        "control": {
+          "qa": {
+            "scheduled": 9,
+            "actual": 9,
+            "missing": 0,
+            "measured": 9,
+            "successes": 9,
+            "successRate": 1
+          },
+          "repair": {
+            "scheduled": 3,
+            "actual": 3,
+            "missing": 0,
+            "measured": 3,
+            "successes": 2,
+            "successRate": 0.6666666666666666
+          }
+        }
+      },
+      "scope": "INDEPENDENT_LOCKED_FROZEN_BEFORE_FIRST_MODEL_REQUEST",
+      "newCriticalRegressions": 0,
+      "runMode": "REAL_AGENT",
+      "usageComplete": true,
+      "scheduled": 24,
+      "actual": 24,
+      "datasetHash": "899e17bc24434f826e1bb06b81a0311788992f48418312b49df00f9b11a30969",
+      "limits": [
+        "HLR-PARCEL-R1 both generated patches fail real judge due to int intermediate overflow; no new SUT critical regression observed.",
+        "Repair retrieval report valid=false for blocks20/24 is preserved; real judge is repair authority.",
+        "Exposure after this run is recorded; future repeats of this dataset are regression."
+      ]
+    }
+  },
+  "limits": [
+    "QA rate is final exposed product26/28 only; profile denominators never merged for QA qualification.",
+    "168 scheduled slots is evidence completeness across finalQA56 + originalRepair16 + fullPublic72 + independent24.",
+    "Full-public original CLI qualification fails in both arms; auxiliary repair retrieval invalid regions and all failures retained.",
+    "Independent new repair2/3 in both arms is a measured model limitation; no additional100-percent repair gate invented.",
+    "No statistically established product advantage, monetary cost reduction or universal production capacity claim.",
+    "Original verifier checks hashes/declarations only; outcome reviewers inspected actual raw traces; native deployment proof is separate.",
+    "Private holdout gold, tests and oracle remain in owner-controlled persistent storage outside this public archive.",
+    "package-authority.json NO_GO is copy-only status; this new manifest is separate release authority."
+  ]
+}

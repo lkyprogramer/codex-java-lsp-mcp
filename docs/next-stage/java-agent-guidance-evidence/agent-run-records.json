@@ -1,0 +1,98 @@
+[
+  {
+    "id": "static-primary",
+    "command": [
+      "codex",
+      "-a",
+      "never",
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/Users/luo/Documents/program/exam-parent-v3",
+      "-o",
+      "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-agent-guidance-i7fjv7b9/agents/static-primary/answer.md",
+      "-"
+    ],
+    "exitCode": 0,
+    "timedOut": false,
+    "seconds": 54.467,
+    "gitStatusUnchanged": true
+  },
+  {
+    "id": "semantic-primary",
+    "command": [
+      "codex",
+      "-a",
+      "never",
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/Users/luo/Documents/program/cipherlink",
+      "-o",
+      "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-agent-guidance-i7fjv7b9/agents/semantic-primary/answer.md",
+      "-"
+    ],
+    "exitCode": 0,
+    "timedOut": false,
+    "seconds": 154.48,
+    "gitStatusUnchanged": true
+  },
+  {
+    "id": "static-worktree",
+    "command": [
+      "codex",
+      "-a",
+      "never",
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/Users/luo/Documents/program/cipherlink-worktrees/fix-brooks-audit",
+      "-o",
+      "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-agent-guidance-i7fjv7b9/agents/static-worktree/answer.md",
+      "-"
+    ],
+    "exitCode": 0,
+    "timedOut": false,
+    "seconds": 77.549,
+    "gitStatusUnchanged": true
+  },
+  {
+    "id": "documentation-only",
+    "command": [
+      "codex",
+      "-a",
+      "never",
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/Users/luo/Documents/program/exam-parent-v3",
+      "-o",
+      "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-agent-guidance-i7fjv7b9/agents/documentation-only/answer.md",
+      "-"
+    ],
+    "exitCode": 0,
+    "timedOut": false,
+    "seconds": 46.819,
+    "gitStatusUnchanged": true
+  }
+]

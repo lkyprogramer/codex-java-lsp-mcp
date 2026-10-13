@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,10 +29,12 @@ import {
   serenaUnavailableResult,
   summarizeLiveTasks,
   coverageProxy,
+  impactSessionFromClient,
   runLiveAgentTask
 } from "./run-agent-trace-live.mjs";
 import { mergeUsage, openaiCompatibleChat, usageFromCompletion } from "./openai-compatible-chat.mjs";
 import { parseAgentTraceCli, runAgentTraceMatrix } from "./run-agent-trace-matrix.mjs";
+import { serializeModelToolResult } from "./eval-tool-wire.mjs";
 
 test("live project cache is shared across arms so create can load a prewarmed snapshot", () => {
   const root = liveProjectCacheRoot("/tmp/l1", "lishuedu");
@@ -682,4 +685,385 @@ test("live agent task records coverage from tool results without sending mustHit
   assert.equal(result.toolCallCount, 1);
   assert.equal(result.usage.status, "MEASURED");
   assert.equal(result.usage.totalTokens, 40);
+});
+
+const auditTask = {
+  taskId: "audit:repair",
+  projectId: "fixture",
+  requiredContextFiles: [],
+  anchor: { file: "A.java", line: 1, column: 1 }
+};
+
+for (const [finishReason, expected] of [["length", "MAX_COMPLETION_TOKENS"], ["stop", "MODEL_STOP"]]) {
+  test(`forced packaging preserves primary ${expected} and raw completion`, async () => {
+    const requests = [];
+    const responses = [];
+    let step = 0;
+    const result = await runLiveAgentTask({
+      task: auditTask,
+      maxRounds: 16,
+      tools: [{ type: "function", function: { name: "write_file" } }],
+      chatRequestConfig: { reasoningEffort: "none", chatTemplateKwargs: { enable_thinking: false }, apiKey: "must-not-log" },
+      onChat: request => requests.push(request),
+      onCompletion: response => responses.push(response),
+      chat: async request => {
+        step += 1;
+        assert.equal(request.reasoningEffort, "none");
+        assert.deepEqual(request.chatTemplateKwargs, { enable_thinking: false });
+        assert.equal(request.maxTokens, 2048);
+        assert.equal(request.apiKey, undefined);
+        return {
+          id: `response-${step}`,
+          model: "fixture-model",
+          debug: { apiKey: "must-not-log" },
+          choices: [{ index: 0, finish_reason: step === 1 ? finishReason : "stop", message: {
+            role: "assistant", content: step === 1 ? "" : '{"patchApplied":false}', debug: "must-not-log"
+          } }],
+          usage: { prompt_tokens: 10, completion_tokens: step === 1 ? 2048 : 2, total_tokens: step === 1 ? 2058 : 12 }
+        };
+      }
+    });
+    assert.equal(result.stopReason, "FORCED_ANSWER", "legacy packaging flag remains compatible");
+    assert.equal(result.primaryStopReason, expected);
+    assert.equal(result.finalAnswerMode, "FORCED_ANSWER");
+    assert.equal(result.toolCallCount, 0, "a forced claim cannot create a patch");
+    assert.equal(step, 2, "empty completion stops before the round limit");
+    assert.deepEqual(requests.map(r => [r.requestIndex, r.forcedAnswer]), [[0, false], [1, true]]);
+    assert.deepEqual(responses.map(r => [r.requestIndex, r.forcedAnswer]), [[0, false], [1, true]]);
+    assert.deepEqual(requests[0].requestConfig, { max_tokens: 2048, reasoning_effort: "none", chat_template_kwargs: { enable_thinking: false } });
+    assert.deepEqual(requests[1].tools, []);
+    assert.equal(responses[0].response.choices[0].finish_reason, finishReason);
+    assert.equal(responses[0].response.choices[0].message.content, "");
+    assert.equal(responses[0].response.usage.completion_tokens, 2048);
+    assert.equal(JSON.stringify({ requests, responses }).includes("must-not-log"), false);
+  });
+}
+
+test("round exhaustion keeps its primary cause and forced request attaches the final tool receipt", async () => {
+  const requests = [];
+  const completions = [];
+  const call = { id: "last-read", type: "function", function: { name: "read", arguments: '{"path":"A.java"}' } };
+  const result = await runLiveAgentTask({
+    task: auditTask,
+    maxRounds: 1,
+    tools: [{ type: "function", function: { name: "read" } }],
+    invoke: async () => ({ path: "A.java", startLine: 1, text: "int n=1;\n", contentHash: "f".repeat(64) }),
+    onChat: request => requests.push(request),
+    onCompletion: response => completions.push(response),
+    chat: async ({ tools }) => tools.length
+      ? { choices: [{ finish_reason: "tool_calls", message: { content: null, tool_calls: [call] } }] }
+      : { choices: [{ finish_reason: "stop", message: { content: "{}" } }] }
+  });
+  assert.equal(result.primaryStopReason, "MAX_ROUNDS");
+  assert.equal(result.finalAnswerMode, "FORCED_ANSWER");
+  assert.equal(requests[1].newReceipts[0].callId, "last-read");
+  assert.deepEqual(completions[0].response.choices[0].message.tool_calls, [call]);
+});
+
+test("normal model answer and failed runtime remain separate from forced packaging", async () => {
+  for (const fail of [false, true]) {
+    let responses = 0;
+    const result = await runLiveAgentTask({
+      task: auditTask,
+      onCompletion: () => responses += 1,
+      chat: async () => {
+        if (fail) throw new Error("fixture connection failed");
+        return { choices: [{ finish_reason: "stop", message: { content: "{}" } }] };
+      }
+    });
+    assert.equal(result.primaryStopReason, fail ? "FAILED_RUNTIME" : "MODEL_STOP");
+    assert.equal(result.finalAnswerMode, fail ? "NO_ANSWER" : "MODEL_ANSWER");
+    assert.equal(responses, fail ? 0 : 1);
+  }
+});
+
+test("discovery MCP forwards every advertised argument and keeps none/window source receipts exact", async () => {
+  const captured = [];
+  const source = "  boolean allowed() {\n    return true;\n  }\n";
+  const client = {
+    async callTool(request) {
+      captured.push(request);
+      const candidate = {
+        declaration: { id: "m", name: "allowed", relativePath: "A.java", contentHash: "f".repeat(64), selection: { line: 4, column: 3 } }
+      };
+      if (request.arguments.preview === "window") Object.assign(candidate, {
+        preview: source, previewKind: "source", evidenceRange: { startLine: 4, endLine: 6 }
+      });
+      return { content: [{ type: "text", text: JSON.stringify({ schemaVersion: "java-discovery/v1", candidates: [candidate] }) }] };
+    }
+  };
+  const session = impactSessionFromClient({ repoRoot: "/isolated/fixture", client });
+  for (const preview of ["none", "window"]) {
+    const args = { query: "allowed", terms: ["allowed"], searchMode: "exact", limit: 3, module: "core", sourceSet: "main", preview };
+    const raw = await session.symbol(args);
+    assert.deepEqual(captured.at(-1), { name: "java_symbol", arguments: { repoRoot: "/isolated/fixture", ...args } });
+    const serialized = serializeModelToolResult("java_symbol", raw);
+    assert.equal(serialized.slices.length, preview === "none" ? 0 : 1);
+    if (preview === "window") {
+      assert.deepEqual(serialized.slices[0], {
+        path: "A.java", startLine: 4, endLine: 6, text: source, fileContentHash: "f".repeat(64),
+        sliceHash: createHash("sha256").update(source, "utf8").digest("hex")
+      });
+      assert.equal(JSON.parse(serialized.content).candidates[0].preview, source);
+    }
+  }
+});
+
+const submitCall = (args = '{"answer":"structurally valid"}', id = "submit") => ({ id, type: "function", function: { name: "submit_answer", arguments: args } });
+const readCall = { id: "read-source", type: "function", function: { name: "read", arguments: '{"path":"A.java"}' } };
+const toolCompletion = (calls, finish_reason = "tool_calls", content = null) => ({ choices: [{ finish_reason, message: { content, tool_calls: calls } }] });
+const typedOptions = { task: auditTask, tools: [{ type: "function", function: { name: "read" } }], submission: { answerKeys: { answer: "string" } } };
+
+test("public recovery identifies the violated field rule and allows only one existing-fact submission", async () => {
+  const fields = { answer: { type: "string", pattern: "^[A-Za-z_$][A-Za-z0-9_$]*$", description: "Simple method name." } };
+  let requests = 0;
+  let invokes = 0;
+  const result = await runLiveAgentTask({ ...typedOptions,
+    submission: { answerKeys: { answer: "string" }, fields, contract: { version: "public-test/v1", sha256: "c".repeat(64) } },
+    invoke: async () => { invokes++; throw new Error("recovery may not fetch source"); },
+    chat: async ({ tools, messages }) => {
+      requests++;
+      if (requests === 1) {
+        assert.equal(tools.at(-1).function.parameters.properties.answer.pattern, fields.answer.pattern);
+        return toolCompletion([submitCall('{"answer":"pkg.Owner#method"}')]);
+      }
+      assert.deepEqual(tools.map(t => t.function.name), ["submit_answer"]);
+      assert.match(messages.at(-1).content, /answer.*pattern/i);
+      return toolCompletion([submitCall('{"answer":"method"}')]);
+    }
+  });
+  assert.equal(requests, 2);
+  assert.equal(invokes, 0);
+  assert.equal(result.submission.recoveryCount, 1);
+  assert.deepEqual(result.submission.acceptedAnswer, { answer: "method" });
+  assert.equal(result.submission.attempts[0].accepted, false);
+  assert.equal(result.submission.attempts[0].rawArguments, '{"answer":"pkg.Owner#method"}');
+  assert.deepEqual(result.submission.publicContract, { version: "public-test/v1", sha256: "c".repeat(64) });
+});
+
+test("typed submission succeeds in one request and preserves raw draft without cleanup", async () => {
+  let requests = 0;
+  const draft = '<think>draft</think> {"answer":"unsubmitted"}';
+  const result = await runLiveAgentTask({ ...typedOptions, chat: async ({ tools }) => {
+    requests += 1;
+    assert.deepEqual(tools.map(tool => tool.function.name), ["read", "submit_answer"]);
+    return toolCompletion([submitCall()], "tool_calls", draft);
+  } });
+  assert.equal(requests, 1);
+  assert.equal(result.stopReason, "SUBMITTED");
+  assert.equal(result.finalAnswerMode, "SUBMITTED");
+  assert.deepEqual(JSON.parse(result.finalContent), { answer: "structurally valid" });
+  assert.equal(result.submission.drafts[0].rawContent, draft);
+  assert.equal(result.submission.attempts[0].rawArguments, '{"answer":"structurally valid"}');
+  assert.equal(result.submission.recoveryCount, 0);
+  assert.deepEqual(result.submission.receipts, []);
+});
+
+test("typed read then submit freezes only previously dispatched receipts even without onChat", async () => {
+  for (const withCallback of [false, true]) {
+    let step = 0;
+    const requests = [];
+    const result = await runLiveAgentTask({ ...typedOptions,
+      ...(withCallback ? { onChat: async request => { await Promise.resolve(); requests.push(request); } } : {}),
+      invoke: async () => ({ path: "A.java", startLine: 2, text: "int value = 1;\n", contentHash: "f".repeat(64) }),
+      chat: async () => ++step === 1 ? toolCompletion([readCall]) : toolCompletion([submitCall()])
+    });
+    assert.equal(step, 2);
+    assert.equal(result.submission.acceptedRequestIndex, 1);
+    assert.deepEqual(result.submission.receipts.map(receipt => receipt.callId), ["read-source"]);
+    assert.equal(result.submission.receipts[0].slices[0].startLine, 2);
+    assert.equal(result.submission.receipts[0].slices[0].text, "int value = 1;\n");
+    if (withCallback) assert.equal(requests[1].newReceipts[0].contentHash, result.submission.receipts[0].contentHash);
+  }
+});
+
+for (const [label, first] of [
+  ["prose draft", { choices: [{ finish_reason: "stop", message: { content: 'prefix {"answer":"value"} </function>' } }] }],
+  ["duplicate keys", toolCompletion([submitCall('{"answer":"a","answer":"b"}')])],
+  ["wrong type", toolCompletion([submitCall('{"answer":false}')])],
+  ["extra key", toolCompletion([submitCall('{"answer":"a","extra":1}')])],
+  ["length-truncated valid JSON", toolCompletion([submitCall()], "length")],
+  ["mixed unseen read", toolCompletion([readCall, submitCall()])]
+]) {
+  test(`typed ${label} gets only one public-contract recovery without invoking rejected actions`, async () => {
+    let step = 0;
+    let invoked = 0;
+    const requests = [];
+    const result = await runLiveAgentTask({ ...typedOptions,
+      onChat: request => requests.push(request),
+      invoke: async () => { invoked += 1; throw new Error("must not invoke"); },
+      chat: async ({ tools, messages }) => {
+        step += 1;
+        if (step === 1) return first;
+        assert.deepEqual(tools.map(tool => tool.function.name), ["submit_answer"]);
+        assert.equal(messages.at(-1).content.includes("Public submission contract recovery"), true);
+        return toolCompletion([submitCall()]);
+      }
+    });
+    assert.equal(invoked, 0);
+    assert.equal(step, 2);
+    assert.equal(result.stopReason, "SUBMITTED");
+    assert.equal(result.primaryStopReason, label === "length-truncated valid JSON" ? "MAX_COMPLETION_TOKENS" : "INVALID_SUBMISSION");
+    assert.equal(result.submission.recoveryCount, 1);
+    assert.equal(result.submission.receipts.some(receipt => receipt.slices.length > 0), false);
+    const firstCalls = first.choices[0].message.tool_calls ?? [];
+    assert.equal(result.toolCallCount, firstCalls.length + 1);
+    assert.deepEqual(requests[1].messages.filter(message => message.role === "tool").map(message => message.tool_call_id), firstCalls.map(call => call.id));
+    if (label === "prose draft") assert.equal(result.submission.drafts[0].rawContent, first.choices[0].message.content);
+  });
+}
+
+test("invalid recovery remains failure and cannot call another action", async () => {
+  let requests = 0;
+  let invokes = 0;
+  const result = await runLiveAgentTask({ ...typedOptions,
+    invoke: async () => { invokes += 1; },
+    chat: async () => ++requests === 1 ? toolCompletion([submitCall('{}')]) : toolCompletion([readCall])
+  });
+  assert.equal(requests, 2);
+  assert.equal(invokes, 0);
+  assert.equal(result.stopReason, "INVALID_SUBMISSION");
+  assert.equal(result.finalAnswerMode, "NO_SUBMISSION");
+  assert.equal(result.finalContent, "");
+  assert.equal(result.submission.acceptedAnswer, null);
+  assert.equal(result.submission.recoveryCount, 1);
+});
+
+test("typed recovery respects round and context caps and never forces an extra request", async () => {
+  let requests = 0;
+  const exhausted = await runLiveAgentTask({ ...typedOptions, maxRounds: 1,
+    invoke: async () => ({ path: "A.java", startLine: 1, text: "value\n" }),
+    chat: async () => { requests += 1; return toolCompletion([readCall]); }
+  });
+  assert.equal(requests, 1);
+  assert.equal(exhausted.stopReason, "MAX_ROUNDS");
+  assert.equal(exhausted.submission.recoveryCount, 0);
+  assert.equal(exhausted.submission.receipts.length, 0);
+  const invalid = await runLiveAgentTask({ ...typedOptions, maxRounds: 1, chat: async () => toolCompletion([submitCall('{}')]) });
+  assert.equal(invalid.stopReason, "INVALID_SUBMISSION");
+  assert.equal(invalid.submission.recoveryCount, 0);
+  requests = 0;
+  const capped = await runLiveAgentTask({ ...typedOptions, promptCap: 1000, chat: async () => {
+    requests += 1;
+    return { choices: [{ finish_reason: "stop", message: { content: "x".repeat(10000) } }] };
+  } });
+  assert.equal(requests, 1);
+  assert.equal(capped.stopReason, "FAILED_CONTEXT_CAP");
+  assert.equal(capped.primaryStopReason, "INVALID_SUBMISSION");
+  assert.equal(capped.submission.recoveryCount, 0);
+});
+
+test("source exhaustion prompt declares remaining zero without claiming evidence completion", async () => {
+  let step = 0;
+  const result = await runLiveAgentTask({ ...typedOptions, sourceBudget: { max_lines: 1, max_bytes: 6 },
+    invoke: async () => ({ path: "A.java", startLine: 1, text: "value\n" }),
+    chat: async ({ messages }) => {
+      if (++step === 1) return toolCompletion([readCall]);
+      const prompt = messages.filter(message => message.role === "user").map(message => message.content).join("\n");
+      assert.match(prompt, /remainingLines=0, remainingBytes=0/);
+      assert.match(prompt, /cannot receive more source/);
+      assert.equal(prompt.includes("enough evidence"), false);
+      return toolCompletion([submitCall()]);
+    }
+  });
+  assert.equal(result.stopReason, "SUBMITTED");
+});
+
+test("async request/completion callback failures are observed and stop typed execution", async () => {
+  for (const callback of ["onChat", "onCompletion"]) {
+    let calls = 0;
+    const result = await runLiveAgentTask({ ...typedOptions,
+      [callback]: async () => { throw new Error(`${callback} audit failed`); },
+      chat: async () => { calls += 1; return toolCompletion([submitCall()]); }
+    });
+    assert.equal(result.stopReason, "FAILED_RUNTIME");
+    assert.match(result.error, /audit failed/);
+    assert.equal(calls, callback === "onChat" ? 0 : 1);
+    assert.equal(result.submission.acceptedAnswer, null);
+  }
+});
+
+test("legacy forced fallback observes async audit callback failures", async () => {
+  for (const callback of ["onChat", "onCompletion"]) {
+    let callbacks = 0;
+    const result = await runLiveAgentTask({ task: auditTask,
+      [callback]: async () => { if (++callbacks === 2) throw new Error("forced audit failed"); },
+      chat: async () => ({ choices: [{ finish_reason: "stop", message: { content: "" } }] })
+    });
+    assert.equal(result.stopReason, "FAILED_RUNTIME");
+    assert.equal(result.finalAnswerMode, "NO_ANSWER");
+    assert.match(result.error, /forced audit failed/);
+  }
+});
+
+for (const withCalls of [false, true]) {
+  for (const recovery of ["submit", "invalid", "last-round"]) {
+    test(`typed length ${withCalls ? "with" : "without"} calls retains primary truncation after ${recovery}`, async () => {
+      let requests = 0;
+      const first = withCalls
+        ? toolCompletion([submitCall()], "length")
+        : { choices: [{ finish_reason: "length", message: { content: '{"answer":"draft"}' } }] };
+      const result = await runLiveAgentTask({ ...typedOptions,
+        maxRounds: recovery === "last-round" ? 1 : 4,
+        chat: async () => ++requests === 1 ? first : toolCompletion([submitCall(recovery === "submit" ? '{"answer":"accepted"}' : '{}')])
+      });
+      assert.equal(requests, recovery === "last-round" ? 1 : 2);
+      assert.equal(result.primaryStopReason, "MAX_COMPLETION_TOKENS");
+      assert.equal(result.stopReason, recovery === "submit" ? "SUBMITTED" : "INVALID_SUBMISSION");
+      assert.equal(result.submission.recoveryCount, recovery === "last-round" ? 0 : 1);
+      if (withCalls) assert.equal(result.submission.attempts[0].reason, "length_truncated");
+      else assert.equal(result.submission.drafts[0].rawContent, '{"answer":"draft"}');
+      if (recovery !== "submit") assert.equal(result.finalContent, "");
+    });
+  }
+}
+
+for (const mode of ["typed", "legacy-forced"]) {
+  test(`${mode} completion audit rejection retains completed provider usage and callback raw metadata`, async () => {
+    const captured = [];
+    let requests = 0;
+    const result = await runLiveAgentTask({
+      ...(mode === "typed" ? typedOptions : { task: auditTask }),
+      onCompletion: async event => {
+        captured.push(event);
+        if (mode === "typed" || event.forcedAnswer) throw new Error("usage audit failed");
+      },
+      chat: async () => {
+        requests += 1;
+        return {
+          id: `usage-response-${requests}`, model: "fake-provider",
+          ...toolCompletion(mode === "typed" ? [submitCall()] : [], mode === "typed" ? "tool_calls" : "stop"),
+          usage: { prompt_tokens: 123, completion_tokens: 45, total_tokens: 168, prompt_tokens_details: { cached_tokens: 12 } }
+        };
+      }
+    });
+    assert.equal(requests, mode === "typed" ? 1 : 2);
+    assert.equal(result.stopReason, "FAILED_RUNTIME");
+    assert.match(result.error, /usage audit failed/);
+    assert.equal(result.usage.status, "MEASURED");
+    assert.equal(result.usage.promptTokens, 123 * requests);
+    assert.equal(result.usage.completionTokens, 45 * requests);
+    assert.equal(result.usage.totalTokens, 168 * requests);
+    assert.equal(result.usage.cachedInputTokens, 12 * requests);
+    assert.equal(captured.at(-1).response.id, `usage-response-${requests}`);
+    assert.equal(captured.at(-1).response.model, "fake-provider");
+    assert.equal(captured.at(-1).response.usage.total_tokens, 168);
+    assert.equal(captured.at(-1).forcedAnswer, mode === "legacy-forced");
+    if (mode === "typed") {
+      assert.equal(captured[0].response.choices[0].message.tool_calls[0].function.arguments, '{"answer":"structurally valid"}');
+      assert.equal(result.submission.acceptedAnswer, null);
+      assert.deepEqual(result.submission.receipts, []);
+    }
+  });
+}
+
+
+test("evidence session mapping explicitly selects operation and isolated repo anchor", async () => {
+  const captured = [];
+  const raw = { schemaVersion: "java-evidence-unit/v1", scopeState: "PARTIAL", units: [], omitted: [{ reason: "STALE" }] };
+  const session = impactSessionFromClient({ repoRoot: "/isolated/fixture", client: { async callTool(request) {
+    captured.push(request); return { content: [{ type: "text", text: JSON.stringify(raw) }] };
+  } } });
+  assert.deepEqual(await session.evidence({ file: "A.java", line: 4, column: 8, query: "ignored" }), raw);
+  assert.deepEqual(captured, [{ name: "java_symbol", arguments: { repoRoot: "/isolated/fixture", operation: "evidence", file: "A.java", line: 4, column: 8 } }]);
 });

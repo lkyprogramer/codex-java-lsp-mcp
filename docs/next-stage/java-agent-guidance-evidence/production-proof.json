@@ -1,0 +1,58 @@
+{
+  "status": "PASS",
+  "buildSha": "48bad915c854",
+  "productionDeploymentPerformed": true,
+  "current": "releases/48bad915c854-20261011T135529Z",
+  "previousCurrent": "releases/8f737ac7cd14-20261011T123708Z",
+  "mcpUrl": "http://127.0.0.1:38456/mcp",
+  "health": {
+    "healthz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 4590,
+      "buildSha": "48bad915c854",
+      "instanceId": "managed-48bad915c854-20261011T135529Z-72c035f7-0ad8-486a-8a31-43f98882e62e"
+    },
+    "readyz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 4599,
+      "buildSha": "48bad915c854",
+      "instanceId": "managed-48bad915c854-20261011T135529Z-72c035f7-0ad8-486a-8a31-43f98882e62e"
+    }
+  },
+  "environmentPreserved": {
+    "JAVA_HOME": true,
+    "JAVA_LSP_CACHE_BASE": true,
+    "JAVA_LSP_HTTP_PORT": true,
+    "JAVA_LSP_IDLE_TTL_MS": true,
+    "JAVA_LSP_OWNERSHIP_BASE": true,
+    "JDTLS_BIN": true,
+    "NODE_BIN": true,
+    "PATH": true
+  },
+  "projectConfigurationPreserved": true,
+  "installedSourceFilesChecked": 1781,
+  "excludedDocumentationLogs": 63,
+  "sourceTests": 1366,
+  "scriptTests": 436,
+  "fail": 0,
+  "skip": 0,
+  "finalSmokeExit": 0,
+  "installer": {
+    "command": [
+      "bash",
+      "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-agent-guidance-i7fjv7b9/package/install-runtime.sh",
+      "--port",
+      "38456",
+      "--canary-port",
+      "38457"
+    ],
+    "exitCode": 0,
+    "seconds": 415.1
+  },
+  "oldQaMeasurementsReusedForHook": false,
+  "productionRollback": "NOT_RUN_SUCCESSFUL_RELEASE_RETAINED"
+}

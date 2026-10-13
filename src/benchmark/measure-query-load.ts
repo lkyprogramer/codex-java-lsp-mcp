@@ -19,7 +19,8 @@ import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { SqlEntitySearch, readIndexGeneration } from "../java-index/sql/entity-search.js";
 import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import { runStaticDiscovery, type DiscoveryResult } from "../discovery/query.js";
-import { sharedQueryWorker, type QueryWorkerStats } from "../discovery/query-worker.js";
+import { configureSharedQueryWorker, sharedQueryWorker, type QueryWorkerStats, type QueryWorkerTiming } from "../discovery/query-worker.js";
+import { classifyQuery } from "../discovery/query-intent.js";
 import { repoCacheBase } from "../repo-layout.js";
 
 function isInside(file: string, dir: string): boolean {
@@ -29,6 +30,7 @@ function isInside(file: string, dir: string): boolean {
 
 interface LoadArgs {
   files: number;
+  workerCount: 1 | 2;
   output: string;
   repo?: string;
   db?: string;
@@ -39,8 +41,9 @@ interface LoadArgs {
   queries?: LoadQuery[];
 }
 
-function parseArgs(argv: string[]): LoadArgs {
+export function parseArgs(argv: string[]): LoadArgs {
   let files = 1000;
+  let workerCount: number = 1;
   let output: string | undefined;
   let repo: string | undefined;
   let db: string | undefined;
@@ -51,6 +54,7 @@ function parseArgs(argv: string[]): LoadArgs {
   let queries: LoadQuery[] | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--files" && argv[i + 1]) files = Number(argv[i + 1]);
+    else if (argv[i] === "--worker-count") workerCount = Number(argv[++i]);
     else if (argv[i] === "--output" && argv[i + 1]) output = argv[i + 1];
     else if (argv[i] === "--repo" && argv[i + 1]) repo = path.resolve(argv[i + 1]!);
     else if (argv[i] === "--db" && argv[i + 1]) db = path.resolve(argv[i + 1]!);
@@ -65,6 +69,7 @@ function parseArgs(argv: string[]): LoadArgs {
     }
   }
   if (!Number.isInteger(files) || files < 1) throw new Error("--files must be a positive integer");
+  if (workerCount !== 1 && workerCount !== 2) throw new Error("--worker-count must be 1 or 2");
   if (!output) throw new Error("--output is required");
   if (repo && !db) throw new Error("--repo requires --db (a scratch index path; never the production cache)");
   // The writer step bumps indexedGeneration: never point it at a live cache.
@@ -72,7 +77,7 @@ function parseArgs(argv: string[]): LoadArgs {
   if (!(deadlineMs > 0) || !Number.isInteger(samples) || samples < 1 || !(writerIntervalMs > 0) || steps.some(step => !Number.isInteger(step) || step < 1)) {
     throw new Error("invalid --deadline-ms/--rounds/--steps");
   }
-  return { files, output, repo, db, deadlineMs, samples, steps, writerIntervalMs, queries };
+  return { files, workerCount, output, repo, db, deadlineMs, samples, steps, writerIntervalMs, queries };
 }
 
 export function generateRepo(root: string, count: number): string[] {
@@ -138,6 +143,14 @@ function percentile(values: number[], p: number): number {
 export type LoadQuery = { kind: string; mode: "auto" | "exact" | "text"; query: string };
 
 export type StepLoadReport = {
+  workerCount: 1 | 2;
+  rawLatencies: Array<{ sample: number; round: number; slot: number; kind: string; query: string; ms: number; stopReason: string; scopeState: string }>;
+  workerRequests: QueryWorkerTiming[];
+  warmup: { requests: number; writerCommits: number; workerSlots: number[]; workerRequests: QueryWorkerTiming[] };
+  measuredWorkerSpawned: number;
+  measuredWriterCommits: number;
+  measuredWorkerCompleted: number;
+  resources: { wallMs: number; cpuUserUs: number; cpuSystemUs: number; cpuEquivalentCores: number; rssStartMb: number; rssEndMb: number; rssSampledPeakMb: number; rssSamplingIntervalMs: number; scope: string };
   concurrency: number;
   requests: number;
   deadlineMs: number;
@@ -165,6 +178,7 @@ export type StepLoadReport = {
 export async function runStepLoad(input: {
   repoRoot: string;
   dbPath: string;
+  workerCount?: 1 | 2;
   queries: readonly LoadQuery[];
   concurrency: number;
   rounds: number;
@@ -172,6 +186,12 @@ export async function runStepLoad(input: {
   /** Commit (and bump indexedGeneration) on a separate connection this often. */
   writerIntervalMs?: number;
 }): Promise<StepLoadReport> {
+  const workerCount = input.workerCount ?? 1;
+  await sharedQueryWorker().close();
+  const timings: QueryWorkerTiming[] = [];
+  const warmTimings: QueryWorkerTiming[] = [];
+  let measuring = false;
+  configureSharedQueryWorker({ workerCount, onTiming: event => (measuring ? timings : warmTimings).push(event) });
   const client = new SqlJavaIndexClient(input.repoRoot, input.dbPath);
   await client.open(1);
   const worker = sharedQueryWorker();
@@ -187,27 +207,64 @@ export async function runStepLoad(input: {
       writerCommits += 1;
     }, input.writerIntervalMs)
     : undefined;
-  const latencies: Array<{ kind: string; ms: number }> = [];
+  const latencies: StepLoadReport["rawLatencies"] = [];
+  let measuredCommitsBefore = 0;
+  let measuredCompletedBefore = 0;
+  let measuredSpawnedBefore = 0;
+  let cpuBefore = process.cpuUsage();
+  let cpuUsed = { user: 0, system: 0 };
+  let measuredStarted = 0;
+  let wallMs = 0;
+  let rssStartMb = 0;
+  let rssEndMb = 0;
+  let rssPeakMb = 0;
+  let rssTimer: NodeJS.Timeout | undefined;
+  const rssMb = () => process.memoryUsage().rss / 1024 / 1024;
   const stopReasons: Record<string, number> = {};
   const scopeStates: Record<string, number> = {};
   const delay = monitorEventLoopDelay({ resolution: 1 });
   try {
     // Warm-up: one pass of every query (connection open, statement prep).
-    for (const query of input.queries) await discover(client, input.repoRoot, query, input.deadlineMs);
+    for (const query of input.queries) {
+      await Promise.all(Array.from({ length: workerCount }, () => discover(client, input.repoRoot, query, input.deadlineMs)));
+    }
+    // Every reader warms the same query set; the measured sample count is unchanged.
+    for (let slot = 0; slot < workerCount; slot += 1) {
+      for (const query of input.queries) {
+        if (!warmTimings.some(event => event.workerSlot === slot && event.request.task === query.query && event.request.mode === classifyQuery(query.query, query.mode) && event.outcome === "completed" && event.actualServiceMs !== null)) {
+          throw new Error(`reader ${slot} did not complete warm query ${query.kind}`);
+        }
+      }
+    }
+    measuredCommitsBefore = writerCommits;
+    measuredCompletedBefore = worker.stats().completed;
+    measuredSpawnedBefore = worker.stats().spawned;
+    cpuBefore = process.cpuUsage();
+    rssStartMb = rssPeakMb = rssMb();
+    measuredStarted = performance.now();
+    rssTimer = setInterval(() => { rssPeakMb = Math.max(rssPeakMb, rssMb()); }, 10);
+    measuring = true;
     delay.enable();
     for (let round = 0; round < input.rounds; round += 1) {
       await Promise.all(Array.from({ length: input.concurrency }, async (_, slot) => {
         const query = input.queries[(round * input.concurrency + slot) % input.queries.length]!;
         const started = performance.now();
         const result = await discover(client, input.repoRoot, query, input.deadlineMs);
-        latencies.push({ kind: query.kind, ms: performance.now() - started });
+        latencies.push({ sample: round * input.concurrency + slot, round, slot, kind: query.kind, query: query.query, ms: performance.now() - started, stopReason: result.stopReason ?? "none", scopeState: result.scopeState });
         const reason = result.stopReason ?? "none";
         stopReasons[reason] = (stopReasons[reason] ?? 0) + 1;
         scopeStates[result.scopeState] = (scopeStates[result.scopeState] ?? 0) + 1;
       }));
     }
     delay.disable();
+    wallMs = performance.now() - measuredStarted;
+    cpuUsed = process.cpuUsage(cpuBefore);
+    rssEndMb = rssMb();
+    rssPeakMb = Math.max(rssPeakMb, rssEndMb);
+    measuring = false;
   } finally {
+    delay.disable();
+    if (rssTimer) clearInterval(rssTimer);
     if (writerTimer) clearInterval(writerTimer);
     if (writerDb) close(writerDb);
     await client.close();
@@ -220,6 +277,14 @@ export async function runStepLoad(input: {
     byKind[kind] = { n: values.length, p50: round3(percentile(values, 50)), p95: round3(percentile(values, 95)), p99: round3(percentile(values, 99)) };
   }
   return {
+    workerCount,
+    rawLatencies: latencies,
+    workerRequests: timings,
+    warmup: { requests: warmTimings.length, writerCommits: measuredCommitsBefore, workerRequests: warmTimings, workerSlots: [...new Set(warmTimings.flatMap(event => event.workerSlot === undefined ? [] : [event.workerSlot]))] },
+    measuredWriterCommits: writerCommits - measuredCommitsBefore,
+    measuredWorkerCompleted: after.completed - measuredCompletedBefore,
+    measuredWorkerSpawned: after.spawned - measuredSpawnedBefore,
+    resources: { wallMs, cpuUserUs: cpuUsed.user, cpuSystemUs: cpuUsed.system, cpuEquivalentCores: wallMs > 0 ? (cpuUsed.user + cpuUsed.system) / (wallMs * 1000) : 0, rssStartMb, rssEndMb, rssSampledPeakMb: rssPeakMb, rssSamplingIntervalMs: 10, scope: "whole process, including all worker threads; measured requests only; sampled RSS is not an exact peak" },
     concurrency: input.concurrency,
     requests: latencies.length,
     deadlineMs: input.deadlineMs,
@@ -329,13 +394,19 @@ async function main(): Promise<void> {
     const steps: StepLoadReport[] = [];
     for (const concurrency of args.steps) {
       const rounds = Math.ceil(args.samples / concurrency);
-      steps.push(await runStepLoad({ repoRoot, dbPath, queries, concurrency, rounds, deadlineMs: args.deadlineMs }));
+      steps.push(await runStepLoad({ repoRoot, dbPath, workerCount: args.workerCount, queries, concurrency, rounds, deadlineMs: args.deadlineMs }));
     }
     const peak = Math.max(...args.steps);
     const withUpdates = await runStepLoad({
-      repoRoot, dbPath, queries, concurrency: peak, rounds: Math.ceil(args.samples / peak), deadlineMs: args.deadlineMs, writerIntervalMs: args.writerIntervalMs
+      repoRoot, dbPath, workerCount: args.workerCount, queries, concurrency: peak, rounds: Math.ceil(args.samples / peak), deadlineMs: args.deadlineMs, writerIntervalMs: args.writerIntervalMs
     });
+    const finalWorker = sharedQueryWorker();
+    await finalWorker.close();
+    const shutdown = finalWorker.stats();
     const report = {
+      shutdown,
+      protocol: "p3-capacity-v1",
+      workerCount: args.workerCount,
       kind: args.repo ? "real-repo-load" : "synthetic-load",
       repo: args.repo ? path.basename(args.repo) : null,
       files: args.repo ? null : args.files,

@@ -1,4 +1,4 @@
-// Eval protocol v1.2 (R11 follow-up): both arms see the same running ledger of
+// Eval protocol v1.4: both arms see the same running ledger of
 // the source they have received against the task budget, and the native read
 // tool returns a bounded default window. Kit scoring is unchanged: the ledger
 // counts exactly the retained source slices the kit counts as received.
@@ -37,7 +37,7 @@ function scriptedChat(requests) {
         usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 }
       };
     }
-    return { choices: [{ finish_reason: "stop", message: { content: "{\"ok\":true}" } }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } };
+    return { choices: [{ finish_reason: "stop", message: { content: "draft", tool_calls: [{ id: "submit", type: "function", function: { name: "submit_answer", arguments: '{"ok":true}' } }] } }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } };
   };
 }
 
@@ -51,6 +51,7 @@ async function run({ arm = "old", sourceBudget } = {}) {
       arm,
       tools: toolSet.tools,
       systemPrompt: "s",
+      submission: { answerKeys: { ok: "boolean" } },
       chat: scriptedChat(requests),
       invoke: (name, args) => toolSet.invoke(name, args),
       ...(sourceBudget ? { sourceBudget } : {})
@@ -61,7 +62,13 @@ async function run({ arm = "old", sourceBudget } = {}) {
   }
 }
 
-const ledgerOf = messages => messages.filter(message => message.role === "user" && /^Source budget so far:/.test(message.content ?? ""));
+const remainingOf = message => {
+  const match = /remainingLines=(\d+), remainingBytes=(\d+)/.exec(message.content);
+  assert.ok(match, "ledger exposes both remaining limits");
+  return { lines: Number(match[1]), bytes: Number(match[2]), exhausted: /Source budget exhausted:/.test(message.content) };
+};
+
+const ledgerOf = messages => messages.filter(message => message.role === "user" && /^Source budget:/.test(message.content ?? ""));
 
 test("after each tool round the model sees received lines/bytes against the task budget", async () => {
   const requests = await run({ sourceBudget: { max_lines: 160, max_bytes: 16000 } });
@@ -71,7 +78,7 @@ test("after each tool round the model sees received lines/bytes against the task
   // 10 + 6 lines; each "// line N\n" line, overlap counted twice as the kit does.
   const bytes = [...Array(10).keys()].map(i => `// line ${i + 1}\n`.length).reduce((a, b) => a + b, 0)
     + [...Array(6).keys()].map(i => `// line ${i + 5}\n`.length).reduce((a, b) => a + b, 0);
-  assert.equal(ledger[0].content, `Source budget so far: received 16 of 160 lines and ${bytes} of 16000 bytes (read windows and previews together; receiving more fails the task).`);
+  assert.deepEqual(remainingOf(ledger[0]), { lines: 144, bytes: 16000 - bytes, exhausted: false });
   const index = second.indexOf(ledger[0]);
   assert.deepEqual(second.slice(index - 2, index).map(message => message.role), ["tool", "tool"], "after every tool reply of the round");
 });
@@ -94,5 +101,17 @@ test("read without maxLines returns a bounded default window", async () => {
     assert.equal(explicit.endLine, 150, "an explicit window is honoured");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test("ledger explicitly signals exhaustion when either remaining source budget is zero", async () => {
+  const bytes = [...Array(10).keys()].map(i => `// line ${i + 1}\n`.length).reduce((a, b) => a + b, 0)
+    + [...Array(6).keys()].map(i => `// line ${i + 5}\n`.length).reduce((a, b) => a + b, 0);
+  for (const sourceBudget of [{ max_lines: 16, max_bytes: 16000 }, { max_lines: 160, max_bytes: bytes }]) {
+    const requests = await run({ sourceBudget });
+    const ledger = ledgerOf(requests[1]);
+    assert.equal(ledger.length, 1);
+    assert.deepEqual(remainingOf(ledger[0]), { lines: sourceBudget.max_lines - 16, bytes: sourceBudget.max_bytes - bytes, exhausted: true });
   }
 });

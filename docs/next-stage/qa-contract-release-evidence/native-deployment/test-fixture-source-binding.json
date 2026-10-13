@@ -1,0 +1,33 @@
+{
+  "schema": "native-release-source-binding/v1",
+  "status": "PREPARED_PENDING_REVIEW_AND_VALIDATION",
+  "manifest": {
+    "path": "native-deployment/package-source-manifest-r3-test-fixture.json",
+    "sha256": "5f3e13cefea457551f69037f06503884714f64815f58a08e0138e908006e3b5f"
+  },
+  "bundle": {
+    "path": "native-deployment/source-8f737ac7cd14-test-fixture.bundle",
+    "sha256": "e7ea5f9846f4744b0a9453689f852f2d0f7df05411583feb0b3332ca3d0b65bd",
+    "bytes": 8729580,
+    "verifyExit": 0
+  },
+  "releaseIdentity": {
+    "baseSha": "8f737ac7cd141d0eb07de37bb212d4d6648d96a3",
+    "sourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc",
+    "files": 611,
+    "dirty": false,
+    "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+  },
+  "evaluatedIdentity": {
+    "commit": "a77b6428ca432259c4008ead6c5e58cdc5e53cef",
+    "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864"
+  },
+  "unchangedFiles": 1842,
+  "fileModesCompared": 1843,
+  "changedPaths": [
+    "src/jdtls-session.test.ts"
+  ],
+  "nonTestFilesChanged": [],
+  "modeChanges": [],
+  "oldMeasurementsRelabeled": false
+}

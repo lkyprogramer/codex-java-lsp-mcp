@@ -68,7 +68,7 @@ function scriptedEndpoint() {
   const pristine = readFileSync(path.join(dataset, "corpora", "payments", SERVICE), "utf8");
   const qaAttempts = { product: 0, control: 0 };
   const call = (name, args) => ({ choices: [{ message: { content: "", tool_calls: [{ id: `call-${name}-${Math.random().toString(16).slice(2, 8)}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] }, finish_reason: "tool_calls" }] });
-  const answer = content => ({ choices: [{ message: { content }, finish_reason: "stop" }], usage: { prompt_tokens: 11, completion_tokens: 3 } });
+  const answer = content => ({ ...call("submit_answer", JSON.parse(content)), usage: { prompt_tokens: 11, completion_tokens: 3 } });
   const script = body => {
     const user = body.messages.find(m => m.role === "user")?.content ?? "";
     const arm = (body.tools ?? []).some(t => t.function?.name === "java_symbol") ? "product" : "control";
@@ -80,7 +80,7 @@ function scriptedEndpoint() {
         const content = arm === "product" ? pristine.replace(reference.before, reference.after) : pristine.replace(reference.before, "String key = requestId;");
         return call("write_file", { path: SERVICE, content });
       }
-      if (step === 2 && arm === "product") return call("java_symbol", { query: "PaymentService accept", searchMode: "text" });
+      if (step === 2 && arm === "product") return call("java_symbol", { query: "PaymentService accept", searchMode: "text", preview: "head" });
       if (step <= 3) return call("test", {});
       return answer('{"patchApplied":true,"summary":"scripted"}');
     }
@@ -88,8 +88,8 @@ function scriptedEndpoint() {
     // the second reads a window that misses lines 8-11.
     if (step === 0) qaAttempts[arm] += 1;
     const full = qaAttempts[arm] === 1;
-    // (the product arm's second attempt asks for an unrelated declaration so
-    // no preview happens to cover lines 8-11)
+    // Discovery is locator-only here; each attempt obtains source through
+    // the explicit read below.
     if (step === 0) {
       return arm === "product"
         ? call("java_symbol", full ? { query: "PaymentService duplicate request", limit: 2 } : { query: "PaymentService#preview", searchMode: "exact", limit: 1 })

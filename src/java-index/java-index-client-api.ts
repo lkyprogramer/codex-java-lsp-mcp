@@ -95,6 +95,10 @@ export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
     && status.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === status.indexedGeneration);
 }
 
+export type EvidenceAnchor = { declarationId: string; kind: "TYPE" | "METHOD"; relativePath: string; contentHash: string; line: number; column: number };
+export type EvidenceSource = { relativePath: string; contentHash: string; startLine: number; endLine: number; sourceKind: string; relation: "result-map-type" | "declaration-document" };
+export type EvidenceSourcesResult = { generation: number; anchor?: EvidenceAnchor; sources: EvidenceSource[]; partial: boolean; reasons: string[] };
+
 export interface JavaIndexClientApi {
   open(generation: number, options?: JavaIndexOpenOptions, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   status(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
@@ -110,6 +114,7 @@ export interface JavaIndexClientApi {
   reconcile(generation: number, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   flush(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
+  queryEvidenceSources(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions): Promise<EvidenceSourcesResult>;
   queryAnchor(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions): Promise<AnchorFacts | undefined>;
   queryType(typeText: string, scopeFile?: string, requestOptions?: JavaIndexRequestOptions): Promise<JavaTypeLookupResult>;
   queryTypes(

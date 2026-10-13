@@ -8,11 +8,14 @@ import { createHash } from "node:crypto";
 import { mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildSubmitAnswerTool, validateSubmission } from "./eval-answer-contract.mjs";
 import { serializeModelToolResult, MODEL_TOOL_MESSAGE_MAX_BYTES } from "./eval-tool-wire.mjs";
 import {
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   DEFAULT_MAX_COMPLETION_TOKENS,
   DEFAULT_PROMPT_CAP_TOKENS,
+  chatRequestConfigForAudit,
+  completionForAudit,
   estimatePromptTokens,
   mergeUsage,
   openaiCompatibleChat,
@@ -501,10 +504,13 @@ export async function runLiveAgentTask({
   maxCompletionTokens = DEFAULT_MAX_COMPLETION_TOKENS,
   toolResultMaxBytes = MODEL_TOOL_MESSAGE_MAX_BYTES,
   onChat,
+  onCompletion,
+  chatRequestConfig = {},
   // Eval protocol v1.2: { max_lines, max_bytes } of the task. When given, a
   // ledger of the source received so far follows every tool round, identical
   // for every arm.
-  sourceBudget
+  sourceBudget,
+  submission
 }) {
   const started = Date.now();
   const observedPaths = new Set();
@@ -516,7 +522,20 @@ export async function runLiveAgentTask({
   let attachedCount = 0;
   let requestIndex = 0;
   let usage = { status: "UNMEASURED" };
-  const exposedTools = tools ?? [JAVA_IMPACT_TOOL];
+  let auditCallbackFailed = false;
+  const submitTool = submission ? buildSubmitAnswerTool(submission.answerKeys, submission.fields) : null;
+  const baseTools = tools ?? [JAVA_IMPACT_TOOL];
+  if (submitTool && baseTools.some(tool => tool?.function?.name === "submit_answer")) throw new TypeError("runner owns submit_answer");
+  const exposedTools = submitTool ? [...baseTools, submitTool] : baseTools;
+  const submissionAudit = submitTool ? {
+    schemaVersion: submission.fields ? "typed-answer-submission/v2" : "typed-answer-submission/v1",
+    schema: structuredClone(submitTool.function.parameters),
+    ...(submission.contract ? { publicContract: structuredClone(submission.contract) } : {}),
+    attempts: [], drafts: [], recoveryCount: 0,
+    acceptedAnswer: null, acceptedRequestIndex: null, receipts: []
+  } : null;
+  let submissionViolation;
+  let recoveryPending = false;
   const callTool = invoke ?? (async (name, args) => {
     if (name !== "java_impact") return { error: `unknown tool ${name}` };
     return impact(args);
@@ -538,26 +557,60 @@ export async function runLiveAgentTask({
       ].join("\n")
     }
   ];
+  if (submitTool) messages.push({
+    role: "user",
+    content: "Finish by calling submit_answer exclusively with every public answer key and its declared type. Ordinary text is a draft and cannot submit an answer. The public contract allows at most one recovery request."
+  });
   // R01: receipts are minted at the request boundary, right before the
   // request is dispatched, for EVERY chat request (including the forced
   // final-answer request). Receipts that never reach a request stay
   // fetched-only and are never credited as received.
-  const dispatch = async request => {
+  const dispatch = async (request, { forcedAnswer = false } = {}) => {
+    const index = requestIndex;
+    const modelSettings = {
+      maxTokens: request.maxTokens,
+      reasoningEffort: chatRequestConfig.reasoningEffort,
+      chatTemplateKwargs: chatRequestConfig.chatTemplateKwargs
+    };
+    const newReceipts = toolReceipts.slice(attachedCount);
     if (typeof onChat === "function") {
-      const newReceipts = toolReceipts.slice(attachedCount);
-      attachedCount = toolReceipts.length;
-      onChat({
-        round: requestIndex,
-        requestIndex,
-        messages: structuredClone(request.messages),
-        tools: request.tools.map(tool => tool?.function?.name ?? tool?.name),
-        receipts: toolReceipts.slice(),
-        newReceipts,
-        payloadHash: createHash("sha256").update(JSON.stringify(request.messages), "utf8").digest("hex")
-      });
+      try {
+        await onChat({
+          round: requestIndex,
+          requestIndex,
+          maxTokens: request.maxTokens,
+          requestConfig: chatRequestConfigForAudit(modelSettings),
+          forcedAnswer,
+          messages: structuredClone(request.messages),
+          tools: request.tools.map(tool => tool?.function?.name ?? tool?.name),
+          receipts: toolReceipts.slice(),
+          newReceipts,
+          payloadHash: createHash("sha256").update(JSON.stringify(request.messages), "utf8").digest("hex")
+        });
+      } catch (error) {
+        auditCallbackFailed = true;
+        throw error;
+      }
     }
+    attachedCount = toolReceipts.length;
     requestIndex += 1;
-    return chat(request);
+    const completion = await chat({
+      ...request,
+      ...(modelSettings.reasoningEffort ? { reasoningEffort: modelSettings.reasoningEffort } : {}),
+      ...(modelSettings.chatTemplateKwargs ? { chatTemplateKwargs: modelSettings.chatTemplateKwargs } : {})
+    });
+    // Provider work already happened even if recording the response fails.
+    // Account exactly once at this boundary for normal and forced requests.
+    usage = mergeUsage(usage, usageFromCompletion(completion));
+    if (typeof onCompletion === "function") {
+      try {
+        await onCompletion({ requestIndex: index, forcedAnswer, response: completionForAudit(completion) });
+      } catch (error) {
+        auditCallbackFailed = true;
+        throw error;
+      }
+    }
+    return completion;
   };
   // Received source as the kit counts it: every retained slice, overlaps
   // included (a preview and a later read of the same lines count twice).
@@ -593,17 +646,18 @@ export async function runLiveAgentTask({
   let runtimeError;
   try {
     for (let round = 0; round < maxRounds; round += 1) {
-      const estimated = estimatePromptTokens(messages, exposedTools);
+      const roundTools = recoveryPending ? [submitTool] : exposedTools;
+      const estimated = estimatePromptTokens(messages, roundTools);
       if (estimated >= promptCap) {
         stopReason = "FAILED_CONTEXT_CAP";
         break;
       }
+      if (recoveryPending) submissionAudit.recoveryCount += 1;
       const completion = await dispatch({
         messages,
-        tools: exposedTools,
+        tools: roundTools,
         maxTokens: maxCompletionTokens
       });
-      usage = mergeUsage(usage, usageFromCompletion(completion));
       const choice = completion?.choices?.[0];
       const message = choice?.message ?? {};
       const calls = message.tool_calls ?? [];
@@ -612,6 +666,53 @@ export async function runLiveAgentTask({
         content: message.content ?? "",
         tool_calls: calls.length ? calls : undefined
       });
+      if (submitTool) {
+        if (message.content != null && message.content !== "") submissionAudit.drafts.push({ requestIndex: requestIndex - 1, rawContent: message.content });
+        const submitCalls = calls.filter(call => call?.function?.name === "submit_answer");
+        if (!calls.length || submitCalls.length || recoveryPending) {
+          const exclusive = calls.length === 1 && submitCalls.length === 1;
+          const validation = !exclusive
+            ? { ok: false, reason: calls.length ? "exclusive_submit_required" : "missing_submission" }
+            : choice?.finish_reason === "length"
+              ? { ok: false, reason: "length_truncated" }
+              : validateSubmission(submitCalls[0]?.function?.arguments, submission.answerKeys, submission.fields);
+          for (const call of calls) {
+            const name = call?.function?.name;
+            const id = call?.id ?? `call-${toolCalls.length}`;
+            const rawArguments = call?.function?.arguments;
+            toolCalls.push({ name, args: name === "submit_answer" && validation.ok ? validation.value : null, pathCount: 0, ...(validation.ok ? {} : { error: true }) });
+            if (name === "submit_answer") submissionAudit.attempts.push({
+              callId: id, requestIndex: requestIndex - 1, rawArguments,
+              schemaVersion: submissionAudit.schemaVersion, accepted: validation.ok,
+              ...(validation.ok ? {} : { reason: validation.reason, ...(validation.key ? { key: validation.key, rule: validation.rule } : {}) })
+            });
+            // Every rejected call is replied to, but none is invoked. In
+            // particular a read mixed with submit cannot create source receipts.
+            pushToolMessage(id, name, validation.ok
+              ? { status: "SUBMITTED" }
+              : { error: "Submission violates the public contract", errorClass: "PROTOCOL", reason: validation.reason });
+          }
+          if (validation.ok) {
+            finalContent = JSON.stringify(validation.value);
+            submissionAudit.acceptedAnswer = structuredClone(validation.value);
+            submissionAudit.acceptedRequestIndex = requestIndex - 1;
+            submissionAudit.receipts = structuredClone(toolReceipts.slice(0, attachedCount));
+            stopReason = "SUBMITTED";
+            break;
+          }
+          // Preserve provider truncation as the first stop cause even when
+          // the public-contract recovery later succeeds or fails.
+          submissionViolation ??= choice?.finish_reason === "length" ? "MAX_COMPLETION_TOKENS" : "INVALID_SUBMISSION";
+          stopReason = "INVALID_SUBMISSION";
+          if (recoveryPending || round === maxRounds - 1) break;
+          recoveryPending = true;
+          messages.push({
+            role: "user",
+            content: `Public submission contract recovery (one request maximum): call submit_answer as the only tool action, with exactly the public keys, declared types and advertised constraints.${validation.key ? ` Public field ${validation.key} violated its ${validation.rule ?? "type"} constraint.` : ""} Use facts already available; no other tool actions are allowed. Assistant text cannot submit an answer.`
+          });
+          continue;
+        }
+      }
       if (!calls.length) {
         stopReason = choice?.finish_reason === "length" ? "MAX_COMPLETION_TOKENS" : "MODEL_STOP";
         finalContent = message.content ?? "";
@@ -645,14 +746,16 @@ export async function runLiveAgentTask({
       if (sourceBudget) {
         messages.push({
           role: "user",
-          content: `Source budget so far: received ${ledger.lines} of ${sourceBudget.max_lines} lines and ${ledger.bytes} of ${sourceBudget.max_bytes} bytes (read windows and previews together; receiving more fails the task).`
+          content: `Source budget: remainingLines=${Math.max(0, sourceBudget.max_lines - ledger.lines)}, remainingBytes=${Math.max(0, sourceBudget.max_bytes - ledger.bytes)} (read windows and previews together). ${ledger.lines >= sourceBudget.max_lines || ledger.bytes >= sourceBudget.max_bytes ? "Source budget exhausted: cannot receive more source." : "Receiving source beyond either limit fails the task."}`
         });
       }
       if (!answerNudgeSent && round >= Math.floor(maxRounds * 0.6)) {
         answerNudgeSent = true;
         messages.push({
           role: "user",
-          content: "You have gathered enough evidence. Stop calling tools and answer the task now with ONE strict JSON object only, using exactly the keys named in the task."
+          content: submitTool
+            ? "Use the available evidence to finish now by calling submit_answer exclusively, with exactly the public keys and declared types."
+            : "You have gathered enough evidence. Stop calling tools and answer the task now with ONE strict JSON object only, using exactly the keys named in the task."
         });
       }
       if (round === maxRounds - 1) stopReason = "MAX_ROUNDS";
@@ -661,11 +764,14 @@ export async function runLiveAgentTask({
     stopReason = "FAILED_RUNTIME";
     runtimeError = error instanceof Error ? error.message : String(error);
   }
-  // Forced-answer fallback: if the loop exhausted its rounds without a final
-  // answer, ask once more with no tools at all so the model must commit to
+  const primaryStopReason = submissionViolation ?? stopReason;
+  let finalAnswerMode = submitTool ? (stopReason === "SUBMITTED" ? "SUBMITTED" : "NO_SUBMISSION")
+    : finalContent === "" ? "NO_ANSWER" : "MODEL_ANSWER";
+  // Forced-answer fallback: when the loop produced no final answer, ask
+  // once more with no tools at all so the model must commit to
   // an answer (or fail honestly). Identical for every arm. It is a real
   // request, so it goes through the same receipt boundary.
-  if (finalContent === "" && stopReason !== "FAILED_RUNTIME" && stopReason !== "FAILED_CONTEXT_CAP") {
+  if (!submitTool && finalContent === "" && stopReason !== "FAILED_RUNTIME" && stopReason !== "FAILED_CONTEXT_CAP") {
     try {
       const forced = await dispatch({
         messages: [
@@ -677,13 +783,21 @@ export async function runLiveAgentTask({
         ],
         tools: [],
         maxTokens: maxCompletionTokens
-      });
-      usage = mergeUsage(usage, usageFromCompletion(forced));
+      }, { forcedAnswer: true });
       const forcedMessage = forced?.choices?.[0]?.message ?? {};
       finalContent = forcedMessage.content ?? "";
-      if (finalContent) stopReason = "FORCED_ANSWER";
-    } catch {
-      // the run keeps its stopReason; an empty answer scores INVALID, not a crash
+      if (finalContent) {
+        stopReason = "FORCED_ANSWER";
+        finalAnswerMode = "FORCED_ANSWER";
+      }
+    } catch (error) {
+      if (auditCallbackFailed) {
+        stopReason = "FAILED_RUNTIME";
+        finalAnswerMode = "NO_ANSWER";
+        runtimeError = error instanceof Error ? error.message : String(error);
+      }
+      // Legacy transport failures keep their original stop reason. Audit
+      // callback failures are explicit runtime failures, never swallowed.
     }
   }
   const coverage = coverageProxy(task.requiredContextFiles, [...observedPaths]);
@@ -694,6 +808,8 @@ export async function runLiveAgentTask({
     taskId: task.taskId,
     arm,
     stopReason,
+    primaryStopReason,
+    finalAnswerMode,
     wallMs: Date.now() - started,
     toolCallCount: toolCalls.length,
     usage,
@@ -702,6 +818,7 @@ export async function runLiveAgentTask({
     taskOutcome: unmeasuredTaskOutcome(),
     taskSuccess: unscored ? null : coverage.success,
     finalContent,
+    ...(submissionAudit ? { submission: submissionAudit } : {}),
     contextCapped: stopReason === "FAILED_CONTEXT_CAP",
     ...(runtimeError ? { error: runtimeError.slice(0, 500) } : {})
   };
@@ -976,6 +1093,11 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
   });
   const client = new Client({ name: "v5r-live-agent-trace", version: "0.1.0" });
   await client.connect(transport);
+  return impactSessionFromClient({ repoRoot, client });
+}
+
+/** MCP mapping shared by the live session and capture-client contract tests. */
+export function impactSessionFromClient({ repoRoot, client }) {
   async function callNamed(name, args) {
     const result = await client.callTool({
       name,
@@ -999,13 +1121,17 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
           ...(args.searchMode ? { searchMode: args.searchMode } : {}),
           ...(args.limit ? { limit: args.limit } : {}),
           ...(args.module ? { module: args.module } : {}),
-          ...(args.sourceSet ? { sourceSet: args.sourceSet } : {})
+          ...(args.sourceSet ? { sourceSet: args.sourceSet } : {}),
+          ...(args.preview !== undefined ? { preview: args.preview } : {})
         }
       }, undefined, { timeout: IMPACT_TIMEOUT_MS });
       const text = result.content?.map(part => part.text).join("\n") ?? "{}";
       if (typeof wireText === "function") wireText(text);
       if (result.isError) return { error: text };
       return JSON.parse(text);
+    },
+    async evidence(args) {
+      return callNamed("java_symbol", { repoRoot, operation: "evidence", file: args.file, line: args.line, column: args.column });
     },
     async impact(args) {
       return callNamed("java_impact", {

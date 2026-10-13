@@ -1,0 +1,556 @@
+{
+  "model": "openclaw/Qwen3.8-next",
+  "evalProtocol": "eval-protocol/v1.2",
+  "scheduled": 72,
+  "received": 72,
+  "providerRequestCount": 547,
+  "byArm": {
+    "product": {
+      "scheduled": 36,
+      "successes": 19,
+      "qaSuccesses": 12,
+      "qaScheduled": 28,
+      "repairSuccesses": 7,
+      "repairScheduled": 8,
+      "usageComplete": true,
+      "inputTokens": 798699,
+      "outputTokens": 13742,
+      "totalTokens": 812441,
+      "failures": [
+        {
+          "taskId": "JSB-PAYMENTS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": false,
+            "receivedLines": 10,
+            "receivedBytes": 557,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-INVENTORY-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 68,
+            "receivedBytes": 2866,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-ACCESS-01",
+          "kind": "qa",
+          "answerStatus": "MISSING_REQUIRED_EVIDENCE",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": false,
+            "receivedEvidenceComplete": false,
+            "receivedLines": 177,
+            "receivedBytes": 4450,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-ACCESS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 158,
+            "receivedBytes": 3903,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-ACCESS-03",
+          "kind": "repair",
+          "answerStatus": "REPAIR_TEST_FAILED",
+          "frozenScore": null,
+          "repairJudge": {
+            "state": "TEST_FAILED",
+            "validatedSuccess": false,
+            "reason": null,
+            "judgeArtifactPath": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-runtime-integrity-cs6vd1k0/runs/live-model/judge/JSB-ACCESS-03_product_r1-34a61f5d4c5a2ccd/frozen-judge.json",
+            "policy": {
+              "changed": [],
+              "removed": [],
+              "added": [],
+              "missingAllowed": [],
+              "symlinks": [],
+              "violations": []
+            }
+          }
+        },
+        {
+          "taskId": "JSB-ADMISSIONS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 44,
+            "receivedBytes": 1550,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-PRICING-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 29,
+            "receivedBytes": 1347,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-PETCLINIC-03",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 12,
+            "receivedBytes": 320,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-MYBATIS-03",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": false,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 182,
+            "receivedBytes": 6607,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-GSON-01",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 98,
+            "receivedBytes": 4227,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-GSON-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": false,
+            "receivedEvidenceComplete": false,
+            "receivedLines": 176,
+            "receivedBytes": 6331,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-NOTIFICATIONS-01",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 66,
+            "receivedBytes": 2708,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-NOTIFICATIONS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 24,
+            "receivedBytes": 1193,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-LEDGER-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 21,
+            "receivedBytes": 894,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-PAGINATION-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 28,
+            "receivedBytes": 1165,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-HIKARI-01",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 51,
+            "receivedBytes": 1351,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-HIKARI-03",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 71,
+            "receivedBytes": 1675,
+            "errors": []
+          },
+          "repairJudge": null
+        }
+      ]
+    },
+    "control": {
+      "scheduled": 36,
+      "successes": 20,
+      "qaSuccesses": 13,
+      "qaScheduled": 28,
+      "repairSuccesses": 7,
+      "repairScheduled": 8,
+      "usageComplete": true,
+      "inputTokens": 563402,
+      "outputTokens": 17556,
+      "totalTokens": 580958,
+      "failures": [
+        {
+          "taskId": "JSB-PAYMENTS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 37,
+            "receivedBytes": 1316,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-INVENTORY-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 53,
+            "receivedBytes": 1799,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-ACCESS-01",
+          "kind": "qa",
+          "answerStatus": "RECEIVED_OVER_BUDGET",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": false,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 397,
+            "receivedBytes": 8282,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-ACCESS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": false,
+            "receivedLines": 37,
+            "receivedBytes": 936,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-ACCESS-03",
+          "kind": "repair",
+          "answerStatus": "REPAIR_TEST_FAILED",
+          "frozenScore": null,
+          "repairJudge": {
+            "state": "TEST_FAILED",
+            "validatedSuccess": false,
+            "reason": null,
+            "judgeArtifactPath": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-runtime-integrity-cs6vd1k0/runs/live-model/judge/JSB-ACCESS-03_control_r1-191fc83f2ca1c532/frozen-judge.json",
+            "policy": {
+              "changed": [],
+              "removed": [],
+              "added": [],
+              "missingAllowed": [],
+              "symlinks": [],
+              "violations": []
+            }
+          }
+        },
+        {
+          "taskId": "JSB-ADMISSIONS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 25,
+            "receivedBytes": 711,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-PRICING-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 21,
+            "receivedBytes": 707,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-PETCLINIC-03",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 10,
+            "receivedBytes": 165,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-MYBATIS-03",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": false,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 166,
+            "receivedBytes": 5950,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-GSON-02",
+          "kind": "qa",
+          "answerStatus": "INVALID_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 60,
+            "receivedBytes": 2269,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-NOTIFICATIONS-01",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 49,
+            "receivedBytes": 1779,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-NOTIFICATIONS-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": false,
+            "receivedLines": 14,
+            "receivedBytes": 450,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-LEDGER-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 26,
+            "receivedBytes": 847,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-PAGINATION-02",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 22,
+            "receivedBytes": 650,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-HIKARI-01",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 30,
+            "receivedBytes": 673,
+            "errors": []
+          },
+          "repairJudge": null
+        },
+        {
+          "taskId": "JSB-HIKARI-03",
+          "kind": "qa",
+          "answerStatus": "WRONG_ANSWER",
+          "frozenScore": {
+            "qaContractPass": false,
+            "valid": true,
+            "budgetPass": true,
+            "receivedEvidenceComplete": true,
+            "receivedLines": 25,
+            "receivedBytes": 491,
+            "errors": []
+          },
+          "repairJudge": null
+        }
+      ]
+    }
+  },
+  "pairedDisagreements": [
+    {
+      "taskId": "JSB-GSON-01",
+      "control": {
+        "success": true,
+        "answerStatus": "CORRECT"
+      },
+      "product": {
+        "success": false,
+        "answerStatus": "WRONG_ANSWER"
+      }
+    }
+  ],
+  "interpretation": "single-repeat regression on exposed bundled corpus, not independent generalization; no task-success or cost reduction claim"
+}

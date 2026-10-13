@@ -8,7 +8,7 @@
 
 它不是完整 IDE，也不是通用语言平台。项目边界以 canonical `repoRoot` 和 `repoHash` 为准，`projectId` 只作为 alias/display name；所有请求都受绝对 deadline、仓库边界和完整性状态约束。
 
-当前生产形态：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`。索引真源是 on-disk SQLite `index.sqlite`（`SqlJavaIndexClient`），不是 SourceIndex / 堆快照。Index-on-disk 已切流（2026-09-08/09，线上 `03f5a4154081`）。替换 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`）。现行操作是 [生产操作](docs/phase-f/production-operations.md)；[切流手册](docs/phase-f/production-cutover-runbook.md) 只保留历史步骤。
+当前生产形态：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`。索引真源是 on-disk SQLite `index.sqlite`（`SqlJavaIndexClient`），不是 SourceIndex / 堆快照。Index-on-disk 于 2026-09-08/09 切流；2026-10-11 QA 发布 `8f737ac7cd14` 的实测与安装证明保留在维护工作区 `docs/next-stage/qa-contract-release-review.md`，该历史归档不随发行包安装。后续 [Java agent 指导](docs/next-stage/java-agent-guidance-review.md) 统一 hook 按需启动；当前 build 和回滚目标以 `daemonctl.sh status` 与受管指针为准。替换 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`）。现行操作是 [生产操作](docs/phase-f/production-operations.md)；[切流手册](docs/phase-f/production-cutover-runbook.md) 只保留历史步骤。
 
 ## 目录
 
@@ -31,7 +31,7 @@
 ## 核心能力
 
 - 注册一个 Codex MCP server：`codex-java-lsp`。
-- 提供 5 个 public tools：`java_status`、`java_impact`、`java_symbol`（operation=query\|position\|references）、`java_diagnostics`、`java_runtime`（action=restart\|shutdown）。
+- 提供 5 个 public tools：`java_status`、`java_impact`、`java_symbol`（operation=query\|position\|references，另有显式实验 operation=evidence）、`java_diagnostics`、`java_runtime`（action=restart\|shutdown）。
 - 默认推荐入口是 `java_impact`，用于生成影响面、候选文件、`readPlan`、证据缺口和指标。
 - 未启用 LSP 的 Java repo 仍可走 fast path：repo/layout/JDK 探测、Tree-sitter JavaIndex、增量 watcher 和有界 streaming `rg`。
 - 启用 LSP 后，JDT LS 为 symbol、references、hierarchy、diagnostics 和精确位置语义提供增强结果；同键请求由 SemanticGateway singleflight 合并。
@@ -69,6 +69,8 @@
 - MCP stdio 对端实际结束或关闭时，服务会释放全部 runtime 并退出；保持打开的空闲 stdio 连接不会让服务自行退出。
 - JDT LS 启动必须显式启用：`lspEnabled=true`，或命中同一 Git `common-dir` 的 worktree family 继承。
 - JavaIndex 是冷启动事实来源；JDT LS 是可选精确增强，不是路由正确性的唯一来源。
+- JDT LS 的 `READY` 要等待当前连接的初始工程导入完成通知；`initialize` 返回和进度静默均不代表就绪。冷态 `java_symbol` 精确查询会报告 `JDT_NOT_READY`，可用 `java_status(start=false)` 等待 `READY` 后重试；导入在后台继续，按需启动保持不变。初始导入完成不保证后续全部 build/index 或注解处理成功。
+- JDT LS 的 Gradle 导入使用 `-Dorg.gradle.parallel=false`，覆盖导入和 APT tooling model；保留注解处理与 Lombok agent。普通命令行构建仍使用业务仓库的并行设置。
 - JDT LS runtime JDK 与项目 JDK 分开处理，避免把语言服务器运行环境误当成项目编译环境。
 - resource 默认值按本机内存保守计算；多 repo 并行时优先保住可用性，而不是抢占更多 JDT LS。
 - `warm-required` 仍是 precision/recall 可选增强，不是默认路径；profile-aware/default warm 需要先解决首触 `textDocument/references` P95。
@@ -221,7 +223,8 @@ hook 行为：
 - 只校验当前 cwd 是否命中 `lspEnabled=true` 或 Git worktree family 继承。
 - 未启用、冲突、非 Java 语义提示时静默放行。
 - 只追加短提示，不直接启动 JDT LS，不阻断 shell/`rg`。
-- 提示 agent 先用 `java_status(start=false)` 校验 `repoRoot`；已配置项目不能只报告 LSP server 未启动，若返回 `started=false`，必须用 `java_status(start=true)` 主动启动。
+- 提示 agent 首次使用或切换仓库时用 `java_status(start=false)` 校验 `repoRoot`；普通仓库与 Git worktree 都按需启动 JDT。`started=false` 不代表静态查询不可用；未知位置先用 `java_symbol(operation=query)` 定位，再按真实锚点调用 `java_impact`。
+- 全局 `AGENTS.md` 维护 Java 工具选择与证据核实策略；hook 补充当前仓库提示，具体参数以 MCP schema 为准。
 - 只有 cwd 已启用 **且** prompt 命中 Java 语义词（如 `java` / `Service` / `修复` / `影响面` / `排查`）才注入 `JAVA_LSP_ADVISOR`。纯「接口 / 接手计划」类 prompt 会静默放行，模型仍应自己调用工具。
 
 ## Public MCP Tools
@@ -233,6 +236,10 @@ hook 行为：
 | `java_symbol` | `operation=query`（默认，给了 query）走静态 discovery：消费磁盘 Java 索引（`java-discovery/v1`：显式 name、1-based UTF-16 locator、按 contentHash 校验的源码 preview），**不需要 JDT**；`backend=jdt` 保留旧 workspace-symbol 通道。`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references（两者始终走 JDT）。默认返回 repo-relative 位置、隐藏 raw URI/range。 | query 默认否（`backend=jdt`、position、references 是） |
 | `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
 | `java_runtime` | `action=restart` 重启当前 repo 的 JDT LS session（默认返回动作摘要，只有显式参数才清 cache）；`action=shutdown` 停止当前或全部（`all=true`）JDT LS 子进程，MCP server 保持存活。HTTP daemon 固定拒绝 `all=true`。 | restart 是；shutdown 否 |
+
+实验操作 `java_symbol(operation=evidence, file, line, column)` 按已定位的 Java 类型或方法读取关联 XML 源码，不启动 JDT。类型路径使用现有 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源；每次最多 8 个片段、80 行、16000 源码字节。`complete` 只说明该 XML 元素范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
+
+静态查询仍默认使用一个共享只读 worker。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
 
 推荐默认调用顺序：
 
@@ -342,6 +349,10 @@ npm run cache:harvest -- --apply
 - `JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS=10000`
 
 ## 开发与验证
+
+当前安装版本的静态事实 revision 为 **5**。旧 revision 的静态索引在正常访问时重建；静态 READY 需要完整遍历，并按实际解析、失败与恢复计数发布。存活的 JDT 子进程继续占有 lease，直到进程确认退出。较早 runtime integrity 阶段的未安装 / NO_GO 记录作为历史保留；QA 发布时刻的资格和安装记录位于维护工作区 `docs/next-stage/qa-contract-release-review.md`；后续 hook 同步见 [Java agent 指导](docs/next-stage/java-agent-guidance-review.md)。未手动修复或删除生产缓存。
+
+较早范围与证据见 [runtime integrity 计划](docs/next-stage/runtime-integrity-plan.md)、[历史发布评审](docs/next-stage/runtime-integrity-release-review.md) 和 [历史原 NO_GO 清单](docs/next-stage/release-evidence.json)。[K01–K32 runner](scripts/run-release-contracts.mjs) 记录逐项原始结果；[真实 JDT driver](scripts/release-jdt-contracts.mjs) 生成 K26/K28 的隔离集成证据。使用这些入口仍须遵守下面的隔离约束。
 
 > **隔离硬门禁**：在线 MCP/LSP 正在运行时，禁止在本 checkout 执行
 > `npm run build`、`npm run clean` 或裸 `node dist/<benchmark-or-smoke>.js`。

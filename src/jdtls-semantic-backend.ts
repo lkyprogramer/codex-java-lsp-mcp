@@ -248,6 +248,9 @@ export function buildJavaSettings(input: {
       import: {
         gradle: {
           enabled: input.buildSystem !== "maven",
+          // Gradle's JDT APT tooling model resolves processors across projects.
+          // Serialize that import only; target-repository build settings stay unchanged.
+          jvmArguments: ["-Dorg.gradle.parallel=false"],
           annotationProcessing: { enabled: annotationProcessing }
         },
         maven: {

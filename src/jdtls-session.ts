@@ -27,6 +27,7 @@ import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdk
 import { toFileUri } from "./repo-layout.js";
 import type { RepoOwnershipLease, RepoOwnerTransport } from "./repo-ownership-lease.js";
 import { processStartIdentityForPid } from "./repo-ownership-lease.js";
+import { classifyWorkspaceCommand, killOwnedProcessTree, ownedPidStillAlive, processCommand } from "./jdt-process-tree.js";
 import type { RepoChangeBatch } from "./repo-generation.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
@@ -59,7 +60,9 @@ import {
   leaseAcquireResultToError,
   positiveInteger,
   resolveJdtlsRuntimePaths,
+  childHasExited,
   splitArgs,
+  delay,
   terminateChild,
   validateJdtlsTransportEnvironment,
   watchedFileChange,
@@ -147,6 +150,7 @@ export type JdtlsCacheStatus = {
 };
 
 export type JdtlsProgressStatus = {
+  importState?: "NOT_STARTED" | "IMPORTING" | "READY" | "FAILED";
   active: number;
   activeMessages: string[];
   lastProgressAt?: string;
@@ -185,6 +189,11 @@ export class JdtlsSession extends JdtlsLspClient {
   private startPromise?: Promise<void>;
   private stopPromise?: Promise<void>;
   private startAttempt?: JdtlsTransportAttempt;
+  /** Every spawned child stays here until its exit is observed. Dropping this set is what leaked JVMs. */
+  private readonly liveAttempts = new Set<JdtlsTransportAttempt>();
+  private readonly childIdentity = new WeakMap<JdtlsChild, string>();
+  private pendingLeaseRelease?: Promise<void>;
+
   private readonly lifecycleListeners = new Set<LifecycleListener>();
   private readonly restartBackoff: JdtRestartBackoff;
   private readyStableTimer?: NodeJS.Timeout;
@@ -213,6 +222,14 @@ export class JdtlsSession extends JdtlsLspClient {
   private cacheInvalidations = 0;
   private lastCacheInvalidatedAt?: Date;
   private lastLanguageStatus?: string;
+  private importState: NonNullable<JdtlsProgressStatus["importState"]> = "NOT_STARTED";
+  private importWait?: {
+    connection: JdtlsConnection;
+    promise: Promise<void>;
+    resolve(): void;
+    reject(error: unknown): void;
+    error?: JavaIntelligenceError;
+  };
   private pendingLease?: CompositeJdtLease;
   private leaseHeartbeatTimer?: NodeJS.Timeout;
   private leaseHeartbeatPromise?: Promise<void>;
@@ -358,6 +375,22 @@ export class JdtlsSession extends JdtlsLspClient {
     };
   }
 
+  /**
+   * Kill every child this session no longer owns. A READY or STARTING child is
+   * kept. A BROKEN session has no owned child: anything still in `liveAttempts`
+   * is the leak and is killed here.
+   */
+  hasLiveChildren(): boolean {
+    return this.liveAttempts.size > 0;
+  }
+
+  async reapAbandonedChildren(): Promise<void> {
+    await this.reapChildren("abandoned");
+    if (this.lifecycleState !== "STARTING" && this.lifecycleState !== "READY") {
+      await this.releasePendingLease();
+    }
+  }
+
   async ensureStarted(
     callerBudget = DeadlineBudget.fromTimeout(DEFAULT_LSP_REQUEST_TIMEOUT_MS)
   ): Promise<void> {
@@ -409,19 +442,26 @@ export class JdtlsSession extends JdtlsLspClient {
     }
   }
 
-  private transition(next: JdtlsLifecycleState): void {
-    if (this.lifecycleState === next) return;
+  private transition(next: JdtlsLifecycleState, notify = false): void {
+    if (this.lifecycleState === next && !notify) return;
     this.lifecycleState = next;
     for (const listener of this.lifecycleListeners) listener(next);
   }
 
   private async startAfterLease(callerBudget: DeadlineBudget): Promise<void> {
-    const leaseResult = await this.acquireCrossProcessLease(callerBudget);
-    if (leaseResult.kind !== "ACQUIRED") {
-      throw leaseAcquireResultToError(leaseResult);
+    await this.pendingLeaseRelease;
+    if (!this.pendingLease) {
+      const leaseResult = await this.acquireCrossProcessLease(callerBudget);
+      if (leaseResult.kind !== "ACQUIRED") {
+        throw leaseAcquireResultToError(leaseResult);
+      }
+      this.pendingLease = leaseResult.lease;
+      this.startLeaseHeartbeat(leaseResult.lease);
+    } else {
+      // A failed start retains both leases while its child survives. Reuse
+      // them so retry cannot wait for the worktree lease held by this session.
+      await this.heartbeatPendingLease();
     }
-    this.pendingLease = leaseResult.lease;
-    this.startLeaseHeartbeat(leaseResult.lease);
     // The start owns its own hard cap. A caller deadline only stops that
     // caller from waiting; it must never kill work shared with another caller.
     const startBudget = DeadlineBudget.fromTimeout(this.startHardCapMs);
@@ -442,13 +482,23 @@ export class JdtlsSession extends JdtlsLspClient {
   }
 
   private async releasePendingLease(): Promise<void> {
+    if (this.hasLiveChildren()) return;
+    if (this.pendingLeaseRelease) return this.pendingLeaseRelease;
     const lease = this.pendingLease;
     this.pendingLease = undefined;
     this.stopLeaseHeartbeat();
-    const heartbeat = this.leaseHeartbeatPromise;
-    if (heartbeat) await heartbeat.catch(() => undefined);
-    this.leaseHeartbeatError = undefined;
-    if (lease) await lease.release();
+    const operation = (async () => {
+      const heartbeat = this.leaseHeartbeatPromise;
+      if (heartbeat) await heartbeat.catch(() => undefined);
+      this.leaseHeartbeatError = undefined;
+      if (lease) await lease.release();
+    })();
+    this.pendingLeaseRelease = operation;
+    try {
+      await operation;
+    } finally {
+      if (this.pendingLeaseRelease === operation) this.pendingLeaseRelease = undefined;
+    }
   }
 
   private startLeaseHeartbeat(lease: CompositeJdtLease): void {
@@ -595,6 +645,9 @@ export class JdtlsSession extends JdtlsLspClient {
     // Transition first so an in-flight startTransactional sees STOPPED and
     // classifies its own failure as CANCELLED rather than a JDT fault.
     this.transition("STOPPED");
+    this.importWait?.reject(new JavaIntelligenceError("CANCELLED", "JDT project import was stopped"));
+    this.importWait = undefined;
+    this.importState = "NOT_STARTED";
     this.clearCache();
     if (this.readyStableTimer) {
       clearTimeout(this.readyStableTimer);
@@ -605,36 +658,40 @@ export class JdtlsSession extends JdtlsLspClient {
     const startPromise = this.startPromise;
     const connection = this.connection;
     const child = this.process;
-    this.startAttempt = undefined;
-    this.startPromise = undefined;
-    this.connection = undefined;
-    this.process = undefined;
-    this.startedAt = undefined;
 
-    if (startAttempt) {
-      await this.disposeAttempt(startAttempt);
-    }
-    if (startPromise) {
-      // Let startup waiters settle before stop() resolves, so a later
-      // ensureStarted() never races a half-torn-down attempt.
-      await startPromise.catch(() => undefined);
-    }
-    if (connection) {
+    if (connection && connection !== startAttempt?.connection) {
       try {
         await withTimeout(connection.sendRequest("shutdown"), 3000, "shutdown");
         connection.sendNotification("exit");
       } catch {
         // Best-effort shutdown; the process is terminated below if it remains alive.
       }
-      try {
-        connection.dispose();
-      } catch {
-        // A disposed connection must never mask the rest of the teardown.
-      }
     }
-    if (child) {
+    if (startAttempt) {
+      await this.finishChild(startAttempt);
+    }
+    const readyAttempt = [...this.liveAttempts].find(item => item.child === child);
+    if (readyAttempt) {
+      await this.finishChild(readyAttempt);
+    } else if (child && !childHasExited(child)) {
       await terminateChild(child, 200);
     }
+    for (const attempt of [...this.liveAttempts]) {
+      await this.finishChild(attempt);
+    }
+    if (startPromise) {
+      // Let startup waiters settle before stop() resolves, so a later
+      // ensureStarted() never races a half-torn-down attempt.
+      await startPromise.catch(() => undefined);
+    }
+    if (this.liveAttempts.size > 0) {
+      throw new Error("JDT LS child is still alive after SIGKILL");
+    }
+    this.startAttempt = undefined;
+    this.startPromise = undefined;
+    this.connection = undefined;
+    this.process = undefined;
+    this.startedAt = undefined;
     // A start failure already releases via ensureStarted()'s own catch (awaited
     // above through startPromise); this is a no-op in that case and the only
     // release path when stop() is called on an already-READY session.
@@ -643,14 +700,21 @@ export class JdtlsSession extends JdtlsLspClient {
     this.clearOwnershipJdtlsState();
     this.documents.closeAll();
     this.diagnostics.clear();
+    this.transition("STOPPED", true);
   }
 
   async forceStop(deadlineMs = 1000): Promise<void> {
     this.terminallyStopped = true;
-    if (this.process) {
-      await forceTerminateJdtlsChild(this.process, deadlineMs);
+    let failure: unknown;
+    try {
+      if (this.process) {
+        await forceTerminateJdtlsChild(this.process, deadlineMs);
+      }
+    } catch (error) {
+      failure = error;
     }
     await this.stop();
+    if (failure && this.liveAttempts.size > 0) throw failure;
   }
 
   private clearOwnershipJdtlsState(): void {
@@ -700,6 +764,13 @@ export class JdtlsSession extends JdtlsLspClient {
       this.activeFirstTouchTrace?.recordStartupPhase("filesystemSetupMs", performance.now() - filesystemStartedAt);
     }
     budget.throwIfExpired("jdtls.spawn");
+    await this.reapChildren("all");
+    if (this.liveAttempts.size > 0) {
+      throw new JavaIntelligenceError(
+        "JDT_BROKEN",
+        "JDT LS child is still alive; refusing to spawn another"
+      );
+    }
 
     const spawnStartedAt = performance.now();
     let attempt: JdtlsTransportAttempt;
@@ -715,6 +786,7 @@ export class JdtlsSession extends JdtlsLspClient {
     }
     this.activeFirstTouchTrace?.recordPid(attempt.child.pid);
     this.startAttempt = attempt;
+    await this.trackSpawnedChild(attempt);
     if (this.ownershipLifecycle?.markJdtlsStarting) {
       this.ownershipLifecycle.markJdtlsStarting();
       this.ownershipJdtlsMarked = true;
@@ -725,6 +797,19 @@ export class JdtlsSession extends JdtlsLspClient {
         this.ownershipLifecycle?.markJdtlsRunning?.(attempt.child.pid, identity);
       }
     }
+    let resolveImport!: () => void;
+    let rejectImport!: (error: unknown) => void;
+    const importPromise = new Promise<void>((resolve, reject) => {
+      resolveImport = resolve;
+      rejectImport = reject;
+    });
+    // Notifications can arrive before initialize has returned and before the
+    // startup transaction begins waiting. Keep early rejection handled.
+    void importPromise.catch(() => undefined);
+    const importWait = { connection: attempt.connection, promise: importPromise, resolve: resolveImport, reject: rejectImport, error: undefined as JavaIntelligenceError | undefined };
+    this.importWait = importWait;
+    this.importState = "IMPORTING";
+    this.lastLanguageStatus = undefined;
     this.registerClientHandlers(attempt.connection);
     attempt.connection.listen();
     this.attachAttemptLogging(attempt);
@@ -777,27 +862,45 @@ export class JdtlsSession extends JdtlsLspClient {
         );
       }
 
+      // initialize only establishes the protocol. ServiceReady is sent after
+      // the initial import job; it does not promise all build/index work succeeded.
+      await budget.race("jdtls.project.import", importWait.promise);
+      await budget.race("jdtls.lease.heartbeat", this.heartbeatPendingLease());
+      if (importWait.error) throw importWait.error;
+      if (this.lifecycleState !== "STARTING" || this.startAttempt !== attempt) {
+        throw new JavaIntelligenceError("CANCELLED", "JDT project import was stopped or superseded");
+      }
+      this.importState = "READY";
+      this.importWait = undefined;
       this.process = attempt.child;
       this.connection = attempt.connection;
       this.startedAt = new Date();
       this.startAttempt = undefined;
       this.restartBackoff.recordReadyStarted();
       this.transition("READY");
-      // The janitor's cross-process liveness check trusts a recorded jdtlsPid
-      // as proof this worktree is in use; writing it before READY would let a
-      // process that dies mid-STARTING leave a stale-but-plausible signal.
-      touchRepoCache(this.repoRoot, { jdtlsPid: attempt.child.pid });
+      // Refresh the pid recorded at spawn. Identity is written only after the
+      // command line matches this workspace. Omitting the field would let
+      // touchRepoCache fill it from `ps` with no command check.
+      if (attempt.child.pid !== undefined) {
+        const recordedIdentity = await this.rememberOwnedIdentity(attempt.child, attempt.child.pid);
+        touchRepoCache(this.repoRoot, {
+          jdtlsPid: attempt.child.pid,
+          jdtlsProcessStartIdentity: recordedIdentity ?? null
+        });
+      }
       this.armReadyStabilityReset(attempt);
     } catch (error) {
       const stoppedOrSuperseded =
         this.lifecycleState === "STOPPED"
         || (this.startAttempt !== attempt
           && (this.lifecycleState === "STARTING" || this.lifecycleState === "READY"));
-      await this.disposeAttempt(attempt);
-      if (this.startAttempt === attempt) this.startAttempt = undefined;
-      if (this.process === attempt.child) this.process = undefined;
-      if (this.connection === attempt.connection) this.connection = undefined;
-      this.startedAt = undefined;
+      if (this.importWait === importWait) {
+        this.importWait = undefined;
+        this.importState = this.lifecycleState === "STOPPED" ? "NOT_STARTED" : "FAILED";
+      }
+      // Pointers are cleared only after the OS process is gone. A child that
+      // survives SIGKILL stays in liveAttempts and blocks the next spawn.
+      await this.finishChild(attempt);
       if (stoppedOrSuperseded) {
         throw new JavaIntelligenceError(
           "CANCELLED",
@@ -829,14 +932,26 @@ export class JdtlsSession extends JdtlsLspClient {
     attempt.child.once("exit", (code, signal) => {
       logStream.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
       logStream.end();
+      this.liveAttempts.delete(attempt);
+      if (this.liveAttempts.size === 0) {
+        touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+      }
       // Identity guards: a stopped or superseded child's exit must never
       // overwrite the state of the session that replaced it.
       const ownsReadyProcess = this.process === attempt.child;
       const ownsStartingAttempt = this.startAttempt === attempt;
       if (!ownsReadyProcess && !ownsStartingAttempt) {
+        if (!this.hasLiveChildren() && this.lifecycleState !== "STARTING" && this.lifecycleState !== "READY") {
+          void this.releasePendingLease();
+          this.transition(this.lifecycleState, true);
+        }
         return;
       }
+      if (ownsStartingAttempt && this.importWait?.connection === attempt.connection) {
+        this.importWait.reject(new JavaIntelligenceError("JDT_BROKEN", "JDT exited during project import"));
+      }
       if (ownsReadyProcess) {
+        this.importState = this.lifecycleState === "STOPPED" ? "NOT_STARTED" : "FAILED";
         if (this.readyStableTimer) {
           clearTimeout(this.readyStableTimer);
           this.readyStableTimer = undefined;
@@ -846,7 +961,6 @@ export class JdtlsSession extends JdtlsLspClient {
         // same is true of the lease release: a STARTING attempt's failure
         // releases it through that same catch.
         this.restartBackoff.recordFailure("JDT_BROKEN");
-        touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
         void this.releasePendingLease();
       }
       try {
@@ -858,9 +972,8 @@ export class JdtlsSession extends JdtlsLspClient {
       this.connection = undefined;
       this.startAttempt = undefined;
       this.startedAt = undefined;
-      if (this.lifecycleState !== "STOPPED") {
-        this.transition("BROKEN");
-      }
+      if (this.lifecycleState !== "STARTING") void this.releasePendingLease();
+      this.transition(this.lifecycleState === "STOPPED" ? "STOPPED" : "BROKEN", true);
     });
   }
 
@@ -875,12 +988,121 @@ export class JdtlsSession extends JdtlsLspClient {
   }
 
   private async disposeAttempt(attempt: JdtlsTransportAttempt): Promise<void> {
+    await this.finishChild(attempt);
+  }
+
+  private async trackSpawnedChild(attempt: JdtlsTransportAttempt): Promise<void> {
+    this.liveAttempts.add(attempt);
+    const pid = attempt.child.pid;
+    if (pid === undefined) return;
+    const identity = await this.captureOwnedIdentity(pid);
+    if (identity) this.childIdentity.set(attempt.child, identity);
+    // `null` suppresses touchRepoCache's ps fallback. A collided pid, or one
+    // still invisible after the retries, must not be stored under an identity
+    // we did not match to this workspace.
+    touchRepoCache(this.repoRoot, {
+      jdtlsPid: pid,
+      jdtlsProcessStartIdentity: identity ?? null
+    });
+  }
+
+  private async rememberOwnedIdentity(child: JdtlsChild, pid: number): Promise<string | undefined> {
+    const known = this.childIdentity.get(child);
+    if (known) return known;
+    const identity = await this.captureOwnedIdentity(pid);
+    if (identity) this.childIdentity.set(child, identity);
+    return identity;
+  }
+
+  private async captureOwnedIdentity(pid: number): Promise<string | undefined> {
+    // Spawn returns before `ps` always sees the new pid. A missing command is
+    // unseen, not a collision, so it retries. A visible command that is not
+    // this workspace stops immediately.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const command = processCommand(pid);
+      const verdict = classifyWorkspaceCommand(command, this.dataDir);
+      if (verdict === "collision") return undefined;
+      if (verdict === "owned") {
+        const identity = processStartIdentityForPid(pid);
+        if (identity) return identity;
+      }
+      if (attempt < 2) await delay(25);
+    }
+    return undefined;
+  }
+
+  private ownedChild(): JdtlsChild | undefined {
+    if (this.lifecycleState === "READY") return this.process;
+    if (this.lifecycleState === "STARTING") return this.startAttempt?.child ?? this.process;
+    return undefined;
+  }
+
+  private reapChildren(mode: "abandoned" | "all"): Promise<void> {
+    return this.reapChildrenNow(mode);
+  }
+
+  private async reapChildrenNow(mode: "abandoned" | "all"): Promise<void> {
+    const keep = mode === "abandoned" ? this.ownedChild() : undefined;
+    for (const attempt of [...this.liveAttempts]) {
+      if (attempt.child === keep) continue;
+      await this.finishChild(attempt);
+    }
+  }
+
+  private async finishChild(attempt: JdtlsTransportAttempt): Promise<boolean> {
+    if (!this.liveAttempts.has(attempt) && childHasExited(attempt.child)) {
+      return true;
+    }
+    // Detach before kill so the exit handler does not treat this reap as the
+    // active session dying and overwrite a start that is about to replace it.
+    const wasStart = this.startAttempt === attempt;
+    const wasProcess = this.process === attempt.child;
+    if (wasStart) this.startAttempt = undefined;
+    if (wasProcess) {
+      this.process = undefined;
+      this.connection = undefined;
+      this.startedAt = undefined;
+    }
     try {
       attempt.connection.dispose();
     } catch {
       // Best-effort; the child is terminated regardless.
     }
-    await terminateChild(attempt.child, 200);
+    let dead = childHasExited(attempt.child) || await terminateChild(attempt.child, 200);
+    if (!dead) {
+      const pid = attempt.child.pid;
+      const identity = pid === undefined ? undefined : await this.rememberOwnedIdentity(attempt.child, pid);
+      if (pid !== undefined && identity) {
+        killOwnedProcessTree(pid, this.dataDir, identity);
+        dead = await this.waitUntilChildGone(attempt.child, identity, 1000);
+      }
+    }
+    if (!dead) {
+      if (wasStart && this.startAttempt === undefined) this.startAttempt = attempt;
+      if (wasProcess && this.process === undefined) {
+        this.process = attempt.child;
+        this.connection = attempt.connection;
+      }
+      return false;
+    }
+    this.liveAttempts.delete(attempt);
+    if (this.liveAttempts.size === 0) {
+      touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+    }
+    return true;
+  }
+
+  private async waitUntilChildGone(child: JdtlsChild, identity: string, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (childHasExited(child)) return true;
+      const pid = child.pid;
+      if (pid === undefined || !ownedPidStillAlive(pid, identity)) return true;
+      await delay(25);
+    }
+    if (childHasExited(child)) return true;
+    const pid = child.pid;
+    return pid === undefined || !ownedPidStillAlive(pid, identity);
   }
 
   private registerClientHandlers(connection: JdtlsConnection): void {
@@ -916,8 +1138,18 @@ export class JdtlsSession extends JdtlsLspClient {
       this.recordProgress(params);
     });
     connection.onNotification("language/status", (params: { type?: string; message?: string }) => {
+      if (this.startAttempt?.connection !== connection && this.connection !== connection) return;
       this.lastLanguageStatus = [params.type, params.message].filter(Boolean).join(": ");
       this.lastProgressAt = new Date();
+      const waiting = this.importWait;
+      if (waiting?.connection !== connection) return;
+      if (params.type === "Error") {
+        waiting.error = new JavaIntelligenceError("JDT_SERVER_ERROR", params.message || "JDT project initialization failed");
+        this.importState = "FAILED";
+        waiting.reject(waiting.error);
+      } else if (params.type === "ServiceReady" && !waiting.error) {
+        waiting.resolve();
+      }
     });
     connection.onError(error => {
       console.error("[codex-java-lsp] jsonrpc error", error);
@@ -990,6 +1222,7 @@ export class JdtlsSession extends JdtlsLspClient {
 
   private progressStatus(): JdtlsProgressStatus {
     return {
+      importState: this.importState,
       active: this.activeProgress.size,
       activeMessages: [...this.activeProgress.values()].slice(0, 5),
       lastProgressAt: this.lastProgressAt?.toISOString(),

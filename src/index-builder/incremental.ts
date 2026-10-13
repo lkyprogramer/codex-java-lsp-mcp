@@ -30,7 +30,7 @@ import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { deleteResourceScan, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import { internSym, symId } from "../java-index/sql/sym.js";
-import { readIndexCounts, readMeta, refreshIndexCounts, writeBuildProgress, writeMeta } from "./progress.js";
+import { readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta } from "./progress.js";
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "exit";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
@@ -124,9 +124,10 @@ function nameDependentPaths(
   db: IndexDatabase,
   before: ReadonlyMap<string, string>,
   after: ReadonlyMap<string, string>,
-  exclude: ReadonlySet<string>
+  exclude: ReadonlySet<string>,
+  dispatchParentNames: readonly string[] = []
 ): string[] {
-  const names = new Set<string>();
+  const names = new Set(dispatchParentNames.map(name => name.toLowerCase()));
   for (const [key, simpleName] of before) if (!after.has(key)) names.add(simpleName.toLowerCase());
   for (const [key, simpleName] of after) if (!before.has(key)) names.add(simpleName.toLowerCase());
   const nameSyms = [...names].map(name => symId(db, name)).filter((sym): sym is number => sym !== undefined);
@@ -142,6 +143,21 @@ function nameDependentPaths(
   return [...paths];
 }
 
+/** Self-calls have incoming method edges but no explicit parent type-name posting. */
+function dispatchDependentPaths(db: IndexDatabase, parentNames: ReadonlySet<string>, exclude: ReadonlySet<string>): string[] {
+  const ids = new Set<string>();
+  for (const chunk of bindChunks([...parentNames])) {
+    const names = inClause(chunk.length);
+    const rows = prepareCached(db,
+      `SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name IN ${names}
+       UNION SELECT s.text AS id FROM method m JOIN type t ON t.sym=m.owner_sym
+       JOIN sym s ON s.id=m.sym WHERE t.simple_name IN ${names}`
+    ).all(...chunk, ...chunk) as Array<{ id: string }>;
+    for (const row of rows) ids.add(row.id);
+  }
+  return dependentPaths(db, [...ids], exclude);
+}
+
 function resolveTouched(db: IndexDatabase, relativePaths: readonly string[]): void {
   const store = new SqlFactsStore(db);
   for (const relativePath of relativePaths) {
@@ -152,7 +168,16 @@ function resolveTouched(db: IndexDatabase, relativePaths: readonly string[]): vo
     const resolved = resolveFileRefs(raw, resolver, view);
     updateBundleFacts(db, { ...resolved, edges: [] });
     store.clearRequestCache();
-    replaceBundleEdges(db, relativePath, buildStaticEdges(resolved, buildSqlRegistryView(store), resolver));
+  }
+  // Call resolution walks other files' inheritance facts. Finish all facts
+  // before building edges, as cold build does, so file order cannot hide a
+  // method inherited through a type that has not yet been resolved.
+  const view = buildSqlRegistryView(store);
+  const resolver = new JavaNameResolver(view);
+  for (const relativePath of relativePaths) {
+    const resolved = readBundle(db, relativePath);
+    if (!resolved) continue;
+    replaceBundleEdges(db, relativePath, buildStaticEdges(resolved, view, resolver));
     store.clearRequestCache();
   }
 }
@@ -213,16 +238,7 @@ function listMyBatisResources(db: IndexDatabase): MyBatisMapperResourceFacts[] {
 }
 
 function finishIndex(db: IndexDatabase, generation: number, roots: readonly string[]): void {
-  writeMeta(db, "indexedGeneration", String(generation));
-  writeMeta(db, "buildState", "READY");
-  const stmt = prepareCached(
-    db,
-    `INSERT INTO source_root_coverage(root, state, generation) VALUES (?, 'COMPLETE', ?)
-     ON CONFLICT(root) DO UPDATE SET state=excluded.state, generation=excluded.generation`
-  );
-  for (const root of roots) stmt.run(root, generation);
-  prepareCached(db, "UPDATE source_root_coverage SET generation=? WHERE state='COMPLETE'").run(generation);
-  refreshIndexCounts(db);
+  publishIndexCoverage(db, generation, roots);
 }
 
 async function parseChanged(
@@ -259,26 +275,53 @@ function applyParsedRefresh(
   generation: number,
   roots: readonly string[],
   deleted: readonly string[],
-  bundles: readonly JavaFileBundle[]
+  bundles: readonly JavaFileBundle[],
+  discovered?: readonly { sourceRoot: string }[]
 ): void {
   const changed = bundles.map(bundle => bundle.file.relativePath);
   const exclude = new Set([...deleted, ...changed]);
   const oldIds = [...deleted, ...changed].flatMap(relativePath => ownedIds(db, relativePath));
   const dependents = new Set(dependentPaths(db, oldIds, exclude));
   const declaredBefore = new Map([...deleted, ...changed].flatMap(relativePath => [...declaredTypes(db, relativePath)]));
+  // A caller references Parent, not the Child whose override changed. Reuse
+  // the indexed type-name postings for direct parents used by bounded dispatch.
+  // Capture the old parents before replacing/deleting the subtype so removal
+  // and reparenting refresh both sides without scanning all caller facts.
+  const dispatchParentNames = new Set<string>();
+  for (const bundle of [
+    ...[...deleted, ...changed].map(relativePath => readBundle(db, relativePath)),
+    ...bundles
+  ]) {
+    if (!bundle) continue;
+    for (const type of bundle.types) {
+      for (const ref of [...type.extends, ...type.implements]) {
+        if (ref.simpleName) dispatchParentNames.add(ref.simpleName);
+      }
+    }
+  }
+  for (const relativePath of dispatchDependentPaths(db, dispatchParentNames, exclude)) dependents.add(relativePath);
+  const recovering = discovered !== undefined && (readMeta(db, "buildState") !== "READY" || readMeta(db, "coverageRevision") !== "1");
   withTransaction(db, () => {
+    if (recovering) {
+      const graph = new SqlKnowledgeGraph(db);
+      graph.clear();
+      graph.generation = generation;
+      graph.flushMeta();
+      db.exec("DELETE FROM entity_token; DELETE FROM entity; DELETE FROM entity_df; DELETE FROM search_doc_token; DELETE FROM search_doc; DELETE FROM search_doc_df;");
+    }
     for (const relativePath of deleted) prepareCached(db, "DELETE FROM file WHERE path=?").run(relativePath);
     for (const bundle of bundles) writeBundle(db, bundle);
     for (const relativePath of dependentPaths(db, [...oldIds, ...changed.flatMap(item => ownedIds(db, item))], exclude)) {
       dependents.add(relativePath);
     }
+    for (const relativePath of dispatchDependentPaths(db, dispatchParentNames, exclude)) dependents.add(relativePath);
     const declaredAfter = new Map(changed.flatMap(relativePath => [...declaredTypes(db, relativePath)]));
-    for (const relativePath of nameDependentPaths(db, declaredBefore, declaredAfter, exclude)) dependents.add(relativePath);
+    for (const relativePath of nameDependentPaths(db, declaredBefore, declaredAfter, exclude, [...dispatchParentNames])) dependents.add(relativePath);
     const rewritten = [...changed, ...dependents].sort();
     resolveTouched(db, rewritten);
     rewriteGraphAndEntities(db, generation, deleted, rewritten);
     rebindChangedNamespaces(db, declaredBefore, declaredAfter);
-    finishIndex(db, generation, roots);
+    publishIndexCoverage(db, generation, roots, discovered);
   });
 }
 
@@ -441,6 +484,7 @@ type IndexedFileRow = {
   mtime: number | null;
   size: number | null;
   contentHash: string | null;
+  parseState: string | null;
 };
 
 type MtimeStamp = {
@@ -530,16 +574,17 @@ async function applyJavaReconcile(
   const indexed = new Map(
     (prepareCached(
       db,
-      "SELECT path, mtime_ms AS mtime, size AS size, content_hash AS contentHash FROM file"
+      "SELECT path, mtime_ms AS mtime, size AS size, content_hash AS contentHash, parse_state AS parseState FROM file"
     ).all() as IndexedFileRow[]).map(row => [row.path, row])
   );
   const changed: string[] = [];
+  const recovering = readMeta(db, "buildState") !== "READY" || readMeta(db, "coverageRevision") !== "1";
   const mtimeStamps: MtimeStamp[] = [];
   const seen = new Set<string>();
   for (const file of discovered) {
     seen.add(file.relativePath);
     const previous = indexed.get(file.relativePath);
-    if (!previous) {
+    if (recovering || !previous || previous.parseState === "FAILED") {
       changed.push(file.absolutePath);
       continue;
     }
@@ -560,14 +605,23 @@ async function applyJavaReconcile(
   if (changed.length === 0 && deleted.length === 0) {
     withTransaction(db, () => {
       stampFileTimes(db, mtimeStamps);
-      finishIndex(db, generation, roots);
+      if (recovering) {
+        const graph = new SqlKnowledgeGraph(db);
+        graph.clear();
+        graph.generation = generation;
+        graph.flushMeta();
+        db.exec("DELETE FROM entity_token; DELETE FROM entity; DELETE FROM entity_df; DELETE FROM search_doc_token; DELETE FROM search_doc; DELETE FROM search_doc_df;");
+        commitSearchDocStats(db);
+      }
+      publishIndexCoverage(db, generation, roots, discovered);
     });
     return;
   }
   if (mtimeStamps.length > 0) {
     withTransaction(db, () => stampFileTimes(db, mtimeStamps));
   }
-  await applyRefresh(db, repoRoot, generation, changed, deleted);
+  const parsed = await parseChanged(db, repoRoot, layout, generation, changed);
+  applyParsedRefresh(db, generation, roots, [...deleted, ...parsed.missing], parsed.bundles, discovered);
 }
 
 export async function applyBuilderJob(options: {
@@ -593,6 +647,10 @@ export async function applyBuilderJob(options: {
     }
     return statusResult(options.db, id, true);
   } catch (err) {
+    withTransaction(options.db, () => {
+      writeMeta(options.db, "buildState", "DEGRADED");
+      options.db.prepare("UPDATE source_root_coverage SET state='DEGRADED'").run();
+    });
     return statusResult(options.db, id, false, err instanceof Error ? err.message : String(err));
   }
 }

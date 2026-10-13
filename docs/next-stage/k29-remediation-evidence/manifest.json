@@ -1,0 +1,141 @@
+{
+  "schema": "java-lsp-k29-remediation-evidence/v1",
+  "beforeSourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+  "afterSourceDigest": "594c65b1cd6b16db0a5bfb2c79c22df2841f0be558e40efba174de31612cd137",
+  "originalEvidenceRoot": "docs/next-stage/runtime-integrity-evidence",
+  "originalEvidenceUnchanged": true,
+  "protocolBefore": "eval-protocol/v1.2",
+  "protocolAfter": "eval-protocol/v1.3",
+  "frozenScorerAndDatasetUnchanged": true,
+  "K29Limits": {
+    "p95Ms": 150,
+    "eventLoopP95Ms": 20
+  },
+  "raw": [
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/after-binding.json",
+      "sha256": "dbc94db339e73943ec3a1e9886591b42a6a68719a95df2703ffedafd8c8f9109",
+      "bytes": 858
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/baseline-binding.json",
+      "sha256": "562d87fc0acd1206f6579000e5fb0b31d98fc55661e270185ce2e58f877309f1",
+      "bytes": 703
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/before-identity.json",
+      "sha256": "4595cac2bf1b076c082133cf8ef9823a31d7790600cf35c9742463bbe391a409",
+      "bytes": 265
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/before.patch",
+      "sha256": "09837298a84b5f7277164232ae3218993e757e99ba163c5c9dcd281f02c6aed8",
+      "bytes": 216441
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/changed-source-binding.json",
+      "sha256": "47236c5e0e39c821f32eef5e5a82539ffde1bb6f5ef343c14eaa4c3d1f1ac26b",
+      "bytes": 2845
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/final-evidence-audit.mjs",
+      "sha256": "14c1b94211da637c11661072eaf46dfe29d3e4fa4496dce21cdd4a50f67df022",
+      "bytes": 9505
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/final-evidence-review.json",
+      "sha256": "6b614d012c173aac325ac73c26f3443c7d4cc4b3af635f1a2e89dd8f109bbde2",
+      "bytes": 16451
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/final-evidence-review.md",
+      "sha256": "2204e44286f9976196cd404ca0d2c9d8b403f06608db7430c09da742a7982176",
+      "bytes": 5718
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/frozen-input-binding.json",
+      "sha256": "800d37f80a32d71c2e682b874faa8ae9110df99d34167fd4ba11a57be22f9bbe",
+      "bytes": 24896
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/implementation.patch",
+      "sha256": "ab74684b3c130e62098fcdd1bd3fbf38fd6660116d8aace7bb70403096058cec",
+      "bytes": 96335
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/k29-comparison.json",
+      "sha256": "a71f8f8271a4af5be72d7fd8c68765bbbcc94c1bed231fc767d53122f50b7c32",
+      "bytes": 46344
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/k29-pairs.log.txt",
+      "sha256": "88d724a0ddced5f0627eff3d61941840b0b591467a91c99be7aba5ba7f8881d4",
+      "bytes": 1786
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/k29-raw.tar.gz",
+      "sha256": "5b3098962948bc358ff4fab0933a6c8192ba6cb1f5d8cc6c5333014c23da27c7",
+      "bytes": 11097
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/launch-live.mjs",
+      "sha256": "8e45cc1627223782cc2c81c0dce774edd69779371dfc39ed3c349b064515429e",
+      "bytes": 3875
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/live-full-comparison.json",
+      "sha256": "95b673df369a025d3ee8463ed77d50a0cf6fa985795cc4636585d2c1233779e9",
+      "bytes": 108194
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/live-full-raw.tar.gz",
+      "sha256": "30280a70bb83facb09101aaf3f89f32ca17c49818c9b0083135121b5c960a7d5",
+      "bytes": 511963
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/live-full.log.txt",
+      "sha256": "a84c105c14dfb96355c0da132d9dde43adde5fae8d82dbc713a9dde0eb2362e9",
+      "bytes": 16671
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/live-smoke-comparison.json",
+      "sha256": "54ecc555feb806c66c8e1addddf6858076d3732512160288601c877291dba33f",
+      "bytes": 32776
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/live-smoke-raw.tar.gz",
+      "sha256": "61b1f4c144ab453f2b8a9a2ae11814073f1184e1aeecdc1ac91bb96d4c54e7b1",
+      "bytes": 153276
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/live-smoke.log.txt",
+      "sha256": "be62fb3802198bcad555ff80ac86b249790aa2a44f1d7d903aac48965390c39f",
+      "bytes": 4029
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/offline-integrated.log.txt",
+      "sha256": "e5aa414b02f1528640def0736328185e4836f8240206903ddc6b2f4f4700aab6",
+      "bytes": 52497
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/original-evidence-check.json",
+      "sha256": "85611814c284620d24d69e3f34089fdf62f0033bfd25654afe8373e8edbcca48",
+      "bytes": 17454
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/projection-replay.json",
+      "sha256": "84c4824a29c8d7a34d30812898fdfec62f24da6d1b60b1675aff555f63c5da5b",
+      "bytes": 10150
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/run-k29-pairs.mjs",
+      "sha256": "4830f4854095a3bce204c53cd27b5bb90fc08699b7ceaa531332acb4f6ae6ca2",
+      "bytes": 2397
+    },
+    {
+      "path": "docs/next-stage/k29-remediation-evidence/raw/summarize-live.py",
+      "sha256": "2ca3870518e0053622dc71f85cefee53a0acbb4ea509d1c2580d81f0e018476f",
+      "bytes": 3278
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -22,8 +23,12 @@ import {
 } from "./test-support/fake-jdtls.test.js";
 import type { GeneratedCodeStatus } from "./generated-code.js";
 import type { LspDiagnostic } from "./jdtls-session.js";
+import { javaSymbol } from "./tools/symbol.js";
+import type { ToolContext } from "./tools/context.js";
 import { GenerationClock, type RepoChange, type RepoChangeBatch } from "./repo-generation.js";
-import { toFileUri } from "./repo-layout.js";
+import { processStartIdentityForPid } from "./repo-ownership-lease.js";
+import { canonicalPath } from "./path-utils.js";
+import { repoCacheRoot, toFileUri } from "./repo-layout.js";
 import type {
   CompositeJdtLease,
   CrossProcessLeaseStore,
@@ -843,6 +848,7 @@ test("a READY child that exits marks the session BROKEN and restartable", async 
 
   factory.children[0].exit(1, null);
   assert.equal(session.status().state, "BROKEN");
+  assert.equal(session.status().progress.importState, "FAILED");
   assert.equal(session.status().started, false);
   assert.equal(session.status().pid, undefined);
   assert.equal(session.status().restartBackoff.consecutiveFailures, 1);
@@ -852,6 +858,121 @@ test("a READY child that exits marks the session BROKEN and restartable", async 
   assert.equal(session.status().state, "READY");
   assert.equal(factory.spawnCalls, 2);
   await session.stop();
+});
+
+test("a child that ignores SIGTERM is SIGKILLed before another JDT is spawned", async () => {
+  const factory = sequenceTransportFactory([
+    { initializeError: new Error("first boom"), surviveSignals: ["SIGTERM"] },
+    { initializeResult: { capabilities: {} } }
+  ]);
+  const { session, advance } = harness(factory);
+  await assert.rejects(() => session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /first boom/);
+  assert.equal(factory.spawnCalls, 1);
+  assert.equal(factory.children[0]?.signalCode, "SIGKILL");
+  advance(500);
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  assert.equal(factory.spawnCalls, 2);
+  await session.stop();
+});
+
+test("a child that survives SIGKILL blocks the next spawn", { timeout: 20_000 }, async () => {
+  const factory = sequenceTransportFactory([
+    { initializeError: new Error("first boom"), exitsOnKill: false }
+  ]);
+  const leaseStore = new FakeLeaseStore();
+  const { session, advance, repoRoot } = harness(factory, { leaseStore, leaseHeartbeatMs: 10 });
+  try {
+    await assert.rejects(() => session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /first boom/);
+    assert.equal(factory.spawnCalls, 1);
+    assert.deepEqual(leaseStore.released, [], "a live child retains worktree and machine slot leases");
+    const heartbeats = leaseStore.heartbeatCalls;
+    await delay(30);
+    assert.ok(leaseStore.heartbeatCalls > heartbeats, "retained leases continue heartbeating");
+    advance(500);
+    await assert.rejects(
+      () => session.ensureStarted(DeadlineBudget.fromTimeout(5000)),
+      /still alive/
+    );
+    assert.equal(factory.spawnCalls, 1);
+    assert.equal(leaseStore.acquireCalls, 1, "retry reuses retained lease instead of reacquiring itself");
+    await assert.rejects(() => session.stop(), /still alive/);
+    await assert.rejects(() => session.stop(), /still alive/);
+    assert.deepEqual(leaseStore.released, [], "failed stop retains both leases");
+    factory.children[0]!.exitsOnKill = true;
+    await session.reapAbandonedChildren();
+    await session.stop();
+    assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "successful reap releases each lease once");
+  } finally {
+    factory.children[0]!.exitsOnKill = true;
+    await session.stop();
+    // stop() refuses to clear repo-meta while the child is still alive. This
+    // fake pid must not remain recorded against the real cache.
+    rmSync(repoCacheRoot(canonicalPath(repoRoot)), { recursive: true, force: true });
+  }
+});
+
+test("a late child exit releases retained leases once and permits a new start", async () => {
+  const leaseStore = new FakeLeaseStore();
+  const factory = sequenceTransportFactory([
+    { initializeError: new Error("first boom"), exitsOnKill: false },
+    { initializeResult: { capabilities: {} } }
+  ]);
+  const { session, advance } = harness(factory, { leaseStore });
+  try {
+    await assert.rejects(() => session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /first boom/);
+    assert.deepEqual(leaseStore.released, []);
+    factory.children[0]!.exit(0, null);
+    await delay(0);
+    assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"]);
+    advance(500);
+    await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+    assert.equal(factory.spawnCalls, 2);
+    assert.equal(leaseStore.acquireCalls, 2);
+    await session.stop();
+    assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_SLOT", "JDT_WORKTREE", "JDT_WORKTREE"]);
+  } finally {
+    factory.children[0]!.exitsOnKill = true;
+    await session.stop();
+  }
+});
+
+test("READY does not record a collided pid's start identity", async () => {
+  const sleeper = spawn(process.execPath, ["-e", "setInterval(()=>{},1000000);"], { stdio: "ignore" });
+  const sleeperPid = sleeper.pid;
+  assert.equal(typeof sleeperPid, "number");
+  const deadline = Date.now() + 3000;
+  let sleeperIdentity: string | undefined;
+  while (Date.now() < deadline && !sleeperIdentity) {
+    sleeperIdentity = processStartIdentityForPid(sleeperPid!);
+    if (!sleeperIdentity) await delay(20);
+  }
+  assert.equal(typeof sleeperIdentity, "string");
+  const factory = fakeTransportFactory({
+    pid: sleeperPid,
+    initializeResult: { capabilities: {} }
+  });
+  const { session, repoRoot } = harness(factory);
+  try {
+    await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+    const meta = JSON.parse(readFileSync(
+      path.join(repoCacheRoot(canonicalPath(repoRoot)), "repo-meta.json"),
+      "utf8"
+    )) as { jdtlsPid?: number; jdtlsProcessStartIdentity?: string };
+    assert.equal(meta.jdtlsPid, sleeperPid);
+    assert.equal(meta.jdtlsProcessStartIdentity, undefined);
+    assert.equal(sleeper.exitCode, null);
+    await session.stop();
+    assert.equal(sleeper.exitCode, null);
+  } finally {
+    rmSync(repoCacheRoot(canonicalPath(repoRoot)), { recursive: true, force: true });
+    if (sleeperPid !== undefined) {
+      try {
+        process.kill(sleeperPid, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }
+  }
 });
 
 test("status reports STARTING pid separately and never as started", async () => {
@@ -1278,6 +1399,7 @@ test("a short first semantic caller does not become the shared backend hard cap"
   const { session, repoRoot } = harness(factory);
   const file = path.join(repoRoot, "A.java");
   writeFileSync(file, "class A {}\n");
+  await session.ensureStarted();
 
   const short = session.semanticLocations(file, 1, 1, DeadlineBudget.fromTimeout(10));
   const long = session.semanticLocations(file, 1, 1, DeadlineBudget.fromTimeout(500));
@@ -1573,4 +1695,109 @@ test("a bound GenerationClock is the only generation used for gateway keys", asy
   assert.equal(documentCalls, 2, "the coordinator clock value is part of the gateway key");
 
   await session.stop();
+});
+
+
+test("initial import blocks READY and semantic requests until ServiceReady", async () => {
+  const { session, factory, repoRoot } = harness(fakeTransportFactory({
+    initializeResult: { capabilities: {} }, autoServiceReady: false,
+    responses: { "textDocument/references": [] }
+  }));
+  const file = path.join(repoRoot, "Probe.java");
+  writeFileSync(file, "class Probe {}\n");
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  try {
+    await waitForInitialized(factory);
+    assert.equal(session.status().state, "STARTING");
+    assert.equal(session.status().started, false);
+    const references = session.rawReferences(file, 1, 7, false, 50);
+    await assert.rejects(references, error => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
+    assert.equal(factory.connections[0]!.count("textDocument/references"), 0);
+    factory.connections[0]!.emitNotification("language/status", { type: "Started", message: "Ready" });
+    await delay(5);
+    assert.equal(session.status().state, "STARTING");
+    factory.connections[0]!.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await ready;
+    assert.equal(session.status().state, "READY");
+    factory.connections[0]!.emitNotification("language/status", { type: "Starting", message: "100%" });
+    assert.equal(session.status().state, "READY");
+    assert.deepEqual(await session.rawReferences(file, 1, 7, false, 3000), []);
+    assert.equal(factory.connections[0]!.count("textDocument/references"), 1);
+  } finally { await session.stop(); await ready.catch(() => undefined); }
+});
+
+test("initialization Error is not replaced by a later ServiceReady", async () => {
+  const { session, factory } = harness(fakeTransportFactory({ initializeResult: { capabilities: {} }, autoServiceReady: false }));
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const rejected = assert.rejects(ready, error => error instanceof JavaIntelligenceError && error.code === "JDT_SERVER_ERROR" && /import failed/.test(error.message));
+  try {
+    await waitForInitialized(factory);
+    factory.connections[0]!.emitNotification("language/status", { type: "Error", message: "import failed" });
+    factory.connections[0]!.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await rejected;
+    assert.equal(session.status().state, "BROKEN");
+    assert.equal(session.status().started, false);
+  } finally { await session.stop(); await rejected.catch(() => undefined); }
+});
+
+test("stop settles a pending import and ignores the stopped connection completion", async () => {
+  const { session, factory } = harness(fakeTransportFactory({ initializeResult: { capabilities: {} }, autoServiceReady: false }));
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const rejected = assert.rejects(ready, error => error instanceof JavaIntelligenceError && error.code === "CANCELLED");
+  try {
+    await waitForInitialized(factory);
+    await session.stop();
+    factory.connections[0]!.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await rejected;
+    assert.equal(session.status().state, "STOPPED");
+    assert.equal(session.status().started, false);
+  } finally { await session.stop(); await rejected.catch(() => undefined); }
+});
+
+async function waitForInitialized(factory: FakeJdtlsTransportFactory): Promise<void> {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    if (factory.connections[0]?.notifications.includes("initialized")) return;
+    await delay(5);
+  }
+  assert.fail("initialize did not finish");
+}
+
+
+test("lease failure during import prevents committing READY", async () => {
+  const leaseStore = new FakeLeaseStore();
+  const { session, factory } = harness(fakeTransportFactory({ initializeResult: { capabilities: {} }, autoServiceReady: false }), { leaseStore, leaseHeartbeatMs: 10 });
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  void ready.catch(() => undefined);
+  try {
+    await waitForInitialized(factory);
+    leaseStore.heartbeatError = new Error("lease lost during import");
+    for (let attempt = 0; attempt < 100 && !session.status().leaseHeartbeat.lastError; attempt++) await delay(5);
+    assert.match(session.status().leaseHeartbeat.lastError ?? "", /lease lost during import/);
+    factory.connections[0]!.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await assert.rejects(ready, error => error instanceof JavaIntelligenceError && error.code === "LEASE_CONFIG_ERROR");
+    assert.equal(session.status().started, false);
+    assert.equal(session.status().progress.importState, "FAILED");
+  } finally { await session.stop(); await ready.catch(() => undefined); }
+});
+
+test("public position and references report an incomplete import instead of successful empty semantics", async () => {
+  const { session, factory, repoRoot } = harness(fakeTransportFactory({ initializeResult: { capabilities: {} }, autoServiceReady: false,
+    responses: { "textDocument/hover": null, "textDocument/definition": [], "textDocument/implementation": [], "textDocument/references": [] } }));
+  writeFileSync(path.join(repoRoot, "Probe.java"), "class Probe {}\n");
+  const context = { repoRoot, session } as ToolContext;
+  const args = { file: "Probe.java", line: 1, column: 7, semanticTimeoutMs: 50, includeDeclaration: false, positionsPerFile: 3 };
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  try {
+    await waitForInitialized(factory);
+    for (const operation of ["position", "references"] as const) {
+      await assert.rejects(javaSymbol(context, { ...args, operation }), error => error instanceof JavaIntelligenceError && error.code === "JDT_NOT_READY" && /java_status/.test(error.message));
+    }
+    assert.equal(session.status().semanticGateway.completedEntries, 0);
+    assert.equal(factory.connections[0]!.count("textDocument/implementation"), 0);
+    factory.connections[0]!.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await ready;
+    const position = await javaSymbol(context, { ...args, operation: "position", semanticTimeoutMs: 3000 }) as { implementations: unknown[] };
+    assert.deepEqual(position.implementations, []);
+    assert.equal(factory.connections[0]!.count("textDocument/implementation"), 1);
+  } finally { await session.stop(); await ready.catch(() => undefined); }
 });

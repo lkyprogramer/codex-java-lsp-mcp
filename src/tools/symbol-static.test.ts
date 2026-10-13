@@ -159,6 +159,28 @@ async function openFixtureClient(fixture: Fixture): Promise<void> {
   await (fixture.client as SqlJavaIndexClient).open(1);
 }
 
+test("explicit evidence uses the static index and does not start JDT", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    const result = await javaSymbol(context, args({ operation: "evidence",
+      file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21
+    }), { budget: DeadlineBudget.fromTimeout(15000) }) as Record<string, unknown>;
+    assert.equal(result.schemaVersion, "java-evidence-unit/v1");
+    assert.equal(result.generation, 1);
+    assert.equal(result.scopeState, "READY");
+    assert.deepEqual(result.units, [], "a type without XML relations has no resource source units");
+    assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
+    await assert.rejects(javaSymbol(context, args({ operation: "evidence" })), /requires file\/line\/column/);
+    await assert.rejects(javaSymbol(context, args({ operation: "evidence", backend: "jdt",
+      file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21
+    })), /static index/);
+    assert.equal(probe.startCalls, 0);
+  } finally { await fixture.cleanup(); }
+});
+
 test("K25: static query succeeds with JDT disabled and zero JDT interactions", async () => {
   const fixture = await buildFixture();
   await openFixtureClient(fixture);
@@ -263,6 +285,8 @@ test("K26: position/references keep the explicit JDT requirement", async () => {
   assert.equal(symbolNeedsJdt({ operation: "query", backend: "jdt" }), true);
   assert.equal(symbolNeedsJdt({ operation: "position" }), true);
   assert.equal(symbolNeedsJdt({ operation: "references" }), true);
+  assert.equal(symbolNeedsJdt({ operation: "evidence" }), false, "explicit evidence never starts JDT");
+  assert.equal(symbolNeedsJdt({ operation: "evidence", backend: "jdt" }), false, "invalid evidence backend is rejected without starting JDT");
   assert.equal(symbolNeedsJdt({ query: "OrderService" }), false, "omitted operation infers query");
 
   const fixture = await buildFixture();

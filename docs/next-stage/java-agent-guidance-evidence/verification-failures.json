@@ -1,0 +1,58 @@
+{
+  "scope": "Java guidance and hook only; runtime lifecycle/deadline unchanged",
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "FAIL",
+      "sourceTests": {
+        "pass": 1366,
+        "fail": 0,
+        "skip": 0
+      },
+      "scriptTests": {
+        "pass": 435,
+        "fail": 1,
+        "skip": 0
+      },
+      "failure": "daemon controller fails closed before stopping when predecessor lacks managed instance identity",
+      "observedCause": "validation driver inherited the live JAVA_LSP_HTTP_INSTANCE_ID; the child fixture also inherits exported variables",
+      "correction": "driver excludes and removes the inherited instance ID; installer creates its own instance identity",
+      "productGuardChanged": false,
+      "knownConditionalLimit": "pre-existing predecessor guard may inherit an externally exported instance ID; controlled installation environment clears it",
+      "isolatedRecheck": {
+        "pass": 28,
+        "fail": 0,
+        "skip": 0,
+        "log": "runtime-artifacts-recheck.log",
+        "logSha256": "8ed4e6aec572fea605c444dd79809b1a0838f5f4e5f1504c85e26ff181f00891"
+      },
+      "log": "production-install.log.attempt-1",
+      "logSha256": "c1f08eefca9ae6899dc80e3ba628341da3696b9e0f8d7ced63c8d4f267778c87"
+    },
+    {
+      "attempt": 2,
+      "status": "FAIL",
+      "sourceTests": {
+        "pass": 1365,
+        "fail": 1,
+        "skip": 0
+      },
+      "scriptTests": "NOT_RUN",
+      "failure": "RepoRuntimeManager does not run a handler after its budget expires during the JavaIndex status probe",
+      "observedError": "Missing expected rejection",
+      "hypothesis": "timer/high-resolution clock phase and optional status timeout catch; not uniquely established by raw failure",
+      "changedAgainstInstalledBaseline": false,
+      "runtimeOrAssertionsModified": false,
+      "isolatedRecheck": {
+        "pass": 1,
+        "fail": 0,
+        "skip": 0,
+        "log": "deadline-test-recheck.log",
+        "logSha256": "247aea7b74f3a8cf805848d23896a51b933a6ab61ece4d3f1bab108459684704"
+      },
+      "log": "production-install.log.attempt-2",
+      "logSha256": "bff0a2eb7c90782fdba2ed05d8b1432bf6f8c4c35aa38014cf7a1bc508782922"
+    }
+  ],
+  "laterSuccessDoesNotReplaceFailures": true
+}

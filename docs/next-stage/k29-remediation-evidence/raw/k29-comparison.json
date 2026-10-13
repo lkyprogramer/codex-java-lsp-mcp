@@ -1,0 +1,1792 @@
+{
+  "identities": {
+    "before": {
+      "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+      "sourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+      "files": 605,
+      "dirty": true,
+      "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+    },
+    "after": {
+      "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+      "sourceDigest": "594c65b1cd6b16db0a5bfb2c79c22df2841f0be558e40efba174de31612cd137",
+      "files": 605,
+      "dirty": true,
+      "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+    }
+  },
+  "planned": [
+    [
+      "before",
+      1
+    ],
+    [
+      "after",
+      1
+    ],
+    [
+      "after",
+      2
+    ],
+    [
+      "before",
+      2
+    ],
+    [
+      "before",
+      3
+    ],
+    [
+      "after",
+      3
+    ]
+  ],
+  "rows": [
+    {
+      "arm": "before",
+      "pair": 1,
+      "candidateIdentity": {
+        "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+        "sourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+        "files": 605,
+        "dirty": true,
+        "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+      },
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/before-1"
+      ],
+      "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/before/candidate",
+      "output": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/before-1",
+      "unchanged": true,
+      "status": "FAIL",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.079,
+            "p95": 40.517,
+            "p99": 45.353,
+            "max": 47.372
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.858,
+              "p95": 2.186,
+              "p99": 3.068
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 30.543,
+              "p95": 41.149,
+              "p99": 47.372
+            },
+            "broad": {
+              "n": 25,
+              "p50": 35.97,
+              "p95": 42.993,
+              "p99": 45.353
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 6.35,
+              "p95": 14.076,
+              "p99": 19.079
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.164,
+            "p95": 1.872,
+            "p99": 2.699,
+            "max": 5.386
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 248.031,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 36.318,
+            "p95": 102.99,
+            "p99": 148.583,
+            "max": 154.451
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 5.133,
+              "p95": 45.096,
+              "p99": 69.091
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 14.858,
+              "p95": 47.004,
+              "p99": 71.591
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 41.938,
+              "p95": 107.078,
+              "p99": 113.77
+            },
+            "broad": {
+              "n": 25,
+              "p50": 67.451,
+              "p95": 148.583,
+              "p99": 154.451
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.162,
+            "p95": 1.641,
+            "p99": 2.497,
+            "max": 17.007
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 220.734,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 22.853,
+            "p95": 286.347,
+            "p99": 317.142,
+            "max": 349.137
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.579,
+              "p95": 18.052,
+              "p99": 18.074
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 13.495,
+              "p95": 22.013,
+              "p99": 22.853
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 165.703,
+              "p95": 284.047,
+              "p99": 317.142
+            },
+            "broad": {
+              "n": 25,
+              "p50": 195,
+              "p95": 313.237,
+              "p99": 349.137
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.151,
+            "p95": 1.531,
+            "p99": 2.134,
+            "max": 6.902
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 262.688,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 22.195,
+            "p95": 274.394,
+            "p99": 304.721,
+            "max": 306.455
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.353,
+              "p95": 15.555,
+              "p99": 17.453
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.19,
+              "p95": 20.233,
+              "p99": 22.195
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 157.782,
+              "p95": 270.867,
+              "p99": 274.394
+            },
+            "broad": {
+              "n": 25,
+              "p50": 187.766,
+              "p95": 304.721,
+              "p99": 306.455
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.151,
+            "p95": 1.333,
+            "p99": 1.845,
+            "max": 3.678
+          },
+          "stopReasons": {
+            "none": 53,
+            "changed_during_request": 47
+          },
+          "scopeStates": {
+            "READY": 53,
+            "PARTIAL": 47
+          },
+          "writerCommits": 15,
+          "writerIntervalMs": 100,
+          "rssMb": 265.5,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ]
+    },
+    {
+      "arm": "after",
+      "pair": 1,
+      "candidateIdentity": {
+        "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+        "sourceDigest": "594c65b1cd6b16db0a5bfb2c79c22df2841f0be558e40efba174de31612cd137",
+        "files": 605,
+        "dirty": true,
+        "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+      },
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/after-1"
+      ],
+      "cwd": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/candidate",
+      "output": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/after-1",
+      "unchanged": true,
+      "status": "FAIL",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 15.27,
+            "p95": 27.59,
+            "p99": 37.193,
+            "max": 38.375
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.592,
+              "p95": 1.605,
+              "p99": 2.067
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 17.306,
+              "p95": 24.011,
+              "p99": 37.193
+            },
+            "broad": {
+              "n": 25,
+              "p50": 20.912,
+              "p95": 32.38,
+              "p99": 38.375
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 5.085,
+              "p95": 13.928,
+              "p99": 35.681
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.154,
+            "p95": 1.767,
+            "p99": 2.644,
+            "max": 13.631
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 246.953,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 20.934,
+            "p95": 55.515,
+            "p99": 59.221,
+            "max": 60.293
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 4.275,
+              "p95": 23.695,
+              "p99": 24.82
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 8.104,
+              "p95": 24.59,
+              "p99": 25.463
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 23.781,
+              "p95": 54.657,
+              "p99": 55.515
+            },
+            "broad": {
+              "n": 25,
+              "p50": 40.23,
+              "p95": 59.221,
+              "p99": 60.293
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.146,
+            "p95": 1.561,
+            "p99": 1.889,
+            "max": 2.105
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 283.359,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 23.241,
+            "p95": 184.273,
+            "p99": 196.729,
+            "max": 204.063
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 7.888,
+              "p95": 16.016,
+              "p99": 16.414
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.831,
+              "p95": 21.298,
+              "p99": 23.241
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 105.561,
+              "p95": 177.125,
+              "p99": 184.273
+            },
+            "broad": {
+              "n": 25,
+              "p50": 124.798,
+              "p95": 196.729,
+              "p99": 204.063
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.146,
+            "p95": 1.475,
+            "p99": 1.859,
+            "max": 2.124
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 283.531,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.863,
+            "p95": 188.468,
+            "p99": 204.468,
+            "max": 208.214
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 7.994,
+              "p95": 14.696,
+              "p99": 16.224
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.147,
+              "p95": 18.579,
+              "p99": 19.863
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 106.557,
+              "p95": 186.032,
+              "p99": 188.468
+            },
+            "broad": {
+              "n": 25,
+              "p50": 126.122,
+              "p95": 204.468,
+              "p99": 208.214
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.559,
+            "p99": 1.903,
+            "max": 2.128
+          },
+          "stopReasons": {
+            "none": 61,
+            "changed_during_request": 39
+          },
+          "scopeStates": {
+            "READY": 61,
+            "PARTIAL": 39
+          },
+          "writerCommits": 10,
+          "writerIntervalMs": 100,
+          "rssMb": 283.313,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ]
+    },
+    {
+      "arm": "after",
+      "pair": 2,
+      "candidateIdentity": {
+        "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+        "sourceDigest": "594c65b1cd6b16db0a5bfb2c79c22df2841f0be558e40efba174de31612cd137",
+        "files": 605,
+        "dirty": true,
+        "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+      },
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/after-2"
+      ],
+      "cwd": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/candidate",
+      "output": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/after-2",
+      "unchanged": true,
+      "status": "FAIL",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 6.379,
+            "p95": 20.907,
+            "p99": 27.014,
+            "max": 27.735
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.465,
+              "p95": 0.68,
+              "p99": 1.099
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 16.22,
+              "p95": 19.766,
+              "p99": 19.792
+            },
+            "broad": {
+              "n": 25,
+              "p50": 19.864,
+              "p95": 27.014,
+              "p99": 27.735
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 4.716,
+              "p95": 5.924,
+              "p99": 6.379
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.147,
+            "p95": 1.419,
+            "p99": 1.95,
+            "max": 2.118
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 247.266,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 21.059,
+            "p95": 58.92,
+            "p99": 62.604,
+            "max": 67.386
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 4.141,
+              "p95": 24.141,
+              "p99": 24.496
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 7.912,
+              "p95": 25.087,
+              "p99": 25.358
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 23.858,
+              "p95": 61.364,
+              "p99": 62.604
+            },
+            "broad": {
+              "n": 25,
+              "p50": 41.311,
+              "p95": 61.115,
+              "p99": 67.386
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.149,
+            "p95": 1.49,
+            "p99": 1.846,
+            "max": 2.124
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 280.203,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.801,
+            "p95": 207.798,
+            "p99": 280.347,
+            "max": 301.368
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.105,
+              "p95": 15.359,
+              "p99": 15.681
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.389,
+              "p95": 19.595,
+              "p99": 19.801
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 115.163,
+              "p95": 243.107,
+              "p99": 280.347
+            },
+            "broad": {
+              "n": 25,
+              "p50": 136.293,
+              "p95": 263.181,
+              "p99": 301.368
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.154,
+            "p95": 1.61,
+            "p99": 2.079,
+            "max": 29.426
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 280.609,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 21.623,
+            "p95": 197.466,
+            "p99": 203.986,
+            "max": 219.575
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 7.922,
+              "p95": 16.411,
+              "p99": 17.563
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.833,
+              "p95": 20.198,
+              "p99": 21.623
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 107.185,
+              "p95": 184.656,
+              "p99": 197.466
+            },
+            "broad": {
+              "n": 25,
+              "p50": 128.382,
+              "p95": 203.986,
+              "p99": 219.575
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.461,
+            "p99": 1.91,
+            "max": 4.114
+          },
+          "stopReasons": {
+            "none": 35,
+            "changed_during_request": 65
+          },
+          "scopeStates": {
+            "READY": 35,
+            "PARTIAL": 65
+          },
+          "writerCommits": 10,
+          "writerIntervalMs": 100,
+          "rssMb": 280.438,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ]
+    },
+    {
+      "arm": "before",
+      "pair": 2,
+      "candidateIdentity": {
+        "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+        "sourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+        "files": 605,
+        "dirty": true,
+        "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+      },
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/before-2"
+      ],
+      "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/before/candidate",
+      "output": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/before-2",
+      "unchanged": true,
+      "status": "FAIL",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 6.015,
+            "p95": 32.689,
+            "p99": 37.266,
+            "max": 37.581
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.523,
+              "p95": 1.167,
+              "p99": 1.406
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 25.292,
+              "p95": 29.185,
+              "p99": 31.173
+            },
+            "broad": {
+              "n": 25,
+              "p50": 30.16,
+              "p95": 37.266,
+              "p99": 37.581
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 4.865,
+              "p95": 5.372,
+              "p99": 6.015
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.15,
+            "p95": 1.257,
+            "p99": 1.912,
+            "max": 3.385
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 286.922,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 31.637,
+            "p95": 89.111,
+            "p99": 116.837,
+            "max": 373.552
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 4.163,
+              "p95": 42.641,
+              "p99": 57.626
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 8.833,
+              "p95": 46.569,
+              "p99": 59.567
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 31.807,
+              "p95": 89.111,
+              "p99": 91.264
+            },
+            "broad": {
+              "n": 25,
+              "p50": 61.082,
+              "p95": 116.837,
+              "p99": 373.552
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.152,
+            "p95": 1.619,
+            "p99": 5.861,
+            "max": 37.618
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 287.25,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.226,
+            "p95": 266.422,
+            "p99": 292.985,
+            "max": 296.868
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.127,
+              "p95": 14.707,
+              "p99": 15.063
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.34,
+              "p95": 19.151,
+              "p99": 19.226
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 150.257,
+              "p95": 263.531,
+              "p99": 266.422
+            },
+            "broad": {
+              "n": 25,
+              "p50": 184.298,
+              "p95": 292.985,
+              "p99": 296.868
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.455,
+            "p99": 1.926,
+            "max": 3.359
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 287.609,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 24.06,
+            "p95": 319.585,
+            "p99": 397.275,
+            "max": 428.675
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 9.712,
+              "p95": 18.873,
+              "p99": 20.013
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 14.074,
+              "p95": 22.094,
+              "p99": 24.06
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 167.511,
+              "p95": 335.657,
+              "p99": 397.275
+            },
+            "broad": {
+              "n": 25,
+              "p50": 213.427,
+              "p95": 368.738,
+              "p99": 428.675
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.153,
+            "p95": 1.748,
+            "p99": 4.211,
+            "max": 8.569
+          },
+          "stopReasons": {
+            "none": 48,
+            "changed_during_request": 52
+          },
+          "scopeStates": {
+            "READY": 48,
+            "PARTIAL": 52
+          },
+          "writerCommits": 17,
+          "writerIntervalMs": 100,
+          "rssMb": 272,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ]
+    },
+    {
+      "arm": "before",
+      "pair": 3,
+      "candidateIdentity": {
+        "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+        "sourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+        "files": 605,
+        "dirty": true,
+        "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+      },
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/before-3"
+      ],
+      "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/before/candidate",
+      "output": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/before-3",
+      "unchanged": true,
+      "status": "FAIL",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 21.571,
+            "p95": 32.453,
+            "p99": 38.765,
+            "max": 101.425
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.496,
+              "p95": 0.982,
+              "p99": 1.248
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 25.35,
+              "p95": 27.85,
+              "p99": 28.354
+            },
+            "broad": {
+              "n": 25,
+              "p50": 30.595,
+              "p95": 38.765,
+              "p99": 101.425
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 4.969,
+              "p95": 6.562,
+              "p99": 21.571
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.498,
+            "p99": 2.314,
+            "max": 22.069
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 284.984,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 31.166,
+            "p95": 86.992,
+            "p99": 95.601,
+            "max": 96.625
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 4.452,
+              "p95": 33.765,
+              "p99": 34.071
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 8.497,
+              "p95": 34.899,
+              "p99": 35.933
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 34.01,
+              "p95": 86.992,
+              "p99": 96.625
+            },
+            "broad": {
+              "n": 25,
+              "p50": 60.936,
+              "p95": 91.945,
+              "p99": 95.601
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.151,
+            "p95": 1.368,
+            "p99": 1.902,
+            "max": 3.391
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 284.531,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 20.087,
+            "p95": 273.604,
+            "p99": 298.306,
+            "max": 307.189
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.056,
+              "p95": 15.228,
+              "p99": 15.878
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.519,
+              "p95": 19.822,
+              "p99": 20.087
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 150.41,
+              "p95": 265.808,
+              "p99": 273.604
+            },
+            "broad": {
+              "n": 25,
+              "p50": 180.065,
+              "p95": 298.306,
+              "p99": 307.189
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.146,
+            "p95": 1.306,
+            "p99": 1.883,
+            "max": 2.07
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 253.594,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 24.505,
+            "p95": 286.798,
+            "p99": 307.012,
+            "max": 316.276
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.176,
+              "p95": 16.808,
+              "p99": 20.445
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.409,
+              "p95": 22.846,
+              "p99": 24.505
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 165.058,
+              "p95": 275.702,
+              "p99": 286.798
+            },
+            "broad": {
+              "n": 25,
+              "p50": 193.955,
+              "p95": 307.012,
+              "p99": 316.276
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.147,
+            "p95": 1.342,
+            "p99": 1.84,
+            "max": 2.615
+          },
+          "stopReasons": {
+            "none": 37,
+            "changed_during_request": 63
+          },
+          "scopeStates": {
+            "READY": 37,
+            "PARTIAL": 63
+          },
+          "writerCommits": 15,
+          "writerIntervalMs": 100,
+          "rssMb": 255.031,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ]
+    },
+    {
+      "arm": "after",
+      "pair": 3,
+      "candidateIdentity": {
+        "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+        "sourceDigest": "594c65b1cd6b16db0a5bfb2c79c22df2841f0be558e40efba174de31612cd137",
+        "files": 605,
+        "dirty": true,
+        "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+      },
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/after-3"
+      ],
+      "cwd": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/candidate",
+      "output": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-k29-remediation-uHvCvY/k29/after-3",
+      "unchanged": true,
+      "status": "FAIL",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 9.138,
+            "p95": 39.739,
+            "p99": 98.117,
+            "max": 109.707
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.542,
+              "p95": 1.48,
+              "p99": 4.359
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 17.791,
+              "p95": 51.892,
+              "p99": 98.117
+            },
+            "broad": {
+              "n": 25,
+              "p50": 21.472,
+              "p95": 68.324,
+              "p99": 109.707
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 4.799,
+              "p95": 6.715,
+              "p99": 9.138
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.154,
+            "p95": 2.271,
+            "p99": 5.882,
+            "max": 34.341
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 230.172,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 22.121,
+            "p95": 62.443,
+            "p99": 87.793,
+            "max": 96.607
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 4.948,
+              "p95": 35.229,
+              "p99": 36.358
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 9.612,
+              "p95": 36.498,
+              "p99": 37.383
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 27.094,
+              "p95": 62.443,
+              "p99": 70.631
+            },
+            "broad": {
+              "n": 25,
+              "p50": 42.221,
+              "p95": 87.793,
+              "p99": 96.607
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.152,
+            "p95": 1.609,
+            "p99": 2.138,
+            "max": 25.1
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 235.891,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.225,
+            "p95": 182.617,
+            "p99": 200.7,
+            "max": 202.373
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 7.486,
+              "p95": 14.348,
+              "p99": 14.715
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 11.555,
+              "p95": 18.71,
+              "p99": 19.225
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 103.737,
+              "p95": 180.79,
+              "p99": 182.617
+            },
+            "broad": {
+              "n": 25,
+              "p50": 128.828,
+              "p95": 200.7,
+              "p99": 202.373
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.147,
+            "p95": 1.476,
+            "p99": 1.901,
+            "max": 2.111
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 254.141,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.454,
+            "p95": 186.281,
+            "p99": 205.407,
+            "max": 206.662
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 7.966,
+              "p95": 15.198,
+              "p99": 15.51
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.39,
+              "p95": 19.06,
+              "p99": 19.454
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 107.062,
+              "p95": 185.689,
+              "p99": 186.281
+            },
+            "broad": {
+              "n": 25,
+              "p50": 126.706,
+              "p95": 205.407,
+              "p99": 206.662
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.147,
+            "p95": 1.52,
+            "p99": 1.843,
+            "max": 2.081
+          },
+          "stopReasons": {
+            "none": 60,
+            "changed_during_request": 40
+          },
+          "scopeStates": {
+            "READY": 60,
+            "PARTIAL": 40
+          },
+          "writerCommits": 10,
+          "writerIntervalMs": 100,
+          "rssMb": 264.031,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ]
+    }
+  ]
+}

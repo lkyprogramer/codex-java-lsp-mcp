@@ -261,6 +261,79 @@ test("a value binding shadows an explicit import when extracting a call receiver
   assert.equal(call.receiverDeclaredType?.text, "Other");
 });
 
+test("local declarations have distinct source identities and own their method calls", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "class Outer {",
+    "  static { class Initialized {} }",
+    "  void first() {",
+    "    String label = \"😀\"; class Local {",
+    "      Local() {}",
+    "      class Member {}",
+    "      void inside() { innerCall(); }",
+    "    }",
+    "    outerCall();",
+    "  }",
+    "  void second() { class Local {} }",
+    "}"
+  ].join("\n");
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/Outer.java" }), backend);
+  const outer = result.types.find(type => type.simpleName === "Outer")!;
+  const locals = result.types.filter(type => type.simpleName === "Local");
+  assert.equal(result.file.parseState, "COMPLETE");
+  assert.equal(locals.length, 2);
+  assert.notEqual(locals[0]!.typeId, locals[1]!.typeId);
+  assert.ok(locals.every(type => type.fqn === undefined && type.enclosingTypeId === outer.typeId));
+  assert.ok(result.types.find(type => type.simpleName === "Initialized"));
+  const member = result.types.find(type => type.simpleName === "Member")!;
+  assert.equal(member.enclosingTypeId, locals[0]!.typeId);
+  assert.equal(member.fqn, undefined);
+  assert.equal(new Set(result.file.allTypeIds).size, result.types.length);
+  assert.deepEqual(result.file.topLevelTypeIds, [outer.typeId]);
+  const first = result.methods.find(method => method.name === "first")!;
+  const inside = result.methods.find(method => method.name === "inside")!;
+  assert.deepEqual(first.callSites.map(call => call.name), ["outerCall"]);
+  assert.deepEqual(inside.callSites.map(call => call.name), ["innerCall"]);
+  assert.equal(inside.ownerTypeId, locals[0]!.typeId);
+  const ctor = result.methods.find(method => method.constructor)!;
+  assert.equal(ctor.ownerTypeId, locals[0]!.typeId);
+  assert.equal(ctor.signatureKey, "<init>()");
+  assert.ok(ctor.methodId.startsWith(`method:${locals[0]!.typeId}#`));
+  const start = lineColToIndex(content, locals[0]!.nameRange!.start);
+  const end = lineColToIndex(content, locals[0]!.nameRange!.end);
+  assert.equal(content.slice(start, end), "Local");
+});
+
+test("compact record constructors inherit canonical parameters and keep declaration ranges", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "record Entry(int value, String... labels) {",
+    "  Entry { labels.clone(); }",
+    "}"
+  ].join("\n");
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/Entry.java" }), backend);
+  const entry = result.types[0]!;
+  const ctor = result.methods[0]!;
+  assert.equal(result.file.parseState, "COMPLETE");
+  assert.equal(ctor.constructor, true);
+  assert.equal(ctor.name, "Entry");
+  assert.equal(ctor.ownerTypeId, entry.typeId);
+  assert.deepEqual(entry.methodIds, [ctor.methodId]);
+  assert.deepEqual(ctor.parameters.map(param => [param.name, param.type.text, param.varargs]), [
+    ["value", "int", false], ["labels", "String", true]
+  ]);
+  assert.equal(ctor.parameters[1]!.type.arrayDepth, 1);
+  assert.equal(ctor.returnType, undefined);
+  assert.equal(ctor.signatureKey, "<init>(int,String[])");
+  assert.equal(ctor.parameters[0]!.range.start.line, 2);
+  assert.equal(ctor.range.start.line, 3);
+  assert.equal(ctor.range.end.line, 3);
+  assert.equal(content.slice(lineColToIndex(content, ctor.nameRange!.start), lineColToIndex(content, ctor.nameRange!.end)), "Entry");
+  assert.equal(ctor.callSites[0]!.receiverDeclaredType?.arrayDepth, 1);
+});
+
 function lineColToIndex(text: string, position: { line: number; column: number }): number {
   const lines = text.split("\n");
   let index = 0;

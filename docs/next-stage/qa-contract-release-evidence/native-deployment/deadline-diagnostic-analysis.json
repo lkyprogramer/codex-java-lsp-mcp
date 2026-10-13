@@ -1,0 +1,23 @@
+{
+  "schema": "deadline-test-causal-diagnostic/v1",
+  "scope": "DIAGNOSTIC_ONLY_NOT_FORMAL_VALIDATION",
+  "status": "COLD_STARTUP_PLUS_QUERY_EXCEEDS_UNCHANGED_CALLER_BUDGET",
+  "rawLog": {
+    "path": "native-deployment/deadline-diagnostic-r4.log",
+    "sha256": "d87956c7f950bcfe4915e88726d487cd01f4f806581bb38a0fc70d77f84dcf6f"
+  },
+  "longCallerStartMs": 43.491459000000006,
+  "startupEndMs": 531.075792,
+  "startupTimeWithinLongBudgetMs": 487.58433299999996,
+  "longCallerElapsedMs": 502.246083,
+  "callerBudgetMs": 500,
+  "definitionStartMs": 531.844834,
+  "definitionEndMs": 572.957584,
+  "definitionDurationMs": 41.11349999999993,
+  "definitionAfterCallerDeadline": true,
+  "fullProcessSnapshots": 6,
+  "fullProcessSnapshotDurationMs": 339.086249,
+  "interpretation": "The shared backend completed after the independent long caller deadline; the original empty result is expected. Warm startup before starting the query-sharing test budgets. No runtime correction is supported by this trace.",
+  "instrumentation": "Timing forwarding wrappers and a separate ignored compiled test copy; original TS test and source runtime untouched by diagnostic",
+  "formalOriginalTestPassClaimed": false
+}

@@ -22,10 +22,12 @@ import {
   openImpactSession
 } from "./run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "./openai-compatible-chat.mjs";
-import { buildToolSet, createAttemptWorkspace, nativeToolNames } from "./eval-native-tools.mjs";
-import { splitSourceLines } from "./eval-tool-wire.mjs";
+import { buildToolSet, createAttemptWorkspace, nativeToolNames, validateArguments } from "./eval-native-tools.mjs";
+import { serializeModelToolResult, splitSourceLines } from "./eval-tool-wire.mjs";
 import { buildFrozenResultsPack, runProfileFrom } from "./eval-frozen-adapter.mjs";
 import { evaluateRepair } from "./eval-repair-adapter.mjs";
+import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
+export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
 /** R03: the native tool surface shared by BOTH arms; the only arm
  * difference is java_symbol on the product arm. */
@@ -38,12 +40,11 @@ export function nativeNames(arm) {
 
 export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
 /**
- * Eval protocol: v1.2 adds the per-round received-source ledger (QA tasks with
- * a budget), the 80-line default read window and the java_symbol description
- * with head previews / no-vocabulary diagnosis. Results of different protocol
- * versions are not comparable.
+ * Eval protocol v1.4 uses exclusive typed submission and explicit source
+ * exhaustion; discovery defaults to locators without source previews.
+ * Results from different protocol versions are not comparable.
  */
-export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.2";
+export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.5";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
@@ -51,20 +52,20 @@ const DISCOVERY_SCHEMA = "java-discovery/v1";
 // R01/W05 + R03: the prompt only references tools actually provided; both
 // arms share the same native tools (list/rg/read; repair adds write_file)
 // and the ONLY arm difference is the product arm's java_symbol.
-export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session - both arms share the native list, rg and read tools; the product arm additionally provides java_symbol; repair tasks additionally get write_file and test (a compile check) - in any order, or none at all. Never assume a tool that is not listed. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
+export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session, in any order, or none at all. Never assume an unlisted tool. Locate declarations, then read the implementation needed for the question. rg/list and symbol results without source previews are locators only, not source evidence. Before submitting, read the implementation and field declarations supporting every answer, including relevant callees, helpers and XML mappings. Target exact matching lines with rg and short read windows; do not consume the budget by reading a large file from its beginning or by requesting previews for many candidates. After receiving that implementation, continue retrieval only to resolve a specific missing fact or dependency; do not repeat discovery of an already located declaration. For concrete return values, trace the operations in the received source step by step before answering. Source previews and explicit reads both consume the source budget, including repeated lines. Read non-Java evidence such as XML explicitly when the question requires it. Assistant body text is draft only. Finish exclusively with submit_answer as the only tool action in that response. For QA use exactly the task's public keys, field roles, types and representation constraints. Member names must be simple identifiers, without package, owner, signature, call arguments or explanation. Return an enum constant's simple name without its owner. Return an expression only when the question requests an expression; do not add prose inside string values. For repair use {"patchApplied": true|false, "summary": "..."}.`;
 
 export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
   function: {
     name: "java_symbol",
-    description: "Locate Java declarations (types/methods) by name, FQN, or task intent. Matching is lexical over code identifiers, comments and framework keys: query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. Returns declarations with 1-based locators (the declaration name) and short byte-exact previews (preview=head by default; window or none on request).",
+    description: "Locate Java declarations (types/methods) by name, FQN, or task intent. Matching is lexical over code identifiers, comments and framework keys: query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. Returns declarations with 1-based locators (the declaration name) and short byte-exact previews (preview=none by default; head or window on explicit request).",
     parameters: {
       type: "object",
       properties: {
         query: { type: "string", description: "Symbol name, FQN, owner#method, or free task text" },
         terms: { type: "array", items: { type: "string" }, description: "Alternative search terms" },
         searchMode: { type: "string", enum: ["auto", "exact", "text"] },
-        limit: { type: "integer" },
+        limit: { type: "integer", minimum: 1, maximum: 20 },
         module: { type: "string" },
         sourceSet: { type: "string", enum: ["main", "test"] },
         preview: { type: "string", enum: ["none", "head", "window"] }
@@ -73,6 +74,47 @@ export const EVAL_JAVA_SYMBOL_TOOL = {
     }
   }
 };
+
+export const EVAL_JAVA_EVIDENCE_TOOL = {
+  type: "function",
+  function: {
+    name: "java_evidence",
+    description: "Request byte-exact indexed MyBatis XML source units linked by fully qualified Java names. For resultMap type links use an already located type declaration's 1-based anchor, not its constructor; method anchors return associated mapped XML statements. Unit completeness describes only the XML source range, not task completion. Stale or omitted bindings remain explicit.",
+    parameters: {
+      type: "object", additionalProperties: false,
+      properties: { file: { type: "string", minLength: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 } },
+      required: ["file", "line", "column"]
+    }
+  }
+};
+
+export function productTools(productProfile = "broad") {
+  if (!["broad", "evidence", "exact-evidence"].includes(productProfile)) throw new Error(`unknown productProfile: ${productProfile}`);
+  if (productProfile !== "exact-evidence") return productProfile === "broad" ? [EVAL_JAVA_SYMBOL_TOOL] : [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_EVIDENCE_TOOL];
+  const { terms: _terms, ...properties } = EVAL_JAVA_SYMBOL_TOOL.function.parameters.properties;
+  return [{ type: "function", function: { ...EVAL_JAVA_SYMBOL_TOOL.function,
+    description: "Locate Java type or method declarations by exact symbol name, FQN, or owner#method. Returns 1-based declaration anchors. Search is exact only; use native rg and read for text discovery. Source previews are opt-in and consume the shared source budget.",
+    parameters: { ...EVAL_JAVA_SYMBOL_TOOL.function.parameters, additionalProperties: false,
+      properties: { ...properties, query: { type: "string", description: "Exact symbol name, FQN, or owner#method" }, searchMode: { type: "string", enum: ["exact"] } } }
+  } }, EVAL_JAVA_EVIDENCE_TOOL];
+}
+
+/** Validate the advertised product contract before dispatch, including bounds. */
+export function validateProductArguments(tool, args) {
+  const schema = tool.function.parameters;
+  if (!args || typeof args !== "object" || Array.isArray(args)) return "arguments must be an object";
+  for (const key of schema.required ?? []) if (!Object.hasOwn(args, key)) return `${key} is required`;
+  for (const [key, value] of Object.entries(args)) {
+    const spec = schema.properties[key];
+    if (!spec) return `unknown parameter: ${key}`;
+    if (spec.type === "array" ? !Array.isArray(value) || value.some(item => typeof item !== spec.items.type)
+      : spec.type === "integer" ? !Number.isInteger(value) : typeof value !== spec.type) return `${key} must be ${spec.type}`;
+    if (spec.enum && !spec.enum.includes(value)) return `${key} must be one of ${spec.enum.join(", ")}`;
+    if (spec.minimum !== undefined && value < spec.minimum || spec.maximum !== undefined && value > spec.maximum) return `${key} is out of bounds`;
+    if (spec.minLength && value.length < spec.minLength) return `${key} must not be empty`;
+  }
+  return null;
+}
 
 export const EVAL_READ_TOOL = {
   type: "function",
@@ -131,80 +173,6 @@ export function usageOrNull(usage) {
   return out;
 }
 
-/**
- * R02: strict JSON answer parsing, equivalent to the frozen kit's
- * parse_json (object_pairs_hook rejects duplicate keys at ANY nesting depth;
- * JSON literals NaN/Infinity are rejected by JSON.parse; input length is
- * bounded). Markdown fences are packaging the frozen task contract does not
- * accept for strict answers - they are a transport format failure, reported
- * as INVALID_ANSWER, never silently stripped or gold-mutated.
- */
-export const MAX_STRICT_ANSWER_CHARS = 262_144;
-
-export function findDuplicateJsonKeys(text) {
-  const duplicates = new Set();
-  const frameStack = [];
-  let inString = false;
-  let escape = false;
-  let buffer = "";
-  // expectKey tracks whether the next JSON string is an object key: true
-  // after `{` or `,` inside an object; reset by `:` once the key is consumed.
-  let expectKey = false;
-  const topFrame = () => frameStack[frameStack.length - 1];
-  const afterValue = () => { const top = topFrame(); expectKey = Boolean(top && top.kind === "obj"); };
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (inString) {
-      if (escape) escape = false;
-      else if (ch === "\\") escape = true;
-      else if (ch === '"') {
-        inString = false;
-        let value = buffer;
-        buffer = "";
-        try {
-          value = JSON.parse(`"${value}"`);
-        } catch {
-          // malformed escape: JSON.parse of the whole answer rejects it later
-        }
-        if (expectKey) {
-          const top = topFrame();
-          if (top && top.kind === "obj") {
-            if (top.keys.has(value)) duplicates.add(value);
-            top.keys.add(value);
-          }
-          // expectKey stays set until the ':' that follows the key.
-        } else {
-          afterValue();
-        }
-      } else {
-        buffer += ch;
-      }
-      continue;
-    }
-    if (ch === '"') {
-      inString = true;
-      buffer = "";
-      escape = false;
-      continue;
-    }
-    if (ch === ":") { expectKey = false; continue; }
-    if (ch === "{") {
-      frameStack.push({ kind: "obj", keys: new Set() });
-      expectKey = true;
-      continue;
-    }
-    if (ch === "}") { frameStack.pop(); afterValue(); continue; }
-    if (ch === "[") { afterValue(); frameStack.push({ kind: "arr" }); expectKey = false; continue; }
-    if (ch === "]") { frameStack.pop(); afterValue(); continue; }
-    if (ch === ",") {
-      const top = topFrame();
-      expectKey = Boolean(top && top.kind === "obj");
-      continue;
-    }
-  }
-  return [...duplicates];
-}
-
 /** Frozen-kit type semantics ported to JS: type identity, exact key sets,
  * element-wise list equality. (JS has one number type, so int/float is not
  * distinguishable - recorded in the evaluation protocol.) */
@@ -228,24 +196,6 @@ export function strictEqualDeep(a, b) {
  * The answer alone is NOT an answer: scoreRunOutcome additionally gates on
  * the frozen required_evidence lines having been received.
  */
-/** Strict answer parse shared by the preliminary scorer and the frozen-kit
- * adapter: {ok, value} or {ok:false, reason}. */
-export function parseStrictAnswer(rawAnswer) {
-  if (typeof rawAnswer !== "string") return { ok: false, reason: "not_string" };
-  const text = rawAnswer.trim();
-  if (text.length > MAX_STRICT_ANSWER_CHARS) return { ok: false, reason: "input_too_long" };
-  const duplicates = findDuplicateJsonKeys(text);
-  if (duplicates.length > 0) return { ok: false, reason: "duplicate_keys", duplicates };
-  let value;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    return { ok: false, reason: "parse_error" };
-  }
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, reason: "not_object" };
-  return { ok: true, value };
-}
-
 export function scoreQaAnswer(goldAnswer, rawAnswer) {
   const parsed = parseStrictAnswer(rawAnswer);
   if (!parsed.ok) {
@@ -385,6 +335,16 @@ export function extractSourceEvents({ callId, toolName, result }) {
   } else {
     return events;
   }
+  if (toolName === "java_evidence" && payload?.schemaVersion === "java-evidence-unit/v1") {
+    for (const unit of payload.units ?? []) {
+      if (typeof unit.text !== "string" || !unit.text || typeof unit.path !== "string"
+        || !Number.isInteger(unit.startLine) || unit.startLine < 1 || !Number.isInteger(unit.endLine)
+        || splitSourceLines(unit.text).length !== unit.endLine - unit.startLine + 1) continue;
+      events.push(sourceEvent({ type: "SOURCE_FETCHED", callId, toolName, path: unit.path, text: unit.text,
+        startLine: unit.startLine, endLine: unit.endLine, fileContentHash: unit.contentHash }));
+    }
+    return events;
+  }
   if (!payload || payload.schemaVersion !== DISCOVERY_SCHEMA || !Array.isArray(payload.candidates)) {
     return events;
   }
@@ -405,6 +365,107 @@ export function extractSourceEvents({ callId, toolName, result }) {
     }
   }
   return events;
+}
+
+export function normalizeTaskAnchor(anchor) {
+  return anchor ? { ...anchor, file: anchor.file ?? anchor.path ?? "unknown", column: anchor.column ?? 1 }
+    : { file: "unknown", line: 1, column: 1 };
+}
+
+/** Evaluation-only projection; raw discovery remains in the audit journal. */
+export function projectDiscoveryForModel(result) {
+  if (!Array.isArray(result?.candidates)) return result;
+  const projected = Object.fromEntries(Object.entries(result).filter(([key]) => !["repoHash", "generation", "candidates"].includes(key)));
+  projected.candidates = result.candidates.map(candidate => {
+    const { id: _id, sourceRoot: _root, ...declaration } = candidate.declaration ?? {};
+    // The range owns the preview hash; retain the locator hash for no-preview results.
+    if (candidate.evidenceRange?.contentHash && candidate.evidenceRange.relativePath === declaration.relativePath) delete declaration.contentHash;
+    const { matchedBy: _matched, declaration: _declaration, ...rest } = candidate;
+    return { declaration, ...rest };
+  });
+  return projected;
+}
+
+/** Exhaustion stops new reads before any source is fetched. Invalid public
+ * arguments still return their contract error instead of a budget status. */
+export async function invokeWithSourceBudget(toolSet, name, args, remaining) {
+  if (name !== "read" || !remaining || (remaining.lines > 0 && remaining.bytes > 0)) return toolSet.invoke(name, args);
+  const schema = toolSet.tools.find(tool => tool.function.name === name)?.function.parameters;
+  if (!schema) return toolSet.invoke(name, args);
+  const invalid = validateArguments(schema, args);
+  if (invalid) return { error: invalid };
+  for (const key of ["startLine", "maxLines"]) if (Object.hasOwn(args, key) && args[key] < 1) return { error: `${key} must be a positive integer` };
+  return { error: "SOURCE_BUDGET_EXHAUSTED", errorClass: "SOURCE_BUDGET", remainingSourceBudget: { lines: Math.max(0, remaining.lines), bytes: Math.max(0, remaining.bytes) }, terminal: true };
+}
+
+/** Limit only whole source lines. Repeated deliveries are charged again. */
+export function boundSourceResult(toolName, result, remaining) {
+  if (!remaining || !result || typeof result !== "object") return result;
+  let linesLeft = Math.max(0, remaining.lines);
+  let bytesLeft = Math.max(0, remaining.bytes);
+  let clipped = false;
+  const prefix = text => {
+    const lines = splitSourceLines(text);
+    const kept = [];
+    for (const line of lines) {
+      const bytes = Buffer.byteLength(line, "utf8");
+      if (linesLeft < 1 || bytes > bytesLeft) break;
+      kept.push(line);
+      linesLeft -= 1;
+      bytesLeft -= bytes;
+    }
+    if (kept.length !== lines.length) clipped = true;
+    return { text: kept.join(""), lines: kept.length, shortened: kept.length !== lines.length };
+  };
+  if (toolName === "read" && typeof result.text === "string") {
+    const kept = prefix(result.text);
+    return { ...result, text: kept.text, endLine: result.startLine + kept.lines - 1,
+      remainingSourceBudget: { lines: linesLeft, bytes: bytesLeft },
+      ...(kept.shortened ? { truncated: true, nextStartLine: result.startLine + kept.lines, sourceBudgetLimited: true, terminal: linesLeft === 0 || bytesLeft === 0, ...(kept.lines === 0 && linesLeft > 0 && bytesLeft > 0 ? { sourceBudgetReason: "NEXT_LINE_EXCEEDS_REMAINING_BYTES" } : {}) } : {}) };
+  }
+  if (toolName === "java_evidence" && Array.isArray(result.units)) {
+    const units = result.units.map(unit => {
+      if (typeof unit.text !== "string" || !unit.text) return unit;
+      const kept = prefix(unit.text);
+      return { ...unit, text: kept.text, endLine: unit.startLine + kept.lines - 1,
+        ...(kept.shortened ? { originalEndLine: unit.originalEndLine ?? unit.endLine, complete: false, sourceOmitted: "SOURCE_BUDGET" } : {}) };
+    });
+    return { ...result, units, remainingSourceBudget: { lines: linesLeft, bytes: bytesLeft },
+      ...(clipped ? { truncated: true, sourceBudgetLimited: true } : {}) };
+  }
+  if (toolName !== "java_symbol" || !Array.isArray(result.candidates)) return result;
+  const candidates = result.candidates.map(candidate => {
+    if (candidate.previewKind !== "source" || typeof candidate.preview !== "string" || !candidate.evidenceRange) return candidate;
+    const kept = prefix(candidate.preview);
+    if (!kept.lines) {
+      const { preview: _preview, previewKind: _kind, evidenceRange: _range, ...locator } = candidate;
+      return { ...locator, declaration: { ...locator.declaration,
+        ...(locator.declaration?.contentHash ? {} : { contentHash: candidate.evidenceRange.contentHash }) }, previewOmitted: "SOURCE_BUDGET" };
+    }
+    return { ...candidate, preview: kept.text,
+      evidenceRange: { ...candidate.evidenceRange, endLine: candidate.evidenceRange.startLine + kept.lines - 1 },
+      ...(kept.shortened ? { previewTruncated: true } : {}) };
+  });
+  return { ...result, candidates, remainingSourceBudget: { lines: linesLeft, bytes: bytesLeft }, ...(clipped ? { truncated: true, sourceBudgetLimited: true } : {}) };
+}
+
+/** Source received before a repair can legitimately differ from the final tree.
+ * Verify against its exact recorded file version, separately from frozen scoring. */
+export function diagnoseCandidateReceipts(events, { candidateRoot, snapshotRoot }) {
+  const rows = events.filter(event => event.type === "SOURCE_RECEIVED").map(event => {
+    const hash = event.fileContentHash;
+    const snapshot = typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash) ? path.join(snapshotRoot, hash) : null;
+    const current = path.resolve(candidateRoot, event.path);
+    const within = current.startsWith(`${path.resolve(candidateRoot)}${path.sep}`);
+    const raw = snapshot && existsSync(snapshot) ? readFileSync(snapshot) : null;
+    const exactText = raw ? splitSourceLines(raw.toString("utf8")).slice(event.startLine - 1, event.endLine).join("") : null;
+    const valid = raw !== null && createHash("sha256").update(raw).digest("hex") === hash && exactText === event.text;
+    const finalCandidateMatches = within && existsSync(current)
+      ? createHash("sha256").update(readFileSync(current)).digest("hex") === hash : false;
+    return { callId: event.callId, path: event.path, startLine: event.startLine, endLine: event.endLine,
+      fileContentHash: hash ?? null, valid, finalCandidateMatches };
+  });
+  return { status: rows.every(row => row.valid) ? "VALID" : "INVALID", checkedReceipts: rows.length, rows };
 }
 
 export function createRecorder() {
@@ -458,7 +519,7 @@ export function createRecorder() {
  * outcome was never externally measured stays UNMEASURED - the pack never
  * promotes a proxy into a task success.
  */
-export function assemblePack({ status, backend, datasetHash, arms, repeats, runs, blockedReasons, planned }) {
+export function assemblePack({ status, backend, datasetHash, arms, repeats, runs, blockedReasons, planned, productProfile = "broad", publicAnswerContract = null }) {
   const byKey = new Map();
   for (const run of runs) {
     const key = `${run.taskId}\u0000${run.arm}\u0000${run.repeat}`;
@@ -476,6 +537,7 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     answerStatus: run.answerStatus ?? null,
     ...(run.attemptState ? { attemptState: run.attemptState } : {}),
     ...(run.repairJudge ? { repairJudge: run.repairJudge } : {}),
+    ...(run.candidateReceiptValidation ? { candidateReceiptValidation: run.candidateReceiptValidation } : {}),
     ...(run.frozenScore ? { frozenScore: run.frozenScore, preliminary: run.preliminary } : {}),
     ...(run.partial ? { partial: true } : {}),
     toolCallCount: run.toolCallCount ?? 0,
@@ -483,6 +545,10 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     usage: usageOrNull(run.usage),
     timedOut: Boolean(run.timedOut),
     ...(run.stopReason ? { stopReason: run.stopReason } : {}),
+    ...(run.primaryStopReason ? { primaryStopReason: run.primaryStopReason } : {}),
+    ...(run.finalAnswerMode ? { finalAnswerMode: run.finalAnswerMode } : {}),
+    ...(run.submission ? { submission: run.submission } : {}),
+    ...(run.publicAnswerContract ? { publicAnswerContract: run.publicAnswerContract } : {}),
     ...(typeof run.finalAnswer === "string" && run.finalAnswer.length > 0 ? { finalAnswer: run.finalAnswer } : {}),
     error: run.error ?? null
   });
@@ -529,6 +595,8 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   return {
     schemaVersion: EVAL_PACK_SCHEMA_VERSION,
     evalProtocol: EVAL_PROTOCOL_VERSION,
+    productProfile,
+    publicAnswerContract: publicAnswerContract ? { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256 } : null,
     status,
     ...(blockedReasons?.length ? { blockedReasons } : {}),
     backend: backend ?? null,
@@ -603,15 +671,30 @@ export async function runLiveEvalRun({
   seed = 1984,
   maxRounds = 16,
   chat,
-  repairJudge = evaluateRepair
+  chatRequestConfig = {},
+  repairJudge = evaluateRepair,
+  openSessionImpl = openImpactSession,
+  productProfile = "broad",
+  publicAnswerContract = null
 }) {
+  const productDeclarations = productTools(productProfile);
+  if (publicAnswerContract) for (const task of tasks.filter(task => task.kind === "qa")) {
+    const fields = publicAnswerContract.tasks.get(task.id);
+    if (!fields) throw new TypeError(`public answer contract missing task: ${task.id}`);
+    buildSubmitAnswerTool(task.output_contract?.answer_keys, fields);
+  }
   const config = openaiCompatibleConfig(env);
+  const effectiveChatRequestConfig = { ...chatRequestConfig,
+    reasoningEffort: chatRequestConfig.reasoningEffort ?? config.reasoningEffort };
   if (!chat && (!config.baseUrl || !config.apiKey || !config.model)) {
     throw new Error("OPENAI_BASE_URL, OPENAI_API_KEY, and OPENAI_MODEL are required for a live eval run");
   }
-  const chatImpl = chat ?? (({ messages, tools, maxTokens }) => openaiCompatibleChat({ ...config, messages, tools, maxTokens }));
+  const chatImpl = chat ?? (({ messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }) =>
+    openaiCompatibleChat({ ...config, messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }));
   mkdirSync(outputDir, { recursive: true });
   const payloadLog = path.join(outputDir, "model-payloads.jsonl");
+  const completionLog = path.join(outputDir, "model-completions.jsonl");
+  const toolLog = path.join(outputDir, "raw-tool-results.jsonl");
   const recorder = createRecorder();
   const runs = [];
   for (const task of tasks) {
@@ -623,7 +706,8 @@ export async function runLiveEvalRun({
         const attemptKey = `${task.id}:${arm}:r${repeat}`;
         const eventsBefore = recorder.events().length;
         const attemptStarted = Date.now();
-        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind };
+        const contractIdentity = publicAnswerContract ? { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256, applied: task.kind === "qa" } : null;
+        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind, productProfile, publicAnswerContract: contractIdentity };
         if (!fixtureRoot || !existsSync(fixtureRoot)) {
           runs.push({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
           continue;
@@ -635,7 +719,7 @@ export async function runLiveEvalRun({
         let partial = false;
         const cacheFor = generation => path.join(outputDir, "mcp-cache", createHash("sha256").update(attemptKey).digest("hex").slice(0, 16), `w${generation}`);
         const openSession = async () => {
-          const opened = await openImpactSession({ repoRoot: candidateRoot, serverJs, cacheRoot: cacheFor(sessionGeneration), env });
+          const opened = await openSessionImpl({ repoRoot: candidateRoot, serverJs, cacheRoot: cacheFor(sessionGeneration), env });
           sessions.push(opened);
           return opened;
         };
@@ -651,47 +735,102 @@ export async function runLiveEvalRun({
             ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${task.budget.max_lines} lines / ${task.budget.max_bytes} bytes; receiving more fails the task.`
             : "";
           let callSeq = 0;
+          const snapshotRoot = path.join(outputDir, "source-snapshots", path.basename(candidateRoot));
+          mkdirSync(snapshotRoot, { recursive: true });
+          const sourceSpent = { lines: 0, bytes: 0 };
+          const modelResult = (name, args, raw, callId) => {
+            recorder.recordToolResult({ callId, toolName: name, result: raw });
+            // Store exact file versions before a later mutation changes them.
+            for (const event of extractSourceEvents({ callId, toolName: name, result: raw })) {
+              const file = path.resolve(candidateRoot, event.path);
+              if (!file.startsWith(`${candidateRoot}${path.sep}`) || !existsSync(file)) continue;
+              const bytes = readFileSync(file);
+              const hash = createHash("sha256").update(bytes).digest("hex");
+              if (hash === event.fileContentHash) writeFileSync(path.join(snapshotRoot, hash), bytes);
+            }
+            const projected = name === "java_symbol" ? projectDiscoveryForModel(raw) : raw;
+            const limited = task.kind === "qa" && task.budget ? boundSourceResult(name, projected, {
+              lines: task.budget.max_lines - sourceSpent.lines,
+              bytes: task.budget.max_bytes - sourceSpent.bytes
+            }) : projected;
+            // Reserve the serialized slices before dispatch (a conservative
+            // upper bound if dispatch fails). Only onChat mints received events.
+            const wire = serializeModelToolResult(name, limited);
+            for (const slice of wire.slices ?? []) {
+              sourceSpent.lines += splitSourceLines(slice.text).length;
+              sourceSpent.bytes += Buffer.byteLength(slice.text, "utf8");
+            }
+            const result = JSON.parse(wire.content);
+            appendFileSync(toolLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile }, callSeq,
+              callId, toolName: name, args, rawHash: createHash("sha256").update(JSON.stringify(raw)).digest("hex"),
+              rawResult: raw, modelResult: result, sourceSlices: wire.slices ?? [] })}\n`, "utf8");
+            return result;
+          };
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
-              taskText: `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}${task.kind === "qa" ? budget : ""}`,
+              taskText: `${task.query}${contract ? `\nAnswer contract: submit_answer with exactly these keys: ${contract}.` : ""}${task.kind === "qa" && publicAnswerContract ? `\nPublic field roles and representations: ${JSON.stringify(publicAnswerContract.tasks.get(task.id))}` : ""}${task.kind === "qa" ? budget : ""}`,
               projectId: task.corpus,
               requiredContextFiles: [],
-              anchor: task.anchors?.[0] ?? { file: "unknown", line: 1, column: 1 }
+              anchor: normalizeTaskAnchor(task.anchors?.[0])
             },
             arm: "old",
             systemPrompt: EVAL_SYSTEM_PROMPT,
-            tools: arm === "product" ? [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools] : toolSet.tools,
+            submission: { answerKeys: task.kind === "repair" ? { patchApplied: "boolean", summary: "string" } : task.output_contract?.answer_keys,
+              ...(task.kind === "qa" && publicAnswerContract ? { fields: publicAnswerContract.tasks.get(task.id), contract: { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256 } } : {}) },
+            tools: arm === "product" ? [...productDeclarations, ...toolSet.tools] : toolSet.tools,
             chat: chatImpl,
+            chatRequestConfig: effectiveChatRequestConfig,
             maxRounds,
-            // Eval protocol v1.2: the same received-source ledger for every arm.
+            // Eval protocol v1.4: the same enforced source budget for every arm.
             ...(task.kind === "qa" && task.budget ? { sourceBudget: task.budget } : {}),
             onChat: request => {
               appendFileSync(payloadLog, `${JSON.stringify({
-                attempt: { taskId: task.id, arm, repeat },
+                attempt: { taskId: task.id, arm, repeat, productProfile },
                 requestIndex: request.requestIndex,
                 payloadHash: request.payloadHash,
+                productProfile,
                 tools: request.tools,
-                messages: request.messages
+                messages: request.messages,
+                maxTokens: request.maxTokens,
+                requestConfig: request.requestConfig,
+                forcedAnswer: request.forcedAnswer
               })}\n`, "utf8");
               for (const receipt of request.newReceipts) {
                 recorder.recordModelDelivery(receipt, { requestIndex: request.requestIndex, payloadHash: request.payloadHash });
               }
             },
+            onCompletion: completion => {
+              appendFileSync(completionLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile }, ...completion })}\n`, "utf8");
+            },
             invoke: async (name, args) => {
               callSeq += 1;
               const callId = `eval:${task.id}:${arm}:${repeat}:${callSeq}`;
-              if (name === "java_symbol") {
-                if (arm !== "product") return { error: "tool java_symbol is not provided in this session" };
-                if (!session) {
-                  return { error: "discovery session unavailable after a write; results would be stale", errorClass: "PARTIAL" };
+              if (name === "java_symbol" || name === "java_evidence") {
+                const declaration = arm === "product" && productDeclarations.find(tool => tool.function.name === name);
+                if (!declaration) return modelResult(name, args, { error: `tool ${name} is not provided in this session` }, callId);
+                const invalid = validateProductArguments(declaration, args);
+                if (invalid) return modelResult(name, args, { error: invalid, errorClass: "CONTRACT" }, callId);
+                if (!session) return modelResult(name, args, { error: "product session unavailable after a write; results would be stale", errorClass: "PARTIAL" }, callId);
+                if (name === "java_evidence") {
+                  const remaining = task.kind === "qa" && task.budget ? {
+                    lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
+                    bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
+                  } : null;
+                  if (remaining && (remaining.lines === 0 || remaining.bytes === 0)) return modelResult(name, args,
+                    { error: "SOURCE_BUDGET_EXHAUSTED", errorClass: "SOURCE_BUDGET", remainingSourceBudget: remaining, terminal: true }, callId);
+                  return modelResult(name, args, await session.evidence(args), callId);
                 }
-                const result = await session.symbol(args);
-                recorder.recordToolResult({ callId, toolName: name, result });
-                return result;
+                const result = await session.symbol({ ...args,
+                  ...(productProfile === "exact-evidence" ? { searchMode: "exact" } : {}),
+                  ...(!Object.hasOwn(args, "preview") ? { preview: "none" } : {}) });
+                return modelResult(name, args, result, callId);
               }
-              const result = await toolSet.invoke(name, args);
-              if (name === "read") recorder.recordToolResult({ callId, toolName: name, result });
+              const remaining = task.kind === "qa" && task.budget ? {
+                lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
+                bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
+              } : null;
+              const result = await invokeWithSourceBudget(toolSet, name, args, remaining);
               if (result?.written === true && arm === "product") {
                 // The candidate changed: the next java_symbol query must see
                 // it, so the session is re-opened on a fresh index.
@@ -706,7 +845,7 @@ export async function runLiveEvalRun({
                   recorder.record({ type: "SESSION_REBIND_FAILED", callId, error: String(error?.message ?? error).slice(0, 300) });
                 }
               }
-              return result;
+              return modelResult(name, args, result, callId);
             }
           });
           let repairVerdict = null;
@@ -720,6 +859,8 @@ export async function runLiveEvalRun({
             });
           }
           const events = recorder.events().slice(eventsBefore);
+          const candidateReceiptValidation = task.kind === "repair"
+            ? diagnoseCandidateReceipts(events, { candidateRoot, snapshotRoot }) : null;
           const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: events }, repairVerdict });
           runs.push({
             ...base,
@@ -729,11 +870,15 @@ export async function runLiveEvalRun({
             answerStatus: scored.answerStatus,
             ...(scored.missingEvidence ? { missingEvidence: scored.missingEvidence } : {}),
             stopReason: run.stopReason,
+            primaryStopReason: run.primaryStopReason,
+            finalAnswerMode: run.finalAnswerMode,
+            ...(run.submission ? { submission: run.submission } : {}),
             toolCallCount: run.toolCallCount,
             usage: run.usage,
             elapsedMs: Date.now() - attemptStarted,
             candidateRoot,
             ...(partial ? { partial: true } : {}),
+            ...(candidateReceiptValidation ? { candidateReceiptValidation } : {}),
             ...(repairVerdict ? {
               repairJudge: {
                 state: repairVerdict.state,
@@ -744,7 +889,7 @@ export async function runLiveEvalRun({
               }
             } : {}),
             sourceReceived: events,
-            finalAnswer: typeof run.finalContent === "string" ? run.finalContent.slice(0, 4000) : "",
+            finalAnswer: typeof run.finalContent === "string" ? run.finalContent : "",
             timedOut: run.stopReason === "MAX_ROUNDS",
             ...(run.error ? { error: run.error } : {})
           });
@@ -767,6 +912,7 @@ export async function runLiveEvalRun({
   }
   return {
     runs,
+    productProfile,
     backend: chat ? { kind: "injected-chat" } : { kind: "openai-api", model: config.model, baseUrlHost: safeHost(config.baseUrl) }
   };
 }
@@ -850,7 +996,7 @@ function runPython(argv, { cwd, timeoutMs = 300_000 }) {
  * taskSuccess is replaced by the kit's qa_contract_pass; the JS outcome is
  * kept only as `preliminary`. Repair rows keep the frozen judge verdict.
  */
-export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, outputDir, model, python = process.env.JSB_PYTHON ?? "python3" }) {
+export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, outputDir, model, productProfile = "broad", python = process.env.JSB_PYTHON ?? "python3" }) {
   const kit = path.resolve(kitRoot);
   const dataset = path.join(kit, "dataset");
   const digest = runPython([python, "-c",
@@ -886,7 +1032,8 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
       attempts,
       arm,
       datasetHash: hashes.dataset,
-      runProfile: runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats, model }),
+      runProfile: { ...runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats, model }),
+        eval_protocol: EVAL_PROTOCOL_VERSION, product_profile: productProfile },
       model
     });
     const packPath = path.join(scoreDir, `${arm}-results.json`);
@@ -939,10 +1086,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const seed = Number(flag("--seed") ?? 1984);
   const maxRounds = Math.max(1, Number(flag("--max-rounds") ?? 16));
   const kitRoot = flag("--kit-root");
+  const publicAnswerContract = flag("--public-answer-contract") ? loadPublicAnswerContract(flag("--public-answer-contract")) : null;
+  const productProfile = flag("--product-profile") ?? "broad";
+  productTools(productProfile);
   const dryRun = argv.includes("--dry-run");
   const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] [--kit-root <frozen kit>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--dry-run]");
+    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--product-profile broad|evidence|exact-evidence] [--dry-run]");
     return 2;
   }
   const datasetHash = goldFile
@@ -959,6 +1109,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
     const pack = assemblePack({
+      productProfile,
+      publicAnswerContract,
       status: dryRun ? "DRY_RUN" : "BLOCKED_AUTH",
       backend: dryRun ? null : backend,
       datasetHash,
@@ -994,13 +1146,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     kitRoot,
     seed,
     maxRounds,
+    productProfile,
+    publicAnswerContract,
     serverJs: flag("--server-js") ?? path.join(scriptDir, "..", "dist", "server.js")
   });
   const scorer = kitRoot
-    ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null })
+    ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null, productProfile })
     : { kind: "preliminary-js", reason: "--kit-root not given: QA uses the preliminary JS scorer and repair is UNMEASURED" };
   const pack = assemblePack({
     status: "MEASURED",
+    productProfile,
+    publicAnswerContract,
     backend: live.backend,
     datasetHash,
     arms,

@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "checkedFiles": 293,
+  "mismatches": [],
+  "immutableManifestSha256": "7985f8752552e4bb44e0641a7b5e549edcf9ad3357632657b851851619a339cf",
+  "scope": "Only original task/gold/scorer/gates and historical artifacts enumerated at task start"
+}

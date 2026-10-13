@@ -1,11 +1,13 @@
-// input: java_symbol query, source position, or reference lookup (operation=references).
-// output: Workspace symbol hits, hover/definition/implementation context, or summary-only references.
+// input: java_symbol query, source position, reference lookup, or explicit evidence request.
+// output: Symbol context, references, or bounded source units linked to a located declaration.
 // pos: Public symbol tool handler. Folds the retired java_references tool in as
 //      operation="references" (Task 31 Step 7 - measured 235 saved tokens on tools/list,
 //      cleared the plan's savedTokens>=200 merge gate).
 import { z } from "zod";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
 import { DISCOVERY_DEFAULT_LIMIT, DISCOVERY_MAX_LIMIT, runStaticDiscovery } from "../discovery/query.js";
+import { runEvidenceUnit } from "../discovery/evidence-unit.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
@@ -24,7 +26,7 @@ export const STATIC_QUERY_LIMIT_DESCRIPTION =
 export const symbolSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
-  operation: z.enum(["query", "position", "references"]).optional(),
+  operation: z.enum(["query", "position", "references", "evidence"]).optional(),
   query: z.string().min(1).max(512).optional(),
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
@@ -54,6 +56,7 @@ type SymbolArgs = z.infer<z.ZodObject<typeof symbolSchema>>;
  *  never be admitted by one layer and rejected by the other. */
 export function symbolNeedsJdt(args: Pick<SymbolArgs, "operation" | "query" | "backend">): boolean {
   const operation = args.operation ?? (args.query ? "query" : "position");
+  if (operation === "evidence") return false;
   const backend = args.backend ?? (operation === "query" ? "static" : "jdt");
   return operation !== "query" || backend === "jdt";
 }
@@ -64,6 +67,24 @@ export async function javaSymbol(
   request?: Pick<RequestContext, "budget">
 ): Promise<unknown> {
   const operation = args.operation ?? (args.query ? "query" : "position");
+  if (operation === "evidence") {
+    if (!args.file || !args.line || !args.column) {
+      throw new Error("java_symbol operation=evidence requires file/line/column of a located Java type or method.");
+    }
+    if (args.backend === "jdt") {
+      throw new Error("java_symbol operation=evidence uses the static index, not backend=jdt.");
+    }
+    const client = context.javaIndexClient;
+    if (!client) throw new Error("java_symbol operation=evidence requires the on-disk Java index.");
+    await waitStaticIndexReady(client, request?.budget);
+    return runEvidenceUnit(client, {
+      repoRoot: context.repoRoot,
+      file: args.file,
+      line: args.line,
+      column: args.column,
+      budget: request?.budget
+    });
+  }
   if (operation === "references") {
     return javaSymbolReferences(context, args, request);
   }
@@ -127,6 +148,7 @@ export async function javaSymbol(
   }
   const file = normalizeRepoFile(context.repoRoot, args.file);
   const result = await context.session.symbolContext(file, args.line, args.column, request?.budget ?? args.semanticTimeoutMs);
+  throwIfJdtImporting(context);
   return {
     mode: "position",
     file: isDiagnosticDetail(args.detail) ? file : describeFile(context.repoRoot, file).path,
@@ -136,6 +158,13 @@ export async function javaSymbol(
     definitions: await describeContainedLocations(context.repoRoot, result.definitions, args.detail),
     implementations: await describeContainedLocations(context.repoRoot, result.implementations, args.detail)
   };
+}
+
+function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {
+  if (context.session.status().state === "STARTING") {
+    throw new JavaIntelligenceError("JDT_NOT_READY",
+      "JDT startup/project import is in progress. Poll java_status(start=false) until state=READY, then retry this semantic request; import continues in the background.", cause);
+  }
 }
 
 async function waitStaticIndexReady(client: JavaIndexClientApi, budget?: DeadlineBudget): Promise<void> {
@@ -162,13 +191,21 @@ async function javaSymbolReferences(
   }
   const file = normalizeRepoFile(context.repoRoot, args.file);
   const limit = clampLimit(args.limit);
-  const result = await context.session.references(
-    file,
-    args.line,
-    args.column,
-    args.includeDeclaration,
-    request?.budget ?? args.semanticTimeoutMs
-  );
+  let result;
+  try {
+    result = await context.session.references(
+      file,
+      args.line,
+      args.column,
+      args.includeDeclaration,
+      request?.budget ?? args.semanticTimeoutMs
+    );
+  } catch (error) {
+    if (error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED") {
+      throwIfJdtImporting(context, error);
+    }
+    throw error;
+  }
   const described = await Promise.all(result.items.map(location => describeLocation(context.repoRoot, location, { detail: args.detail })));
   // describeLocation returns undefined for hits outside this repo (jars, JDK
   // sources); they are counted, not rendered.

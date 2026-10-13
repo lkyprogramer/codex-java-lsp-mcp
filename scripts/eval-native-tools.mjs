@@ -27,6 +27,7 @@ export const EVAL_READ_TOOL = {
         startLine: { type: "integer" },
         maxLines: { type: "integer" }
       },
+      additionalProperties: false,
       required: ["path"]
     }
   }
@@ -50,6 +51,7 @@ export const EVAL_LIST_TOOL = {
     parameters: {
       type: "object",
       properties: { path: { type: "string" }, maxEntries: { type: "integer" } },
+      additionalProperties: false,
       required: ["path"]
     }
   }
@@ -59,14 +61,15 @@ export const EVAL_RG_TOOL = {
   type: "function",
   function: {
     name: "rg",
-    description: "Grep a fixed-string pattern in the working copy; returns bounded 'path:line:content' output.",
+    description: "Locate a fixed-string pattern in the working copy; returns bounded repo-relative 'path:line:content' navigation output. These matches do not count as source evidence; read the relevant exact windows before submission.",
     parameters: {
       type: "object",
       properties: {
         pattern: { type: "string" },
-        path: { type: "string", description: "repo-relative directory to search (default: root)" },
+        path: { type: "string", description: "repo-relative file or directory to search (default: root)" },
         maxResults: { type: "integer" }
       },
+      additionalProperties: false,
       required: ["pattern"]
     }
   }
@@ -110,8 +113,8 @@ export const EVAL_TEST_TOOL = {
   type: "function",
   function: {
     name: "test",
-    description: "Compile all Java sources of the working copy (javac) and report the diagnostics. Evaluator tests are not available.",
-    parameters: { type: "object", properties: {} }
+    description: "Compile production Java sources selected by the public Maven configuration (or standalone src tree). Unsupported builds are reported explicitly. Evaluator tests are not available.",
+    parameters: { type: "object", properties: {}, additionalProperties: false }
   }
 };
 
@@ -124,10 +127,38 @@ export const EVAL_WRITE_FILE_TOOL = {
     parameters: {
       type: "object",
       properties: { path: { type: "string" }, content: { type: "string" } },
+      additionalProperties: false,
       required: ["path", "content"]
     }
   }
 };
+
+/** Exact replacement shared by both repair arms. */
+export const EVAL_REPLACE_FILE_TOOL = {
+  type: "function",
+  function: {
+    name: "replace_file",
+    description: "Replace exactly one occurrence of before with after in an existing repo-relative file. Zero or multiple matches fail without writing.",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string" }, before: { type: "string", minLength: 1 }, after: { type: "string" } },
+      required: ["path", "before", "after"],
+      additionalProperties: false
+    }
+  }
+};
+
+export function validateArguments(schema, args) {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return "arguments must be an object";
+  for (const key of Object.keys(args)) {
+    if (!Object.hasOwn(schema.properties, key)) return `unknown parameter: ${key}`;
+    const spec = schema.properties[key];
+    if (spec.type === "integer" ? !Number.isInteger(args[key]) : typeof args[key] !== spec.type) return `${key} must be ${spec.type}`;
+    if (spec.minLength && args[key].length < spec.minLength) return `${key} must not be empty`;
+  }
+  for (const key of schema.required ?? []) if (!Object.hasOwn(args, key)) return `${key} is required`;
+  return null;
+}
 
 /** True when `target` is `root` itself or strictly inside it. */
 function isInside(root, target) {
@@ -230,7 +261,7 @@ function boundedText(text, limit = NATIVE_TOOL_LIMIT) {
  * as thrown exceptions, so the agent loop stays alive and receipts stay
  * honest. */
 /** Shared native tool executor bound to ONE candidate root. `kind`
- * ("qa"|"repair") selects whether write_file is exposed; both arms see the
+ * ("qa"|"repair") selects whether mutation and compile tools are exposed; both arms see the
  * identical native set. Returns the tool declarations (matching the
  * runLiveAgentTask tool shape) plus an async invoke(name, args). Tool
  * errors come back as {error} objects, never as thrown exceptions, so the
@@ -246,8 +277,13 @@ export function buildToolSet(profile, kind, { candidateRoot, budget = {} } = {})
   const rgTimeoutMs = budget.rgTimeoutMs ?? 20_000;
   const maxLines = budget.maxLines ?? DEFAULT_READ_LINES;
   const readMaxBytes = budget.readMaxBytes ?? READ_MAX_SOURCE_BYTES;
-  const tools = [...(kind === "repair" ? [EVAL_WRITE_FILE_TOOL, EVAL_TEST_TOOL] : []), EVAL_LIST_TOOL, EVAL_RG_TOOL, EVAL_READ_TOOL];
+  const tools = [...(kind === "repair" ? [EVAL_WRITE_FILE_TOOL, EVAL_REPLACE_FILE_TOOL, EVAL_TEST_TOOL] : []), EVAL_LIST_TOOL, EVAL_RG_TOOL, EVAL_READ_TOOL];
   const invoke = async (name, args) => {
+    const declaration = tools.find(tool => tool.function.name === name);
+    if (!declaration) return { error: `tool ${name} is not provided in this session` };
+    const invalid = validateArguments(declaration.function.parameters, args);
+    if (invalid) return { error: invalid, errorClass: "INVALID_ARGUMENTS" };
+    if (name === "replace_file") return invokeReplace(args, candidateRoot);
     if (name === "list") {
       return invokeList(args, candidateRoot, outputCapBytes);
     }
@@ -306,20 +342,22 @@ async function invokeRg(args, candidateRoot, outputCapBytes, timeoutMs) {
   if (pattern.length === 0) return { error: "pattern is required" };
   const check = resolveInCandidate(candidateRoot, args?.path ?? ".");
   if (check.error) return { error: check.error };
+  if (!check.exists) return { error: `rg search path does not exist: ${check.normalized}`, errorClass: "PATH_NOT_FOUND" };
   const maxResults = Math.max(1, Math.min(1_000, Number.isFinite(args?.maxResults) ? Math.trunc(args.maxResults) : 200));
   // argv-array spawn: the pattern is a single argument, never shell-joined.
   const argv = [
     "--fixed-strings",
     "--line-number",
+    "--with-filename",
     "--no-heading",
     "--color", "never",
     "-g", "!*.min.js",
     "--max-count", String(maxResults),
-    "--", pattern, "."
+    "--", pattern, path.relative(check.candidateRoot, check.target) || "."
   ];
   let result;
   try {
-    result = await executeFile(RGP_BIN, argv, { cwd: check.target, timeoutMs, outputCapBytes: outputCapBytes * 4 });
+    result = await executeFile(RGP_BIN, argv, { cwd: check.candidateRoot, timeoutMs, outputCapBytes: outputCapBytes * 4 });
   } catch (error) {
     const code = error?.code;
     if (code === "ENOENT") return { error: `rg binary not found at ${RGP_BIN} (BLOCKED_ENV)` };
@@ -412,6 +450,26 @@ async function invokeWrite(args, candidateRoot) {
   }
 }
 
+async function invokeReplace(args, candidateRoot) {
+  const check = resolveInCandidate(candidateRoot, args.path);
+  if (check.error) return { error: check.error };
+  try {
+    if (!check.exists || !lstatSync(check.target).isFile()) return { error: "replace failed: target is not an existing regular file" };
+    const bytes = readFileSync(check.target);
+    const before = Buffer.from(args.before, "utf8");
+    const offset = bytes.indexOf(before);
+    if (offset < 0) return { error: "replace failed: before has no match" };
+    if (bytes.indexOf(before, offset + 1) >= 0) return { error: "replace failed: before has multiple matches" };
+    const updated = Buffer.concat([bytes.subarray(0, offset), Buffer.from(args.after, "utf8"), bytes.subarray(offset + before.length)]);
+    const recheck = resolveInCandidate(candidateRoot, args.path);
+    if (recheck.error) return { error: recheck.error };
+    await writeFile(recheck.target, updated);
+    return { path: check.normalized, written: true, bytes: updated.length, replacements: 1 };
+  } catch (error) {
+    return { error: `replace failed: ${String(error.message ?? error)}` };
+  }
+}
+
 async function collectJavaSources(root) {
   const out = [];
   const walk = async dir => {
@@ -432,33 +490,82 @@ async function collectJavaSources(root) {
   return out;
 }
 
-/** Repair-only `test` tool: compiles every .java file of the working copy
- * with javac into a scratch directory OUTSIDE the candidate (the candidate
- * tree is never polluted) and reports the diagnostics. No evaluator test is
- * ever exposed; this is the neutral compile/test check both arms share. */
+/** This deliberately small compile adapter supports dependency-free Maven
+ * production roots and standalone src trees. It never guesses a classpath or
+ * combines independent modules. Complex builds need their real build runner. */
+async function compileUnits(candidateRoot) {
+  candidateRoot = realpathSync(candidateRoot);
+  const units = [];
+  const visit = async (relativeRoot, seen = new Set()) => {
+    const check = resolveInCandidate(candidateRoot, relativeRoot);
+    if (check.error) throw new Error(check.error);
+    if (seen.has(check.target)) throw new Error("cyclic Maven module configuration");
+    seen.add(check.target);
+    const pomPath = path.join(check.target, "pom.xml");
+    if (!existsSync(pomPath)) {
+      if (relativeRoot !== ".") throw new Error("declared module has no pom.xml");
+      if (existsSync(path.join(check.target, "build.gradle")) || existsSync(path.join(check.target, "build.gradle.kts"))) throw new Error("Gradle compile configuration is unsupported");
+      const sourceCheck = resolveInCandidate(candidateRoot, path.join(relativeRoot, "src"));
+      if (sourceCheck.error) throw new Error(sourceCheck.error);
+      units.push({ root: relativeRoot, sources: await collectJavaSources(sourceCheck.target), release: null });
+      return;
+    }
+    const pomCheck = resolveInCandidate(candidateRoot, path.relative(candidateRoot, pomPath));
+    if (pomCheck.error) throw new Error(pomCheck.error);
+    const xml = readFileSync(pomCheck.target, "utf8").replace(/<!--[\s\S]*?-->/g, "");
+    if (/<(?:parent|dependencies|profiles|plugins|extensions)\b/.test(xml)) throw new Error("Maven inheritance, dependencies, profiles and plugins require the real build runner");
+    const tag = name => xml.match(new RegExp(`<${name}\\s*>\\s*([^<]+?)\\s*</${name}>`))?.[1];
+    const source = tag("sourceDirectory") ?? "src/main/java";
+    const sourceCheck = resolveInCandidate(candidateRoot, path.join(relativeRoot, source));
+    if (sourceCheck.error) throw new Error(sourceCheck.error);
+    const configuredRelease = tag("maven\\.compiler\\.release");
+    const sourceLevel = tag("maven\\.compiler\\.source");
+    const targetLevel = tag("maven\\.compiler\\.target");
+    if (!configuredRelease && (sourceLevel || targetLevel) && (!sourceLevel || sourceLevel !== targetLevel)) throw new Error("Maven source/target configuration requires matching explicit levels");
+    const rawRelease = configuredRelease ?? sourceLevel;
+    const release = rawRelease?.replace(/^1\./, "") ?? null;
+    if (release !== null && !/^\d+$/.test(release)) throw new Error("unresolved Maven Java release");
+    if (source.includes("${") || /<build\b/.test(xml) && !/<sourceDirectory\b/.test(xml)) throw new Error("unsupported Maven build configuration");
+    units.push({ root: relativeRoot, sources: await collectJavaSources(sourceCheck.target), release });
+    const modules = xml.match(/<modules\b[^>]*>([\s\S]*?)<\/modules>/)?.[1] ?? "";
+    for (const match of modules.matchAll(/<module\b[^>]*>\s*([^<]+?)\s*<\/module>/g)) {
+      if (match[1].includes("${")) throw new Error("unresolved Maven module path");
+      await visit(path.join(relativeRoot, match[1]), seen);
+    }
+  };
+  await visit(".");
+  return units;
+}
+
 async function invokeCompileCheck(candidateRoot, { javaHome, timeoutMs, outputCapBytes }) {
-  const sources = await collectJavaSources(candidateRoot);
-  if (sources.length === 0) return { status: "NO_SOURCES", exitCode: null, output: "" };
+  let units;
+  try { units = await compileUnits(candidateRoot); }
+  catch (error) { return { status: "UNSUPPORTED", exitCode: null, output: String(error.message ?? error) }; }
+  if (units.every(unit => unit.sources.length === 0)) return { status: "NO_SOURCES", exitCode: null, output: "" };
   const javac = javaHome ? path.join(javaHome, "bin", "javac") : "javac";
   const classes = mkdtempSync(path.join(os.tmpdir(), "eval-compile-check-"));
+  const results = [];
+  const started = Date.now();
   try {
-    let result;
-    try {
-      result = await executeFile(javac, ["-encoding", "UTF-8", "-proc:none", "-d", classes, ...sources], { cwd: candidateRoot, timeoutMs, outputCapBytes: outputCapBytes * 4 });
-    } catch (error) {
-      if (error?.code === "ENOENT") return { error: `javac not found at ${javac} (BLOCKED_ENV)`, errorClass: "BLOCKED_ENV" };
-      return { error: String(error.message ?? error) };
+    for (const [index, unit] of units.entries()) {
+      if (unit.sources.length === 0) continue;
+      const remaining = timeoutMs - (Date.now() - started);
+      if (remaining <= 0) return { status: "TIMEOUT", exitCode: null, output: "compile deadline exhausted", timedOut: true, units: results };
+      const destination = path.join(classes, String(index));
+      mkdirSync(destination);
+      let result;
+      try {
+        result = await executeFile(javac, ["-encoding", "UTF-8", "-proc:none", ...(unit.release ? ["--release", unit.release] : []), "-d", destination, ...unit.sources], { cwd: candidateRoot, timeoutMs: remaining, outputCapBytes: outputCapBytes * 4 });
+      } catch (error) {
+        if (error?.code === "ENOENT") return { error: `javac not found at ${javac} (BLOCKED_ENV)`, errorClass: "BLOCKED_ENV" };
+        return { error: String(error.message ?? error) };
+      }
+      const bounded = boundedText(`${result.stdout}${result.stderr}`.replaceAll(`${candidateRoot}${path.sep}`, "").replaceAll(`${realpathSync(candidateRoot)}${path.sep}`, ""), outputCapBytes);
+      const status = result.timedOut ? "TIMEOUT" : result.code === 0 && !result.outputLimited ? "COMPILED" : "COMPILE_FAILED";
+      results.push({ root: unit.root, release: unit.release, status, exitCode: result.code, compiledFiles: unit.sources.length, output: bounded.text, ...(result.timedOut ? { timedOut: true } : {}), ...(bounded.truncated || result.outputLimited ? { truncated: true } : {}) });
+      if (status !== "COMPILED") return { ...results.at(-1), units: results };
     }
-    const text = `${result.stdout}${result.stderr}`.replaceAll(`${candidateRoot}${path.sep}`, "");
-    const bounded = boundedText(text, outputCapBytes);
-    return {
-      status: result.timedOut ? "TIMEOUT" : result.code === 0 ? "COMPILED" : "COMPILE_FAILED",
-      exitCode: result.code,
-      compiledFiles: sources.length,
-      output: bounded.text,
-      ...(result.timedOut ? { timedOut: true } : {}),
-      ...(bounded.truncated || result.outputLimited ? { truncated: true } : {})
-    };
+    return { status: "COMPILED", exitCode: 0, compiledFiles: results.reduce((sum, unit) => sum + unit.compiledFiles, 0), output: results.map(unit => unit.output).join(""), units: results };
   } finally {
     rmSync(classes, { recursive: true, force: true });
   }

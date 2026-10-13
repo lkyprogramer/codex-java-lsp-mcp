@@ -31,7 +31,7 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
-import { readIndexCounts, readMeta, writeBuildProgress, writeMeta } from "../../index-builder/progress.js";
+import { readIndexCounts, readMeta, readSourceRootCounts, writeBuildProgress, writeMeta } from "../../index-builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { noteTelemetryHydratePhases } from "../../telemetry/impact-telemetry.js";
 import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, isMemoryPath, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
@@ -40,6 +40,7 @@ import { schemaVersionsMatch } from "./schema.js";
 const execFileAsync = promisify(execFile);
 import { SqlEntitySearch } from "./entity-search.js";
 import { absoluteNow, sharedQueryWorker } from "../../discovery/query-worker.js";
+import { queryEvidenceSources as readEvidenceSources } from "./evidence-sources.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
 import {
@@ -324,6 +325,11 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     return runEntitySearch(this.queryDeps(), task, limit, remainingMsOf(requestOptions));
   }
 
+  async queryEvidenceSources(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions) {
+    const relative = this.toRelative(file);
+    return readEvidenceSources(this.requireDb(), relative ?? "", line, column, remainingMsOf(requestOptions));
+  }
+
   async queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined> {
     const relative = this.toRelative(file);
     const anchor = relative ? this.requireStore().anchor(relative, line, column) : undefined;
@@ -438,6 +444,14 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       return;
     }
     this.db = openIndexDb(this.dbPath, { readOnly: true });
+    // A cold builder creates the file before its schema transaction finishes.
+    // Polling that transient file must retain BUILDING rather than construct
+    // readers over tables that do not yet exist.
+    if (this.lastStatus.state === "BUILDING" && !schemaVersionsMatch(this.db)) {
+      closeDb(this.db);
+      this.db = undefined;
+      return;
+    }
     // A reload may follow a rebuilt/replaced file: drop the worker's reader
     // of the old inode now instead of at its next request or idle timeout.
     void sharedQueryWorker().release(this.dbPath);
@@ -538,7 +552,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     let db: IndexDatabase | undefined;
     try {
       db = openIndexDb(this.dbPath, { readOnly: true });
-      return schemaVersionsMatch(db);
+      return schemaVersionsMatch(db) && (readMeta(db, "buildState") !== "READY" || readMeta(db, "coverageRevision") === "1");
     } catch {
       return false;
     } finally {
@@ -612,15 +626,16 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       state: string;
       generation: number | bigint;
     }>;
+    const counts = readSourceRootCounts(this.db);
     return rows.map(row => ({
       root: row.root,
       generation: typeof row.generation === "bigint" ? Number(row.generation) : Number(row.generation),
       state: row.state as SourceRootCoverage["state"],
-      discoveredFiles: 0,
-      indexedFiles: 0,
-      failedFiles: 0,
-      recoveredFiles: 0,
-      extractorVersion: ""
+      discoveredFiles: counts[row.root]?.discoveredFiles ?? 0,
+      indexedFiles: counts[row.root]?.indexedFiles ?? 0,
+      failedFiles: counts[row.root]?.failedFiles ?? 0,
+      recoveredFiles: counts[row.root]?.recoveredFiles ?? 0,
+      extractorVersion: counts[row.root]?.extractorVersion ?? ""
     }));
   }
 

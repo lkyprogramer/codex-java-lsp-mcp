@@ -1,0 +1,468 @@
+Cloning into '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/candidate'...
+done.
+HEAD is now at 04058e4 revert(discovery): drop declaration ranges after the evidence pilot
+{"isolation":"detached-local-clone","candidateRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/candidate","cacheRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/cache","jdtlsBin":"/usr/bin/false","executableTree":"ed7f86ad6fda549bf4e782a1715e0ee9518f92c6"}
+Cloning into '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo'...
+done.
+HEAD is now at 7977714 Create isolated JDT verification fixture
+{"isolation":"detached-code-and-java-local-clones","sourceRepo":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-runtime-integrity-cs6vd1k0/jdt-fixture","repoRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo","repoCommit":"79777147d0e66657233e04bfd1bfd94e6b4da7b9","cacheRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache","dataDir":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache/jdt-workspace","logDir":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache/jdt-logs","jdtlsBin":"/opt/homebrew/bin/jdtls"}
+(node:69730) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[codex-java-lsp] cleaned 1 stale worktree cache(s)
+[codex-java-lsp] MCP server ready
+[codex-java-lsp] tool failed tool=java_symbol ./register-alias.sh --enable-lsp <id> /private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo
+[codex-java-lsp] shutting down (stdio_end)
+(node:69953) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[codex-java-lsp] MCP server ready
+(node:69953) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[codex-java-lsp] shutting down (stdio_end)
+{
+  "candidateIdentity": {
+    "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+    "sourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+    "files": 605,
+    "dirty": true,
+    "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+  },
+  "K26": {
+    "status": "PASS",
+    "evidence": {
+      "disabled": {
+        "isError": true,
+        "message": "./register-alias.sh --enable-lsp <id> /private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+        "status": {
+          "repoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+          "state": "NEW",
+          "started": false,
+          "restartBackoff": {},
+          "knownDiagnostics": 0,
+          "openDocuments": 0,
+          "buildSystem": "maven",
+          "projectJdk": {
+            "requiredMajor": 17,
+            "requiredRaw": "17",
+            "resolvedHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+            "runtimeName": "JavaSE-17",
+            "primarySource": "maven",
+            "allSources": [
+              "maven"
+            ],
+            "status": "degraded",
+            "notes": [
+              "runtime path is newer than required source level; boot API may be imprecise (21 > 17)."
+            ]
+          },
+          "generatedCode": {
+            "lombok": {
+              "detected": false,
+              "agentEnabled": false,
+              "status": "not-detected"
+            },
+            "annotationProcessing": {
+              "detectedProcessors": [],
+              "enabled": false,
+              "source": "not-detected"
+            },
+            "generatedCodeSemantics": "not-detected"
+          },
+          "progress": {
+            "active": 0,
+            "activeMessageCount": 0
+          },
+          "repoHash": "f9d273d56719",
+          "rootSource": "explicit",
+          "aliases": [
+            "release-contracts"
+          ],
+          "layoutProfile": "maven-reactor",
+          "layout": {
+            "layout": "single",
+            "layoutProfile": "maven-reactor",
+            "sourceRootCount": 1,
+            "resourceRootCount": 0,
+            "broadRoots": [
+              "."
+            ]
+          },
+          "runtimeBuild": {
+            "gitSha": "04058e43b8b2",
+            "generatedAt": "2026-10-11T02:34:57.347Z",
+            "defaultsFingerprint": "e5835394a86f"
+          },
+          "rootWarnings": [],
+          "lsp": {
+            "enabled": false,
+            "matchedBy": "disabled",
+            "configuredRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+            "effectiveRepoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+            "reason": "Project alias is registered with lspEnabled=false.",
+            "enableHint": "./register-alias.sh --enable-lsp <id> /private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo"
+          },
+          "javaIndex": {
+            "state": "BUILDING",
+            "indexedGeneration": 0,
+            "files": 0,
+            "coverage": "degraded",
+            "pendingBackground": 0,
+            "builder": {
+              "state": "cold-building",
+              "pid": 69808,
+              "queued": 0
+            }
+          },
+          "watcher": {
+            "ready": true,
+            "degraded": false,
+            "pending": 0
+          },
+          "resource": {
+            "maxActiveRepos": 3,
+            "idleTtlMs": 2700000,
+            "jdtlsXmx": "2g",
+            "activeRepos": 1,
+            "activeJdtlsPids": [],
+            "importConcurrency": 2,
+            "workspaceRetainedOnShutdown": true
+          }
+        }
+      },
+      "enabled": {
+        "locator": {
+          "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+          "queries": [
+            "compute"
+          ],
+          "summary": {
+            "candidates": 1,
+            "annotated": 1,
+            "selectionResolvesDeclaration": 1,
+            "annotatedOldLocatorResolvesDeclaration": 0,
+            "errors": 0
+          },
+          "rows": [
+            {
+              "query": "compute",
+              "id": "method:type:v2:src%2Fmain%2Fjava%2Fprobe%2FTarget.java#probe.Target#compute(int)",
+              "kind": "method",
+              "relativePath": "src/main/java/probe/Target.java",
+              "selection": {
+                "line": 5,
+                "column": 23
+              },
+              "evidenceRange": {
+                "relativePath": "src/main/java/probe/Target.java",
+                "contentHash": "9a850cab38aa707bb801ef5e0f77d11849fffa41a642da13c03560df35fad218",
+                "startLine": 4,
+                "endLine": 7
+              },
+              "oldLocator": {
+                "line": 4,
+                "column": 5
+              },
+              "oldLocatorText": "@Deprecated",
+              "jdtAtSelection": {
+                "hoverHead": "int probe.Target.compute(int value)",
+                "hoverNamesDeclaration": true,
+                "definitions": [
+                  {
+                    "path": "src/main/java/probe/Target.java",
+                    "line": 5,
+                    "column": 23
+                  }
+                ],
+                "definitionIsDeclaration": true
+              },
+              "jdtAtOldLocator": {
+                "hoverHead": "",
+                "hoverNamesDeclaration": false,
+                "definitions": [],
+                "definitionIsDeclaration": false
+              }
+            }
+          ]
+        },
+        "references": {
+          "totalReferences": 1,
+          "matchedReferences": 1,
+          "returnedReferences": 1,
+          "externalReferencesSuppressed": 0,
+          "truncated": false,
+          "groups": [
+            {
+              "referenceCount": 1,
+              "files": [
+                {
+                  "path": "src/main/java/probe/Caller.java",
+                  "sourceSet": "main",
+                  "referenceCount": 1,
+                  "positions": [
+                    {
+                      "line": 5,
+                      "column": 23,
+                      "range": {
+                        "start": {
+                          "line": 5,
+                          "column": 23
+                        },
+                        "end": {
+                          "line": 5,
+                          "column": 34
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "status": {
+          "repoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+          "state": "READY",
+          "started": true,
+          "pid": 70097,
+          "restartBackoff": {},
+          "startedAt": "2026-10-11T02:35:26.296Z",
+          "knownDiagnostics": 0,
+          "openDocuments": 1,
+          "buildSystem": "maven",
+          "projectJdk": {
+            "requiredMajor": 17,
+            "requiredRaw": "17",
+            "resolvedHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+            "runtimeName": "JavaSE-17",
+            "primarySource": "maven",
+            "allSources": [
+              "maven"
+            ],
+            "status": "degraded",
+            "notes": [
+              "runtime path is newer than required source level; boot API may be imprecise (21 > 17)."
+            ]
+          },
+          "generatedCode": {
+            "lombok": {
+              "detected": false,
+              "agentEnabled": false,
+              "status": "not-detected"
+            },
+            "annotationProcessing": {
+              "detectedProcessors": [],
+              "enabled": false,
+              "source": "not-detected"
+            },
+            "generatedCodeSemantics": "not-detected"
+          },
+          "progress": {
+            "active": 0,
+            "activeMessageCount": 0,
+            "lastProgressAt": "2026-10-11T02:35:26.405Z",
+            "lastLanguageStatus": "ServiceReady: ServiceReady"
+          },
+          "repoHash": "f9d273d56719",
+          "rootSource": "explicit",
+          "aliases": [
+            "release-contracts"
+          ],
+          "layoutProfile": "maven-reactor",
+          "layout": {
+            "layout": "single",
+            "layoutProfile": "maven-reactor",
+            "sourceRootCount": 1,
+            "resourceRootCount": 0,
+            "broadRoots": [
+              "."
+            ]
+          },
+          "runtimeBuild": {
+            "gitSha": "04058e43b8b2",
+            "generatedAt": "2026-10-11T02:34:57.347Z",
+            "defaultsFingerprint": "e5835394a86f"
+          },
+          "rootWarnings": [],
+          "lsp": {
+            "enabled": true,
+            "matchedBy": "direct-root",
+            "configuredRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+            "effectiveRepoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo"
+          },
+          "javaIndex": {
+            "state": "READY",
+            "indexedGeneration": 1,
+            "files": 2,
+            "coverage": "complete",
+            "pendingBackground": 0,
+            "db": {
+              "bytes": 245760,
+              "cacheKb": 32768
+            },
+            "builder": {
+              "state": "absent",
+              "queued": 0
+            }
+          },
+          "watcher": {
+            "ready": true,
+            "degraded": false,
+            "pending": 0
+          },
+          "resource": {
+            "maxActiveRepos": 3,
+            "idleTtlMs": 2700000,
+            "jdtlsXmx": "2g",
+            "activeRepos": 1,
+            "activeJdtlsPids": [
+              70097
+            ],
+            "importConcurrency": 2,
+            "workspaceRetainedOnShutdown": true
+          }
+        }
+      }
+    }
+  },
+  "K28": {
+    "status": "PASS",
+    "evidence": {
+      "shortCode": "DEADLINE_EXCEEDED",
+      "whileShortExited": {
+        "inflight": 1,
+        "completedEntries": 0,
+        "cacheHits": 0,
+        "cacheMisses": 2,
+        "sharedJoins": 1,
+        "abortedNoWaiters": 0,
+        "completeWrites": 0,
+        "rejectedWrites": 0,
+        "lifecycleBackoffSkips": 0,
+        "busyOtherSessionSkips": 0
+      },
+      "longOutcome": {
+        "completion": "COMPLETE",
+        "value": [
+          {
+            "uri": "file:///private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo/src/main/java/probe/Caller.java",
+            "range": {
+              "start": {
+                "line": 4,
+                "character": 22
+              },
+              "end": {
+                "line": 4,
+                "character": 33
+              }
+            }
+          }
+        ],
+        "elapsedMs": 22529,
+        "cacheHit": false,
+        "shared": false
+      },
+      "settled": {
+        "inflight": 0,
+        "completedEntries": 1,
+        "cacheHits": 0,
+        "cacheMisses": 2,
+        "sharedJoins": 1,
+        "abortedNoWaiters": 0,
+        "completeWrites": 1,
+        "rejectedWrites": 0,
+        "lifecycleBackoffSkips": 0,
+        "busyOtherSessionSkips": 0
+      },
+      "backendCalls": 1,
+      "status": {
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+        "dataDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache/jdt-workspace/f9d273d56719",
+        "logFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache/jdt-logs/f9d273d56719/jdtls.log",
+        "jdtlsBin": "/opt/homebrew/bin/jdtls",
+        "state": "READY",
+        "started": true,
+        "pid": 69157,
+        "restartBackoff": {
+          "consecutiveFailures": 0,
+          "blockedUntilExplicitReset": false
+        },
+        "knownDiagnostics": 0,
+        "openDocuments": 1,
+        "startedAt": "2026-10-11T02:35:05.810Z",
+        "cache": {
+          "enabled": true,
+          "entries": 0,
+          "hits": 0,
+          "misses": 0,
+          "invalidations": 0
+        },
+        "semanticGateway": {
+          "inflight": 0,
+          "completedEntries": 0,
+          "cacheHits": 0,
+          "cacheMisses": 0,
+          "sharedJoins": 0,
+          "abortedNoWaiters": 0,
+          "completeWrites": 0,
+          "rejectedWrites": 0,
+          "lifecycleBackoffSkips": 0,
+          "busyOtherSessionSkips": 0
+        },
+        "buildSystem": "maven",
+        "projectJdk": {
+          "requiredMajor": 17,
+          "requiredRaw": "17",
+          "resolvedHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+          "runtimeName": "JavaSE-17",
+          "primarySource": "maven",
+          "allSources": [
+            "maven"
+          ],
+          "status": "degraded",
+          "candidates": [
+            "7:/Library/Java/JavaVirtualMachines/jdk1.7.0_75.jdk/Contents/Home",
+            "7:/Library/Java/JavaVirtualMachines/jdk1.7.0_80.jdk/Contents/Home",
+            "8:/Library/Java/JavaVirtualMachines/jdk1.8.0.jdk/Contents/Home",
+            "8:/Library/Java/JavaVirtualMachines/jdk1.8.0_281.jdk/Contents/Home",
+            "8:/Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home",
+            "8:/Users/luo/Library/Java/JavaVirtualMachines/adopt-openjdk-1.8.0_282/Contents/Home",
+            "21:/Users/luo/.sdkman/candidates/java/21.0.10-tem"
+          ],
+          "notes": [
+            "runtime path is newer than required source level; boot API may be imprecise (21 > 17)."
+          ]
+        },
+        "generatedCode": {
+          "lombok": {
+            "detected": false,
+            "agentEnabled": false,
+            "status": "not-detected"
+          },
+          "annotationProcessing": {
+            "detectedProcessors": [],
+            "enabled": false,
+            "source": "not-detected"
+          },
+          "generatedCodeSemantics": "not-detected"
+        },
+        "progress": {
+          "active": 0,
+          "activeMessages": [],
+          "lastProgressAt": "2026-10-11T02:35:17.534Z",
+          "lastLanguageStatus": "ServiceReady: ServiceReady"
+        },
+        "leaseHeartbeat": {
+          "active": true,
+          "intervalMs": 30000,
+          "lastSuccessAt": "2026-10-11T02:35:05.810Z"
+        }
+      },
+      "coldStartup": true,
+      "operationCapMs": 180000,
+      "shortCallerMs": 30
+    }
+  },
+  "runtimeJavaHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+  "projectJavaHome": "/Users/luo/.sdkman/candidates/java/17.0.18-tem"
+}
+preserved isolated JDT benchmark root: /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P
+preserved isolated validation root: /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk

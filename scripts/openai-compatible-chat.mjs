@@ -5,6 +5,53 @@
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 112 * 1024;
 export const DEFAULT_PROMPT_CAP_TOKENS = 100_000;
 export const DEFAULT_MAX_COMPLETION_TOKENS = 2_048;
+export const DEFAULT_CHAT_TEMPLATE_KWARGS = Object.freeze({ enable_thinking: false });
+
+/** Model request settings only; connection/auth fields never enter the audit. */
+export function chatRequestConfigForAudit({
+  maxTokens = DEFAULT_MAX_COMPLETION_TOKENS,
+  reasoningEffort,
+  chatTemplateKwargs = DEFAULT_CHAT_TEMPLATE_KWARGS
+} = {}) {
+  return {
+    max_tokens: maxTokens,
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+    chat_template_kwargs: { enable_thinking: chatTemplateKwargs.enable_thinking }
+  };
+}
+
+/** Preserve response evidence without copying provider/debug or auth fields. */
+export function completionForAudit(completion) {
+  const picked = (value, keys) => Object.fromEntries(keys
+    .filter(key => value != null && Object.hasOwn(value, key))
+    .map(key => [key, structuredClone(value[key])]));
+  return {
+    ...picked(completion, ["id", "model", "created"]),
+    choices: (Array.isArray(completion?.choices) ? completion.choices : []).map(choice => ({
+      ...picked(choice, ["index", "finish_reason"]),
+      message: {
+        ...picked(choice?.message, ["role", "content", "reasoning_content", "refusal"]),
+        ...(Array.isArray(choice?.message?.tool_calls) ? {
+          tool_calls: choice.message.tool_calls.map(call => ({
+            ...picked(call, ["id", "type"]),
+            function: picked(call.function, ["name", "arguments"])
+          }))
+        } : {})
+      }
+    })),
+    ...(completion?.usage != null ? { usage: {
+      ...picked(completion.usage, ["prompt_tokens", "completion_tokens", "total_tokens"]),
+      ...(completion.usage.prompt_tokens_details != null ? {
+        prompt_tokens_details: picked(completion.usage.prompt_tokens_details, ["cached_tokens", "audio_tokens"])
+      } : {}),
+      ...(completion.usage.completion_tokens_details != null ? {
+        completion_tokens_details: picked(completion.usage.completion_tokens_details, [
+          "reasoning_tokens", "audio_tokens", "accepted_prediction_tokens", "rejected_prediction_tokens"
+        ])
+      } : {})
+    } } : {})
+  };
+}
 
 export function openaiCompatibleConfig(env = process.env) {
   const baseUrl = (env.OPENAI_BASE_URL || "").replace(/\/$/, "");
@@ -27,6 +74,7 @@ export async function openaiCompatibleChat({
   maxTokens = DEFAULT_MAX_COMPLETION_TOKENS,
   temperature = 0,
   reasoningEffort,
+  chatTemplateKwargs = DEFAULT_CHAT_TEMPLATE_KWARGS,
   timeoutMs = DEFAULT_CHAT_TIMEOUT_MS,
   fetchImpl = globalThis.fetch
 }) {
@@ -39,16 +87,10 @@ export async function openaiCompatibleChat({
     messages,
     tools,
     tool_choice: tools?.length ? toolChoice : undefined,
-    max_tokens: maxTokens,
     temperature,
-    // Qwen3 thinking can consume the whole max_tokens budget before tool_calls.
-    // This endpoint honors chat_template_kwargs.enable_thinking=false (top-level enable_thinking is ignored).
-    chat_template_kwargs: { enable_thinking: false }
+    // These are requested settings, not proof of provider thinking behavior.
+    ...chatRequestConfigForAudit({ maxTokens, reasoningEffort, chatTemplateKwargs })
   };
-  // Reasoning-level passthrough for gateways that accept it (e.g. local
-  // codex gateways); symmetric for every arm. Ignored by endpoints that
-  // do not recognize the field.
-  if (reasoningEffort) body.reasoning_effort = reasoningEffort;
   // One absolute deadline covers connect, headers AND body decoding.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error(`openai-compatible request exceeded ${timeoutMs}ms`)), timeoutMs);

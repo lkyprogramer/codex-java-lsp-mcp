@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { extractJavaFile } from "../java-index/ast-extractor.js";
+import { createJavaParserBackend } from "../java-index/java-parser-backend.js";
 import { openIndexDb } from "../java-index/sql/driver.js";
 import { ensureSchema } from "../java-index/sql/schema.js";
 import { SqlFactsStore } from "../java-index/sql/facts-store.js";
@@ -164,4 +166,65 @@ test("removing one file in a two-file module keeps MODULE CONTAINS", () => {
   assert.ok(graph.successors("repo", "CONTAINS").some(edge => edge.toId === moduleId));
   assert.equal(graph.nodesById.has("src/main/java/demo/Alpha.java"), false);
   assert.equal(graph.nodesById.get("src/main/java/demo/Beta.java")?.kind, "FILE");
+});
+
+test("same-named local types and their members remain distinct through graph replacement", async () => {
+  const relativePath = "src/main/java/demo/Widget.java";
+  const backend = await createJavaParserBackend();
+  const extract = (content: string, generation: number): JavaFileBundle => ({
+    ...extractJavaFile({
+      repoRoot: "/unused", absolutePath: `/unused/${relativePath}`, relativePath,
+      sourceRoot: "src/main/java", module: "demo", sourceSet: "main",
+      content, size: Buffer.byteLength(content), mtimeMs: 0, contentHash: `h${generation}`, generation
+    }, backend),
+    edges: []
+  });
+  const content = `package demo;
+class Widget {
+  void first() { class Local { int value; Local() {} void same() {} class Inner {} } }
+  void second() { class Local { int value; Local() {} void same() {} class Inner {} } }
+}`;
+  const first = extract(content, 1);
+  assert.equal(first.file.parseState, "COMPLETE");
+  const locals = first.types.filter(type => !type.fqn);
+  assert.equal(locals.length, 4, "both local classes and their nested classes have position identities");
+  assert.equal(new Set(locals.map(type => type.typeId)).size, 4);
+  const index = new MemoryFacts();
+  const graphDb = openIndexDb(":memory:");
+  ensureSchema(graphDb);
+  const graph = new SqlKnowledgeGraph(graphDb);
+  try {
+    index.replaceFile(first);
+    const builder = new KnowledgeGraphBuilder(graph);
+    builder.rebuildFromStore(index.store, 1);
+    const assertReachable = (facts: JavaFileBundle) => {
+      const graphIds = new Set<string>();
+      for (const fact of [...facts.types, ...facts.fields, ...facts.methods]) {
+        const javaIndexId = "typeId" in fact ? fact.typeId : "fieldId" in fact ? fact.fieldId : fact.methodId;
+        const id = graph.nodeIdForJavaIndexId(javaIndexId);
+        assert.ok(id, `graph must retain ${javaIndexId}`);
+        assert.equal(graph.nodesById.get(id)?.javaIndexId, javaIndexId);
+        graphIds.add(id);
+        if ("ownerTypeId" in fact) {
+          const ownerId = graph.nodeIdForJavaIndexId(fact.ownerTypeId)!;
+          assert.ok(graph.successors(ownerId, "DECLARES").some(edge => edge.toId === id));
+        } else if ("enclosingTypeId" in fact && fact.enclosingTypeId) {
+          const ownerId = graph.nodeIdForJavaIndexId(fact.enclosingTypeId)!;
+          assert.ok(graph.successors(ownerId, "CONTAINS").some(edge => edge.toId === id));
+        }
+      }
+      assert.equal(graphIds.size, facts.types.length + facts.fields.length + facts.methods.length);
+    };
+    assertReachable(first);
+    assert.equal(graph.nodeIdForJavaIndexId(first.types[0]!.typeId), `${relativePath}#demo.Widget`);
+
+    const second = extract(content.replace("  void first()", "\n\n  void first()"), 2);
+    index.replaceFile(second);
+    builder.replaceFile(second, index.store, 2);
+    assertReachable(second);
+    for (const type of locals) assert.equal(graph.nodeIdForJavaIndexId(type.typeId), undefined, "replaced positions must not leave stale nodes");
+  } finally {
+    graphDb.close();
+    index.db.close();
+  }
 });

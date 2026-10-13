@@ -226,6 +226,18 @@ function resolveCallSite(
     };
   }
 
+  // An explicit super receiver bypasses same-owner lookup and runtime
+  // dispatch. Syntax extraction keeps the receiver text even without a
+  // declared receiver type; treating it as unqualified would bind an override.
+  if (callSite.receiverText === "super") {
+    const owner = registry.byId.get(method.ownerTypeId);
+    if (!owner) return undefined;
+    const match = walkSuperChain(owner, callSite.name, callSite.arity, registry, new Set([method.ownerTypeId]));
+    if (!match) return undefined;
+    return { toId: match.method.methodId, kind: "CALLS", confidence: 0.85,
+      resolutionKind: "SUPER_CHAIN_NAME_ARITY", typeStrategy: match.typeStrategy };
+  }
+
   // METHOD_INVOCATION
   if (callSite.receiverDeclaredType) {
     if (callSite.receiverDeclaredType.resolution.state !== "RESOLVED_REPO") return undefined;

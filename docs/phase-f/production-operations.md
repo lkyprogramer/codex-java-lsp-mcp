@@ -1,7 +1,8 @@
 # 本机 Java LSP 现行操作（Index-on-Disk）
 
-- 日期：2026-09-09
-- 线上：`buildSha=03f5a4154081`（`releases/03f5a4154081-20260909T030914Z`）
+- 日期：2026-10-11
+- 当前 build：由 `daemonctl.sh status` 查询；`current` 指向当前不可变 release。
+- 回滚目标：以 `state/previous-current` 为准。2026-10-11 QA 发布基线为 `8f737ac7cd14`；后续 hook 同步见 [Java agent 指导](../next-stage/java-agent-guidance-review.md)。
 - MCP：`http://127.0.0.1:38456/mcp`（不要 `--activate-http`，不要改 URL）
 - 索引真源：每 worktree 一份 `~/Library/Caches/codex-java-lsp/<repoHash>/index.sqlite`
 - 历史切流步骤（SourceIndex → 5 工具）见 [production-cutover-runbook.md](production-cutover-runbook.md)；**不要再按那份的 hibernate / 7 仓冷建 / 删 SourceIndex 执行。**
@@ -30,7 +31,9 @@ JDT **默认不随 daemon / `java_status` / `java_impact(fast)` 启动。**
 
 - `java_status(start=false)`、`java_impact(fast)`：只开该 root 的 sqlite。
 - `java_impact(auto)`：仅 service-profile 锚点才打 JDT；controller 不打。
-- `java_symbol` / `java_diagnostics` / `required`：要 LSP，且仓 `lspEnabled`（worktree 可按 family 继承启用资格）。
+- `java_symbol(operation=query)` 默认静态定位，`operation=evidence` 读取关联 XML，两者不启动 JDT。
+- `java_symbol(position/references)` / `backend=jdt` / `java_diagnostics` / `required`：要 LSP，且仓 `lspEnabled`（worktree 可按 family 继承启用资格）。
+- 普通仓库和 worktree 的 hook 均提醒按需启动；`started=false` 不代表静态索引不可用。全局 `AGENTS.md` 负责工具选择与源码核实策略。
 - 最多 3 个 JDT；idle 15 min（本机 plist `JAVA_LSP_IDLE_TTL_MS=900000`）；关进程保留 `workspace/`。
 - `session.state=READY` ≠ 工程 import 完。workspace symbol 要等 `ServiceReady`。
 - 不要四个 pin 同时 `start=true`。不要设 `JAVA_LSP_ENGINE`。不要起第四个 HTTP daemon。
@@ -53,6 +56,12 @@ npm run cache:harvest -- --apply
 ```
 
 ## 安装 / 回滚
+
+2026-10-11 QA 合同版本已实际安装。原 15 发布门、K01–K32、隔离升级与回滚均已通过评审；本次生产 installer 的 1366 源码测试和 436 脚本测试全部通过，无跳过，线上 health/ready 与五工具 smoke 通过。URL、四个 pin、项目配置、cache/ownership 和 15min JDT idle TTL 保持原值。这段描述限定于 QA 发布 `8f737ac7cd14`；原始 proof 与验收报告位于维护工作区 `docs/next-stage/qa-contract-release-evidence/` 和 `docs/next-stage/qa-contract-release-review.md`，不随发行包安装。生产未执行回滚，成功版本保留。
+
+当前事实 revision 为 **5**。旧 revision 2 的静态索引在正常访问时重建，未手动删除生产缓存。静态 READY 以完整源遍历及实际解析、失败、恢复计数为依据；JDT 子进程仍存活时保留 lease，确认退出后才释放。较早 runtime integrity 阶段的 NO_GO、失败和原始发布清单仍作为历史保留。
+
+后续安装按当前变更范围执行原 installer 和相关验证；维护工作区的历史 QA 资格清单只绑定原候选，不作为后续候选的验证结果。较早 [计划](../next-stage/runtime-integrity-plan.md)、[发布评审](../next-stage/runtime-integrity-release-review.md) 和 [原 NO_GO 清单](../next-stage/release-evidence.json) 为历史材料。[K runner](../../scripts/run-release-contracts.mjs) 与 [真实 JDT driver](../../scripts/release-jdt-contracts.mjs) 是隔离验证入口；它们的结果不构成安装授权。
 
 ```bash
 # 干净工作区；不要 --activate-http

@@ -1,0 +1,2092 @@
+{
+  "schema": "java-specialist-release-evidence/v1.1",
+  "candidateSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+  "datasetHash": "c34a7c7c2f261bb273bc622739eae6beff8479ca96512c48942638cd912b8c4d",
+  "scorerHash": "5c41e12a994a7a9269725e94646bfb691e6929c2d3dba7c306255754095d4a28",
+  "protocolHash": "a0fe5568570a1c78f16575c7f9c3d10de40c5e762fa425374e502e85cb483d8b",
+  "gates": [
+    {
+      "id": "DATASET",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/57b53ba129422819-dataset-command.json",
+          "sha256": "57b53ba12942281970ea4c039cf501d61e9a843246d1c3b07ee6debf53404875"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/d24d58506a247f8c-bundle-check-final.log.txt",
+          "sha256": "d24d58506a247f8c5872ee8cb9e14b597c25ca08d816bb2ede44bb18a6940383"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/9395ac1121b29d61-bundle-materialization.json",
+          "sha256": "9395ac1121b29d61da7b4a88106de5ebf6779145fcf05c07eb7600b80b519588"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/1582086eec3f8398-frozen-ignored-logs.tar.gz",
+          "sha256": "1582086eec3f8398b63ace41a640c7673c49c6dbc924621dc2fda0af1167d258"
+        }
+      ],
+      "reason": "Frozen 36-task dataset validation and 357-file package integrity pass; 34 ignored immutable logs restored from original by exact frozen SHA, no content changed."
+    },
+    {
+      "id": "ORIGINAL_PROBES",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/7ad973d1405354be-probe12.log.txt",
+          "sha256": "7ad973d1405354be68e9b0dbc9d5f6cdb7cddc1e7c2c9d2c896cb352f03d2a13"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2df2b4f2bdd90f36-final-source-binding.json",
+          "sha256": "2df2b4f2bdd90f368714e4b2d346e4204af1bc50c5e94df670db3accc519f896"
+        }
+      ],
+      "reason": "All 12 original source probes passed on candidate."
+    },
+    {
+      "id": "WIRE_SENTINEL",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/154e1952a2a2165f-final-release-gate.log.txt",
+          "sha256": "154e1952a2a2165f54429f3ab7f976e6b35a4cd8e52447060a286da489ec8a26"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/fed164a3f381e744-unit-command.json",
+          "sha256": "fed164a3f381e744b90087d183aaa3e0a7fa8b3439a7c2d1557ef5af836eab03"
+        }
+      ],
+      "reason": "Current script suite and frozen evaluator negative tests preserve payload/received-source boundaries."
+    },
+    {
+      "id": "CANONICAL_SCORER",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/fed164a3f381e744-unit-command.json",
+          "sha256": "fed164a3f381e744b90087d183aaa3e0a7fa8b3439a7c2d1557ef5af836eab03"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/d26a2821bdef8f09-faultcheck-command.json",
+          "sha256": "d26a2821bdef8f09247c6c528c93cdf49cc89824d1247831c9085ca5e7d853d1"
+        }
+      ],
+      "reason": "Frozen scorer selfcheck/faultcheck passed; live run is scored with the same frozen scorer."
+    },
+    {
+      "id": "REPAIR_JUDGE",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/0ef612a9b7940b32-repair-oracles-command.json",
+          "sha256": "0ef612a9b7940b32e14760bf60662be6170200a8af81937654244d71176114e3"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a22af0a67778e33f-repair-oracles.json",
+          "sha256": "a22af0a67778e33ff0c147ea17b8e350312f50fcf3cb89c9b192e2d70a1a4878"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/fed164a3f381e744-unit-command.json",
+          "sha256": "fed164a3f381e744b90087d183aaa3e0a7fa8b3439a7c2d1557ef5af836eab03"
+        }
+      ],
+      "reason": "Frozen judge boundary and oracle checks passed; these validate the checker, not model repair success."
+    },
+    {
+      "id": "PRODUCT_COUNTEREXAMPLES",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/41d87a36618c26b0-counterexamples.json",
+          "sha256": "41d87a36618c26b0fd9b91c922255a76b8f7df2edfd3fe88c5e28cde6a21e9c2"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/281e24310a650999-counterexamples.log.txt",
+          "sha256": "281e24310a6509998244e924ee578c1e3cd2c45d2000db7ce2187f84ddcd5090"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/6f89c9d66186d716-run.json",
+          "sha256": "6f89c9d66186d71602791859ee3998036dddffb40c9711dd564ae3b775770a76"
+        }
+      ],
+      "reason": "All 27 original mechanism counterexamples passed."
+    },
+    {
+      "id": "MACOS_BUILD",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/ade2bebcbdb6546a-live-compile.log.txt",
+          "sha256": "ade2bebcbdb6546af4abe1c73fda54747873d2433c98f1783dbee60a344cf790"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a736fd6510356418-real-jdt-verified.log.txt",
+          "sha256": "a736fd651035641885163f263aa93682f1867b6340874f73dd80332a37dc4ca3"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a65126113c629b32-acceptance-script-final-tests.log.txt",
+          "sha256": "a65126113c629b3204c11d27bb115121444c11eb691eb074fc47507bcb079852"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2df2b4f2bdd90f36-final-source-binding.json",
+          "sha256": "2df2b4f2bdd90f368714e4b2d346e4204af1bc50c5e94df670db3accc519f896"
+        }
+      ],
+      "reason": "Isolated compile passed. Final acceptance script updates independently verified."
+    },
+    {
+      "id": "MACOS_FULL_TEST",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/154e1952a2a2165f-final-release-gate.log.txt",
+          "sha256": "154e1952a2a2165f54429f3ab7f976e6b35a4cd8e52447060a286da489ec8a26"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2df2b4f2bdd90f36-final-source-binding.json",
+          "sha256": "2df2b4f2bdd90f368714e4b2d346e4204af1bc50c5e94df670db3accc519f896"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a65126113c629b32-acceptance-script-final-tests.log.txt",
+          "sha256": "a65126113c629b3204c11d27bb115121444c11eb691eb074fc47507bcb079852"
+        }
+      ],
+      "reason": "1335 source and368 script tests pass; production bytes identical to final tree. Three subsequently corrected JDT acceptance script files have18 focused passing tests and real JDT proof; no production drift."
+    },
+    {
+      "id": "MCP_ROUNDTRIP",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/28a97f5dde3bf938-mcp-contracts-final.log.txt",
+          "sha256": "28a97f5dde3bf9381b749d126257dc1ce07e22ce5e33eb1bed90cf144af7795f"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/154e1952a2a2165f-final-release-gate.log.txt",
+          "sha256": "154e1952a2a2165f54429f3ab7f976e6b35a4cd8e52447060a286da489ec8a26"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a736fd6510356418-real-jdt-verified.log.txt",
+          "sha256": "a736fd651035641885163f263aa93682f1867b6340874f73dd80332a37dc4ca3"
+        }
+      ],
+      "reason": "Actual SDK/watcher suite7/7; isolated HTTP five-tool smoke and real JDT K26/K28 pass."
+    },
+    {
+      "id": "INDEPENDENT_LOCKED",
+      "status": "NOT_RUN",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/dfa162bd4bcf9299-release-gaps.json",
+          "sha256": "dfa162bd4bcf9299313800ae558340236e52a7c7620ad7693523c29d738fe138"
+        }
+      ],
+      "reason": "Already exposed historical locked corpus is regression evidence only."
+    },
+    {
+      "id": "FULL_PUBLIC",
+      "status": "NOT_RUN",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/dfa162bd4bcf9299-release-gaps.json",
+          "sha256": "dfa162bd4bcf9299313800ae558340236e52a7c7620ad7693523c29d738fe138"
+        }
+      ],
+      "reason": "Full external public repositories profile not executed; bundled snapshots do not substitute."
+    },
+    {
+      "id": "LIVE_PAIRED",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/1ecb333622bf4ada-results-pack.json",
+          "sha256": "1ecb333622bf4ada21fc5e6131ff32faa9995e4ff9cb3a414259d734b285ac9d"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/d552a3c9cdc734bc-attempts.json",
+          "sha256": "d552a3c9cdc734bc2f22ac2b087cf29dd81926e0bdd554bdb08cb3197db1f6ac"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/4b42b51b1e740649-schedule.jsonl",
+          "sha256": "4b42b51b1e740649b703fc47b0d45bc3ce1456353f983af8d67b9babd247ea65"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/ddf73ddee7881bf0-live-next-summary.json",
+          "sha256": "ddf73ddee7881bf090a5d73c913a5de55e8974012450b175df0b2bb668c27e99"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/1084fe1045f6f4ef-live-next.log.txt",
+          "sha256": "1084fe1045f6f4ef12a3852644e1ce9fd2b04f751dd32181bb6dbc0e67b06e08"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/08f4ad06f30c8142-live-next-raw.tar.gz",
+          "sha256": "08f4ad06f30c814220c0466443688609e69b4c2b7ba153a37901bd85f0bfecb6"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/91aa8ab528b55b11-live-candidate-identity.json",
+          "sha256": "91aa8ab528b55b11ca2b09072c1ac96d917aa44c911317bff52ea71c9ec8bcb3"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2df2b4f2bdd90f36-final-source-binding.json",
+          "sha256": "2df2b4f2bdd90f368714e4b2d346e4204af1bc50c5e94df670db3accc519f896"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/527ef80425227890-live-validity-notes.json",
+          "sha256": "527ef8042522789077baaf5b2876dd456b4dbf93fb34b90d4d04c7e6e96920d8"
+        }
+      ],
+      "reason": "All72 next-model attempts completed with provider usage; all8 real repair groups judged. Measurement complete, QA quality floor fails and product19/36 versuscontrol20/36 does not demonstrate improvement. Product ADMISSIONS-03 repair has one invalid base-corpus region hash although candidate repair judge passes; do not claim all structured evidence valid."
+    },
+    {
+      "id": "PERFORMANCE",
+      "status": "FAIL",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/20b56c361ecb1d3c-query-load-report.json",
+          "sha256": "20b56c361ecb1d3c78a1c1708430549b4defc8570efad294b83fcbd19817f6c2"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/f61c6d9ae4a1a08c-load-assessment.md",
+          "sha256": "f61c6d9ae4a1a08cbc60c03ed10df04f4b8114662e59bec1af8abdc7d07bd44e"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/973aa59dae3dfdb9-query-load-report.json",
+          "sha256": "973aa59dae3dfdb9b75ee677303b35caa8b8759ed8d4e5cc6fa0a3a69b59dfee"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/c02ba15c0e46216b-command.json",
+          "sha256": "c02ba15c0e46216b6d989b2ced251d347ec2c36766182ba510a3dd7f4af1044e"
+        }
+      ],
+      "reason": "c20P95=268.585ms and updates=270.906ms fail150ms; event-loopP95<=1.311ms and queue settled. Same-host base c20=268.696ms; no measured new c20regression, no statistical equivalence claimed."
+    },
+    {
+      "id": "EXISTING_RELEASE_GATE",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/f9000f9386d65198-final-release-gate.json",
+          "sha256": "f9000f9386d65198658a279bc36d8aedeed3cb543bf780f52e7fefb561829f8a"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/154e1952a2a2165f-final-release-gate.log.txt",
+          "sha256": "154e1952a2a2165f54429f3ab7f976e6b35a4cd8e52447060a286da489ec8a26"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2df2b4f2bdd90f36-final-source-binding.json",
+          "sha256": "2df2b4f2bdd90f368714e4b2d346e4204af1bc50c5e94df670db3accc519f896"
+        }
+      ],
+      "reason": "Existing release profile completed full isolation tests and HTTP smoke; later probe-only changes have focused validation."
+    },
+    {
+      "id": "REVIEW",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/9f601b6dea61bbd5-independent-final-review.md",
+          "sha256": "9f601b6dea61bbd544733be9de360e51c5db115bdfb2f3f31a1299b8ad94f0e9"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2df2b4f2bdd90f36-final-source-binding.json",
+          "sha256": "2df2b4f2bdd90f368714e4b2d346e4204af1bc50c5e94df670db3accc519f896"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/256a4e18deef13d0-regression-evidence.tar.gz",
+          "sha256": "256a4e18deef13d026517290bb7b9c9180ba862ca93264bde7a0f644bc6befde"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/cd78cbc4ee5ffc5a-candidate-executable.patch",
+          "sha256": "cd78cbc4ee5ffc5a1915c6ae36a63db2c124e0b75a44a65b852673f2a0d0a6de"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2acce83da2208bcf-workspace-integration.json",
+          "sha256": "2acce83da2208bcf8310fc359c53f53b068478aa06928196665e5faa0b452dcc"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a65126113c629b32-acceptance-script-final-tests.log.txt",
+          "sha256": "a65126113c629b3204c11d27bb115121444c11eb691eb074fc47507bcb079852"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/ad81188c06204663-independent-acceptance-review.md",
+          "sha256": "ad81188c062046638ead604a1b08045f616e320018b86bbe577c8688e6f0de30"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/c0c033e710c7a256-real-jdt.log.txt",
+          "sha256": "c0c033e710c7a25616ef063e570a2a7e3575ae65fc0960b6f64eae2cb4460ce7"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/80733742f6e462d2-real-jdt-final.log.txt",
+          "sha256": "80733742f6e462d2e692dbeea973e960ecdecd04ebc4e98ba06c6821ad0950ee"
+        }
+      ],
+      "reason": "Independent concrete production and K05/K17 findings closed; subsequent probe newline correction passed strict LF/CRLF tests and actual JDT. Release qualification remains separate."
+    }
+  ],
+  "contracts": [
+    {
+      "id": "K01",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/f3f7cc863ce0cf5b-K01.stdout.log.txt",
+          "sha256": "f3f7cc863ce0cf5ba5db81828178eb77af6f0cf96d13f287f670423a11031c66"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K01.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "断言两份 type/method/field ID、file_id 不相同；查出的每条边端点存在。",
+      "selected": [
+        {
+          "name": "T02: parser-produced same-FQN declarations in different modules keep distinct source-scoped IDs",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^T02: parser-produced same-FQN",
+        "dist/java-index/sql/rows.test.js"
+      ]
+    },
+    {
+      "id": "K02",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/4af5527fffa18c73-K02.stdout.log.txt",
+          "sha256": "4af5527fffa18c73e622faa062fe3790826eedc2f4f13c4112e11e8f3d64c3e7"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K02.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "对实体与归属排序后比对完全一致；不能只比较条数。",
+      "selected": [
+        {
+          "name": "T02: AB and BA write orders produce the same ownership set",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^T02: AB and BA write orders",
+        "dist/java-index/sql/rows.test.js"
+      ]
+    },
+    {
+      "id": "K03",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/ccbd30b3a02a9fd9-K03.stdout.log.txt",
+          "sha256": "ccbd30b3a02a9fd95f4e08f973bb3efe0711ffff74dad0ec72a9a360a7f7b2fc"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K03.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-index",
+      "expected": "未指定编译范围保留歧义候选；指定 main 不出现 test；test 的可见性显式遵循 build。",
+      "selected": [
+        {
+          "name": "K03: real main/test duplicate FQN remains ambiguous until sourceSet scope",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K03:",
+        "dist/benchmark/release-index-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K04",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/7c801c60c476a127-K04.stdout.log.txt",
+          "sha256": "7c801c60c476a127ee5cdfc5b945bed31bcb0659449f661dd04bdc313da4669b"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K04.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "named ID 不变，selection 坐标加5；匿名/局部类型允许文件局部 ID 变化。",
+      "selected": [
+        {
+          "name": "K04: named declaration identities survive five inserted blank lines through parser and SQLite",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K04:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K05",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/529622828da9e99e-K05.stdout.log.txt",
+          "sha256": "529622828da9e99e63326365aeddbb63f08e22080a7dbd13451fb5ec644408c1"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K05.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-watcher",
+      "expected": "A 的声明、边、search-doc 清除；B 的归属和结果保持；不得手动清整个库假装增量通过。",
+      "selected": [
+        {
+          "name": "K05: the real watcher deletes one duplicate declaration without deleting its sibling",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K05:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "K06",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/00cf3e57bfda0c6a-K06.stdout.log.txt",
+          "sha256": "00cf3e57bfda0c6ad2e722e0c1bd64376ec592b6fbf6b7e720c452351943d33e"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K06.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-worktree",
+      "expected": "局部named ID允许相同，但每个结果repoHash/sourceHash匹配本worktree；无兄弟内容串入。",
+      "selected": [
+        {
+          "name": "K06: linked worktree queries retain local identity and source hash",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K06:",
+        "dist/benchmark/release-index-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K07",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/5bdd180710b3c66c-K07.stdout.log.txt",
+          "sha256": "5bdd180710b3c66cb36511e25f1c3be4abec25b44b702561d3e487d0b170dfaa"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K07.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "最终range包含201；provider和最后serializer均检查，不能只中间结果通过。",
+      "selected": [
+        {
+          "name": "K07: requested line 201 survives real parser, range provider, planner and final compact serializer",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K07:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K08",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/95f3e583fc6624e7-K08.stdout.log.txt",
+          "sha256": "95f3e583fc6624e73a251b0b16844bd9623eef197ab965037a76c9e1a815b0fb"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K08.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "正常预算两行都在；预算不足不得声称完整覆盖。",
+      "selected": [
+        {
+          "name": "K08: lines 100 and 350 survive final serialization, and insufficient budget reports missing anchors",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K08:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K09",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/875a1cd310609a78-K09.stdout.log.txt",
+          "sha256": "875a1cd310609a78e96bfbf10646eacf0acd097b837242260fbea3d736b6848a"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K09.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "行号对应一致，源码slice哈希与byte计数基于原始文件；不全局改LF。",
+      "selected": [
+        {
+          "name": "K09: long-method CRLF byte costs and source hashes match original UTF-8 bytes",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K09:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K10",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/b5404149f28ad411-K10.stdout.log.txt",
+          "sha256": "b5404149f28ad411f77b3b36b157628f19dcc7436d8d0b2036bd315f502eeb65"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K10.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-fixture",
+      "expected": "列为1-based UTF-16 code units；与独立字符串编码长度oracle一致，不用同parser反算作oracle。",
+      "selected": [
+        {
+          "name": "K10: CRLF emoji declaration and call selections use independently counted UTF-16 columns",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K10:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K11",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e8ce708eadbc788d-K11.stdout.log.txt",
+          "sha256": "e8ce708eadbc788dbcd3ed4592b67e70200593458c2fc688b748966c07ac634e"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K11.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-index",
+      "expected": "显式调用事实不消失；返回的必要证据移动到当前range；不要求排序分数bit-identical。",
+      "selected": [
+        {
+          "name": "K11: real builder refresh preserves call facts and relocates moved helper evidence",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K11:",
+        "dist/benchmark/release-index-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K12",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/62e3e382187486e5-K12.stdout.log.txt",
+          "sha256": "62e3e382187486e56ca6a3b0d98a90e570763be31917ce9a1186c979029a712f"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K12.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-MCP",
+      "expected": "明确BUDGET_TOO_SMALL/PARTIAL或现有等价错误；无虚假COMPLETE，无无限等待。",
+      "selected": [
+        {
+          "name": "K12: public MCP rejects a zero deadline explicitly and settles the request",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K12:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "K13",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/441442687d059aa5-K13.stdout.log.txt",
+          "sha256": "441442687d059aa5535491b801c609fbf17c7d8adcd563a0faaae71a16c946b7"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K13.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "相关method参与且可用作anchor；纯type命中不结束text搜索。",
+      "selected": [
+        {
+          "name": "T04: a mixed query surfaces the relevant method instead of short-circuiting on the type",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^T04: a mixed query",
+        "dist/java-index/sql/entity-search-intent.test.js"
+      ]
+    },
+    {
+      "id": "K14",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e42787aea0ad2ac3-K14.stdout.log.txt",
+          "sha256": "e42787aea0ad2ac3090b6adae7fe9f9642071600727332b49f65164e5fb42a09"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K14.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "source-export",
+      "expected": "精确声明命中且dense=0；静态后端JDT=0；不存在不得回退模糊召回。",
+      "selected": [
+        {
+          "name": "R07: an exact miss is a miss - never a fuzzy BM25 hit",
+          "status": "passed"
+        },
+        {
+          "name": "R07: exact match, ambiguous duplicates and camelCase method selectors",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^R07: (an exact miss|exact match)",
+        "dist/java-index/sql/entity-search-bounded.test.js"
+      ]
+    },
+    {
+      "id": "K15",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/cc06171957697d28-K15.stdout.log.txt",
+          "sha256": "cc06171957697d282f04996eeb5ba497f7027718004723a926e69751f62de287"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K15.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-watcher",
+      "expected": "新词对应当前sourceHash；旧表示被替换；不改Java逻辑仍须刷新文档。",
+      "selected": [
+        {
+          "name": "K15: a Chinese JavaDoc-only edit becomes visible through the real watcher at its new hash",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K15:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "K16",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/ad92227e0e969dd3-K16.stdout.log.txt",
+          "sha256": "ad92227e0e969dd38858c5b0e6aa1226010792bb1736d36a01b3aeabe432e40f"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K16.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-resource",
+      "expected": "证据source为正确XML path/hash/range，目标declaration为对应Java方法；N01/P01独立断言不能替代真实parser测试。",
+      "selected": [
+        {
+          "name": "K16/P01: same-named statements in two namespaces: source is each XML path/hash/range, target each Java method",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K16/P01:",
+        "dist/java-index/builder/r08-evidence.test.js"
+      ]
+    },
+    {
+      "id": "K17",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/ae89769ad7c8b930-K17.stdout.log.txt",
+          "sha256": "ae89769ad7c8b930efef7df9bb994dbe4bab8e7ede008cf03c58df38ecb0232b"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K17.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-MCP",
+      "expected": "scope在cap前生效；module与sourceSet AND；未知module不扩大范围；记录物理work与truncated理由。",
+      "selected": [
+        {
+          "name": "K17: public MCP applies module AND source-set before the candidate limit",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K17:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "K18",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e043250365ed4465-K18.stdout.log.txt",
+          "sha256": "e043250365ed4465ced621800694370817ccc1bc5f66c8929471d8858861acf8"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K18.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-resource",
+      "expected": "key可检索，canary不得进入model payload或embedding；不得外发真实凭据。",
+      "selected": [
+        {
+          "name": "K18: a secret value never enters any document, token, or search response",
+          "status": "passed"
+        },
+        {
+          "name": "K18: a short secret assigned to a secret-named key is redacted in document text, as in previews",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K18:",
+        "dist/java-index/sql/search-docs.test.js"
+      ]
+    },
+    {
+      "id": "K19",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/56f996a2b20998cd-K19.stdout.log.txt",
+          "sha256": "56f996a2b20998cd80473e031b1fde0c9265223f29bb97766f6bd691d553cba2"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K19.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-watcher",
+      "expected": "负缓存随变更失效；新名称可达；旧路径不复活；采用bounded wait，不用任意sleep断言已一致。",
+      "selected": [
+        {
+          "name": "K19: real watcher add rename and delete invalidate negative and positive lookups",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K19:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "K20",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/0836e51e03a34491-K20.stdout.log.txt",
+          "sha256": "0836e51e03a3449141d9336e7a22db511a7497551cfe2b72dd0c00e59f1aded0"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K20.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-concurrent",
+      "expected": "返回同snapshot的全部G证据或显式changedDuringRequest/PARTIAL；不拼新status与旧locator。",
+      "selected": [
+        {
+          "name": "K20: real writer commit between query snapshot and preview cannot yield mixed READY evidence",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K20:",
+        "dist/benchmark/release-index-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K21",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/61dd1273f503421a-K21.stdout.log.txt",
+          "sha256": "61dd1273f503421a27e1f79e26179814c7c318e99bd80c4f339a03abdecbd427"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K21.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-worktree",
+      "expected": "XML-source文档先reconcile再READY；不能因Java相同复用旧SQL证据。",
+      "selected": [
+        {
+          "name": "K21: real sibling copy reconciles changed XML before READY without Java changes",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K21:",
+        "dist/benchmark/release-index-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K22",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e4935d17ef47686b-K22.stdout.log.txt",
+          "sha256": "e4935d17ef47686b3a96dead5328bde58e2e13f7a711ecc75d441b812398df08"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K22.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-fixture",
+      "expected": "输出STATIC_CANDIDATE/AMBIGUOUS而非虚假JDT_BOUND；如主动请求JDT证据另跑真实JDT层。",
+      "selected": [
+        {
+          "name": "K22: same-arity ambiguous overload keeps syntax call and emits no false static binding",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K22:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K23",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/c34b76a730526232-K23.stdout.log.txt",
+          "sha256": "c34b76a730526232bad0f10b7ad814b343b8bffeb6b1d026169a7155ddc71e8e"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K23.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-fixture",
+      "expected": "区分静态目标与运行时分派；不声称Parent是唯一运行目标；不需要新建全程序分析器。",
+      "selected": [
+        {
+          "name": "K23: concrete Parent receiver with Child override is virtual rather than a unique runtime target",
+          "status": "passed"
+        },
+        {
+          "name": "K23: final method does not invent runtime dispatch to a subtype",
+          "status": "passed"
+        },
+        {
+          "name": "K23: private method does not invent runtime dispatch to a subtype",
+          "status": "passed"
+        },
+        {
+          "name": "K23: static method does not invent runtime dispatch to a subtype",
+          "status": "passed"
+        },
+        {
+          "name": "K23: overload instead of override does not invent runtime dispatch to a subtype",
+          "status": "passed"
+        },
+        {
+          "name": "K23: explicit super call binds the parent declaration and bypasses virtual dispatch",
+          "status": "passed"
+        },
+        {
+          "name": "K23: cross-file override add, edit, reparent and delete incrementally match a fresh cold graph",
+          "status": "passed"
+        },
+        {
+          "name": "K23: qualified and imported-equivalent parameter spellings retain concrete override dispatch",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K23:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K24",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/f7153d09cd69980d-K24.stdout.log.txt",
+          "sha256": "f7153d09cd69980d7f5a19112d565112c2acf890faced1821ad4b4a95fad7d2c"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K24.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-fixture",
+      "expected": "parse/coverage保持PARTIAL；不能写COMPLETE的负缓存。",
+      "selected": [
+        {
+          "name": "K24: recovered parse cannot certify COMPLETE or a trustworthy missing type",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K24:",
+        "dist/index-builder/integrity.test.js"
+      ]
+    },
+    {
+      "id": "K25",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2cfcf1d0f9d633f4-K25.stdout.log.txt",
+          "sha256": "2cfcf1d0f9d633f442491f4f7477ae1594fdd603063bdfa29eb23f8dfa8347ec"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K25.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-MCP",
+      "expected": "静态结果有效，JDT启动=0；不是用假的MCP factory直接调用函数替代。",
+      "selected": [
+        {
+          "name": "K25: static queries use the real MCP protocol with zero JDT launches",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K25:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ]
+    },
+    {
+      "id": "K26",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2bfdbe64f1df2f12-K26.real-jdt.json",
+          "sha256": "2bfdbe64f1df2f12eec6e1d979a55d34f8605d55c5079f1c04a1716082a716b5"
+        }
+      ],
+      "level": "runtime-JDT",
+      "expected": "关闭时明确配置错误；启用时实际绑定/引用可用且同一absolute deadline；记录runtime JDK/project JDK分离。",
+      "observed": {
+        "disabled": {
+          "isError": true,
+          "message": "./register-alias.sh --enable-lsp <id> /private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+          "status": {
+            "repoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+            "state": "NEW",
+            "started": false,
+            "restartBackoff": {},
+            "knownDiagnostics": 0,
+            "openDocuments": 0,
+            "buildSystem": "maven",
+            "projectJdk": {
+              "requiredMajor": 17,
+              "requiredRaw": "17",
+              "resolvedHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+              "runtimeName": "JavaSE-17",
+              "primarySource": "maven",
+              "allSources": [
+                "maven"
+              ],
+              "status": "degraded",
+              "notes": [
+                "runtime path is newer than required source level; boot API may be imprecise (21 > 17)."
+              ]
+            },
+            "generatedCode": {
+              "lombok": {
+                "detected": false,
+                "agentEnabled": false,
+                "status": "not-detected"
+              },
+              "annotationProcessing": {
+                "detectedProcessors": [],
+                "enabled": false,
+                "source": "not-detected"
+              },
+              "generatedCodeSemantics": "not-detected"
+            },
+            "progress": {
+              "active": 0,
+              "activeMessageCount": 0
+            },
+            "repoHash": "f9d273d56719",
+            "rootSource": "explicit",
+            "aliases": [
+              "release-contracts"
+            ],
+            "layoutProfile": "maven-reactor",
+            "layout": {
+              "layout": "single",
+              "layoutProfile": "maven-reactor",
+              "sourceRootCount": 1,
+              "resourceRootCount": 0,
+              "broadRoots": [
+                "."
+              ]
+            },
+            "runtimeBuild": {
+              "gitSha": "04058e43b8b2",
+              "generatedAt": "2026-10-11T02:34:57.347Z",
+              "defaultsFingerprint": "e5835394a86f"
+            },
+            "rootWarnings": [],
+            "lsp": {
+              "enabled": false,
+              "matchedBy": "disabled",
+              "configuredRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+              "effectiveRepoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+              "reason": "Project alias is registered with lspEnabled=false.",
+              "enableHint": "./register-alias.sh --enable-lsp <id> /private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo"
+            },
+            "javaIndex": {
+              "state": "BUILDING",
+              "indexedGeneration": 0,
+              "files": 0,
+              "coverage": "degraded",
+              "pendingBackground": 0,
+              "builder": {
+                "state": "cold-building",
+                "pid": 69808,
+                "queued": 0
+              }
+            },
+            "watcher": {
+              "ready": true,
+              "degraded": false,
+              "pending": 0
+            },
+            "resource": {
+              "maxActiveRepos": 3,
+              "idleTtlMs": 2700000,
+              "jdtlsXmx": "2g",
+              "activeRepos": 1,
+              "activeJdtlsPids": [],
+              "importConcurrency": 2,
+              "workspaceRetainedOnShutdown": true
+            }
+          }
+        },
+        "enabled": {
+          "locator": {
+            "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+            "queries": [
+              "compute"
+            ],
+            "summary": {
+              "candidates": 1,
+              "annotated": 1,
+              "selectionResolvesDeclaration": 1,
+              "annotatedOldLocatorResolvesDeclaration": 0,
+              "errors": 0
+            },
+            "rows": [
+              {
+                "query": "compute",
+                "id": "method:type:v2:src%2Fmain%2Fjava%2Fprobe%2FTarget.java#probe.Target#compute(int)",
+                "kind": "method",
+                "relativePath": "src/main/java/probe/Target.java",
+                "selection": {
+                  "line": 5,
+                  "column": 23
+                },
+                "evidenceRange": {
+                  "relativePath": "src/main/java/probe/Target.java",
+                  "contentHash": "9a850cab38aa707bb801ef5e0f77d11849fffa41a642da13c03560df35fad218",
+                  "startLine": 4,
+                  "endLine": 7
+                },
+                "oldLocator": {
+                  "line": 4,
+                  "column": 5
+                },
+                "oldLocatorText": "@Deprecated",
+                "jdtAtSelection": {
+                  "hoverHead": "int probe.Target.compute(int value)",
+                  "hoverNamesDeclaration": true,
+                  "definitions": [
+                    {
+                      "path": "src/main/java/probe/Target.java",
+                      "line": 5,
+                      "column": 23
+                    }
+                  ],
+                  "definitionIsDeclaration": true
+                },
+                "jdtAtOldLocator": {
+                  "hoverHead": "",
+                  "hoverNamesDeclaration": false,
+                  "definitions": [],
+                  "definitionIsDeclaration": false
+                }
+              }
+            ]
+          },
+          "references": {
+            "totalReferences": 1,
+            "matchedReferences": 1,
+            "returnedReferences": 1,
+            "externalReferencesSuppressed": 0,
+            "truncated": false,
+            "groups": [
+              {
+                "referenceCount": 1,
+                "files": [
+                  {
+                    "path": "src/main/java/probe/Caller.java",
+                    "sourceSet": "main",
+                    "referenceCount": 1,
+                    "positions": [
+                      {
+                        "line": 5,
+                        "column": 23,
+                        "range": {
+                          "start": {
+                            "line": 5,
+                            "column": 23
+                          },
+                          "end": {
+                            "line": 5,
+                            "column": 34
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "status": {
+            "repoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+            "state": "READY",
+            "started": true,
+            "pid": 70097,
+            "restartBackoff": {},
+            "startedAt": "2026-10-11T02:35:26.296Z",
+            "knownDiagnostics": 0,
+            "openDocuments": 1,
+            "buildSystem": "maven",
+            "projectJdk": {
+              "requiredMajor": 17,
+              "requiredRaw": "17",
+              "resolvedHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+              "runtimeName": "JavaSE-17",
+              "primarySource": "maven",
+              "allSources": [
+                "maven"
+              ],
+              "status": "degraded",
+              "notes": [
+                "runtime path is newer than required source level; boot API may be imprecise (21 > 17)."
+              ]
+            },
+            "generatedCode": {
+              "lombok": {
+                "detected": false,
+                "agentEnabled": false,
+                "status": "not-detected"
+              },
+              "annotationProcessing": {
+                "detectedProcessors": [],
+                "enabled": false,
+                "source": "not-detected"
+              },
+              "generatedCodeSemantics": "not-detected"
+            },
+            "progress": {
+              "active": 0,
+              "activeMessageCount": 0,
+              "lastProgressAt": "2026-10-11T02:35:26.405Z",
+              "lastLanguageStatus": "ServiceReady: ServiceReady"
+            },
+            "repoHash": "f9d273d56719",
+            "rootSource": "explicit",
+            "aliases": [
+              "release-contracts"
+            ],
+            "layoutProfile": "maven-reactor",
+            "layout": {
+              "layout": "single",
+              "layoutProfile": "maven-reactor",
+              "sourceRootCount": 1,
+              "resourceRootCount": 0,
+              "broadRoots": [
+                "."
+              ]
+            },
+            "runtimeBuild": {
+              "gitSha": "04058e43b8b2",
+              "generatedAt": "2026-10-11T02:34:57.347Z",
+              "defaultsFingerprint": "e5835394a86f"
+            },
+            "rootWarnings": [],
+            "lsp": {
+              "enabled": true,
+              "matchedBy": "direct-root",
+              "configuredRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+              "effectiveRepoRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo"
+            },
+            "javaIndex": {
+              "state": "READY",
+              "indexedGeneration": 1,
+              "files": 2,
+              "coverage": "complete",
+              "pendingBackground": 0,
+              "db": {
+                "bytes": 245760,
+                "cacheKb": 32768
+              },
+              "builder": {
+                "state": "absent",
+                "queued": 0
+              }
+            },
+            "watcher": {
+              "ready": true,
+              "degraded": false,
+              "pending": 0
+            },
+            "resource": {
+              "maxActiveRepos": 3,
+              "idleTtlMs": 2700000,
+              "jdtlsXmx": "2g",
+              "activeRepos": 1,
+              "activeJdtlsPids": [
+                70097
+              ],
+              "importConcurrency": 2,
+              "workspaceRetainedOnShutdown": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "K27",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/179fe79639d6463e-K27.stdout.log.txt",
+          "sha256": "179fe79639d6463e1ad765d98ec2b5a8670dd6c4c66cc4064a7d79c134410dac"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K27.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-provider",
+      "expected": "lexical仍可用；不写COMPLETE负缓存；关闭时provider调用=0。optional未接核心时记录实际集成边界，不伪造不存在的自动fallback。",
+      "selected": [
+        {
+          "name": "K27: the shipped disabled provider boundary keeps lexical MCP queries usable with zero fetches",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K27:",
+        "scripts/release-mcp-contracts.test.mjs"
+      ],
+      "scope": "disabled production integration: lexical remains usable, zero fetches; no nonexistent automatic dense fallback is claimed"
+    },
+    {
+      "id": "K28",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2bfdbe64f1df2f12-K28.real-jdt.json",
+          "sha256": "2bfdbe64f1df2f12eec6e1d979a55d34f8605d55c5079f1c04a1716082a716b5"
+        }
+      ],
+      "level": "runtime-JDT",
+      "expected": "短caller退出不取消长caller；backend按现有policy结算、资源释放；先fake协议单测，再真实JDT集成证据。",
+      "observed": {
+        "shortCode": "DEADLINE_EXCEEDED",
+        "whileShortExited": {
+          "inflight": 1,
+          "completedEntries": 0,
+          "cacheHits": 0,
+          "cacheMisses": 2,
+          "sharedJoins": 1,
+          "abortedNoWaiters": 0,
+          "completeWrites": 0,
+          "rejectedWrites": 0,
+          "lifecycleBackoffSkips": 0,
+          "busyOtherSessionSkips": 0
+        },
+        "longOutcome": {
+          "completion": "COMPLETE",
+          "value": [
+            {
+              "uri": "file:///private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo/src/main/java/probe/Caller.java",
+              "range": {
+                "start": {
+                  "line": 4,
+                  "character": 22
+                },
+                "end": {
+                  "line": 4,
+                  "character": 33
+                }
+              }
+            }
+          ],
+          "elapsedMs": 22529,
+          "cacheHit": false,
+          "shared": false
+        },
+        "settled": {
+          "inflight": 0,
+          "completedEntries": 1,
+          "cacheHits": 0,
+          "cacheMisses": 2,
+          "sharedJoins": 1,
+          "abortedNoWaiters": 0,
+          "completeWrites": 1,
+          "rejectedWrites": 0,
+          "lifecycleBackoffSkips": 0,
+          "busyOtherSessionSkips": 0
+        },
+        "backendCalls": 1,
+        "status": {
+          "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/repo",
+          "dataDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache/jdt-workspace/f9d273d56719",
+          "logFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ns03hk/tmp/codex-java-lsp-isolated-jdt-Ny6F8P/cache/jdt-logs/f9d273d56719/jdtls.log",
+          "jdtlsBin": "/opt/homebrew/bin/jdtls",
+          "state": "READY",
+          "started": true,
+          "pid": 69157,
+          "restartBackoff": {
+            "consecutiveFailures": 0,
+            "blockedUntilExplicitReset": false
+          },
+          "knownDiagnostics": 0,
+          "openDocuments": 1,
+          "startedAt": "2026-10-11T02:35:05.810Z",
+          "cache": {
+            "enabled": true,
+            "entries": 0,
+            "hits": 0,
+            "misses": 0,
+            "invalidations": 0
+          },
+          "semanticGateway": {
+            "inflight": 0,
+            "completedEntries": 0,
+            "cacheHits": 0,
+            "cacheMisses": 0,
+            "sharedJoins": 0,
+            "abortedNoWaiters": 0,
+            "completeWrites": 0,
+            "rejectedWrites": 0,
+            "lifecycleBackoffSkips": 0,
+            "busyOtherSessionSkips": 0
+          },
+          "buildSystem": "maven",
+          "projectJdk": {
+            "requiredMajor": 17,
+            "requiredRaw": "17",
+            "resolvedHome": "/Users/luo/.sdkman/candidates/java/21.0.10-tem",
+            "runtimeName": "JavaSE-17",
+            "primarySource": "maven",
+            "allSources": [
+              "maven"
+            ],
+            "status": "degraded",
+            "candidates": [
+              "7:/Library/Java/JavaVirtualMachines/jdk1.7.0_75.jdk/Contents/Home",
+              "7:/Library/Java/JavaVirtualMachines/jdk1.7.0_80.jdk/Contents/Home",
+              "8:/Library/Java/JavaVirtualMachines/jdk1.8.0.jdk/Contents/Home",
+              "8:/Library/Java/JavaVirtualMachines/jdk1.8.0_281.jdk/Contents/Home",
+              "8:/Library/Internet Plug-Ins/JavaAppletPlugin.plugin/Contents/Home",
+              "8:/Users/luo/Library/Java/JavaVirtualMachines/adopt-openjdk-1.8.0_282/Contents/Home",
+              "21:/Users/luo/.sdkman/candidates/java/21.0.10-tem"
+            ],
+            "notes": [
+              "runtime path is newer than required source level; boot API may be imprecise (21 > 17)."
+            ]
+          },
+          "generatedCode": {
+            "lombok": {
+              "detected": false,
+              "agentEnabled": false,
+              "status": "not-detected"
+            },
+            "annotationProcessing": {
+              "detectedProcessors": [],
+              "enabled": false,
+              "source": "not-detected"
+            },
+            "generatedCodeSemantics": "not-detected"
+          },
+          "progress": {
+            "active": 0,
+            "activeMessages": [],
+            "lastProgressAt": "2026-10-11T02:35:17.534Z",
+            "lastLanguageStatus": "ServiceReady: ServiceReady"
+          },
+          "leaseHeartbeat": {
+            "active": true,
+            "intervalMs": 30000,
+            "lastSuccessAt": "2026-10-11T02:35:05.810Z"
+          }
+        },
+        "coldStartup": true,
+        "operationCapMs": 180000,
+        "shortCallerMs": 30
+      }
+    },
+    {
+      "id": "K29",
+      "status": "FAIL",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/2484c9bfb375fcc2-K29.stdout.log.txt",
+          "sha256": "2484c9bfb375fcc22e0bd68cced0fa3396f89987342ae5c40111dd73385b6658"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/baf3c9ffd2c16247-K29.stderr.log.txt",
+          "sha256": "baf3c9ffd2c16247b582dddacfbd095d875d47daf6954d28594d674c8de7eadb"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/20b56c361ecb1d3c-query-load-report.json",
+          "sha256": "20b56c361ecb1d3c78a1c1708430549b4defc8570efad294b83fcbd19817f6c2"
+        }
+      ],
+      "level": "runtime-load",
+      "expected": "队列有界，超时不遗留无界工作；不得全图prefetch；按原150ms/20ms SLO独立记录，不以机器不同推算通过。",
+      "mechanismPass": true,
+      "performancePass": false,
+      "warmStaticP95LimitMs": 150,
+      "eventLoopP95LimitMs": 20,
+      "steps": [
+        {
+          "concurrency": 1,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 5.829,
+            "p95": 31.583,
+            "p99": 34.101,
+            "max": 37.564
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 0.521,
+              "p95": 0.691,
+              "p99": 0.979
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 25.472,
+              "p95": 29.113,
+              "p99": 29.951
+            },
+            "broad": {
+              "n": 25,
+              "p50": 30.033,
+              "p95": 34.101,
+              "p99": 37.564
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 4.878,
+              "p95": 5.657,
+              "p99": 5.829
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.24,
+            "p99": 1.891,
+            "max": 2.045
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 266.016,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 1,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 1,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 5,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 30.536,
+            "p95": 86.166,
+            "p99": 91.22,
+            "max": 95.016
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 4.182,
+              "p95": 34.521,
+              "p99": 34.545
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 7.706,
+              "p95": 35.066,
+              "p99": 35.435
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 31.992,
+              "p95": 86.166,
+              "p99": 86.716
+            },
+            "broad": {
+              "n": 25,
+              "p50": 59.784,
+              "p95": 91.22,
+              "p99": 95.016
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.233,
+            "p99": 1.826,
+            "max": 2.082
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 267.109,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 4,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 19.086,
+            "p95": 268.585,
+            "p99": 294.572,
+            "max": 297.856
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.059,
+              "p95": 14.891,
+              "p99": 15.042
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.342,
+              "p95": 18.949,
+              "p99": 19.086
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 150.859,
+              "p95": 266.33,
+              "p99": 268.585
+            },
+            "broad": {
+              "n": 25,
+              "p50": 180.484,
+              "p95": 294.572,
+              "p99": 297.856
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.148,
+            "p95": 1.297,
+            "p99": 1.808,
+            "max": 2.095
+          },
+          "stopReasons": {
+            "none": 100
+          },
+          "scopeStates": {
+            "READY": 100
+          },
+          "writerCommits": 0,
+          "writerIntervalMs": null,
+          "rssMb": 267.922,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        },
+        {
+          "concurrency": 20,
+          "requests": 100,
+          "deadlineMs": 1000,
+          "latencyMs": {
+            "p50": 20.515,
+            "p95": 270.906,
+            "p99": 299.157,
+            "max": 299.558
+          },
+          "byKind": {
+            "rare-fqn": {
+              "n": 25,
+              "p50": 8.387,
+              "p95": 15.487,
+              "p99": 16.045
+            },
+            "fuzzy": {
+              "n": 25,
+              "p50": 12.49,
+              "p95": 19.732,
+              "p99": 20.515
+            },
+            "common-word": {
+              "n": 25,
+              "p50": 150.927,
+              "p95": 268.246,
+              "p99": 270.906
+            },
+            "broad": {
+              "n": 25,
+              "p50": 179.952,
+              "p95": 299.157,
+              "p99": 299.558
+            }
+          },
+          "eventLoopDelayMs": {
+            "p50": 1.149,
+            "p95": 1.311,
+            "p99": 1.809,
+            "max": 2.105
+          },
+          "stopReasons": {
+            "none": 58,
+            "changed_during_request": 42
+          },
+          "scopeStates": {
+            "READY": 58,
+            "PARTIAL": 42
+          },
+          "writerCommits": 15,
+          "writerIntervalMs": 100,
+          "rssMb": 268.375,
+          "worker": {
+            "queued": 0,
+            "running": false,
+            "queuePeak": 19,
+            "completed": 104,
+            "rejectedQueueFull": 0,
+            "expiredInQueue": 0,
+            "terminated": 0,
+            "spawned": 0,
+            "threads": 1
+          },
+          "settled": true
+        }
+      ],
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "dist/benchmark/measure-query-load.js",
+        "--files",
+        "1000",
+        "--samples",
+        "100",
+        "--steps",
+        "1,5,20",
+        "--output",
+        "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-KJvBwm/k-contracts/raw/load"
+      ],
+      "scope": "fixed generated 1000-file corpus; measured here, not an all-repository capacity claim"
+    },
+    {
+      "id": "K30",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e94f75416b24a4e4-K30.stdout.log.txt",
+          "sha256": "e94f75416b24a4e496e2b8074ebcc3d3ce478f0fb68534b64e6ce854e0bfb9e0"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K30.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "runtime-SQL",
+      "expected": "WAL在配置的idle TTL+有界grace后收敛；无无限snapshot；不得以删库作为收敛。",
+      "selected": [
+        {
+          "name": "K30: actual query readers release by idle TTL and checkpoint converges without deleting DB",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K30:",
+        "dist/benchmark/release-index-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K31",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/4e10bb27a033502c-K31.stdout.log.txt",
+          "sha256": "4e10bb27a033502c983a60b7c9c0ea95445131069fd77fcce06d27262e3f7d31"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K31.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-fixture",
+      "expected": "各声明独立可寻址；不以constructor伪造局部type身份；数据库归属正确。",
+      "selected": [
+        {
+          "name": "K31: package-private, nested and local type declarations are independently addressable in SQLite",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K31:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    },
+    {
+      "id": "K32",
+      "status": "PASS",
+      "evidence": [
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/a2a17ea070fc776c-K32.stdout.log.txt",
+          "sha256": "a2a17ea070fc776c337d45aee821515687d2ad52c787b10e4a8ad884a70c040a"
+        },
+        {
+          "path": "docs/next-stage/runtime-integrity-evidence/raw/e3b0c44298fc1c14-K32.stderr.log.txt",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "level": "parser-fixture",
+      "expected": "真实parser的声明/range正确，文本括号不影响方法边界；JDK8业务源码与fixture目标级别分开。",
+      "selected": [
+        {
+          "name": "K32: javac --release 17 accepts record compact constructor and text-block braces do not alter parser bounds",
+          "status": "passed"
+        }
+      ],
+      "exitCode": 0,
+      "timedOut": false,
+      "command": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^K32:",
+        "dist/benchmark/release-source-contracts.test.js"
+      ]
+    }
+  ],
+  "metrics": {
+    "qaContractRate": 0.42857142857142855,
+    "newCriticalRegressions": 0,
+    "actualRepairTaskGroups": 8,
+    "scheduledRuns": 72,
+    "receivedRuns": 72,
+    "runMode": "REAL_AGENT",
+    "scoringProtocol": "FROZEN_CANONICAL",
+    "usageComplete": true,
+    "structuredEvidenceInvalidRuns": 1
+  },
+  "claims": {
+    "costReduction": false
+  },
+  "optionalExperimentEnabled": false,
+  "optionalExperimentDecision": "INVALID_EXPERIMENT",
+  "deploymentAuthorized": false,
+  "candidateIdentity": {
+    "baseSha": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+    "sourceDigest": "2d4f09405670e73bc655173b3ffe2ec72dc5b4beafddb396ea15c3fd4c0400d1",
+    "files": 605,
+    "dirty": true,
+    "lockfileHash": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+  },
+  "candidateIdentityNote": "Uncommitted candidate: candidateSha is the base only. sourceDigest binds executable sources/tests/fixtures/package lock/scripts using run-release-contracts.mjs canonical identity.",
+  "provenance": [
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/e8e1ea7d3cc73729-make_release_evidence.py",
+      "sha256": "e8e1ea7d3cc73729097b56916ae2785333fbec4b8853a2cf9948fbec7b817842"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/9a837e61e4256b7e-release-inputs.json",
+      "sha256": "9a837e61e4256b7e9be3bf255a4abcf30bf71fc43917f901824dfa1897dceab8"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/6233410947b1a4bb-manifest.json",
+      "sha256": "6233410947b1a4bbe1860789856f7789af7cf29e6092d4de5143f7202227b223"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/5c41e12a994a7a92-scoring.py",
+      "sha256": "5c41e12a994a7a9269725e94646bfb691e6929c2d3dba7c306255754095d4a28"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/a0fe5568570a1c78-protocol-identity.json",
+      "sha256": "a0fe5568570a1c78f16575c7f9c3d10de40c5e762fa425374e502e85cb483d8b"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/11ebe6be9b2b516e-k-contract-results.json",
+      "sha256": "11ebe6be9b2b516ef455e5f80efcfc7bcabe9a3da628f78df74df28bab00bdaf"
+    }
+  ],
+  "deploymentPerformed": false,
+  "llmArtifacts": [
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/59c31e019047eed3-product-report.json",
+      "sha256": "59c31e019047eed3c6d323486fcc3d665785f252c8a409ffd8bc6263548445c4"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/13680f2832a859bd-control-report.json",
+      "sha256": "13680f2832a859bd70bcf1d4ab8504e62d3bcad60ea48dfaccd46618f00bf23a"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/ddf73ddee7881bf0-live-next-summary.json",
+      "sha256": "ddf73ddee7881bf090a5d73c913a5de55e8974012450b175df0b2bb668c27e99"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/08f4ad06f30c8142-live-next-raw.tar.gz",
+      "sha256": "08f4ad06f30c814220c0466443688609e69b4c2b7ba153a37901bd85f0bfecb6"
+    },
+    {
+      "path": "docs/next-stage/runtime-integrity-evidence/raw/527ef80425227890-live-validity-notes.json",
+      "sha256": "527ef8042522789077baaf5b2876dd456b4dbf93fb34b90d4d04c7e6e96920d8"
+    }
+  ],
+  "packagingNotes": [
+    "Raw .log contents are stored with a .txt suffix so Git ignore does not omit them.",
+    "The frozen package originally contained34 ignored historical logs. Their exact manifest-matching bytes are included in frozen-ignored-logs.tar.gz for fresh-clone reproduction; no frozen content or manifest was edited."
+  ]
+}

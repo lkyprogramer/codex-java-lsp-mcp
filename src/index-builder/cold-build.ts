@@ -30,6 +30,7 @@ import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import {
   clearIndexData,
+  publishIndexCoverage,
   readBuildProgress,
   readMeta,
   refreshIndexCounts,
@@ -109,14 +110,32 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   const resolvedRepoRoot = await realpath(options.repoRoot).catch(() => path.resolve(options.repoRoot));
   const layout = probeLayout(resolvedRepoRoot);
 
-  if (readMeta(db, "buildState") === "READY") {
+  if (readMeta(db, "buildState") !== "BUILDING") {
     withTransaction(db, () => clearIndexData(db));
   }
   writeMeta(db, "buildState", "BUILDING");
+  db.prepare("UPDATE source_root_coverage SET state='BUILDING'").run();
   writeMeta(db, "repoRoot", resolvedRepoRoot);
 
   const discovered = await discoverJavaFiles(resolvedRepoRoot, layout);
   const total = discovered.length;
+  // An interrupted build may resume after the worktree changed. Invalidate
+  // stale declarations before reusing the durable cursor; all resolution then
+  // reruns against the current declaration set.
+  const known = db.prepare("SELECT path, content_hash AS hash, source_root AS root, parse_state AS state FROM file").all() as Array<{ path: string; hash: string; root: string; state: string }>;
+  const manifest = new Map(discovered.map(file => [file.relativePath, file]));
+  const stale: string[] = [];
+  for (const row of known) {
+    const file = manifest.get(row.path);
+    if (!file || file.sourceRoot !== row.root || row.state === "FAILED" ||
+      createHash("sha256").update(await readFile(file.absolutePath, "utf8"), "utf8").digest("hex") !== row.hash) stale.push(row.path);
+  }
+  if (stale.length > 0 || known.length !== total && readBuildProgress(db)?.phase === "resolve") {
+    withTransaction(db, () => {
+      for (const relativePath of stale) db.prepare("DELETE FROM file WHERE path=?").run(relativePath);
+      writeBuildProgress(db, { phase: "declare", done: 0, total });
+    });
+  }
   let progress = readBuildProgress(db) ?? { phase: "declare" as const, done: 0, total };
   progress = { ...progress, total };
   let parseFailed = 0;
@@ -145,6 +164,9 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
             layout
           });
           cache.delete(bundle.file.relativePath);
+          if (bundle.file.parseState === "FAILED") {
+            parseFailures.push({ relativePath: file.relativePath, message: `Java parse failed (${bundle.file.parseErrorCount} errors)` });
+          }
           return bundle;
         } catch (err) {
           if (isFatalIndexIoError(err)) throw err;
@@ -156,39 +178,44 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
         }
       });
       const bundles = parsed.filter((bundle): bundle is JavaFileBundle => bundle !== undefined);
-      parseFailed += parsed.length - bundles.length;
+      parseFailed += parsed.length - bundles.length + bundles.filter(bundle => bundle.file.parseState === "FAILED").length;
       const next = withTransaction(db, () => {
         for (const bundle of bundles) writeBundle(db, bundle);
         return commitProgress(db, { phase: "declare", done: existingPaths(db).size, total });
       });
       afterCommit({ phase: "declare", done: next.files, total }, options);
     }
-
-    const xmlFiles = await discoverMyBatisResourceFiles(resolvedRepoRoot, layout);
-    const resources: MyBatisMapperResourceFacts[] = [];
-    const scans: Array<{ relativePath: string; contentHash: string; size: number; mtimeMs: number }> = [];
-    for (const file of xmlFiles) {
-      const info = await stat(file.absolutePath);
-      const content = await readFile(file.absolutePath, "utf8");
-      const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-      scans.push({ relativePath: file.relativePath, contentHash, size: info.size, mtimeMs: info.mtimeMs });
-      const resource = extractMyBatisMapperFacts({
-        relativePath: file.relativePath,
-        content,
-        contentHash,
-        generation
-      });
-      if (resource) resources.push(resource);
-    }
-    progress = withTransaction(db, () => {
-      for (const resource of resources) writeMyBatisResource(db, resource);
-      for (const scan of scans) recordResourceScan(db, scan.relativePath, scan.contentHash, scan.size, scan.mtimeMs);
-      const next: BuildProgress = { phase: "resolve", done: 0, total };
-      commitProgress(db, next);
-      return next;
-    });
-    afterCommit(progress, options);
   }
+
+  const xmlFiles = await discoverMyBatisResourceFiles(resolvedRepoRoot, layout);
+  const resources: MyBatisMapperResourceFacts[] = [];
+  const scans: Array<{ relativePath: string; contentHash: string; size: number; mtimeMs: number }> = [];
+  for (const file of xmlFiles) {
+    const info = await stat(file.absolutePath);
+    const content = await readFile(file.absolutePath, "utf8");
+    const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+    scans.push({ relativePath: file.relativePath, contentHash, size: info.size, mtimeMs: info.mtimeMs });
+    const resource = extractMyBatisMapperFacts({
+      relativePath: file.relativePath,
+      content,
+      contentHash,
+      generation
+    });
+    if (resource) resources.push(resource);
+  }
+  const declared = progress.phase === "declare";
+  progress = withTransaction(db, () => {
+    // This is a full cold-build census, including resume from resolve. Replace
+    // its resource set so removed XML and mapper-to-nonmapper edits cannot
+    // leave old evidence behind when the graph/documents rebuild below.
+    db.exec("DELETE FROM mybatis_resource; DELETE FROM resource_scan;");
+    for (const resource of resources) writeMyBatisResource(db, resource);
+    for (const scan of scans) recordResourceScan(db, scan.relativePath, scan.contentHash, scan.size, scan.mtimeMs);
+    const next: BuildProgress = declared ? { phase: "resolve", done: 0, total } : progress;
+    commitProgress(db, next);
+    return next;
+  });
+  if (declared) afterCommit(progress, options);
 
   const store = new SqlFactsStore(db);
   const view = buildSqlRegistryView(store);
@@ -229,14 +256,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
 
   const roots = layout.sourceRoots.map(root => root.relativePath);
   const counts = withTransaction(db, () => {
-    const stmt = db.prepare(
-      `INSERT INTO source_root_coverage(root, state, generation) VALUES (?, 'COMPLETE', ?)
-       ON CONFLICT(root) DO UPDATE SET state=excluded.state, generation=excluded.generation`
-    );
-    for (const root of roots) stmt.run(root, generation);
-    writeMeta(db, "buildState", "READY");
-    writeMeta(db, "indexedGeneration", String(generation));
-    return refreshIndexCounts(db);
+    return publishIndexCoverage(db, generation, roots, discovered);
   });
 
   return { ok: true, parseFailed, parseFailures, ...counts };
