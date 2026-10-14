@@ -7,7 +7,7 @@ import { checkStatus, derivedStatus } from "./ilv2-mac-status.mjs";
 
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
 
-async function fixture(t, gates, results = {}, manual = "状态见 `docs/index-lifecycle-v2/mac/status.json`。\n", openDecisions = []) {
+async function fixture(t, gates, results = {}, manual = "状态见 `docs/index-lifecycle-v2/mac/status.json`。\n", openDecisions = [], card = "# MAC-01\n") {
   const root = await mkdtemp(path.join(os.tmpdir(), "mac-status-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const [name, value] of Object.entries(results)) {
@@ -16,7 +16,9 @@ async function fixture(t, gates, results = {}, manual = "状态见 `docs/index-l
   }
   await writeFile(path.join(root, "status.json"), json({ schema: "ilv2-mac-status/v1", gates, openDecisions }));
   await writeFile(path.join(root, "manual.md"), manual);
-  return { statusFile: path.join(root, "status.json"), manualFile: path.join(root, "manual.md") };
+  await mkdir(path.join(root, "manual/cards"), { recursive: true });
+  await writeFile(path.join(root, "manual/cards/MAC-01.md"), card);
+  return { statusFile: path.join(root, "status.json"), manualFile: path.join(root, "manual.md"), manualDir: path.join(root, "manual") };
 }
 
 test("parent status is derived from children", () => {
@@ -44,12 +46,13 @@ test("drift, stored parent status, orphans and manual status copies are rejected
     { gateId: "G1", status: "PASS", children: ["G1A"] },
     { gateId: "G2", status: "PASS" }
   ], { one: { gateId: "G1A", status: "IN_PROGRESS", evidence: [{ name: "probe" }] }, orphan: { gateId: "G9", status: "PASS" } }, "**执行状态：** PASS\n",
-  [{ id: "D1", evidence: { result: "one/task-result.json", name: "probe" } }, { id: "D2", evidence: { result: "one/task-result.json", name: "gone" } }, { id: "D3", evidence: { result: "missing/task-result.json", name: "probe" } }]);
+  [{ id: "D1", evidence: { result: "one/task-result.json", name: "probe" } }, { id: "D2", evidence: { result: "one/task-result.json", name: "gone" } }, { id: "D3", evidence: { result: "missing/task-result.json", name: "probe" } }],
+  "# MAC-01\n\n**执行状态：** PASS\n");
   const { status, errors } = await checkStatus(files);
   assert.ok(!errors.some(error => error.startsWith("D1:")), JSON.stringify(errors));
   assert.equal(status, "FAIL");
   for (const pattern of [/G1A: status.json PASS but one\/task-result.json records IN_PROGRESS/, /G1: parent status is derived/, /G2: PASS requires a task-result/,
-    /orphan\/task-result.json is not referenced/, /repeats per-card execution status/, /must reference status.json/, /D2: one\/task-result.json has no evidence gone/, /D3: unreadable evidence/]) {
+    /orphan\/task-result.json is not referenced/, /^manual repeats per-card execution status/, /cards\/MAC-01.md repeats per-card execution status/, /must reference status.json/, /D2: one\/task-result.json has no evidence gone/, /D3: unreadable evidence/]) {
     assert.ok(errors.some(error => pattern.test(error)), `${pattern} not in ${JSON.stringify(errors)}`);
   }
 });

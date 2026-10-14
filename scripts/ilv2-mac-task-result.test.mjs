@@ -81,9 +81,10 @@ test("compose writes a generated result, upserts status.json and refuses unsuppo
   await mkdir(path.join(docs, "flow"), { recursive: true });
   await writeFile(path.join(docs, "status.json"), json({ schema: "ilv2-mac-status/v1", gates: [{ gateId: "G03A", taskId: "MAC-03A", status: "PLAN" }], workflow: [] }));
   await writeFile(path.join(docs, "manual.md"), "see index-lifecycle-v2/mac/status.json\n");
+  await mkdir(path.join(docs, "manual"));
   await writeFile(path.join(root, "probe.json"), json({ status: "BLOCKED_ENV_TCC" }));
   const verdictFile = path.join(root, "verdict.json"), outFile = path.join(docs, "flow/task-result.json");
-  const options = { runRoot: root, verdictFile, outFile, statusFile: path.join(docs, "status.json"), manualFile: path.join(docs, "manual.md") };
+  const options = { runRoot: root, verdictFile, outFile, statusFile: path.join(docs, "status.json"), manualFile: path.join(docs, "manual.md"), manualDir: path.join(docs, "manual") };
   await writeFile(verdictFile, json({ schema: "ilv2-task-verdict/v1", taskId: "WF", workflowId: "WF-1", status: "PASS", main: ["main"], evidence: [{ name: "a4", file: "probe.json" }] }));
   await assert.rejects(composeTaskResult(options), /requires closeout/);
   await mkdir(path.join(root, "closeout"));

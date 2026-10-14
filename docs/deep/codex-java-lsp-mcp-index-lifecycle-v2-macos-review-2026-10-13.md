@@ -450,3 +450,24 @@ flowchart TB
 - 独立评审初审FAIL，共4项P2：清点漏`*Pid`和逃逸进程、零测试运行可判PASS、收尾记录未绑定本次运行、TCC证据指针悬空。修复后复核PASS。
 - 复跑中还发现两项既有问题并已修：`e7c12e4`使`ilv2-mac-runtime-contracts.test.mjs`解析已删除的broker输出行；`node --test`遇到不存在的文件参数会静默不选，曾造成一次INVALID调用。
 - 两个运行根都已收尾：早先一次被替代的尝试与最终候选，均为零残留、归档物理校验PASS。A4证据记录为`workflow-mac5-tcc`（BLOCKED_ENV）。
+
+### 8.5 ILV2-MAC/6 结构修订与JDT导入根因（2026-10-14）
+
+输入：ILV2-MAC/5遗留项。用户要求完成D（手册拆分、spike约束回填、G06C去重、03A∥04排序）、`brew pin`、B_full和JDT导入卡住排查，并决定TCC-LAUNCHER-IDENTITY选“业务worktree移出保护目录”。产品合同与阈值不变。
+
+| 问题与证据 | MAC/6处理 |
+| --- | --- |
+| JDT导入在active域90 s无进展（WF-MAC5两次FAIL）。jstack显示Buildship `CompatibilityChecker`经`ZippedDistribution`在HTTPS下载Gradle；control域daemon的`-cp`是私有home下的`wrapper/dists/gradle-9.3.1-bin`，从开始导入到daemon启动约84 s，MAC-02B归档中同一段约8–9 s | 根因是owner fixture同时给了`gradle.home`和`gradle.version`，JDT LS优先用version。删除version；测试断言设置不带version、daemon `-cp`位于冻结home之下且不含`wrapper/dists`。此前JDT导入证据实际未使用冻结Gradle，这一点如实记录，不改写历史计数 |
+| 工具链可被`brew upgrade`改动 | `brew pin gradle jdtls openjdk`；换版本须unpin、重建INPUT并重跑依赖门（verification.md） |
+| 手册约120 KB，每张卡都要全量加载 | 原路径改为索引，§0–§1、§2、各卡、§5–§6、§4/§7–§9拆成独立文件，章节号不变；逐行比对只有4行有意修改。状态检查器同时扫描拆分文件 |
+| MAC-00 spike数据只在结果JSON里 | MAC-04/05/12卡写入实测约束：逻辑页差11.3%/31.2%、B20/B200为27.4 s/131.2 s、固定reconcile开销约7.2 s、graph-search约58%、parse约18%；MAC-05列出falsifier，MAC-12按旧profile不先做parser并行 |
+| G06C重复G02B/G09最慢的真实launchd恢复证明 | G06C改用直接spawn的owner fixture验证调度准入；launchd时间线和≤10 s退出只由G02B（原语）与G09（集成）证明；launcher/锁代码变更后重跑G02B |
+| 03A与04可并行但顺序未写明 | 索引给出推荐顺序：03A∥04 → 05（含薄切片）→ 06→07→08，03B在05后、07前 |
+| 业务worktree位于`~/Documents/program` | 新增`ilv2-mac-worktree-migration.mjs`，只读生成migrate/verify/rollback脚本，临时仓库测试实际执行迁移、校验、回滚。真实计划在工作根`plans/worktree-migration/`，未执行，等用户确认 |
+| Tier-1首个候选上owner在解析`command.json`时崩溃（`Unexpected end of JSON input`），launchd重启后处于RECOVERING，JDT导入未启动 | fixture写命令改为同目录临时文件+rename；owner每25 ms轮询，此前可能读到截断后未写完的文件。该修复没有专门的确定性回归测试，只由下列真实launchd运行覆盖 |
+
+验证（结果见`docs/index-lifecycle-v2/mac/workflow-mac6/task-result.json`，PASS）：
+- B_full：旧源码`9b3a110`不插桩，在冻结lishu-v2上跑3次cold full，均自然READY、5887/4文件全部入索引、FAILED/RECOVERED为0、integrity ok、无WAL。build墙钟393.6/409.9/419.7 s，中位数409.9 s；主机load 15–21，属于负载下的基线。聚合数据在`mac-00/b-full.json`。由此full上限为1,230 s，full门为≤327.9 s。
+- Tier-0修复后JDT导入测试连续3次通过（load最高29）；修复前同一入口复现失败。
+- Tier-1：首个候选`runs/workflow-mac6/20261014T152153Z`的main-jdt为2/3，失败原因是上述command竞态，已收尾归档并被替代。新候选环境探针READY，main-jdt 3/3，main-ilv2 123/123（WF-MAC5的19个文件加迁移测试），收尾零残留。
+- 拆分前后逐行比对，只有4行有意修改；拆分文件内相对链接0失效。

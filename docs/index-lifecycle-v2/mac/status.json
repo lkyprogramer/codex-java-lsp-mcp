@@ -1,6 +1,6 @@
 {
   "schema": "ilv2-mac-status/v1",
-  "manualVersion": "ILV2-MAC/5",
+  "manualVersion": "ILV2-MAC/6",
   "planStatus": "IN_PROGRESS",
   "candidateStatus": "NOT_READY",
   "benefit": "UNMEASURED",
@@ -201,6 +201,11 @@
       "id": "WF-MAC5",
       "status": "FAIL",
       "result": "workflow-mac5/task-result.json"
+    },
+    {
+      "id": "WF-MAC6",
+      "status": "PASS",
+      "result": "workflow-mac6/task-result.json"
     }
   ],
   "openDecisions": [
@@ -220,7 +225,14 @@
         "business worktrees outside TCC-protected folders",
         "another launch topology proven by the same probe"
       ],
-      "decisionOwner": "user"
+      "decisionOwner": "user",
+      "decision": {
+        "choice": "business worktrees outside TCC-protected folders",
+        "decidedBy": "user",
+        "decidedAt": "2026-10-14",
+        "state": "DECIDED_PENDING_MIGRATION",
+        "note": "Stays open until the migration plan is confirmed and executed and MAC-17/18 re-probe reads without a TCC prompt."
+      }
     }
   ],
   "next": [

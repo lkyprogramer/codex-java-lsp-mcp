@@ -1,6 +1,6 @@
 // Isolated launchd adapter. The job is the real native exec route, with no
 // supervising wrapper between launchd and the owner.
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import os from "node:os";
@@ -78,7 +78,11 @@ export async function createOwnerFixture(t, options = {}) {
         throw Object.assign(new Error(`${diagnosis.classification}: launchd owner not ready`), { diagnosis });
       }
     },
-    async command(command) { await writeJson(path.join(root, "command.json"), { id: randomUUID(), ...command }); },
+    // The owner polls command.json every 25 ms; a truncate-then-write would let it parse a partial file and crash.
+    async command(command) {
+      const id = randomUUID(), staged = path.join(root, `command.${id}.tmp`);
+      await writeJson(staged, { id, ...command }); await rename(staged, path.join(root, "command.json"));
+    },
     async stopOwned() {
       if (!direct) throw new Error("direct primitive fixture required");
       if (supervisor && supervisor.exitCode === null && supervisor.signalCode === null) process.kill(-supervisor.pid, "SIGTERM");

@@ -32,7 +32,9 @@ async function startJdtImport() {
   const settings = buildJavaSettings({ repoRoot: path.join(root, "repo"), buildSystem: "gradle",
     projectJdk: { resolvedHome: options.javaHome, runtimeName: "JavaSE-25" },
     generatedCode: { annotationProcessing: { enabled: false } }, gradleHome: env.GRADLE_USER_HOME });
-  Object.assign(settings.java.import.gradle, { home: options.jdtImport.gradleHome, version: "9.3.1",
+  // No gradle.version: JDT LS prefers it over gradle.home and the Tooling API
+  // then downloads a fresh distribution instead of running the frozen one.
+  Object.assign(settings.java.import.gradle, { home: options.jdtImport.gradleHome,
     wrapper: { enabled: false }, offline: { enabled: true }, java: { home: options.javaHome } });
   jdt = defaultJdtlsTransportFactory.spawn({ binary: options.jdtlsBin,
     args: ["-data", path.join(root, "jdt-data"), "-configuration", path.join(root, "jdt-configuration"),

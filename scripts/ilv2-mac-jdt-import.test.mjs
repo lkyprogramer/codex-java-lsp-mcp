@@ -65,6 +65,8 @@ test("launchd-jdt-settings-import-and-fault-recovery", { timeout: 300000 }, asyn
     await record(fixture, "import-initialized", item.owner.pid);
     assert.equal(item.jdt.env.GRADLE_USER_HOME, home);
     assert.equal(item.jdt.settings.java.import.gradle.user.home, home);
+    assert.equal(item.jdt.settings.java.import.gradle.home, frozen.gradleHome);
+    assert.equal(item.jdt.settings.java.import.gradle.version, undefined);
     assert.equal(item.jdt.initialize.initializationOptions.settings.java.import.gradle.user.home, home);
     await eventually(async () => (await readFile(path.join(repo, "phase.txt"), "utf8").catch(() => "")) === "IMPORT_STARTED", 90000);
     item.pid = await daemon(home);
@@ -75,6 +77,9 @@ test("launchd-jdt-settings-import-and-fault-recovery", { timeout: 300000 }, asyn
     item.daemonFd = (await execute("/usr/sbin/lsof", ["-a", "-p", String(item.pid), "-d", "4"])).stdout;
     item.daemonCommand = (await execute("/bin/ps", ["-o", "command=", "-p", String(item.pid)])).stdout;
     assert.match(item.daemonCommand, /GradleDaemon 9\.3\.1/);
+    // The daemon must run the frozen installation, not a downloaded distribution.
+    assert.ok(item.daemonCommand.includes(`-cp ${frozen.gradleHome}/lib/`), item.daemonCommand);
+    assert.equal(item.daemonCommand.includes("wrapper/dists"), false);
     assert.notEqual(item.daemonPgid, item.owner.pgid); assert.equal(item.daemonFd.includes(".owner.lock"), false);
     Object.assign(evidence.domains.at(-1), { owner: item.owner, jdt: item.jdt, pid: item.pid,
       jdtPgid: item.jdtPgid, jdtFd: item.jdtFd, daemonPgid: item.daemonPgid, daemonFd: item.daemonFd, daemonCommand: item.daemonCommand });

@@ -9,6 +9,8 @@ import { cliOptions, isMain, readJson, requireValue, runCli } from "./ilv2-mac-c
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const STATUS_FILE = path.join(repoRoot, "docs/index-lifecycle-v2/mac/status.json");
 export const MANUAL_FILE = path.join(repoRoot, "docs/deep/codex-java-lsp-mcp-index-lifecycle-v2-ai-execution-manual-2026-10-13.md");
+// The manual file is an index; rules, contract, cards and verification live here.
+export const MANUAL_DIR = path.join(repoRoot, "docs/deep/ilv2-mac-manual");
 export const GATE_STATUSES = new Set(["PLAN", "IN_PROGRESS", "PASS", "FAIL", "BLOCKED_ENV", "BLOCKED_AUTH", "NOT_RUN", "NOT_REPRODUCED", "INVALID_EXPERIMENT"]);
 // The manual keeps contracts only; per-card execution status paragraphs duplicated this file.
 const MANUAL_STATUS_MARKER = /\*\*执行状态[:：]?/;
@@ -29,7 +31,12 @@ export function derivedStatus(gate, byId) {
   return "IN_PROGRESS";
 }
 
-export async function checkStatus({ statusFile = STATUS_FILE, manualFile = MANUAL_FILE } = {}) {
+async function markdownFiles(dir) {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  return entries.filter(entry => entry.isFile() && entry.name.endsWith(".md")).map(entry => path.join(entry.parentPath, entry.name)).sort();
+}
+
+export async function checkStatus({ statusFile = STATUS_FILE, manualFile = MANUAL_FILE, manualDir = MANUAL_DIR } = {}) {
   const status = await readJson(statusFile);
   const baseDir = path.dirname(statusFile);
   const errors = [];
@@ -83,13 +90,17 @@ export async function checkStatus({ statusFile = STATUS_FILE, manualFile = MANUA
   const manual = await readFile(manualFile, "utf8");
   if (MANUAL_STATUS_MARKER.test(manual)) errors.push("manual repeats per-card execution status; keep it in status.json");
   if (!manual.includes("index-lifecycle-v2/mac/status.json")) errors.push("manual must reference status.json as the status source");
+  for (const file of await markdownFiles(manualDir)) {
+    if (MANUAL_STATUS_MARKER.test(await readFile(file, "utf8"))) errors.push(`${path.relative(manualDir, file)} repeats per-card execution status; keep it in status.json`);
+  }
   const summary = status.gates.map(gate => ({ gateId: gate.gateId, status: byId.has(gate.gateId) ? derivedStatus(gate, byId) : null }));
   return { status: errors.length ? "FAIL" : "PASS", errors, summary };
 }
 
 if (isMain(import.meta.url)) runCli(async () => {
-  const options = cliOptions(process.argv.slice(2), ["--status", "--manual"]);
-  const result = await checkStatus({ statusFile: options.status ?? STATUS_FILE, manualFile: options.manual ?? MANUAL_FILE });
+  const options = cliOptions(process.argv.slice(2), ["--status", "--manual", "--manual-dir"]);
+  const result = await checkStatus({ statusFile: options.status ?? STATUS_FILE, manualFile: options.manual ?? MANUAL_FILE,
+    manualDir: options["manual-dir"] ?? MANUAL_DIR });
   console.log(JSON.stringify({ status: result.status, errors: result.errors,
     gates: Object.fromEntries(result.summary.map(row => [row.gateId, row.status])) }, null, 2));
   process.exitCode = result.status === "PASS" ? 0 : 1;

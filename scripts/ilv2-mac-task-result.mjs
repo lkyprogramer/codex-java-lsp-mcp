@@ -7,7 +7,7 @@ import { lstat, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { MAC_WORK_ROOT, cliOptions, isMain, readJson, requireValue, runCli, sha256, writeJson } from "./ilv2-mac-contracts.mjs";
 import { ISOLATED_LAUNCHD_LABEL } from "./ilv2-mac-fixture-quota.mjs";
-import { GATE_STATUSES, MANUAL_FILE, STATUS_FILE, checkStatus } from "./ilv2-mac-status.mjs";
+import { GATE_STATUSES, MANUAL_DIR, MANUAL_FILE, STATUS_FILE, checkStatus } from "./ilv2-mac-status.mjs";
 
 // Gates whose PASS also needs a second build of the same source (manual §0.2).
 export const INDEPENDENT_RERUN_GATES = new Set(["G09", "G11", "G14", "G17"]);
@@ -161,7 +161,7 @@ async function optionalJson(file) {
   catch (error) { if (error.code === "ENOENT") return null; throw error; }
 }
 
-export async function composeTaskResult({ runRoot, verdictFile, outFile, statusFile = STATUS_FILE, manualFile = MANUAL_FILE }) {
+export async function composeTaskResult({ runRoot, verdictFile, outFile, statusFile = STATUS_FILE, manualFile = MANUAL_FILE, manualDir = MANUAL_DIR }) {
   const verdict = await readJson(verdictFile);
   requireValue(verdict.schema === "ilv2-task-verdict/v1" && verdict.taskId && Boolean(verdict.gateId) !== Boolean(verdict.workflowId), "verdict needs schema, taskId and exactly one of gateId/workflowId");
   requireValue(GATE_STATUSES.has(verdict.status), `invalid status ${verdict.status}`);
@@ -220,7 +220,7 @@ export async function composeTaskResult({ runRoot, verdictFile, outFile, statusF
   const staged = `${statusFile}.${process.pid}.tmp`;
   await writeFile(staged, `${JSON.stringify(status, null, 2)}\n`);
   await rename(staged, statusFile);
-  return { result, statusCheck: await checkStatus({ statusFile, manualFile }) };
+  return { result, statusCheck: await checkStatus({ statusFile, manualFile, manualDir }) };
 }
 
 if (isMain(import.meta.url)) runCli(async () => {

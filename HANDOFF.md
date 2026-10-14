@@ -14,7 +14,7 @@
 
 pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。探针：`scripts/probe-daemon-acceptance.mjs`（D2/D4/D6 + P2-G2/G5/G6）。手册：`docs/deep/codex-java-lsp-mcp-index-on-disk-ai-execution-manual-2026-09-07.md`。
 
-隔离验证：`PATH="/opt/homebrew/bin:$PATH"` + `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`（门证据，Tier-1）。ILV2迭代用 `sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs -- COMMAND`（持久隔离tree，增量构建，不产生证据，Tier-0）。ILV2工作根已迁至 `~/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac`（不得放在 TCC 保护目录）；门状态只看 `docs/index-lifecycle-v2/mac/status.json`。
+隔离验证：`PATH="/opt/homebrew/bin:$PATH"` + `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`（门证据，Tier-1）。ILV2迭代用 `sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs -- COMMAND`（持久隔离tree，增量构建，不产生证据，Tier-0）。ILV2工作根已迁至 `~/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac`（不得放在 TCC 保护目录）；门状态只看 `docs/index-lifecycle-v2/mac/status.json`。ILV2手册自`ILV2-MAC/6`起拆为索引（原手册路径）+ `docs/deep/ilv2-mac-manual/`（rules/contract/cards/verification/ledger），每卡只加载索引、本卡和引用章节。JDT/Gradle工具链已`brew pin`；JDT设置不得带`gradle.version`（会绕开冻结home去下载）。业务worktree迁出Documents的dry-run计划在工作根`plans/worktree-migration/`，未执行，待用户确认。
 
 ## 当前任务
 
