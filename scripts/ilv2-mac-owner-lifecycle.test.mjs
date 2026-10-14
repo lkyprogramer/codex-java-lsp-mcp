@@ -7,7 +7,7 @@ import { createOwnerFixture, eventually, processAlive, processGroup } from "./il
 import { execute, writeJson } from "./ilv2-mac-contracts.mjs";
 
 async function evidence(name, result) {
-  if (process.env.ILV2_RUN_ROOT) await writeJson(path.join(process.env.ILV2_RUN_ROOT, "raw", `${name}.json`), result);
+  if (process.env.ILV2_RUN_ROOT) await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `${name}.json`), result);
 }
 async function busy(fixture) {
   return eventually(async () => {
@@ -44,7 +44,7 @@ test("bounded-lock-wait-and-owner-busy-restart", { timeout: 24000 }, async t => 
   await two.close();
 });
 
-for (const name of ["crash-soon-after-start-honors-recovery-budget", "launchd-restart-reaps-owned-group", "lock-survives-daemon-sigkill-until-descendants-exit"]) {
+for (const name of ["crash-soon-after-start-honors-recovery-budget", "stable-sigkill-reaps-owned-group-and-preserves-lock-until-exit"]) {
   test(name, { timeout: 22000 }, async t => {
     const fixture = await createOwnerFixture(t, { child: true, depth: 2 });
     const ready = await fixture.ready();
@@ -60,7 +60,7 @@ for (const name of ["crash-soon-after-start-honors-recovery-budget", "launchd-re
     const restarted = await fixture.ready(ready.pid);
     assert.ok(performance.now() - faultAt < 10000);
     assert.notEqual(restarted.pgid, ready.pgid);
-    await evidence(t.name, { owner: ready, descendants, restarted, oldExitedMs, recoveryMs: performance.now() - faultAt });
+    await evidence(t.name, { contracts: ["launchd-restart-reaps-owned-group", "lock-survives-daemon-sigkill-until-descendants-exit"], owner: ready, descendants, restarted, oldExitedMs, recoveryMs: performance.now() - faultAt });
     await fixture.close();
   });
 }

@@ -1,8 +1,96 @@
 #!/usr/bin/env node
-// Validate the actual remaining tree; this command never deletes evidence.
-import { lstat, readdir } from "node:fs/promises";
+// Verify residuals, or finish this run after actual owned resources have exited.
+import { lstat, readdir, readFile, mkdir, mkdtemp, rm, realpath } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
-import { contains, readJson, managedPath, requireValue, isMain, runCli, cliOptions } from "./ilv2-mac-contracts.mjs";
+import { contains, readJson, writeJson, sha256, execute, managedPath, requireValue, isMain, runCli, cliOptions } from "./ilv2-mac-contracts.mjs";
+import { fixtureQuotaFile } from "./ilv2-mac-fixture-quota.mjs";
+
+function exited(pid) {
+  try { process.kill(pid, 0); return false; }
+  catch (error) { if (error.code === "ESRCH") return true; throw error; }
+}
+
+export async function verifyOwnedExit(manifest) {
+  requireValue(Array.isArray(manifest.processes) && Array.isArray(manifest.launchdJobs), "explicit process and job inventory required");
+  for (const row of manifest.processes) {
+    requireValue(Number.isInteger(row.pid) && row.pid > 1, "invalid owned pid");
+    requireValue(exited(row.pid), `owned process still alive: ${row.pid}`);
+    if (row.pgid !== undefined) {
+      requireValue(row.ownedGroup === true && Number.isInteger(row.pgid) && row.pgid > 1, "owned group identity required");
+      requireValue(exited(-row.pgid), `owned group still alive: ${row.pgid}`);
+    }
+  }
+  for (const row of manifest.launchdJobs) {
+    requireValue(row.domain === `gui/${process.getuid()}` && /^com\.lky\.ilv2-mac02b\.[a-zA-Z0-9.-]+$/.test(row.label), "isolated launchd identity required");
+    try { await execute("/bin/launchctl", ["print", `${row.domain}/${row.label}`]); throw new Error(`launchd job still present: ${row.label}`); }
+    catch (error) { requireValue(error.code === 113 && /Could not find service/.test(error.stderr ?? ""), `launchd absence unproven: ${row.label}`); }
+  }
+  if (manifest.workRoot) {
+    const db = new DatabaseSync(fixtureQuotaFile(manifest.workRoot), { readOnly: true });
+    try {
+      const pids = new Set(manifest.processes.map(row => row.pid));
+      const rows = db.prepare("SELECT s.*,j.run_root FROM fixture_slots s LEFT JOIN external_fixture_jobs j ON j.token=s.token").all();
+      requireValue(!rows.some(row => pids.has(row.pid) || pids.has(row.child_pid) || row.run_root && contains(manifest.runRoot, row.run_root)), "owned fixture quota remains registered");
+    } finally { db.close(); }
+  }
+  return { status: "PASS", processes: manifest.processes, launchdJobs: manifest.launchdJobs };
+}
+
+async function inventory(root, targets) {
+  const rows = [];
+  async function visit(file) {
+    const stat = await lstat(file);
+    requireValue(!stat.isSymbolicLink() && (stat.isFile() || stat.isDirectory()), "archive requires regular files/directories");
+    if (stat.isDirectory()) for (const name of (await readdir(file)).sort()) await visit(path.join(file, name));
+    else rows.push({ path: path.relative(root, file), bytes: stat.size, sha256: sha256(await readFile(file)) });
+  }
+  for (const target of targets) await visit(target);
+  return rows.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function finishCloseout(manifest) {
+  const root = manifest.runRoot;
+  requireValue(await realpath(root) === root && (await readFile(path.join(root, "run-root.txt"), "utf8")).trim() === root, "preregistered canonical run root required");
+  const output = await managedPath(root, manifest.closeoutDirectory);
+  requireValue(output === manifest.closeoutDirectory && manifest.artifacts.some(row => row.path === output && row.class === "LOCAL" && row.recursive), "closeout output must be registered LOCAL");
+  await mkdir(output, { recursive: true });
+  try { await lstat(path.join(output, "closeout.json")); throw new Error("closeout already exists"); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+  const before = await validateCloseout(manifest);
+  requireValue(before.unregisteredPaths.length === 0, "unregistered paths must be resolved before cleanup");
+  const resourceExit = await verifyOwnedExit(manifest);
+  const expired = manifest.artifacts.filter(row => row.expiresAtGate === manifest.gateId && !row.carryOver);
+  for (const row of expired) {
+    requireValue(["RAW", "BULK", "INPUT"].includes(row.class), "retained records cannot expire");
+    requireValue(!manifest.artifacts.some(other => other !== row && contains(row.path, other.path)), "overlapping cleanup registrations rejected");
+    requireValue(await managedPath(root, row.path) === row.path, "cleanup symlink/alias rejected");
+  }
+  const existing = [];
+  for (const row of expired) {
+    try { await lstat(row.path); existing.push(row); } catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  const raw = existing.filter(row => row.class === "RAW");
+  let archive = null;
+  if (raw.length) {
+    const files = await inventory(root, raw.map(row => row.path));
+    const archivePath = path.join(output, "raw-evidence.tar.gz");
+    await writeJson(path.join(output, "archive-manifest.json"), { files });
+    await execute("/usr/bin/tar", ["-czf", archivePath, "-C", root, "--", ...raw.map(row => path.relative(root, row.path))]);
+    const verification = await mkdtemp(path.join(output, "verify-"));
+    try {
+      await execute("/usr/bin/tar", ["-xzf", archivePath, "-C", verification]);
+      const actual = await inventory(verification, raw.map(row => path.join(verification, path.relative(root, row.path))));
+      requireValue(JSON.stringify(actual) === JSON.stringify(files), "physical archive verification mismatch");
+    } finally { await rm(verification, { recursive: true, force: true }); }
+    archive = { path: archivePath, sha256: sha256(await readFile(archivePath)), fileCount: files.length, bytes: files.reduce((sum, row) => sum + row.bytes, 0), physicalVerification: "PASS" };
+  }
+  for (const row of existing) await rm(row.path, { recursive: true, force: true });
+  const remaining = await validateCloseout(manifest);
+  const result = { ...remaining, gatePassClaim: false, resourceExit, archive, deletedPaths: existing.map(row => row.path) };
+  await writeJson(path.join(output, "closeout.json"), result);
+  return result;
+}
 
 export async function validateCloseout(manifest) {
   const root = manifest.runRoot;
@@ -28,7 +116,9 @@ export async function validateCloseout(manifest) {
       const registrations = manifest.artifacts.filter(row => row.recursive ? contains(row.path, file) : row.path === file);
       if (!registrations.length && !manifest.artifacts.some(row => contains(file, row.path))) unregisteredPaths.push(file);
       const stat = await lstat(file);
-      requireValue(!stat.isSymbolicLink(), "closeout residual symlink rejected");
+      // The broker's node_modules link points into its own private dependency
+      // copy. Inspect the link without traversing it; external targets fail.
+      if (stat.isSymbolicLink()) await managedPath(root, file);
       const expired = registrations.some(row => row.expiresAtGate === manifest.gateId && !row.carryOver);
       if (expired) expiredResidualPaths.push(file);
       if (entry.isDirectory()) await visit(file);
@@ -40,8 +130,10 @@ export async function validateCloseout(manifest) {
     carryOver: manifest.artifacts.filter(row => row.carryOver) };
 }
 if (isMain(import.meta.url)) runCli(async () => {
-  const options = cliOptions(process.argv.slice(2), ["--manifest"]);
-  const result = await validateCloseout(await readJson(options.manifest));
+  const options = cliOptions(process.argv.slice(2), ["--manifest", "--finish"]);
+  requireValue(Boolean(options.manifest) !== Boolean(options.finish), "choose --manifest or --finish");
+  const manifest = await readJson(options.manifest ?? options.finish);
+  const result = options.finish ? await finishCloseout(manifest) : await validateCloseout(manifest);
   console.log(JSON.stringify(result));
   process.exitCode = result.status === "PASS" ? 0 : 1;
 });

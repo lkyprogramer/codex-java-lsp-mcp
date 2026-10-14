@@ -92,7 +92,7 @@ export async function createOwnerFixture(t, options = {}) {
       } else result = await lease.close();
       await writeJson(path.join(root, "closeout.json"), result);
       if (process.env.ILV2_RUN_ROOT) {
-        const target = path.join(process.env.ILV2_RUN_ROOT, "raw", `owner-${label.split(".").at(-1)}`);
+        const target = path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `owner-${label.split(".").at(-1)}`);
         await mkdir(target);
         for (const name of ["options.json", "fixture.plist", "timeline.jsonl", "stdout.log", "stderr.log", "closeout.json"]) {
           try { await writeFile(path.join(target, name), await readFile(path.join(root, name))); } catch (error) { if (error.code !== "ENOENT") throw error; }

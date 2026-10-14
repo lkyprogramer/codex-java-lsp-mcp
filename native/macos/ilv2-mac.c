@@ -20,8 +20,10 @@
 #error Unsupported architecture
 #endif
 
+static bool native_startup_error = false;
+
 static int failure(const char *code, int error) {
-    printf("{\"protocol\":\"%s\",\"kind\":\"error\",\"code\":\"%s\",\"errno\":%d}\n", ILV2_NATIVE_PROTOCOL, code, error);
+    printf("{\"protocol\":\"%s\",\"kind\":\"%s\",\"code\":\"%s\",\"errno\":%d}\n", ILV2_NATIVE_PROTOCOL, native_startup_error ? "startup-error" : "error", code, error);
     return 1;
 }
 
@@ -68,11 +70,13 @@ static int clone_database(const char *source, const char *target) {
 }
 
 #include "owner-lock.h"
+#include "fsevents.h"
 
 int main(int argc, char **argv) {
     if (argc == 3 && strcmp(argv[1], "capability") == 0) return capability(argv[2]);
     if (argc == 4 && strcmp(argv[1], "clone") == 0) return clone_database(argv[2], argv[3]);
     if (argc >= 4 && strcmp(argv[1], "owner") == 0) return launch_owner(argc, argv);
+    if (argc == 4 && strcmp(argv[1], "watch") == 0) return watch_fsevents(argv[2], argv[3]);
     if (argc == 3 && strcmp(argv[1], "verify-owner-lock") == 0) return verify_owner_lock(argv[2]);
     return failure("INVALID_ARGUMENTS", 0);
 }

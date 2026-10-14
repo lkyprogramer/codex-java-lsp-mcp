@@ -9,7 +9,7 @@ async function busy(fixture) {
   return eventually(async () => (await readFile(path.join(fixture.root, "stdout.log"), "utf8").catch(() => "")).includes('"code":"OWNER_BUSY"'), 6500);
 }
 async function evidence(name, result) {
-  await writeJson(path.join(process.env.ILV2_RUN_ROOT, "raw", `${name}.json`), { ...result, launchd: "NOT_RUN" });
+  await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `${name}.json`), { ...result, launchd: "NOT_RUN" });
 }
 test("native-bounded-lock-wait-does-not-exec-second-owner", { timeout: 22000 }, async t => {
   const one = await createOwnerFixture(t, { route: "direct" }); const ready = await one.ready();

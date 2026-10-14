@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
-import { isolatedValidationEnvironment } from "./run-isolated-validation.mjs";
+import { mkdtemp, mkdir, readFile, rm, writeFile, realpath, symlink } from "node:fs/promises";
+import os from "node:os";
+import { promisify } from "node:util";
+import { execFile, spawn } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
+import { sha256 } from "./ilv2-mac-contracts.mjs";
+import { isolatedValidationEnvironment, validationIdentity, verifyValidationIdentity, validationResultDirectory, recordValidationCommand, registeredReuseRoot, verifyNativeToolchain } from "./run-isolated-validation.mjs";
 
 test("isolated validation never inherits or accepts overrides for active LSP state directories", () => {
   const root = "/tmp/v32-isolated";
@@ -115,3 +121,130 @@ function restore(name, value) {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
 }
+
+async function frozenFixture(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ilv2-runner-unit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const workspace = path.join(root, "workspace"), candidate = path.join(root, "candidate");
+  for (const directory of [workspace, candidate]) {
+    await mkdir(directory);
+    await promisify(execFile)("git", ["init", "--quiet", directory]);
+    for (const name of ["src", "docs", "dist", "node_modules"]) await mkdir(path.join(directory, name));
+    await writeFile(path.join(directory, "src", "main.ts"), "export const value = 1;\n");
+    await writeFile(path.join(directory, "docs", "manual.md"), "initial\n");
+    await mkdir(path.join(directory, "dist", "native"));
+    await writeFile(path.join(directory, "dist", "native", "manifest.json"), '{"binarySha256":"frozen-native"}\n');
+    await writeFile(path.join(directory, "dist", "build-stamp.json"), '{"gitSha":"frozen-build"}\n');
+    await writeFile(path.join(directory, "dist", "main.js"), "export const value = 1;\n");
+    await writeFile(path.join(directory, "node_modules", "dependency.js"), "module.exports = 1;\n");
+  }
+  const runtime = { nodeSha256: "frozen-node", runtimeManifestSha256: "frozen-manifest" };
+  return { root, workspace, candidate, runtime, frozen: await validationIdentity(candidate, workspace, runtime) };
+}
+
+test("frozen candidate reuse allows documentation edits without a rebuild and rejects source edits", async t => {
+  const f = await frozenFixture(t);
+  await writeFile(path.join(f.workspace, "docs", "manual.md"), "updated requirements prose\n");
+  assert.deepEqual(await verifyValidationIdentity(f.frozen, f.candidate, f.workspace, f.runtime), f.frozen);
+  await writeFile(path.join(f.workspace, "src", "main.ts"), "export const value = 2;\n");
+  await assert.rejects(verifyValidationIdentity(f.frozen, f.candidate, f.workspace, f.runtime), /candidate drift: source/);
+  assert.equal(await readFile(path.join(f.candidate, "dist", "main.js"), "utf8"), "export const value = 1;\n");
+});
+
+test("reuse rejects compiled output, runtime and dependency drift independently", async t => {
+  const f = await frozenFixture(t);
+  await assert.rejects(verifyValidationIdentity(f.frozen, f.candidate, f.workspace, { ...f.runtime, nodeSha256: "changed" }), /candidate drift: runtime/);
+  await writeFile(path.join(f.candidate, "dist", "main.js"), "corrupted output\n");
+  await assert.rejects(verifyValidationIdentity(f.frozen, f.candidate, f.workspace, f.runtime), /candidate drift: dist/);
+  await writeFile(path.join(f.candidate, "dist", "main.js"), "export const value = 1;\n");
+  await writeFile(path.join(f.candidate, "node_modules", "dependency.js"), "module.exports = 2;\n");
+  await assert.rejects(verifyValidationIdentity(f.frozen, f.candidate, f.workspace, f.runtime), /candidate drift: dependencies/);
+});
+
+test("unique evidence names reject overwrite and traversal", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ilv2-results-unit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const directory = await validationResultDirectory(root, "independent-1");
+  await writeFile(path.join(directory, "sentinel"), "original");
+  await assert.rejects(validationResultDirectory(root, "independent-1"), { code: "EEXIST" });
+  await assert.rejects(validationResultDirectory(root, "../escaped"), /invalid validation run name/);
+  assert.equal(await readFile(path.join(directory, "sentinel"), "utf8"), "original");
+});
+
+test("a failing selected command preserves both output streams and its actual exit", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ilv2-command-unit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await assert.rejects(recordValidationCommand(root, process.execPath,
+    ["-e", "process.stdout.write('main evidence'); process.stderr.write('original error'); process.exitCode = 3"],
+    { cwd: root, env: { PATH: process.env.PATH, UNRELATED_SECRET: "must-not-record" } }), /exited with 3/);
+  const record = JSON.parse(await readFile(path.join(root, "0.command.json"), "utf8"));
+  assert.equal(record.exitCode, 3);
+  assert.equal(record.signal, null);
+  assert.ok(record.elapsedMs >= 0);
+  assert.equal(record.environment.UNRELATED_SECRET, undefined);
+  assert.equal(await readFile(path.join(root, record.stdout), "utf8"), "main evidence");
+  assert.equal(await readFile(path.join(root, record.stderr), "utf8"), "original error");
+});
+
+test("reuse requires the registered broker and rejects escaping symlinks", async t => {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "ilv2-broker-unit-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, "tmp"));
+  const broker = path.join(root, "tmp", "broker");
+  await mkdir(broker);
+  await writeFile(path.join(root, "run-root.txt"), `${root}\n`);
+  await writeFile(path.join(broker, "broker-root.json"), JSON.stringify({ root: broker, parentRunRoot: root }));
+  assert.equal(await registeredReuseRoot(root, broker), broker);
+  await assert.rejects(registeredReuseRoot(undefined, broker), /preregistered/);
+  await mkdir(path.join(root, "outside-tmp"));
+  await symlink(path.join(root, "outside-tmp"), path.join(root, "tmp", "escaped"));
+  await assert.rejects(registeredReuseRoot(root, path.join(root, "tmp", "escaped")), /outside managed root/);
+  await symlink(broker, path.join(root, "tmp", "alias"));
+  await assert.rejects(registeredReuseRoot(root, path.join(root, "tmp", "alias")), /symlink rejected/);
+});
+
+test("reuse checks actual compiler bytes, version and selected SDK", async () => {
+  const native = { compiler: process.execPath, compilerSha256: "wrong" };
+  await assert.rejects(verifyNativeToolchain(native), /compiler bytes/);
+  native.compilerSha256 = sha256(await readFile(process.execPath));
+  native.toolchain = "wrong";
+  await assert.rejects(verifyNativeToolchain(native), /compiler version/);
+  native.toolchain = (await promisify(execFile)(process.execPath, ["--version"])).stdout;
+  native.sdk = "/not-the-selected-sdk";
+  await assert.rejects(verifyNativeToolchain(native), /SDK/);
+});
+
+test("controller SIGKILL preserves in-flight identity and both received streams", { timeout: 7000 }, async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ilv2-command-kill-"));
+  const module = new URL("./run-isolated-validation.mjs", import.meta.url).href;
+  const code = `import {recordValidationCommand} from ${JSON.stringify(module)}; await recordValidationCommand(${JSON.stringify(root)}, process.execPath, ['-e', 'console.log("partial stdout"); console.error("partial stderr"); setInterval(()=>{},1000)'], {cwd:${JSON.stringify(root)}, env:{}});`;
+  const controller = spawn(process.execPath, ["--input-type=module", "-e", code], { stdio: "ignore", env: isolatedValidationEnvironment(root) });
+  const closed = new Promise(resolve => controller.once("close", resolve));
+  let childPid;
+  t.after(async () => {
+    if (controller.exitCode === null && controller.signalCode === null) controller.kill("SIGKILL");
+    await closed;
+    if (childPid) {
+      try { process.kill(childPid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+      for (let i = 0; i < 100; i++) {
+        try { process.kill(childPid, 0); } catch (error) { if (error.code === "ESRCH") { await rm(root, { recursive: true, force: true }); return; } throw error; }
+        await delay(20);
+      }
+      throw new Error("owned interrupted command did not actually exit");
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+  let record;
+  for (let i = 0; i < 100; i++) {
+    try {
+      record = JSON.parse(await readFile(path.join(root, "0.command.json"), "utf8"));
+      childPid = record.pid;
+      if (childPid && (await readFile(path.join(root, record.stdout), "utf8")).includes("partial stdout") && (await readFile(path.join(root, record.stderr), "utf8")).includes("partial stderr")) break;
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    await delay(20);
+  }
+  assert.ok(childPid > 1); controller.kill("SIGKILL"); await closed;
+  assert.equal(record.status, "IN_PROGRESS"); assert.equal(record.exitCode, null);
+  assert.match(await readFile(path.join(root, record.stdout), "utf8"), /partial stdout/);
+  assert.match(await readFile(path.join(root, record.stderr), "utf8"), /partial stderr/);
+});

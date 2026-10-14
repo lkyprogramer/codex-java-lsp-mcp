@@ -1,0 +1,220 @@
+{
+  "taskId": "MAC-02C",
+  "gateId": "G02C",
+  "status": "PASS",
+  "dependency": {
+    "taskId": "MAC-02B",
+    "status": "PASS",
+    "commit": "0ab0e0f19e8605fe271ef4b7af28440c3fd597fc"
+  },
+  "identity": {
+    "sourceDigest": "ee2c29e64f40e9b41374d4b04d0a9a03b68a23fe5b76d3c333c1339b598f924e",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSourceDigest": "00c85cc121511d5748b95292f1b9a5a8dfad1b34e24881a67046fc591660638a",
+    "executableTree": "N/A: source-file digest binds patched candidate; build gitSha is baseline only",
+    "buildStampIdentitySha256": "62e6c5eebc0ed58f7209ae76df20ffb4bd3cb5fae9c2a0845bccd0071298976f",
+    "distInventorySha256": "0bcb78f155f11f3a40949ad62c5c74e48b73e60d4a00249e0337d0defe67c9b8",
+    "buildIdentitySerialization": "SHA-256 of compact JSON archived build object; distInventorySha256 binds actual dist bytes"
+  },
+  "checks": [
+    {
+      "name": "workflow-main",
+      "status": "PASS",
+      "selectedTestCount": 32,
+      "commands": [
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/tmp/codex-java-lsp-isolated-validation-ntqpVV/candidate/node_modules/.bin/tsc",
+            "-p",
+            "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/tmp/codex-java-lsp-isolated-validation-ntqpVV/candidate/tsconfig.json"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 5457.059666,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/tmp/codex-java-lsp-isolated-validation-ntqpVV/candidate/scripts/build-macos-native.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 2668.2947920000006,
+          "stdoutSha256": "cf037322c3cf9ceaa32552a0c0c5565e66b083d3439f4afc4d050dc0b1a91421",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/tmp/codex-java-lsp-isolated-validation-ntqpVV/candidate/scripts/write-build-stamp.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 156.0397499999999,
+          "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "--test",
+            "--test-concurrency=1",
+            "scripts/run-isolated-validation.test.mjs",
+            "scripts/ilv2-mac-closeout.test.mjs",
+            "scripts/ilv2-mac-contracts.test.mjs",
+            "scripts/build-macos-native.test.mjs",
+            "scripts/ilv2-mac-owner-primitives.test.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 43367.327583000006,
+          "stdoutSha256": "c4b4546ba5f141b4633a871b6acde521a531f078bf67b53a35a77aad35ee0e4b",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "resultPath": "raw/validation/workflow-main/result.json"
+    },
+    {
+      "name": "workflow-independent",
+      "status": "PASS",
+      "selectedTestCount": 7,
+      "commands": [
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "--test",
+            "--test-concurrency=1",
+            "--test-name-pattern=finish physically|live process|unknown files|controller SIGKILL|reuse checks actual compiler|native-owner-rejects|native-calls-preserve",
+            "scripts/ilv2-mac-closeout.test.mjs",
+            "scripts/run-isolated-validation.test.mjs",
+            "scripts/ilv2-mac-owner-primitives.test.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 4969.513709,
+          "stdoutSha256": "89f495cc91526177810ae2b8a01d82fdd3f9d8ba1e0c6ca9aa76dbd296b7ca58",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "resultPath": "raw/validation/workflow-independent/result.json"
+    },
+    {
+      "name": "mac02c-main",
+      "status": "PASS",
+      "selectedTestCount": 9,
+      "commands": [
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "--test",
+            "--test-concurrency=1",
+            "dist/mac-platform/fsevents.test.js",
+            "scripts/ilv2-mac-fsevents.test.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 8385.698375,
+          "stdoutSha256": "4d88994d4fb4764f1efa9c92890839fb7140915dfb84e9e06a3a038422267b9c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "resultPath": "raw/validation/mac02c-main/result.json"
+    },
+    {
+      "name": "mac02c-independent",
+      "status": "PASS",
+      "selectedTestCount": 3,
+      "commands": [
+        {
+          "argv": [
+            "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+            "--test",
+            "--test-concurrency=1",
+            "--test-name-pattern=fence-timeout-includes-delayed-ready|fence-ready-consumes-acknowledgement-budget|real-fsevents-ready-fence-root-restart-and-owner-inheritance",
+            "dist/mac-platform/fsevents.test.js",
+            "scripts/ilv2-mac-fsevents.test.mjs"
+          ],
+          "exitCode": 0,
+          "elapsedMs": 6570.903916,
+          "stdoutSha256": "601097f67b395dc9c3450757fb8aab70bdbf792facb5918be02b14166ea66e04",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "resultPath": "raw/validation/mac02c-independent/result.json"
+    }
+  ],
+  "notClaimed": [
+    "Real OS FSEvents overflow: NOT_INDUCED",
+    "Repeated MAC-02B launchd/JDT/Gradle matrix: NOT_RUN; prior G02B evidence retained",
+    "MAC-03B tracker integration: NOT_RUN"
+  ],
+  "closeout": {
+    "status": "PASS",
+    "registeredPids": 41,
+    "ownedGroups": 16,
+    "launchdJobs": 0,
+    "fixtureQuotaRows": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/closeout/raw-evidence.tar.gz",
+      "sha256": "02ca25360c25b6592f900f4ebae15e8ef0b392d5c658be529fe57e928e288156",
+      "fileCount": 87,
+      "bytes": 188915,
+      "physicalVerification": "PASS"
+    },
+    "deletedPaths": [
+      "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/raw",
+      "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02c/20261014T094440Z/tmp"
+    ]
+  },
+  "next": "MAC-03 remains PLAN; this requested MAC-02C scope is complete.",
+  "parentGate": {
+    "gateId": "G02",
+    "status": "PASS",
+    "children": [
+      {
+        "gateId": "G02A",
+        "status": "PASS",
+        "commit": "2c70544eeaf58358eb65a03cb4f0d6b3fd435cfd"
+      },
+      {
+        "gateId": "G02B",
+        "status": "PASS",
+        "commit": "0ab0e0f19e8605fe271ef4b7af28440c3fd597fc"
+      },
+      {
+        "gateId": "G02C",
+        "status": "PASS",
+        "sourceDigest": "ee2c29e64f40e9b41374d4b04d0a9a03b68a23fe5b76d3c333c1339b598f924e"
+      }
+    ],
+    "boundary": "Child gates retain their actual candidate scope. This run adds direct owner regressions and C transport validation; no whole B matrix rerun."
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "ae03fbe84b028c5674a0dd7fc3a5a1292947efcabc6d6912fa819fe335ff15a7",
+      "openFindings": []
+    },
+    "verification": {
+      "status": "PASS",
+      "sha256": "69d0cbfa618b1630bff0676fc5b1daf168a65e08dcfcf20c0da10d88c22489fd",
+      "workflowSelected": 7,
+      "mac02cSelected": 3
+    },
+    "closeout": {
+      "status": "PASS",
+      "sha256": "8e7edbf97d44dd391b828ebccd24c456d16a29a6830f4e5b0c240d2c859cbeba"
+    }
+  },
+  "workflow": {
+    "status": "PASS",
+    "candidateBuilds": 1,
+    "oneTimeRelocationProofBuilds": 2,
+    "reuseCommands": 3,
+    "independentRebuilds": 0,
+    "sourceOfTruth": "This result references automatic command records in the verified archive",
+    "thresholdChanges": "NONE"
+  },
+  "authorization": "Current user instruction; historical U2 local commits only. No push/PR/deployment or OS privacy changes."
+}
