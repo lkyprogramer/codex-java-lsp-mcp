@@ -4,11 +4,11 @@
 // pos: Reusable real-repository acceptance runner; all code and Java inputs run from private local clones.
 import { createHash } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { access, copyFile, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRegisteredBrokerRoot } from "./ilv2-mac-contracts.mjs";
 import {
   aggregateJavaIndexRpcSidecar,
   DIAGNOSTIC_RPC_GATE_POLICY
@@ -114,7 +114,7 @@ async function main() {
 
   const sourceRoot = path.resolve(cli.candidateRoot);
   const outputDir = path.resolve(cli.outputDir);
-  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "codex-java-lsp-mcp-three-repo-"));
+  const workspaceRoot = await createRegisteredBrokerRoot("codex-java-lsp-mcp-three-repo-");
   const baselineRoot = path.join(workspaceRoot, "baseline");
   const candidateRoot = path.join(workspaceRoot, "candidate");
   const scenarioDir = path.join(outputDir, "frozen-scenarios");

@@ -3,12 +3,12 @@
 // output: Validation executed in a detached patched local clone with isolated caches and JDT disabled.
 // pos: Mandatory safety boundary between development validation and the user's active LSP runtime.
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { captureCandidatePatch } from "./run-three-repo-cold-matrix.mjs";
+import { createRegisteredBrokerRoot } from "./ilv2-mac-contracts.mjs";
 import {
   bindCandidateNodeCommand,
   copyIsolatedNodeModules,
@@ -110,7 +110,7 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
 async function main() {
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
-  const validationRoot = await mkdtemp(path.join(os.tmpdir(), "codex-java-lsp-isolated-validation-"));
+  const validationRoot = await createRegisteredBrokerRoot("codex-java-lsp-isolated-validation-");
   const candidateRoot = path.join(validationRoot, "candidate");
   const patchFile = path.join(validationRoot, "candidate.patch");
   try {
