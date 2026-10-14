@@ -429,3 +429,24 @@ flowchart TB
 - Python文档一致性检查覆盖20张主卡、11张子卡的显式DAG、F01–F12/D01–D12、12个本地链接、31个固定commit链接及行号、JSON/围栏和当前命令入口文件；`git diff --check`通过。显式DAG检查本身不能替代本轮独立review对隐含能力前置的审查。
 
 以上是文档与合成命令验证，不是三仓/K/launchd/JDT/Gradle或新架构的端到端验收。实际运行仍须对应G门证据；已知目标未验证之处没有被改写为PASS。
+
+### 8.4 ILV2-MAC/5 流程修订（2026-10-14）
+
+输入：MAC-00至02C的执行复盘。02A/B/C的实际墙钟约10 h，测试命令累计约16 min。02B的6次失败都属于环境或夹具问题：pre-main等待、夹具前提、EPERM、可变工具链。用户要求按A（环境）→C（状态与证据）→B（两级开发循环）修订脚本、手册和HANDOFF。产品合同、阈值和G门判据不变；D（手册拆分、spike约束回填MAC-04/05/12、G06C去重、03A∥04排序）与E（harness细项）不在本轮范围。
+
+| 问题与证据 | MAC/5处理 |
+| --- | --- |
+| G02B两次运行在main前超时：工作根在`~/Documents`，launchd job等待DocumentsFolder的TCC决定 | 工作根迁至`~/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac`。运行根、TMPDIR或fixture根位于保护目录时，直接报`BLOCKED_ENV_TCC_PATH`。四个冻结仓以APFS clone复制后重新完整核验，manifest只改repoRoot。02B的工具链清单原本只存在于RAW归档，现持久化为INPUT |
+| 环境阻塞只能人工排查 | 新增`ilv2-mac-env-probe.mjs`，检查路径、工具链，并测真实隔离launchd job经native launcher到冻结Node的ready时延。超时时用`launchctl print`、`ps`和TCC日志按本job归因；owner fixture的ready超时也按同样方式归类 |
+| 生产TCC风险（本轮新发现） | 隔离探针读取`~/Documents`下的文件时，TCC以launcher为`responsible_path`发出授权提示。业务仓库在`~/Documents/program`，因此列为MAC-17前须由用户作出的开放决定（手册§2.1） |
+| 状态漂移：手册逐卡执行状态、mac-02的README/task-result停在IN_PROGRESS，mac-02b的README仍写父门未过 | `status.json`为唯一状态源，父门状态由子门推导、不存储；`ilv2-mac-status.mjs`做一致性校验。删除手册中4段执行状态，修正两份README |
+| task-result依赖手抄hash和计数 | broker在运行根追加`validation-index.jsonl`。`ilv2-mac-task-result.mjs`据此生成收尾清单骨架和结果文件，PASS缺少记录支持时拒绝生成 |
+| 每次迭代都走一遍完整broker构建 | Tier-0开发循环`ilv2-mac-dev.mjs`：持久tree、增量tsc、native按需重编，不产生证据。Tier-1 broker每卡只为最终候选构建一次 |
+| 独立复验和独立收尾每门重复 | 只有G09/G11/G14/G17要求独立复验；其他门由只读评审核对原始断言、归档hash和残留。归档的物理解包校验保留，因为只需秒级 |
+
+验证（结果记录见`docs/index-lifecycle-v2/mac/workflow-mac5/task-result.json`，状态为FAIL）：
+- Tier-0实测：冷启动11.2 s，热启动约5 s，其中构建开销约1.7 s。修剪和残留检查正常。
+- Tier-1最终候选：环境探针READY，launchd ready约0.2 s，工具链22,304个文件无漂移。main-ilv2为119/120；唯一失败是`native-owner-rejects-closed-fd-and-erased-child-binding`观察超时，单独重跑5/5通过，原失败保留。真实JDT/Gradle导入`launchd-jdt-settings-import-and-fault-recovery`两次失败，方向一致：active域在JDT initialize后90 s内没有Gradle导入进度，主机load在10–13，根因未定位，不计PASS。
+- 独立评审初审FAIL，共4项P2：清点漏`*Pid`和逃逸进程、零测试运行可判PASS、收尾记录未绑定本次运行、TCC证据指针悬空。修复后复核PASS。
+- 复跑中还发现两项既有问题并已修：`e7c12e4`使`ilv2-mac-runtime-contracts.test.mjs`解析已删除的broker输出行；`node --test`遇到不存在的文件参数会静默不选，曾造成一次INVALID调用。
+- 两个运行根都已收尾：早先一次被替代的尝试与最终候选，均为零残留、归档物理校验PASS。A4证据记录为`workflow-mac5-tcc`（BLOCKED_ENV）。

@@ -10,7 +10,7 @@ import { GradleDomain, defaultGradleCleanupIO } from "../dist/mac-platform/gradl
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 async function toolchains() {
-  const tools = await readJson(process.env.ILV2_MAC02B_TOOLCHAINS);
+  const tools = await readJson(process.env.ILV2_TOOLCHAINS ?? "ILV2_TOOLCHAINS is unset: name the frozen toolchain INPUT");
   for (const file of tools.files) assert.equal(sha256(await readFile(file.path)), file.sha256, `frozen toolchain drift: ${file.path}`);
   return tools;
 }

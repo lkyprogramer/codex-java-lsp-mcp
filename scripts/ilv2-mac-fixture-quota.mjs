@@ -7,13 +7,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { realpath } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { requireValue } from "./ilv2-mac-contracts.mjs";
+import { requireUnprotectedRoot, requireValue } from "./ilv2-mac-contracts.mjs";
 
 function alive(pid) {
   if (!Number.isInteger(pid) || pid === 0) return true;
   try { process.kill(pid, 0); return true; }
   catch (error) { return error.code !== "ESRCH"; }
 }
+// Isolated jobs only; the production label is com.lky.codex-java-lsp-mcp.
+export const ISOLATED_LAUNCHD_LABEL = /^com\.lky\.ilv2-mac[a-z0-9-]*\.[a-zA-Z0-9.-]+$/;
 export const fixtureQuotaFile = workRoot => path.join(workRoot, "control", "fixture-daemons", "quota.sqlite");
 
 function transaction(file, operation) {
@@ -180,7 +182,8 @@ export async function acquireLaunchdFixtureSlot(workRoot, { runRoot, label, sign
   requireValue(path.isAbsolute(runRoot) && await realpath(runRoot) === runRoot && runRoot.startsWith(`${await realpath(workRoot)}/runs/`), "private registered launchd root required");
   const registered = process.env.ILV2_RUN_ROOT;
   requireValue(registered && (await readFile(path.join(registered, "run-root.txt"), "utf8")).trim() === registered && runRoot.startsWith(`${await realpath(registered)}/`), "launchd fixture must belong to preregistered run root");
-  requireValue(/^com\.lky\.ilv2-mac02b\.[a-zA-Z0-9.-]+$/.test(label), "isolated launchd label required");
+  requireValue(ISOLATED_LAUNCHD_LABEL.test(label), "isolated launchd label required");
+  requireUnprotectedRoot(runRoot, "launchd fixture root");
   return acquireSlot(workRoot, { signal, timeoutMs, externalJob: { domain: `gui/${process.getuid()}`, label, runRoot } });
 }
 export function inspectFixtureSlots(workRoot) {

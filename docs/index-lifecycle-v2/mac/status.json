@@ -1,0 +1,230 @@
+{
+  "schema": "ilv2-mac-status/v1",
+  "manualVersion": "ILV2-MAC/5",
+  "planStatus": "IN_PROGRESS",
+  "candidateStatus": "NOT_READY",
+  "benefit": "UNMEASURED",
+  "workRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac",
+  "historicalWorkRoot": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac",
+  "currentInputs": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/plans/relocation/20261014T133452Z/inputs.json",
+  "toolchains": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/inputs/toolchains/jdt-1.56.0-gradle-9.3.1-jdk-25.0.2/toolchains.json",
+  "gates": [
+    {
+      "gateId": "G00",
+      "taskId": "MAC-00",
+      "status": "PASS",
+      "result": "mac-00/task-result.json",
+      "commit": "6fd8032"
+    },
+    {
+      "gateId": "G01",
+      "taskId": "MAC-01",
+      "status": "PASS",
+      "result": "mac-01/task-result.json",
+      "commit": "6fd8032"
+    },
+    {
+      "gateId": "G02A",
+      "taskId": "MAC-02A",
+      "status": "PASS",
+      "result": "mac-02/task-result.json",
+      "commit": "2c70544"
+    },
+    {
+      "gateId": "G02B",
+      "taskId": "MAC-02B",
+      "status": "PASS",
+      "result": "mac-02b/task-result.json",
+      "commit": "0ab0e0f"
+    },
+    {
+      "gateId": "G02C",
+      "taskId": "MAC-02C",
+      "status": "PASS",
+      "result": "mac-02c/task-result.json",
+      "commit": "e7c12e4"
+    },
+    {
+      "gateId": "G02",
+      "taskId": "MAC-02",
+      "children": [
+        "G02A",
+        "G02B",
+        "G02C"
+      ],
+      "result": "mac-02/task-result.json"
+    },
+    {
+      "gateId": "G03A",
+      "taskId": "MAC-03A",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G03B",
+      "taskId": "MAC-03B",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G03",
+      "taskId": "MAC-03",
+      "children": [
+        "G03A",
+        "G03B"
+      ]
+    },
+    {
+      "gateId": "G04",
+      "taskId": "MAC-04",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G05",
+      "taskId": "MAC-05",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G06A",
+      "taskId": "MAC-06A",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G06B",
+      "taskId": "MAC-06B",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G06C",
+      "taskId": "MAC-06C",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G06",
+      "taskId": "MAC-06",
+      "children": [
+        "G06A",
+        "G06B",
+        "G06C"
+      ]
+    },
+    {
+      "gateId": "G07",
+      "taskId": "MAC-07",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G08A",
+      "taskId": "MAC-08A",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G08B",
+      "taskId": "MAC-08B",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G08C",
+      "taskId": "MAC-08C",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G08",
+      "taskId": "MAC-08",
+      "children": [
+        "G08A",
+        "G08B",
+        "G08C"
+      ]
+    },
+    {
+      "gateId": "G09",
+      "taskId": "MAC-09",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G10",
+      "taskId": "MAC-10",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G11",
+      "taskId": "MAC-11",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G12",
+      "taskId": "MAC-12",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G13",
+      "taskId": "MAC-13",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G14",
+      "taskId": "MAC-14",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G15",
+      "taskId": "MAC-15",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G16",
+      "taskId": "MAC-16",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G17",
+      "taskId": "MAC-17",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G18",
+      "taskId": "MAC-18",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G19",
+      "taskId": "MAC-19",
+      "status": "PLAN"
+    }
+  ],
+  "workflow": [
+    {
+      "id": "WF-MAC5-TCC",
+      "status": "BLOCKED_ENV",
+      "result": "workflow-mac5-tcc/task-result.json"
+    },
+    {
+      "id": "WF-MAC5",
+      "status": "FAIL",
+      "result": "workflow-mac5/task-result.json"
+    }
+  ],
+  "openDecisions": [
+    {
+      "id": "TCC-LAUNCHER-IDENTITY",
+      "blocks": [
+        "MAC-17",
+        "MAC-18"
+      ],
+      "finding": "An isolated launchd job whose Program is the native owner launcher, after exec into the frozen Node, still hit AUTHREQ_PROMPTING for kTCCServiceSystemPolicyDocumentsFolder; TCC named the launcher as responsible_path (binary_path=node). Business repositories live under ~/Documents/program.",
+      "evidence": {
+        "result": "workflow-mac5-tcc/task-result.json",
+        "name": "a4-documents-read"
+      },
+      "options": [
+        "stable code-signing identity for the launcher plus one recorded Documents grant",
+        "business worktrees outside TCC-protected folders",
+        "another launch topology proven by the same probe"
+      ],
+      "decisionOwner": "user"
+    }
+  ],
+  "next": [
+    "MAC-03A",
+    "MAC-04"
+  ]
+}

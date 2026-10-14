@@ -8,13 +8,8 @@ export const NATIVE_PROTOCOL = "ilv2-mac-native/v1";
 export const DEPLOYMENT_TARGET = "14.0";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-export async function buildMacNative(repoRoot = root) {
-  const runtime = await verifyRuntime();
-  const runtimeManifest = JSON.parse(await readFile(process.env.ILV2_RUNTIME_MANIFEST, "utf8"));
-  const compiler = "/usr/bin/clang";
-  const toolchain = (await execute(compiler, ["--version"])).stdout;
-  if (runtimeManifest.clang !== toolchain) throw new Error("native toolchain drift");
-  const sdk = (await execute("/usr/bin/xcrun", ["--show-sdk-path"])).stdout.trim();
+/** Native build inputs; their digest is the manifest's sourceDigest. */
+export async function nativeSourceFiles(repoRoot = root) {
   const files = [];
   async function visit(directory) {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -26,7 +21,17 @@ export async function buildMacNative(repoRoot = root) {
   }
   await visit(path.join(repoRoot, "native/macos"));
   files.push({ path: "scripts/build-macos-native.mjs", sha256: sha256(await readFile(path.join(repoRoot, "scripts/build-macos-native.mjs"))) });
-  files.sort((a, b) => a.path.localeCompare(b.path));
+  return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+export async function buildMacNative(repoRoot = root) {
+  const runtime = await verifyRuntime();
+  const runtimeManifest = JSON.parse(await readFile(process.env.ILV2_RUNTIME_MANIFEST, "utf8"));
+  const compiler = "/usr/bin/clang";
+  const toolchain = (await execute(compiler, ["--version"])).stdout;
+  if (runtimeManifest.clang !== toolchain) throw new Error("native toolchain drift");
+  const sdk = (await execute("/usr/bin/xcrun", ["--show-sdk-path"])).stdout.trim();
+  const files = await nativeSourceFiles(repoRoot);
   const output = path.join(repoRoot, "dist/native");
   // No old helper or identity may survive an unsuccessful build.
   await rm(output, { recursive: true, force: true });

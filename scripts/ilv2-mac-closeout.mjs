@@ -4,7 +4,7 @@ import { lstat, readdir, readFile, mkdir, mkdtemp, rm, realpath } from "node:fs/
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { contains, readJson, writeJson, sha256, execute, managedPath, requireValue, isMain, runCli, cliOptions } from "./ilv2-mac-contracts.mjs";
-import { fixtureQuotaFile } from "./ilv2-mac-fixture-quota.mjs";
+import { ISOLATED_LAUNCHD_LABEL, fixtureQuotaFile } from "./ilv2-mac-fixture-quota.mjs";
 
 function exited(pid) {
   try { process.kill(pid, 0); return false; }
@@ -22,9 +22,21 @@ export async function verifyOwnedExit(manifest) {
     }
   }
   for (const row of manifest.launchdJobs) {
-    requireValue(row.domain === `gui/${process.getuid()}` && /^com\.lky\.ilv2-mac02b\.[a-zA-Z0-9.-]+$/.test(row.label), "isolated launchd identity required");
+    requireValue(row.domain === `gui/${process.getuid()}` && ISOLATED_LAUNCHD_LABEL.test(row.label), "isolated launchd identity required");
     try { await execute("/bin/launchctl", ["print", `${row.domain}/${row.label}`]); throw new Error(`launchd job still present: ${row.label}`); }
     catch (error) { requireValue(error.code === 113 && /Could not find service/.test(error.stderr ?? ""), `launchd absence unproven: ${row.label}`); }
+  }
+  if (manifest.runRoot) {
+    // A process that never published its PID (e.g. killed before evidence was
+    // copied) is still found while its argv names this run root. Our own
+    // ancestors (the shell that invoked closeout) are not residuals.
+    const rows = (await execute("/bin/ps", ["-axww", "-o", "pid=,ppid=,command="], { maxBuffer: 32 * 1024 * 1024 })).stdout.split("\n").filter(Boolean)
+      .map(line => /^\s*(\d+)\s+(\d+)\s(.*)$/.exec(line)).filter(Boolean).map(([, pid, ppid, command]) => ({ pid: Number(pid), ppid: Number(ppid), command }));
+    const parent = new Map(rows.map(row => [row.pid, row.ppid]));
+    const ancestors = new Set();
+    for (let pid = process.pid; pid > 1 && !ancestors.has(pid); pid = parent.get(pid) ?? 1) ancestors.add(pid);
+    const named = rows.filter(row => !ancestors.has(row.pid) && (row.command.includes(`${manifest.runRoot}/`) || row.command.split(/\s+/).includes(manifest.runRoot)));
+    requireValue(!named.length, `live process references run root: ${named.map(row => row.pid).join(",")}`);
   }
   if (manifest.workRoot) {
     const db = new DatabaseSync(fixtureQuotaFile(manifest.workRoot), { readOnly: true });
@@ -47,6 +59,14 @@ async function inventory(root, targets) {
   }
   for (const target of targets) await visit(target);
   return rows.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+// The runs this closeout covered; a broker run appended later was never inventoried or archived.
+async function indexSnapshot(root) {
+  let bytes;
+  try { bytes = await readFile(path.join(root, "validation-index.jsonl")); } catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  const runs = bytes.toString("utf8").split("\n").filter(Boolean).map(line => JSON.parse(line).name);
+  return { sha256: sha256(bytes), runs };
 }
 
 export async function finishCloseout(manifest) {
@@ -87,7 +107,7 @@ export async function finishCloseout(manifest) {
   }
   for (const row of existing) await rm(row.path, { recursive: true, force: true });
   const remaining = await validateCloseout(manifest);
-  const result = { ...remaining, gatePassClaim: false, resourceExit, archive, deletedPaths: existing.map(row => row.path) };
+  const result = { ...remaining, closeoutId: manifest.gateId, validationIndex: await indexSnapshot(root), gatePassClaim: false, resourceExit, archive, deletedPaths: existing.map(row => row.path) };
   await writeJson(path.join(output, "closeout.json"), result);
   return result;
 }

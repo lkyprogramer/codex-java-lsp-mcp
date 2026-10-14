@@ -7,7 +7,7 @@ import { execute, readJson, sha256, writeJson } from "./ilv2-mac-contracts.mjs";
 import { GradleDomain, defaultGradleCleanupIO } from "../dist/mac-platform/gradle-domain.js";
 
 async function tools() {
-  const frozen = await readJson(process.env.ILV2_MAC02B_TOOLCHAINS);
+  const frozen = await readJson(process.env.ILV2_TOOLCHAINS ?? "ILV2_TOOLCHAINS is unset: name the frozen toolchain INPUT");
   for (const file of frozen.files) assert.equal(sha256(await readFile(file.path)), file.sha256, `toolchain drift: ${file.path}`);
   assert.equal(frozen.jdtVersion, "1.56.0"); assert.equal(frozen.gradleVersion, "9.3.1");
   return frozen;

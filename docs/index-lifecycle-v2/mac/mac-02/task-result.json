@@ -1,4 +1,8 @@
 {
+  "schema": "ilv2-task-result/v1",
+  "taskId": "MAC-02",
+  "gateId": "G02",
+  "status": "PASS",
   "children": [
     {
       "closeout": "PASS",
@@ -24,8 +28,11 @@
     },
     {
       "gateId": "G02C",
-      "status": "PLAN",
-      "taskId": "MAC-02C"
+      "status": "PASS",
+      "taskId": "MAC-02C",
+      "evidence": "../mac-02c/task-result.json",
+      "commit": "e7c12e4ad428fc56a769b08da6ec405c7e11e474",
+      "sourceDigest": "ee2c29e64f40e9b41374d4b04d0a9a03b68a23fe5b76d3c333c1339b598f924e"
     }
   ],
   "dependsOn": {
@@ -280,17 +287,13 @@
       "unregisteredPaths": []
     }
   },
-  "next": "G02B PASS; commit B and start MAC-02C. Parent G02 requires G02C PASS.",
+  "next": "G02 PASS (A/B/C). Current status and next cards: ../status.json.",
   "notValidated": [
-    "MAC-02C FSEvents",
     "G09 complete product recovery and restart JDT reinitialize",
     "formal K/PR/release product acceptance",
     "formal three-repository matrix",
     "MAC-03 new capture",
     "production installation/calls/deployment"
   ],
-  "privateEvidence": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z",
-  "schema": "ilv2-task-result/v1",
-  "status": "IN_PROGRESS",
-  "taskId": "MAC-02"
+  "privateEvidence": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z"
 }

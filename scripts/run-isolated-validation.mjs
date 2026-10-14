@@ -2,7 +2,7 @@
 // input: The current source worktree plus either a targeted command or the full local validation profile.
 // output: Validation executed in a detached patched local clone with isolated caches and JDT disabled.
 // pos: Mandatory safety boundary between development validation and the user's active LSP runtime.
-import { mkdir, rm, symlink, writeFile, readFile, realpath, lstat } from "node:fs/promises";
+import { appendFile, mkdir, rm, symlink, writeFile, readFile, realpath, lstat } from "node:fs/promises";
 import { openSync, writeSync, closeSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -163,7 +163,7 @@ export async function validationResultDirectory(root, name) {
 }
 
 function evidenceEnvironment(env) {
-  return Object.fromEntries(Object.entries(env).filter(([key]) => /^(?:HOME|TMPDIR|PATH|ILV2_(?:RUN_ROOT|RUNTIME_MANIFEST|NODE_BIN)|JAVA_LSP_(?:ISOLATED_VALIDATION|CACHE_ROOT|SERVICE_STATE_ROOT)|GRADLE_USER_HOME|MAVEN_USER_HOME|JDTLS_(?:BIN|DATA_DIR|LOG_DIR))$/.test(key)));
+  return Object.fromEntries(Object.entries(env).filter(([key]) => /^(?:HOME|TMPDIR|PATH|ILV2_(?:RUN_ROOT|RUNTIME_MANIFEST|NODE_BIN|TOOLCHAINS)|JAVA_LSP_(?:ISOLATED_VALIDATION|CACHE_ROOT|SERVICE_STATE_ROOT)|GRADLE_USER_HOME|MAVEN_USER_HOME|JDTLS_(?:BIN|DATA_DIR|LOG_DIR))$/.test(key)));
 }
 
 export async function recordValidationCommand(directory, command, args, { cwd, env }, index = 0) {
@@ -198,6 +198,35 @@ export async function recordValidationCommand(directory, command, args, { cwd, e
   return record;
 }
 
+export function tapCounts(text) {
+  const counts = Object.fromEntries([...text.matchAll(/^# (tests|pass|fail|cancelled|skipped|todo) (\d+)$/gm)].map(([, key, value]) => [key, Number(value)]));
+  return Object.keys(counts).length ? counts : null;
+}
+
+export function compactValidationIdentity(identity) {
+  if (!identity) return null;
+  return { sourceDigest: identity.source, runtimeManifestSha256: identity.runtime?.runtimeManifestSha256 ?? null,
+    nativeSha256: identity.native?.binarySha256 ?? null, nativeSourceDigest: identity.native?.sourceDigest ?? null,
+    buildStampSha256: identity.build ? hash(JSON.stringify(identity.build)) : null,
+    distInventorySha256: identity.dist?.sha256 ?? null, dependencySha256: identity.dependencies?.sha256 ?? null };
+}
+
+// RAW validation directories are archived and deleted at gate closeout; this
+// LOCAL index keeps the compact facts that task-result.json is generated from.
+export async function appendValidationIndex(runRoot, { name, directory, validationRoot, identity, commands, mainError }) {
+  const rows = [];
+  for (const record of commands) {
+    rows.push({ argv: record.argv, exitCode: record.exitCode ?? null, signal: record.signal ?? null, elapsedMs: record.elapsedMs ?? null,
+      startedAt: record.startedAt, endedAt: record.endedAt ?? null, pid: record.pid ?? null,
+      stdoutSha256: record.stdoutSha256 ?? null, stderrSha256: record.stderrSha256 ?? null,
+      tap: tapCounts(await readFile(path.join(directory, record.stdout), "utf8")) });
+  }
+  const entry = { schema: "ilv2-validation-index/v1", name, status: mainError ? "FAIL" : "SELECTED_COMMANDS_PASSED", mainError: mainError?.message ?? null,
+    result: path.relative(runRoot, path.join(directory, "result.json")), validationRoot, identity: compactValidationIdentity(identity), commands: rows };
+  await appendFile(path.join(runRoot, "validation-index.jsonl"), `${JSON.stringify(entry)}\n`);
+  return entry;
+}
+
 export async function registeredReuseRoot(runRoot, brokerRoot) {
   if (!runRoot || (await readFile(path.join(runRoot, "run-root.txt"), "utf8")).trim() !== path.resolve(runRoot)) throw new Error("reuse requires preregistered ILV2_RUN_ROOT");
   const validationRoot = await managedPath(path.join(runRoot, "tmp"), path.resolve(brokerRoot));
@@ -223,7 +252,11 @@ async function main() {
   await mkdir(evidenceRoot, { recursive: true });
   const directory = await validationResultDirectory(evidenceRoot, cli.name ?? `${Date.now()}-${randomUUID()}`);
   let identity, mainError, cleanupError, index = 0;
-  const invoke = (command, args, options) => recordValidationCommand(directory, command, args, options, index++);
+  const commands = [];
+  const invoke = async (command, args, options) => {
+    try { const record = await recordValidationCommand(directory, command, args, options, index++); commands.push(record); return record; }
+    catch (error) { if (error.commandRecord) commands.push(error.commandRecord); throw error; }
+  };
   try {
     runtime = await verifyRuntime();
     let env;
@@ -280,6 +313,10 @@ async function main() {
     } catch (error) {
       cleanupError = error;
       console.error(JSON.stringify({ mainError: mainError?.message ?? null, evidenceError: error.message }));
+    }
+    if (process.env.ILV2_RUN_ROOT && !cleanupError) {
+      try { await appendValidationIndex(process.env.ILV2_RUN_ROOT, { name: path.basename(directory), directory, validationRoot, identity, commands, mainError }); }
+      catch (error) { cleanupError = error; console.error(JSON.stringify({ indexError: error.message })); }
     }
     let resultFile = path.join(directory, "result.json");
     if (!process.env.ILV2_RUN_ROOT && !cli.keep && !cli.reuse && !mainError && !cleanupError) {

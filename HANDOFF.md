@@ -14,7 +14,7 @@
 
 pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。探针：`scripts/probe-daemon-acceptance.mjs`（D2/D4/D6 + P2-G2/G5/G6）。手册：`docs/deep/codex-java-lsp-mcp-index-on-disk-ai-execution-manual-2026-09-07.md`。
 
-隔离验证：`PATH="/opt/homebrew/bin:$PATH"` + `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`。
+隔离验证：`PATH="/opt/homebrew/bin:$PATH"` + `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`（门证据，Tier-1）。ILV2迭代用 `sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs -- COMMAND`（持久隔离tree，增量构建，不产生证据，Tier-0）。ILV2工作根已迁至 `~/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac`（不得放在 TCC 保护目录）；门状态只看 `docs/index-lifecycle-v2/mac/status.json`。
 
 ## 当前任务
 
@@ -506,7 +506,7 @@ V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authoriz
 
 ## 绝对不要再踩的坑（跨 Sprint 持续有效）
 
-- 不要在活动 checkout 直接执行 `npm run build`、`node dist/...`、`npx tsc`、任何 `node --test` 或三仓 benchmark。所有会启动 Node worker/JDT/JavaIndex 的命令必须包在 `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs` 中，并保持 `JDTLS_BIN=/usr/bin/false`。
+- 不要在活动 checkout 直接执行 `npm run build`、`node dist/...`、`npx tsc`、任何 `node --test` 或三仓 benchmark。所有会启动 Node worker/JDT/JavaIndex 的命令必须包在 `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`（门证据）或 `scripts/ilv2-mac-dev.mjs`（开发迭代，同一隔离环境，在工作根 `MAC_WORK_ROOT`（`scripts/ilv2-mac-contracts.mjs`）下 `dev/<tree>/` 的独立 tree 中构建运行）中，并保持 `JDTLS_BIN=/usr/bin/false`。dev 循环的结果不能当门证据。
 - 不要运行旧的 `benchmark:lsp-performance` 入口；它已删除。
 - 不要把 close 的 grace 恢复成 deadline 触发 `terminate()`；这会在 native parser 或原子写中杀 worker。
 - 不要将 watcher refresh、A2 anchor 或多文件 refresh 标为 `ACTIVE_ANCHOR`。只有 `AgentRouter` 的第一个 A1 anchor 且单 changed/no deleted 能升级 root priority。
@@ -531,7 +531,7 @@ V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authoriz
 
 - 计划真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v3-value-realization-optimization-development-plan-2026-08-09.md`。
 - Sprint3 证据：`artifacts/v3-final/sprint3-{cold-matrix-20260815-v3,progressive-20260815,storm-20260815,diagnostics-20260815,followup-20260815}/`。
-- 隔离验证入口：`sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted|compile|full [--keep] [--env NAME=VALUE] -- COMMAND`。
+- 隔离验证入口：`sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted|compile|full [--keep] [--env NAME=VALUE] -- COMMAND`。ILV2开发循环：`sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs [--name TREE] [--keep-runs N] [--env NAME=VALUE] [-- COMMAND]`。
 - LOC ledger 生成参考：对比固定基线 `d7f23d5`（31,638 行）与当前 worktree，用 `scripts/count-production-ts.mjs` 的 `countProductionTs`；硬上限 `Math.floor(31638*1.05)=33,219`（`scripts/run-v32-optimization-matrix.mjs:49` 用 `<=` 判定，打满不算超）；**当前候选 33,230/33,219，超编 11 行（V3.2-29 一次性突破，用户已授权，未偿还）**——`productionLocGatePassed: false` 是预期状态，不要"修复"它；新增生产代码前必须先问用户是否愿意再授权一次突破，或找到能偿还这 11 行债务的真实删除机会（V3.2-28 试过把 `SPRING_CALL_PATH` 移出 verified 配额这个零 LOC 规则，已被证伪回滚，见报告 §4，不要重复跑同一条被否定的规则）。
 
 ## 给下一会话的第一步

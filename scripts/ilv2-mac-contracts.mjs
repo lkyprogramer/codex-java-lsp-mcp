@@ -8,7 +8,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CONTRACT_VERSION = "ilv2-mac-run/v1";
-export const MAC_WORK_ROOT = path.join(os.userInfo().homedir, "Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac");
+// ILV2-MAC/5: outside every TCC-protected folder. The pre-MAC/5 root under
+// ~/Documents/evidence-archive stays a read-only historical archive.
+export const MAC_WORK_ROOT = path.join(os.userInfo().homedir, "Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac");
+// A launchd job that loads or reads files below these folders waits for a TCC
+// decision before main (G02B runs 20261014T035836Z/061337Z). Managed roots must avoid them.
+const TCC_PROTECTED_FOLDERS = ["Desktop", "Documents", "Downloads", "Library/Mobile Documents", "Library/CloudStorage"];
+// Removable and network volumes are TCC services of their own.
+const TCC_PROTECTED_ROOTS = ["/Volumes"];
 export const execute = promisify(execFile);
 export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 export const readJson = async file => JSON.parse(await readFile(file, "utf8"));
@@ -47,6 +54,15 @@ export function contains(root, target) {
   const relative = path.relative(path.resolve(root), path.resolve(target));
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
+/** Return the TCC-protected user folder that contains target, or null. APFS is case-insensitive here. */
+export function tccProtectedFolder(target, home = os.userInfo().homedir) {
+  const folded = path.resolve(target).toLowerCase();
+  return [...TCC_PROTECTED_FOLDERS.map(name => path.join(home, name)), ...TCC_PROTECTED_ROOTS].find(root => contains(root.toLowerCase(), folded)) ?? null;
+}
+export function requireUnprotectedRoot(target, label) {
+  const folder = tccProtectedFolder(target);
+  requireValue(!folder, `BLOCKED_ENV_TCC_PATH: ${label} ${target} is inside TCC-protected ${folder}`);
+}
 export async function resolvedPath(target) {
   try { return await realpath(target); }
   catch (error) {
@@ -78,6 +94,7 @@ export async function createRegisteredBrokerRoot(prefix) {
   if (runRoot) {
     requireValue((await readFile(path.join(runRoot, "run-root.txt"), "utf8")).trim() === path.resolve(runRoot), "run root must be preregistered");
     requireValue(contains(await realpath(runRoot), await realpath(os.tmpdir())), "broker TMPDIR must belong to preregistered run root");
+    requireUnprotectedRoot(await realpath(runRoot), "run root");
   }
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   // The preregistered parent covers a SIGKILL before this child is announced.

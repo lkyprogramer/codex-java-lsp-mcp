@@ -1,6 +1,6 @@
 # MAC-02：Mac 原生边界
 
-状态：**MAC-02A/G02A、MAC-02B/G02B均PASS；MAC-02C尚未实施，父G02未通过。** A已提交`2c70544`。B最终37文件定向8/8、独立8/8与独立收尾通过，真实launchd/JDT/Gradle合同已实测；见[MAC-02B证据](../mac-02b/README.md)。按用户顺序，整理提交B后进入C。
+状态：**父G02 PASS（G02A `2c70544`、G02B `0ab0e0f`、G02C `e7c12e4`）。** 现行状态唯一真源是[`../status.json`](../status.json)；本文只记录G02A的边界与证据。B、C见[MAC-02B](../mac-02b/README.md)、[MAC-02C](../mac-02c/README.md)。
 
 MAC-02A提供C17 capability/clonefile helper、同一native builder、冻结Node入口、候选native源码身份、native/runtime构建stamp与受管HTTP smoke。helper只克隆缓存同卷的文件，跨卷/非APFS/身份错误明确失败，不复制fallback。安装器的`--preflight-runtime`是只读身份检查，不安装或调用生产服务。
 

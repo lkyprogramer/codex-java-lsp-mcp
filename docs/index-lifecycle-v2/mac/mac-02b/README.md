@@ -1,6 +1,6 @@
 # MAC-02B：owner 锁与生命周期
 
-状态：**PASS，G02B已通过；MAC-02C尚未实施，父G02未通过。** MAC-02A已提交`2c70544`。本卡不代表正式产品查询、transport、binding或GC恢复通过。
+状态：**PASS（G02B）。** 父G02及后续卡状态以[`../status.json`](../status.json)为准。MAC-02A已提交`2c70544`。本卡不代表正式产品查询、transport、binding或GC恢复通过。
 
 原生launcher在canonical cache root固定`.owner.lock`，monotonic等待最多5秒后直接exec冻结Node，锁映射fd4，IPC保留fd3。入口验证同OFD锁与runtime/native身份，builder、JDT和原生调用显式传递fd4。真实parser位于builder内部。native stdout/stderr分别限制64KiB字节；超时/超限SIGKILL后等待实际close。
 

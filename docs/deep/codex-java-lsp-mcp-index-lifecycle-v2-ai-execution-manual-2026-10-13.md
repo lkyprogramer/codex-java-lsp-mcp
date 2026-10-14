@@ -2,8 +2,8 @@
 
 | 项 | 值 |
 | --- | --- |
-| 版本 | `ILV2-MAC/4`，2026-10-13，替代本文件的旧 P0–P4 执行顺序 |
-| 当前状态 | `IN_PROGRESS`：MAC-00/G00、MAC-01/G01、MAC-02A/G02A、MAC-02B/G02B已按各自范围通过；A提交`2c70544`、B提交`0ab0e0f`。流程精简与MAC-02C/G02C已通过，见[唯一结果记录](../index-lifecycle-v2/mac/mac-02c/task-result.json)；父G02的A/B/C已齐全。MAC-03及后续仍为PLAN |
+| 版本 | `ILV2-MAC/5`，2026-10-14（流程修订：工作根迁出TCC保护目录、门状态单源、两级开发循环；产品合同不变），替代本文件的旧 P0–P4 执行顺序 |
+| 当前状态 | `IN_PROGRESS`。各门状态唯一真源为 [`docs/index-lifecycle-v2/mac/status.json`](../index-lifecycle-v2/mac/status.json)，`scripts/ilv2-mac-status.mjs` 校验它与各 `task-result.json` 及本手册一致；本手册不复制逐卡执行状态 |
 | 目标 | 消除构建活锁、错误新鲜度、跨 worktree 内容污染和请求失控；让同内容复用、真实差量构建及后续 agent 收益可测 |
 | 平台 | Mac 专用：2026-10-13 读取为 `arm64`、macOS `26.5.1 (25F80)`、Node `22.16.0`、SQLite `3.49.1`；MAC-00 冻结绝对可执行路径、digest和完整versions，并核对实际生产工件；不自动升级 |
 | 技术路线 | TypeScript + SQLite + 小型 macOS 原生 helper；APFS 硬前提；唯一 daemon、不可变内容快照、显式 full/delta、统一 lease |
@@ -30,9 +30,10 @@
 3. 不复制凭据，不读取无关 `.env`，不向公开仓库写业务源码、任务正文、gold、oracle或模型原文；执行agent可见不等于允许公开。不改 pins、生产 projects.json；不新增 fat-service。
 4. 不引入 heap/RSS kill 阈值。记录 RSS/CPU 用于分析，不能替代阶段进度与明确时限。
 5. 不更换存储引擎、不重写语言。原生 helper 使用系统 API，作为版本化构建产物；不是插件式跨平台抽象。
-6. 不删除历史归档及其引用：`docs/evidence-archive/`、`/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/`。
+6. 不删除历史归档及其引用：`docs/evidence-archive/`、`/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/`。MAC/5之前的工作根`…/evidence-archive/codex-java-lsp-mcp/ilv2-mac/`属于后者，只读保留，新运行不再写入。
 7. 继续禁止 `--activate-http` 和 `JAVA_LSP_ENGINE`。保留 [HANDOFF](../../HANDOFF.md) 与 [操作文档](../phase-f/production-operations.md) 的“不得新增第四个 live daemon”限制，不据此把现有实例数当作已核验事实；常驻测试只用已授权 `:38457` canary，不增设第二个常驻canary。单次fixture daemon使用独立临时HOME/cache/owner/projects及随机未占用端口，默认禁用JDT（真实JDT专项除外），登记PID/PGID/端口并在运行结束回收；这类有界测试进程不计入常驻实例，不得接生产根。同机所有测试runner合计最多2个fixture daemon，受管配额同时约束并行测试；达到上限排队，不把每个runner的2个相加。
 8. 正式三仓矩阵遵守 [主机政策](../phase-v4/three-repo-host-load-policy.md)：load < 20 应跑，load ≥ 20 仍跑并记录；唯一主机硬门是可用内存 ≥ 4 GiB。真实 ENOSPC 等执行失败如实报告。文档改写和小范围单测不触发矩阵。
+9. 不修改TCC数据库，不代用户授予或撤销隐私权限。探针或测试引出TCC对话框时按拒绝处理并记`BLOCKED_ENV_TCC`；是否授权由用户另行决定（生产launcher的开放决定见§2.1）。
 
 ### 0.2 每项任务的完成合同
 
@@ -42,24 +43,33 @@
 - 新架构按合同测试实施，不要求先在旧架构伪造全部 RED。历史活锁未复现，不阻塞已经由独立测试确认的其他缺陷修复。
 - 实现后运行最窄定向测试及必要编译；G08前移查询容量和三仓回归，G14负责最终整合候选的全量、完整K合同与真实负载。新修改只重跑受影响证据，禁止同一 SHA 多角色重复完整矩阵。
 - 评审与实现分离。并发/持久化/native/公共工具合同必须独立只读评审；评审固定 commit 或 tree/source digest。正式架构和门禁结论不使用 fast 档。
-- 每项输出 `task-result.json`：taskId、状态、源码/tree/native/build 身份、输入 hash、精确命令、退出码、断言、原始产物位置/hash、未覆盖项、删除清单、授权引用和下一步。空缺写 `N/A`，不填虚构数字。
+- 每项输出 `task-result.json`，由 `scripts/ilv2-mac-task-result.mjs compose` 生成：输入为broker在运行根自动追加的`validation-index.jsonl`（argv、退出码、耗时、TAP计数、源码/native/runtime身份）、`closeout/closeout.json`、独立评审记录和一份人工`verdict.json`（taskId与gateId、状态、main/expectedRed/independentRerun的运行名、补充证据文件、未覆盖项、授权引用、下一步）。生成器同时写回`status.json`。PASS缺少记录支持时拒绝生成，包括以下情形：
+  - main运行没有实际执行测试，或有失败、取消的测试；main运行之间身份不一。
+  - expected-RED不是测试失败（编译或broker失败不算）。
+  - 需要独立复验的门缺少复验。
+  - 收尾未PASS或归档未物理校验；收尾id与verdict不符；收尾后validation-index又被追加；raw/、tmp/仍存在。
+  - 评审有未关闭发现，或评审的source与候选不符。
+
+  不手抄hash和计数；空缺写`N/A`。
 - **任务/门状态**：`PLAN`、`IN_PROGRESS`、`PASS`、`FAIL`、`BLOCKED_ENV`、`BLOCKED_AUTH`、`NOT_RUN`、`NOT_REPRODUCED`、`INVALID_EXPERIMENT`。条件任务NOT_RUN要有依据；未启动的MAC主卡/子卡为PLAN。
 - **文档/计划状态**：`PLAN_READY`、`IN_PROGRESS`、`LANDED`；**候选状态**：`NOT_READY`、`READY_FOR_DEPLOY`、`DEPLOYED`；**收益结论**：`UNMEASURED`、`IMPROVED`、`NOT_IMPROVED`。`SUPERSEDED`仅标历史任务被替代，`UNMEASURED_BASELINE`仅标测量前提，不混入任务PASS/FAIL。
 - 每次本地commit前，扫描**暂存的实际blob**与新增文件类型/体积：业务包名、Mapper namespace、业务源码片段和密钥特征的未解决命中必须为0。扫描器只输出文件路径/计数，不回显匹配正文；文档里的规则文字或脱敏占位符需逐项解释后排除，不宽泛排除整个docs。二进制/压缩RAW、源码树与未审明的任务正文直接拒绝入库。MAC-01补可重复的扫描入口；MAC-00证据先留§0.3持久工作根，待MAC-01扫描器可用并通过扫描、人工diff检查后再纳入本地提交，不能先提交后补扫。
 - MAC-02/06/08按下文子卡实施和验收；MAC-03拆开纯TS捕获与原生tracker集成。开工时把真实文件、定向测试名/命令和数据清单填进执行记录。只对未决并发/持久化合同做独立评审，不新增“每张小卡先审批展开计划”的统一阻塞步骤。
 - 门失败不得降低阈值、删样本、扩大 mock 或延长已经冻结的时限。连续两次同因失败且没有新证据时，停止该路径，记录根因与下一项最小验证；不连补猜测补丁。
 
-执行顺序固定为：列齐本卡合同与缺口 → 最小环境/ready探针 → 一次构建并冻结候选 → 主测 → 同一候选的独立只读评审与关键行为复验 → 一次收尾 → 更新结果并提交。环境探针未到ready时不展开故障矩阵。评审可与主测并行；对同一范围只安排一次独立评审，发现修复后只复核受影响项。
+执行顺序固定为：列齐本卡合同与缺口 → 运行环境探针`scripts/ilv2-mac-env-probe.mjs`（§5.1），未到READY不展开故障矩阵 → Tier-0开发循环迭代 → 一次Tier-1构建并冻结候选 → 主测 → 同一候选的独立只读评审（G09/G11/G14/G17另加独立复验）→ 一次收尾 → 生成结果并提交。评审可与主测并行；对同一范围只安排一次独立评审，发现修复后只复核受影响项。Tier-0运行不是证据：不计次、不进task-result，失败也不留档；只有最终Tier-1候选上的运行计入。
 
-一个物理场景可以证明多项合同，证据中逐项列出断言，不重复计作多个测试；刚启动与稳定运行的故障窗口仍分开。独立复验必须由不同执行者实际重跑关键退出/锁/协议边界，不要求复制整个主测矩阵。只有源码、运行时、工具链、依赖或编译产物漂移才重建；文档和汇总变更不使候选失效。原始失败保留，命令退出0只代表所选检查通过，不能自动宣告G门PASS。
+一个物理场景可以证明多项合同，证据中逐项列出断言，不重复计作多个测试；刚启动与稳定运行的故障窗口仍分开。独立复验（不同执行者在另一次构建上实际重跑关键退出/锁/协议边界，不复制整个主测矩阵）只是G09、G11、G14、G17的必需项；其他门由独立只读评审核对关键原始断言、归档hash与实际残留，不另起构建。只有源码、运行时、工具链、依赖或编译产物漂移才重建；文档和汇总变更不使候选失效。原始失败保留，命令退出0只代表所选检查通过，不能自动宣告G门PASS。
 
-`run-isolated-validation.mjs`自动生成各命令的双流、实际close后的退出码、时间、argv、环境白名单与hash。`task-result.json`只汇总这些记录及独立结论，是门状态的唯一结果入口；README/手册只引用该结果，不再复制命令日志、源码清单或维护重复状态表。每轮记录构建与验证命令耗时；排障、证据处理及等待只按实际时间记录，未计时写N/A。
+`run-isolated-validation.mjs`自动生成各命令的双流、实际close后的退出码、时间、argv、环境白名单与hash，并在已登记运行根追加`validation-index.jsonl`（LOCAL，收尾后仍保留）。`task-result.json`是每门的唯一结果记录，`status.json`是门状态的唯一汇总；父门状态由子门推导，不单独存储。README/手册只引用二者，不复制命令日志、源码清单或状态。每轮记录构建与验证命令耗时；排障、证据处理及等待只按实际时间记录，未计时写N/A。
 
 ### 0.3 产物、公开边界与清理
 
 新小型证据放 `docs/index-lifecycle-v2/mac/`：单文件≤1 MiB、总计≤20 MiB，只收聚合数值、不含业务含义的ID、hash和脱敏结论。`agent-visible tasks/answer contract/query plan`仅表示执行agent可读，与`private gold/oracle`一样不允许提交公开仓库；仓库不存任务正文、业务路径/符号清单、模型请求响应或压缩原始记录。
 
-持久工作根 `ILV2_WORK_ROOT=/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/` 保存本计划输入和证据：`inputs/frozen-java-repos/<repo>/` 为经完整性核验的冻结副本；`plans/mac-00/<freeze-id>/` 保存runtime.json、thresholds.json和冻结manifest；`datasets/<dataset-id>/` 放任务、答案合同、私有gold/oracle；`runs/<task-id>/<run-id>/` 为受管运行根；`archives/<task-id>/<run-id>/` 保存通过核验的RAW归档。执行agent只获得agent-visible部分，gold由独立scorer读取。文件写权限不足时，只阻塞依赖持久产物的步骤并记BLOCKED_AUTH；不能改放公开仓库，也不能以/tmp作为跨门保留的替代。
+持久工作根 `ILV2_WORK_ROOT=/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/` 保存本计划输入和证据：`inputs/frozen-java-repos/<repo>/` 为经完整性核验的冻结副本；`plans/mac-00/<freeze-id>/` 保存runtime.json、thresholds.json和冻结manifest；`datasets/<dataset-id>/` 放任务、答案合同、私有gold/oracle；`runs/<task-id>/<run-id>/` 为受管运行根；`archives/<task-id>/<run-id>/` 保存通过核验的RAW归档。执行agent只获得agent-visible部分，gold由独立scorer读取。文件写权限不足时，只阻塞依赖持久产物的步骤并记BLOCKED_AUTH；不能改放公开仓库，也不能以/tmp作为跨门保留的替代。
+
+**工作根、运行根、TMPDIR和fixture根不得位于TCC保护目录**（`~/Desktop`、`~/Documents`、`~/Downloads`、`~/Library/Mobile Documents`、`~/Library/CloudStorage`，大小写不敏感）：launchd job加载或读取其中的文件会在main之前等待TCC决定，G02B有两次运行因此超时。`createRegisteredBrokerRoot`和launchd fixture配额遇到这类路径直接报`BLOCKED_ENV_TCC_PATH`。MAC/5迁移用APFS clone把四个冻结仓复制到新根，输入manifest只改`repoRoot`，文件清单逐字节不变；现行输入清单为`plans/relocation/20261014T133452Z/inputs.json`，四仓均重新通过完整核验。`plans/mac-00/20261013T144536Z/`是原样副本，runtime.json的hash不变，其中inputs.json只作历史。MAC-02B的JDT/TAPI/JDK/Gradle清单已持久化为INPUT `inputs/toolchains/jdt-1.56.0-gradle-9.3.1-jdk-25.0.2/toolchains.json`，由`ILV2_TOOLCHAINS`传入；它引用Homebrew Cellar路径，brew升级会使其漂移，环境探针报`BLOCKED_ENV_TOOLCHAIN_DRIFT`。
 
 **临时目录不提供保留保证。** 本机macOS的`com.apple.tmp_cleaner`每天调度`/usr/libexec/tmp_cleaner`；脚本设`daily_clean_tmps_days=3`，以`-atime +3 -mtime +3 -ctime +3`删文件、以`-empty -mtime +3`删空目录。这里的“3天”是当前清理配置，不是精确72小时的安全保留承诺；不用touch/atime续期保住证据。历史`/tmp/frozen-java-repos`只作待核验的恢复输入，不能继续充当权威冻结根。冻结输入、批准记录、runtime manifest、`--keep`产物和跨门carry-over全部放持久根；/tmp仅用于同次调用结束就可丢弃的探针。MAC-00先按§1.1核验或重建持久副本，之后consumer只使用该副本。
 
@@ -78,7 +88,7 @@
 
 归档顺序固定：生成逐文件SHA-256清单 → 打包 → 解包到本次临时验证目录 → 重算全部hash并比较路径集合/字节数 → 确认一致 → 删除解包验证目录与原始RAW。一次物理解包校验足够；独立执行者核对归档hash、关键原始断言与实际资源/目录残留，不默认再解包一遍。归档或验证失败保留原件，不宣布清理完成。只删除本次登记且到期的精确路径；不对`/tmp/ilv2-*`或整个TMPDIR通配删除。历史残留另按其归属和授权处理，不自动并入本次运行清单。
 
-统一收尾入口为`ilv2-mac-closeout.mjs --finish <closeout-manifest.json>`。清单明确登记`runRoot`、`gateId`、`artifacts`、`processes`（PID及确实拥有的PGID）、`launchdJobs`和递归LOCAL的`closeoutDirectory`；使用fixture配额时附`workRoot`。入口只读证明本次资源实际退出及配额释放，再对到期RAW归档并物理校验一次，删除到期目录，生成`closeout.json`。原始错误由runner双流保存，收尾错误单独报告；收尾PASS不代表产品G门PASS。独立收尾使用`--manifest`核验实际残留，并独立调用资源退出核验，不重建、不重复归档。跨门候选必须登记consumer/到期门。
+收尾清单由`ilv2-mac-task-result.mjs manifest --run-root <root> --gate <G门或WF-流程id>`从运行根生成：`raw/`为RAW、`tmp/`为BULK，均到期于本次收尾；`closeout/`为递归LOCAL；其余顶层文件为LOCAL。未知顶层目录直接拒绝，需移入raw/tmp或用`--extra`显式登记（如carry-over INPUT）。PID/PGID/launchd label取自raw下的JSON/JSONL与plist、broker根和validation-index；只有组长PID本身被记录时才登记owned group。统一收尾入口为`ilv2-mac-closeout.mjs --finish <closeout-manifest.json>`。清单明确登记`runRoot`、`gateId`、`artifacts`、`processes`（PID及确实拥有的PGID）、`launchdJobs`和递归LOCAL的`closeoutDirectory`；使用fixture配额时附`workRoot`。入口只读证明本次资源实际退出及配额释放，再对到期RAW归档并物理校验一次，删除到期目录，生成`closeout.json`。原始错误由runner双流保存，收尾错误单独报告；收尾PASS不代表产品G门PASS。需要独立复验的门（§0.2）由独立执行者用`--manifest`核验实际残留，并独立调用资源退出核验，不重建、不重复归档。跨门候选必须登记consumer/到期门。
 
 评测单批预计峰值≤20 GiB，保留30 GiB磁盘余量；不新增三仓矩阵的主机拒绝门。以下模板为待填执行记录，`null`表示尚未测量：
 
@@ -137,6 +147,7 @@ review 已读源码并运行既有 23 项定向测试、int64 实验。它们不
 - MAC-02B覆盖刚启动后及稳定运行时SIGKILL、锁暂占用、锁等待超时/OWNER_BUSY重启、活动Gradle导入中故障、同root重复启动、父死子存和锁fd意外关闭。原“故障后≤10 s完整清理”仍为G02B/G06C硬门，两类进程从同一故障时刻计时；静态降级可用不能将清理超时改判PASS。若互斥或完整收敛失败，用失败证据修复该门，不预先增加自有持久PID日志/start gate/常驻guardian。
 - 原生部分限于capability、clonefile、FSEvents和小型exec/flock launcher，使用C17系统API；架构/协议/binary digest可验证，不做universal或Node ABI addon。clonefile只用于**缓存卷内**SEALED DB→私有tmp DB。APFS、同卷是缓存路径硬前提；业务仓库可在另一卷，capture读取实际字节，不调用clonefile。
 - 不支持clone、helper缺失或runtime身份不符明确失败，不转普通复制。Node/OS升级重新冻结并跑受影响门；不能把另一PATH会话的版本当本候选版本。
+- **TCC责任进程（开放决定）：** 2026-10-14的隔离launchd探针中，job的Program是本launcher，exec冻结Node后读取`~/Documents`下的文件，仍触发`kTCCServiceSystemPolicyDocumentsFolder`的`AUTHREQ_PROMPTING`。TCC把launcher记为`responsible_path`，`binary_path`为node（`status.json`的`openDecisions`引用该证据）。业务仓库位于`~/Documents/program/`，所以生产owner首次读取业务仓会等待隐私授权，未获授权时capture被阻塞。可选路线有三条：给launcher稳定的代码签名身份，再由用户一次性授权；把业务worktree迁出保护目录；或换用另一种经同一探针证明的启动拓扑。由用户在MAC-17之前决定。决定之前，不得把生产读取业务仓视为已验证。按TCC以cdhash识别ad-hoc签名的一般行为推断，每次重建的候选binary身份都会变；该推断尚未实测，不能据此复用授权。
 
 服务域最多一个owner。不同baseline/candidate测试实例使用隔离root和临时PGID，不构成正式多owner支持；常驻实例限制见§0.1。
 
@@ -290,7 +301,6 @@ G11正确性通过后可以准备提前候选，避免把数据集/模型实验/
 
 ### MAC-00 — 冻结runtime、输入和最早成本spike
 
-**执行状态：** `PASS`（G00，有限旧路径诊断）。[执行结果](../index-lifecycle-v2/mac/mac-00/README.md)列明未验证维度；不计作新架构性能或生产验收。
 
 **范围：** `docs/index-lifecycle-v2/mac/mac-00/`、历史冻结清单与隔离运行目录；不修旧生产产品。spike允许在临时checkout加测量探针和一次性C clonefile探针，产物不进入生产路径。
 
@@ -313,7 +323,6 @@ G11正确性通过后可以准备提前候选，避免把数据集/模型实验/
 
 **验收G01：** fake driver被正确判PASS/FAIL，错误身份不能开始负载；百分位/分母自测通过；status-only不触发预热；start只管理自身生命周期，attach不停止被附加服务。另用合成负向样本证明：扫描暂存blob而非工作树、stdout/stderr不含命中正文、docs没有整体豁免；未登记路径/到期残留拒绝closeout；broker创建后输出前被杀仍归属预登记父根；第三个fixture排队，取消/退出释放配额；HEAD未变但缺文件/坏对象/输入hash变化不能开跑。新增CLI在本卡结束才允许被后续门调用。
 
-**执行状态：PASS。** 定向修复、独立行为复验、逐文件归档、实际收尾及暂存blob扫描已完成，见[MAC-01聚合证据](../index-lifecycle-v2/mac/mac-01/README.md)。该结论只覆盖验收工具，不抵扣后续产品、native、JDT或性能门。
 
 ### MAC-02 — native边界与构建供应链（分卡验收）
 
@@ -329,7 +338,6 @@ G11正确性通过后可以准备提前候选，避免把数据集/模型实验/
 
 **G02A：** 运行、安装预检和manifest的Node/SQLite完全一致；不同PATH不影响选择；native改动影响身份；编译失败/错误架构/跨卷clone明确失败；业务仓库在另一卷的read capture不受此限制。D06为计划层替换，无需虚构删除不存在的源码。
 
-**执行状态：PASS。** 固定Node/native构建与clone边界、定向入口/真实受管HTTP、独立复验、私有镜像卸载、归档和实际收尾均完成，见[MAC-02聚合证据](../index-lifecycle-v2/mac/mac-02/README.md)。历史baseline没有native时保留原始树并明确标注；当前candidate必须完整构建。wrapper fixture只证明运行时选择；正式K/PR/release、三仓、生产安装与后续MAC-03新capture仍未运行。
 
 #### MAC-02B — flock launcher与launchd生命周期证明
 
@@ -341,7 +349,6 @@ G11正确性通过后可以准备提前候选，避免把数据集/模型实验/
 
 **G02B：** 旧持锁OWNER_PROCESS尚存时第二launcher等待且不exec，超时非零退出；旧组退出后锁释放。验收刚启动即崩溃和锁暂占用两条实际launchd时间线，核对KeepAlive/ThrottleInterval以及OWNER_BUSY重启；两类旧进程正常清理须在同一≤10 s窗口退出。Gradle stop失败时用明确的恢复状态机fixture证明静态准入状态不被语义阻塞状态覆盖，且不会启动新JDT；有效home/按版本stop/实际exit/launchd卸载留证，对照域不误停。本卡不要求尚未实现的SnapshotStore、正式transport或GC，也不把fixture状态当正确查询的证明；完整产品恢复由G09必验。环境不足BLOCKED_ENV，不用guardian绕过证明。
 
-**执行状态：PASS。** 最终37文件候选受影响定向8/8、独立8/8及源码评审通过；前候选真实launchd7场景与quota2测试保留其身份。实际JDT配置驱动两个私有Gradle域导入，活动故障后旧owner/JDT组与daemon从同一故障起点2156.013291ms退出，对照域存活。Documents权限经用户允许且观察到系统放行；两个EPERM夹具FAIL及定向RED保留，修复只以ESRCH证明退出、原10秒门不变。566文件归档完整解包核验、独立收尾、到期carry删除及job/PID/组/quota无残留均完成。详见[MAC-02B证据](../index-lifecycle-v2/mac/mac-02b/README.md)。G09完整查询恢复/重新initialize仍未运行；FSEvents锁/组实测归G02C，现可按顺序进入C。
 
 #### MAC-02C — FSEvents传输和fence
 
@@ -508,7 +515,7 @@ G08C不沿用绕过新query池的旧SQL直连benchmark冒充请求路径证明�
 
 **范围：** `install-runtime.sh`、`scripts/runtime-artifacts.test.mjs`、README、HANDOFF、[生产操作文档](../phase-f/production-operations.md)、隔离 canary。
 
-**步骤：** 安装工件包含并校验native binary/权限/版本；移除旧stdio runtime迁移和双schema启动合同。生成release digest、唯一缓存/独立serviceStateRoot布局、§2.1完整launchd配置（RunAtLoad、KeepAlive/非零OWNER_BUSY、ThrottleInterval、AbandonProcessGroup、5 s锁等待）及停止/回退步骤，按生成plist读回核验。canary用`:38457`独立cache和service-state，通过start启动后attach回放≥2 h、≥1000正常请求，含full/seed/编辑/重启/lease/GC；真实JDT专项另测，其余可禁用JDT。
+**步骤：** 安装工件包含并校验native binary/权限/版本；移除旧stdio runtime迁移和双schema启动合同。生成release digest、唯一缓存/独立serviceStateRoot布局、§2.1完整launchd配置（RunAtLoad、KeepAlive/非零OWNER_BUSY、ThrottleInterval、AbandonProcessGroup、5 s锁等待）及停止/回退步骤，按生成plist读回核验。按§2.1的TCC决定落实launcher身份与授权方式，并在隔离launchd下用`ilv2-mac-env-probe.mjs --read <业务仓内文件>`证明READY；BLOCKED_ENV_TCC不能计入G17。canary用`:38457`独立cache和service-state，通过start启动后attach回放≥2 h、≥1000正常请求，含full/seed/编辑/重启/lease/GC；真实JDT专项另测，其余可禁用JDT。
 
 **验收G17：** 本卡修改构建输入后先补受影响G14门；运行实例build/source/native身份与候选匹配，§6正常窗口SLO达标，输出回滚演练和安装清单。部署请求精确到SHA/digest、生产路径、唯一owner、旧缓存和service-state保留/恢复方式；披露空私有Gradle home下首次发行版/依赖下载、首次语义可用耗时和新增磁盘实测，未测明确标注，静态与语义可用时间分开。只迁入核实必需且获授权的构建配置，不整份复制用户Gradle home或凭据；不能由“当前未见配置”推定生产永久无需配置。工程候选可READY_FOR_DEPLOY，尚非DEPLOYED或AGENT_IMPROVED。
 
@@ -516,7 +523,7 @@ G08C不沿用绕过新query池的旧SQL直连benchmark冒充请求路径证明�
 
 **依赖：** 默认MAC-17 PASS，或§3.1提前候选完成其必需前置门；两者均需用户对具体候选安装的明确授权。无授权停在准备好的包。
 
-**步骤：** 安装前复查目标身份；停止旧服务，安装同一工件、切换唯一launcher/daemon 和新 cache namespace，验证状态、一个真实静态查询、一次指定仓库增量和 stdio/HTTP 路径指向同一 owner。是否启动真实 JDT 按批准范围执行。记录每步结果和旧工件位置。
+**步骤：** 安装前复查目标身份；停止旧服务，安装同一工件、切换唯一launcher/daemon 和新 cache namespace，验证状态、一个真实静态查询、一次指定仓库增量和 stdio/HTTP 路径指向同一 owner。真实静态查询须由生产launcher身份实际读取业务仓完成；TCC等待或拒绝记BLOCKED_ENV_TCC，不视为可用。是否启动真实 JDT 按批准范围执行。记录每步结果和旧工件位置。
 
 **验收 G18：** 读回生产 instance/build/native digest 与候选一致，进程槽位/缓存根/工具结果符合合同；失败立即按已批准回退方案停止新服务，旧版本只有在已证明可用且获准时才恢复。旧格式数据不迁移也不自动删除；不把回退到已知活锁 release 当成功恢复。
 
@@ -555,12 +562,22 @@ MAC-02A已将native builder和runtime manifest校验接入普通构建、隔离/
 
 `ILV2_NODE_BIN`是执行命令的任务变量，`runtime.json`中的可执行身份才是真源。shell broker校验该路径和`ILV2_RUNTIME_MANIFEST`，保留原六项环境清理并移除`NODE_TEST_CONTEXT`，不回退PATH。JS binder在任何嵌套分支返回前将字面`node`重绑定为当前绝对`process.execPath`；quoted test glob在编译候选中展开。安装器使用同一manifest及冻结Node安装中的npm-cli，不重新查PATH；`--preflight-runtime`只读返回身份。实际另一Node的PATH漂移证据已保留；普通测试自建私有execPath fixture，不另加必须安装备用版本的前提。
 
+**两级开发循环。** Tier-0用于迭代：`sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs [--name <tree>] [--env K=V] [-- node --test <文件>]`，需先设好下方模板中的`ILV2_NODE_BIN`、`ILV2_RUNTIME_MANIFEST`和PATH。它的行为如下：
+- 在工作根（`MAC_WORK_ROOT`，路径同§0.3）的`dev/<tree>/`维护一个持久的`--shared` clone。执行破坏性的git命令前，先核对它确实是自己的clone且路径不经过符号链接；然后重置到源HEAD，再重新应用`captureCandidatePatch`补丁。
+- node_modules只在lock hash变化时重拷。
+- 执行`tsc --incremental`，并删除没有对应`src/*.ts`的陈旧`dist/**/*.js`。
+- native只在其源码digest、runtime或工具链变化时重编；build stamp每次重写。
+- 命令在新建的`runs/dev-<tree>/<id>/`下运行，HOME、cache和TMPDIR都隔离，launchd fixture可用。结束后核对登记的进程、launchd job和配额都已退出，并确认没有活进程的命令行引用该运行根。只保留最近N个已结束的干净运行；有残留或未结束的运行不删。
+- 同一tree串行执行；锁被活进程持有时拒绝启动。
+
+Tier-0不产生证据，不得写入task-result。Tier-1是下文的broker：每张卡的最终候选只构建一次，只有它上面的运行计入门。`node --test`遇到不存在的文件参数时会静默不选；broker和Tier-0因此拒绝候选中不存在的测试文件参数，包括zsh未分词的数组。卡开始时先在Tier-1候选里运行环境探针：`--name env-probe -- "$ILV2_NODE_BIN" scripts/ilv2-mac-env-probe.mjs [--toolchains "$ILV2_TOOLCHAINS"]`，未到READY就停止。之后的命令用`--reuse`在同一候选上执行。`--read <保护目录内文件>`会让系统弹出真实的TCC对话框，所以只在用户事先同意时运行，并按“不允许”作答，记为`BLOCKED_ENV_TCC`。
+
 以下为完整子shell模板，在源码checkout执行，替换freeze/task/run ID及测试路径。也可保存为任务脚本后用`/bin/sh`执行，禁止source到持久shell。每次新建并登记运行根；环境在子shell退出后恢复。MAC-00尚无manifest时直接固定并记录runtime；后续指向持久冻结文件。`TMPDIR`必须在broker启动前设置，子进程的`--env TMPDIR=...`不能约束broker自身mkdtemp。
 
 ```sh
 (
   set -eu
-  export ILV2_WORK_ROOT="/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac"
+  export ILV2_WORK_ROOT="/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac"
   export ILV2_NODE_BIN="/Users/luo/.nvm/versions/node/v22.16.0/bin/node"
   export ILV2_RUNTIME_MANIFEST="$ILV2_WORK_ROOT/plans/mac-00/<freeze-id>/runtime.json"
   ILV2_TASK_DIR="$ILV2_WORK_ROOT/runs/<task-id>"
@@ -572,6 +589,9 @@ MAC-02A已将native builder和runtime manifest校验接入普通构建、隔离/
   printf '%s\n' "$ILV2_RUN_ROOT" > "$ILV2_RUN_ROOT/run-root.txt"
   mkdir "$ILV2_RUN_ROOT/tmp"
   export TMPDIR="$ILV2_RUN_ROOT/tmp"
+  export PATH="/opt/homebrew/bin:$PATH"
+  # JDT/Gradle cards only:
+  # export ILV2_TOOLCHAINS="$ILV2_WORK_ROOT/inputs/toolchains/jdt-1.56.0-gradle-9.3.1-jdk-25.0.2/toolchains.json"
   unset NODE_OPTIONS NODE_PATH NODE_REPL_HISTORY NODE_V8_COVERAGE NODE_COMPILE_CACHE NODE_REDIRECT_WARNINGS
 
   "$ILV2_NODE_BIN" scripts/run-isolated-validation.mjs --name main --profile targeted -- \
@@ -705,7 +725,7 @@ clonefile 返回成功证明请求了原生克隆；`ls -l` 不能证明共享 e
 ```sh
 (
   set -eu
-  export ILV2_WORK_ROOT="/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac"
+  export ILV2_WORK_ROOT="/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac"
   export ILV2_NODE_BIN="/Users/luo/.nvm/versions/node/v22.16.0/bin/node"
   export ILV2_RUNTIME_MANIFEST="$ILV2_WORK_ROOT/plans/mac-00/<freeze-id>/runtime.json"
   ILV2_TASK_DIR="$ILV2_WORK_ROOT/runs/mac-14"
@@ -739,7 +759,7 @@ runner已在内部调用同一verifier；第二条是对持久产物的独立复
 ```sh
 (
   set -eu
-  export ILV2_WORK_ROOT="/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac"
+  export ILV2_WORK_ROOT="/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac"
   export ILV2_NODE_BIN="/Users/luo/.nvm/versions/node/v22.16.0/bin/node"
   export ILV2_RUNTIME_MANIFEST="$ILV2_WORK_ROOT/plans/mac-00/<freeze-id>/runtime.json"
   ILV2_TASK_DIR="$ILV2_WORK_ROOT/runs/mac-14"

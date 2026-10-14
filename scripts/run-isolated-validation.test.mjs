@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { execFile, spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { sha256 } from "./ilv2-mac-contracts.mjs";
-import { isolatedValidationEnvironment, validationIdentity, verifyValidationIdentity, validationResultDirectory, recordValidationCommand, registeredReuseRoot, verifyNativeToolchain } from "./run-isolated-validation.mjs";
+import { isolatedValidationEnvironment, validationIdentity, verifyValidationIdentity, validationResultDirectory, recordValidationCommand, registeredReuseRoot, verifyNativeToolchain, tapCounts, appendValidationIndex } from "./run-isolated-validation.mjs";
 
 test("isolated validation never inherits or accepts overrides for active LSP state directories", () => {
   const root = "/tmp/v32-isolated";
@@ -184,6 +184,27 @@ test("a failing selected command preserves both output streams and its actual ex
   assert.equal(record.environment.UNRELATED_SECRET, undefined);
   assert.equal(await readFile(path.join(root, record.stdout), "utf8"), "main evidence");
   assert.equal(await readFile(path.join(root, record.stderr), "utf8"), "original error");
+});
+
+test("validation index keeps compact command facts, TAP totals and identity for failed and passed runs", async t => {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "validation-index-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  assert.deepEqual(tapCounts("# tests 3\n# pass 2\n# fail 1\n# cancelled 0\n"), { tests: 3, pass: 2, fail: 1, cancelled: 0 });
+  assert.equal(tapCounts("plain output\n"), null);
+  const directory = path.join(root, "raw/validation/main");
+  await mkdir(directory, { recursive: true });
+  const env = { PATH: process.env.PATH, HOME: root };
+  const passed = await recordValidationCommand(directory, process.execPath, ["-e", "console.log('# tests 1\\n# pass 1\\n# fail 0')"], { cwd: root, env }, 0);
+  const failed = await recordValidationCommand(directory, process.execPath, ["-e", "process.exit(3)"], { cwd: root, env }, 1).catch(error => error.commandRecord);
+  const identity = { source: "s", runtime: { runtimeManifestSha256: "r" }, native: { binarySha256: "n", sourceDigest: "ns" }, build: { a: 1 }, dist: { sha256: "d" }, dependencies: { sha256: "p" } };
+  await appendValidationIndex(root, { name: "main", directory, validationRoot: "/v", identity, commands: [passed, failed], mainError: new Error("exit 3") });
+  await appendValidationIndex(root, { name: "probe", directory, validationRoot: "/v", identity: null, commands: [], mainError: null });
+  const [main, probe] = (await readFile(path.join(root, "validation-index.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(main.status, "FAIL"); assert.equal(main.result, "raw/validation/main/result.json");
+  assert.deepEqual(main.commands.map(row => [row.exitCode, row.tap?.tests ?? null]), [[0, 1], [3, null]]);
+  assert.deepEqual(main.identity, { sourceDigest: "s", runtimeManifestSha256: "r", nativeSha256: "n", nativeSourceDigest: "ns",
+    buildStampSha256: sha256(JSON.stringify({ a: 1 })), distInventorySha256: "d", dependencySha256: "p" });
+  assert.equal(probe.status, "SELECTED_COMMANDS_PASSED"); assert.equal(probe.identity, null);
 });
 
 test("reuse requires the registered broker and rejects escaping symlinks", async t => {

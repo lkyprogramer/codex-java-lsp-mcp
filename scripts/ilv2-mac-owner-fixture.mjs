@@ -11,6 +11,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { acquireFixtureSlot, acquireLaunchdFixtureSlot } from "./ilv2-mac-fixture-quota.mjs";
 import { MAC_WORK_ROOT, execute, writeJson } from "./ilv2-mac-contracts.mjs";
 import { ownerLaunchArguments } from "../dist/mac-platform/owner-lock.js";
+import { diagnoseLaunchdJob } from "./ilv2-mac-env-probe.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const escapeXml = value => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -68,7 +69,15 @@ export async function createOwnerFixture(t, options = {}) {
       if (!direct) for (const row of rows) if (row.type === "ready") lease.observe(row.pid, row.pgid);
       return rows;
     },
-    async ready(excludePid) { return eventually(async () => (await fixture.records()).find(row => row.type === "ready" && row.pid !== excludePid)); },
+    async ready(excludePid) {
+      try { return await eventually(async () => (await fixture.records()).find(row => row.type === "ready" && row.pid !== excludePid)); }
+      catch (error) {
+        if (direct || !/deadline exceeded/.test(error.message)) throw error;
+        // Classify a launchd job that never reached Node (e.g. a pending TCC prompt) instead of a bare timeout.
+        const diagnosis = await diagnoseLaunchdJob({ label, subjects: [launch.binary] });
+        throw Object.assign(new Error(`${diagnosis.classification}: launchd owner not ready`), { diagnosis });
+      }
+    },
     async command(command) { await writeJson(path.join(root, "command.json"), { id: randomUUID(), ...command }); },
     async stopOwned() {
       if (!direct) throw new Error("direct primitive fixture required");

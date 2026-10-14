@@ -4,7 +4,7 @@
 import { createHash } from "node:crypto";
 import { cp, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 
 const ISOLATED_STATE_FLAGS = new Set([
   "--index-cache-dir",
@@ -191,9 +191,17 @@ export function bindCandidateNodeCommand(values, { candidateRoot, stateRoot }) {
 // Node 22.16 does not expand these quoted test globs. Resolve only in the built
 // candidate, never against the source checkout's possibly stale dist tree.
 export function expandCandidateTestGlobs(values, candidateRoot) {
+  const testRun = values.includes("--test");
   return values.flatMap(value => {
     const match = /^(dist|scripts)\/(\*\*\/)?\*\.test\.(js|mjs)$/.exec(value);
-    if (!match) return [value];
+    if (!match) {
+      // node --test treats a missing path as a pattern and silently runs nothing
+      // for it, e.g. an unsplit "a.test.mjs b.test.mjs" from an unquoted zsh array.
+      if (testRun && !value.startsWith("-") && /\.(?:[cm]?js|ts)$/.test(value) && !statSync(path.resolve(candidateRoot, value), { throwIfNoEntry: false })?.isFile()) {
+        throw new Error(`candidate test file not found: ${value}`);
+      }
+      return [value];
+    }
     const files = [];
     function visit(relative) {
       for (const entry of readdirSync(path.join(candidateRoot, relative), { withFileTypes: true })) {

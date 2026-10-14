@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { execute, sha256, writeJson, verifyFrozenInput, verifyRuntime, cliOptions } from "./ilv2-mac-contracts.mjs";
+import { execute, sha256, writeJson, verifyFrozenInput, verifyRuntime, cliOptions, MAC_WORK_ROOT, tccProtectedFolder, requireUnprotectedRoot } from "./ilv2-mac-contracts.mjs";
 import { validateCloseout } from "./ilv2-mac-closeout.mjs";
 import { scanStaged } from "./ilv2-mac-staged-scan.mjs";
 
@@ -165,3 +165,14 @@ test("SIGKILL after directory creation but before announcement remains under the
   assert.equal((await readFile(path.join(root, "run-root.txt"), "utf8")).trim(), root);
 });
 test("duplicate CLI options are rejected", () => assert.throws(() => cliOptions(["--out", "one", "--out", "two"], ["--out"]), /invalid/));
+test("managed roots reject TCC-protected user folders, case-insensitively and without prefix false positives", () => {
+  const home = "/fixture/home";
+  assert.equal(tccProtectedFolder("/fixture/home/Documents/evidence/run", home), "/fixture/home/Documents");
+  assert.equal(tccProtectedFolder("/fixture/home/documents/run", home), "/fixture/home/Documents");
+  assert.equal(tccProtectedFolder("/fixture/home/Library/Mobile Documents/x", home), "/fixture/home/Library/Mobile Documents");
+  assert.equal(tccProtectedFolder("/fixture/home/DocumentsArchive/run", home), null);
+  assert.equal(tccProtectedFolder("/Volumes/External/run", home), "/Volumes");
+  assert.equal(tccProtectedFolder("/fixture/home/Developer/ilv2-work", home), null);
+  assert.equal(tccProtectedFolder(MAC_WORK_ROOT), null);
+  assert.throws(() => requireUnprotectedRoot(path.join(os.userInfo().homedir, "Documents", "run"), "run root"), /BLOCKED_ENV_TCC_PATH/);
+});

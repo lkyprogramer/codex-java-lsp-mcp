@@ -179,6 +179,20 @@ test("nested JDT isolation broker retains its own repo and state placeholders", 
   }), [process.execPath, ...command.slice(1)]);
 });
 
+test("test runs reject candidate test paths that do not exist instead of silently selecting nothing", async t => {
+  const candidateRoot = await mkdtemp(path.join(os.tmpdir(), "candidate-tests-"));
+  t.after(() => rm(candidateRoot, { recursive: true, force: true }));
+  await mkdir(path.join(candidateRoot, "scripts"));
+  for (const name of ["a.test.mjs", "b.test.mjs"]) await writeFile(path.join(candidateRoot, "scripts", name), "");
+  const bind = values => bindCandidateNodeCommand(values, { candidateRoot, stateRoot: candidateRoot });
+  assert.deepEqual(bind(["node", "--test", "--test-name-pattern=x.js", "scripts/a.test.mjs", "scripts/b.test.mjs"]).slice(1),
+    ["--test", "--test-name-pattern=x.js", "scripts/a.test.mjs", "scripts/b.test.mjs"]);
+  assert.throws(() => bind(["node", "--test", "scripts/a.test.mjs scripts/b.test.mjs"]), /candidate test file not found/);
+  assert.throws(() => bind(["node", "--test", "scripts/missing.test.mjs"]), /candidate test file not found/);
+  // Without --test a script argument keeps its existing meaning.
+  assert.deepEqual(bind(["node", "scripts/missing.mjs"]).slice(1), ["scripts/missing.mjs"]);
+});
+
 function run(command, args, env) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { env, stdio: ["ignore", "pipe", "pipe"] });
