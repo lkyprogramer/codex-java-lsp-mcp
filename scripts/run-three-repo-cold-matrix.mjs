@@ -8,7 +8,7 @@ import { access, copyFile, mkdir, readFile, readdir, realpath, rm, writeFile } f
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createRegisteredBrokerRoot } from "./ilv2-mac-contracts.mjs";
+import { createRegisteredBrokerRoot, verifyRuntime } from "./ilv2-mac-contracts.mjs";
 import {
   aggregateJavaIndexRpcSidecar,
   DIAGNOSTIC_RPC_GATE_POLICY
@@ -109,6 +109,7 @@ function runtimeStateDescriptor(environment) {
 }
 
 async function main() {
+  await verifyRuntime();
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
 
@@ -192,7 +193,7 @@ async function main() {
       .map(([project, scenario]) => `${scenario.sha256}  frozen-scenarios/${project}.scenarios.jsonl`)
       .join("\n") + "\n");
 
-    await build(baselineRoot, isolatedEnv);
+    await build(baselineRoot, isolatedEnv, { legacyBaseline: true });
     await build(candidateRoot, isolatedEnv);
     const candidateTests = await runCandidateTests(candidateRoot, isolatedEnv, path.join(outputDir, "candidate-tests"));
 
@@ -420,8 +421,20 @@ async function symlinkNodeModules(isolatedNodeModules, worktreeRoot) {
   await symlink(isolatedNodeModules, target, "dir");
 }
 
-async function build(root, env) {
+export function matrixNativeBuildArguments(root, { legacyBaseline = false } = {}) {
+  const script = path.join(root, "scripts/build-macos-native.mjs");
+  const source = path.join(root, "native/macos/ilv2-mac.c");
+  if (legacyBaseline && !existsSync(script) && !existsSync(source)) return [];
+  if (!existsSync(script) || !existsSync(source)) throw new Error("native build inputs missing");
+  return [script];
+}
+
+async function build(root, env, options) {
+  const nativeArgs = matrixNativeBuildArguments(root, options);
   await run(process.execPath, [path.join(root, "node_modules", ".bin", "tsc"), "-p", path.join(root, "tsconfig.json")], { cwd: root, env });
+  // The frozen historical baseline predates the native implementation. It
+  // remains that source tree; only a current candidate must build the helper.
+  if (nativeArgs.length) await run(process.execPath, nativeArgs, { cwd: root, env });
   await run(process.execPath, [path.join(root, "scripts", "write-build-stamp.mjs")], { cwd: root, env });
 }
 
@@ -562,7 +575,11 @@ async function runtimeIdentity(root) {
     commit: (await capture("git", ["-C", root, "rev-parse", "HEAD^{commit}"])).trim(),
     commitTree: (await capture("git", ["-C", root, "rev-parse", "HEAD^{tree}"])).trim(),
     executableTree: (await capture("git", ["-C", root, "write-tree"])).trim(),
-    buildStamp: JSON.parse(await readFile(path.join(root, "dist", "build-stamp.json"), "utf8"))
+    buildStamp: JSON.parse(await readFile(path.join(root, "dist", "build-stamp.json"), "utf8")),
+    runtime: await verifyRuntime(),
+    native: existsSync(path.join(root, "dist/native/manifest.json"))
+      ? JSON.parse(await readFile(path.join(root, "dist/native/manifest.json"), "utf8"))
+      : "NOT_APPLICABLE_LEGACY_BASELINE"
   };
 }
 
@@ -628,7 +645,7 @@ async function persistUntrackedInputs(sourceRoot, outputRoot, inputs) {
 }
 
 function isCandidateSourceInput(file) {
-  return /^(src|golden|fixtures|scripts)\//.test(file)
+  return /^(src|golden|fixtures|scripts|native)\//.test(file)
     || /^(?:package(?:-lock)?\.json|tsconfig\.json)$/.test(file);
 }
 

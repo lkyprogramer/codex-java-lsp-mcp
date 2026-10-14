@@ -134,7 +134,7 @@ export function bindCommandToIsolatedRepository(values, repoRoot, isolationRoot 
       throw new Error(`${values[index]} must use a {repo} or {state} placeholder`);
     }
   }
-  const command = replaceRepoPlaceholder(values, repoRoot, isolationRoot);
+  const command = replaceRepoPlaceholder([process.execPath, ...values.slice(1)], repoRoot, isolationRoot);
   if (path.resolve(command[repoRootIndex + 1]) !== path.resolve(repoRoot)) {
     throw new Error("benchmark command repo root does not match the detached Java clone");
   }

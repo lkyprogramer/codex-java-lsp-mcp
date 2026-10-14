@@ -58,7 +58,7 @@ test("real JDT benchmark binds the command repo root to the detached clone", () 
       ["node", "tool.js", "--repo-root", "{repo}", "--output", "{repo}/out.json"],
       "/tmp/repo"
     ),
-    ["node", "tool.js", "--repo-root", "/tmp/repo", "--output", "/tmp/repo/out.json"]
+    [process.execPath, "tool.js", "--repo-root", "/tmp/repo", "--output", "/tmp/repo/out.json"]
   );
   assert.throws(
     () => bindCommandToIsolatedRepository(["node", "tool.js", "--repo-root", "/active/repo"], "/tmp/repo"),
@@ -93,7 +93,7 @@ test("real JDT benchmark binds the command repo root to the detached clone", () 
       "/tmp/isolated/repo",
       "/tmp/isolated"
     ),
-    ["node", "tool.js", "--repo-root", "/tmp/isolated/repo", "--index-cache-dir", "/tmp/isolated/index"]
+    [process.execPath, "tool.js", "--repo-root", "/tmp/isolated/repo", "--index-cache-dir", "/tmp/isolated/index"]
   );
 });
 

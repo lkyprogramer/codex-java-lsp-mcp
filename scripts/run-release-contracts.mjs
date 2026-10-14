@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectedSubtests } from "./task36-tap-evidence.mjs";
+import { verifyRuntime } from "./ilv2-mac-contracts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sha = value => createHash("sha256").update(value).digest("hex");
@@ -42,7 +43,7 @@ export function candidateIdentity(cwd = root) {
     return result.stdout;
   };
   const files = [...new Set(git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean))]
-    .filter(file => /^(src\/|scripts\/|fixtures\/|package(?:-lock)?\.json$|tsconfig\.json$)/.test(file)).sort();
+    .filter(file => /^(src\/|scripts\/|fixtures\/|native\/|package(?:-lock)?\.json$|tsconfig\.json$|install-runtime\.sh$)/.test(file)).sort();
   const hashes = files.map(file => [file, existsSync(path.join(cwd, file)) ? sha(readFileSync(path.join(cwd, file))) : "DELETED"]);
   return { baseSha: git(["rev-parse", "HEAD"]).trim(), sourceDigest: sha(JSON.stringify(hashes)), files: hashes.length, dirty: git(["status", "--porcelain"]).trim().length > 0, lockfileHash: sha(readFileSync(path.join(cwd, "package-lock.json"))) };
 }
@@ -102,6 +103,7 @@ function execute(args, timeoutMs = 90000) {
 }
 
 async function main(argv) {
+  await verifyRuntime();
   const value = name => { const i = argv.indexOf(name); return i < 0 ? undefined : argv[i + 1]; };
   if (!argv.includes("--isolated") || process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") throw new Error("run with --isolated inside run-isolated-validation");
   if (!value("--output")) throw new Error("--output is required");

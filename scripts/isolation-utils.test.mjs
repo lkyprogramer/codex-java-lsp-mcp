@@ -50,7 +50,8 @@ test("host Node runtime selectors never reach isolated child processes", () => {
     NODE_REPL_HISTORY: "/active/repl-history",
     NODE_V8_COVERAGE: "/active/coverage",
     NODE_COMPILE_CACHE: "/active/compile-cache",
-    NODE_REDIRECT_WARNINGS: "/active/warnings.log"
+    NODE_REDIRECT_WARNINGS: "/active/warnings.log",
+    NODE_TEST_CONTEXT: "child-v8"
   });
   assert.deepEqual(clean, { TASK_MARKER: "yes" });
 });
@@ -147,7 +148,7 @@ test("candidate commands bind writable and repository paths to private placehold
       "--output", "{candidate}/result.json"
     ], { candidateRoot, stateRoot }),
     [
-      "node",
+      process.execPath,
       "dist/benchmark.js",
       "--repo-root", candidateRoot,
       "--index-cache-dir", "/private/state/index",
@@ -175,7 +176,7 @@ test("nested JDT isolation broker retains its own repo and state placeholders", 
   assert.deepEqual(bindCandidateNodeCommand(command, {
     candidateRoot: "/private/candidate",
     stateRoot: "/private/state"
-  }), command);
+  }), [process.execPath, ...command.slice(1)]);
 });
 
 function run(command, args, env) {

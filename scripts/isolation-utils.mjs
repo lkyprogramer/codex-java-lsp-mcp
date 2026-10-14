@@ -4,6 +4,7 @@
 import { createHash } from "node:crypto";
 import { cp, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
+import { readdirSync } from "node:fs";
 
 const ISOLATED_STATE_FLAGS = new Set([
   "--index-cache-dir",
@@ -24,7 +25,8 @@ const HOST_NODE_RUNTIME_SELECTORS = [
   "NODE_REPL_HISTORY",
   "NODE_V8_COVERAGE",
   "NODE_COMPILE_CACHE",
-  "NODE_REDIRECT_WARNINGS"
+  "NODE_REDIRECT_WARNINGS",
+  "NODE_TEST_CONTEXT"
 ];
 const NODE_CODE_LOADING_OPTIONS = new Set([
   "--require",
@@ -154,10 +156,10 @@ export function validateCandidateNodeCommand(values) {
 
 export function bindCandidateNodeCommand(values, { candidateRoot, stateRoot }) {
   validateCandidateNodeCommand(values);
+  const command = [process.execPath, ...values.slice(1)];
   const script = values.slice(1).find(value => /\.(?:[cm]?js|ts)$/.test(value));
-  if (script && NESTED_ISOLATION_BROKERS.has(path.normalize(script))) return [...values];
+  if (script && NESTED_ISOLATION_BROKERS.has(path.normalize(script))) return command;
 
-  const command = [...values];
   for (let index = 0; index < command.length; index += 1) {
     const value = command[index];
     if ([...ISOLATED_STATE_FLAGS, ...CANDIDATE_ROOT_FLAGS].some(flag => value.startsWith(`${flag}=`))) {
@@ -183,7 +185,27 @@ export function bindCandidateNodeCommand(values, { candidateRoot, stateRoot }) {
     command[index + 1] = bound;
     index += 1;
   }
-  return command;
+  return expandCandidateTestGlobs(command, candidateRoot);
+}
+
+// Node 22.16 does not expand these quoted test globs. Resolve only in the built
+// candidate, never against the source checkout's possibly stale dist tree.
+export function expandCandidateTestGlobs(values, candidateRoot) {
+  return values.flatMap(value => {
+    const match = /^(dist|scripts)\/(\*\*\/)?\*\.test\.(js|mjs)$/.exec(value);
+    if (!match) return [value];
+    const files = [];
+    function visit(relative) {
+      for (const entry of readdirSync(path.join(candidateRoot, relative), { withFileTypes: true })) {
+        const name = path.posix.join(relative, entry.name);
+        if (entry.isDirectory() && match[2]) visit(name);
+        else if (entry.isFile() && name.endsWith(`.test.${match[3]}`)) files.push(name);
+      }
+    }
+    visit(match[1]);
+    if (!files.length) throw new Error(`candidate test glob has no matches: ${value}`);
+    return files.sort();
+  });
 }
 
 function sha256(value) {

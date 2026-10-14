@@ -1,0 +1,288 @@
+{
+  "children": [
+    {
+      "closeout": "PASS",
+      "gateId": "G02A",
+      "independentReview": "PASS",
+      "sourceDigest": "83a6ed49935ecb6f34a20e05983032383e23b514cb95b799e8e6c8a3d2f7794f",
+      "status": "PASS",
+      "taskId": "MAC-02A"
+    },
+    {
+      "gateId": "G02B",
+      "status": "PLAN",
+      "taskId": "MAC-02B"
+    },
+    {
+      "gateId": "G02C",
+      "status": "PLAN",
+      "taskId": "MAC-02C"
+    }
+  ],
+  "dependsOn": {
+    "G00": "PASS",
+    "G01": "PASS",
+    "commit": "6fd8032ac45b3b32bf7d3cf6fd0033e4999a4ae4"
+  },
+  "deploymentPerformed": false,
+  "identity": {
+    "mac02aSourceDigest": "83a6ed49935ecb6f34a20e05983032383e23b514cb95b799e8e6c8a3d2f7794f",
+    "nativeBinarySha256": "68cd864dcb7189a4fb486c8e50a95b3b1d7c9570ada1bffb3ab75573f6b8c5c7",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524"
+  },
+  "mac02a": {
+    "checks": [
+      {
+        "name": "raw/defaults-1.log",
+        "sha256": "0d86fd9a5d294d7aa6d34e0f376fcf435f2f5fede31e6571d56d5ef1c7930cab",
+        "sourceDigest": "83a6ed49935ecb6f34a20e05983032383e23b514cb95b799e8e6c8a3d2f7794f",
+        "status": "PASS",
+        "tapSummary": [
+          "# tests 3",
+          "# pass 3",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 39890.852542"
+        ]
+      },
+      {
+        "name": "raw/installer-regression.log",
+        "sha256": "6270ccd446301c6d41ff26fcf68a05671c25b7fd3ac5a77f58760a0391612fde",
+        "sourceDigest": null,
+        "status": "PASS",
+        "tapSummary": [
+          "# tests 5",
+          "# pass 5",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 1513.094667"
+        ]
+      },
+      {
+        "name": "raw/old-runtime-red.log",
+        "sha256": "693bf7ac331833d8468511c1dd99f0fe4c5392523a971693d7cd7013c538e373",
+        "sourceDigest": null,
+        "status": "FAIL_RECORDED",
+        "tapSummary": [
+          "# tests 3",
+          "# pass 0",
+          "# fail 3",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 397.68425"
+        ]
+      },
+      {
+        "name": "raw/targeted-1.log",
+        "sha256": "416238c437e65b6e2d4ae125ce8678d4caf320196b714120ce0398400dfc8c7f",
+        "sourceDigest": "8fa4acd6696af86544893855b1043bde97bc226a98d41a2571e4aaa5f6b52962",
+        "status": "FAIL_RECORDED",
+        "tapSummary": [
+          "# tests 36",
+          "# pass 32",
+          "# fail 4",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 80396.277583"
+        ]
+      },
+      {
+        "name": "raw/targeted-2.log",
+        "sha256": "4e23762c58b4a7bcea2b3d6f8d2f95f177f1f27f3d63cd32ba9056e2889f364e",
+        "sourceDigest": "808027e652c9314bff70c9ba18031eab6c260e1c8ff8239bfe434e2e9a3697df",
+        "status": "FAIL_RECORDED",
+        "tapSummary": [
+          "# tests 19",
+          "# pass 18",
+          "# fail 1",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 13100.952625"
+        ]
+      },
+      {
+        "name": "raw/targeted-3.log",
+        "sha256": "5e0c72892e23d3a00108e2c40cb3fc4743e066e4c45a4b931ac39a91fcb066f8",
+        "sourceDigest": "28b94c38970bdced9ad82b300ce598012a0fffe5e96b6be0310645d4282832da",
+        "status": "PASS",
+        "tapSummary": [
+          "# tests 1",
+          "# pass 1",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 25276.687791"
+        ]
+      },
+      {
+        "name": "raw/targeted-4.log",
+        "sha256": "b99882cec6b86764e29545a9f16409eb6aa4a6b1849597f6670d5fcc199268bf",
+        "sourceDigest": "799be7be17cd666aca1d2e7c21c416699edcba844e14ddead50b93fc3828b16d",
+        "status": "INVALID_INVOCATION",
+        "tapSummary": [
+          "# tests 245",
+          "# pass 245",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 30135.711708"
+        ]
+      },
+      {
+        "name": "raw/targeted-5.log",
+        "sha256": "b9d6baa8a5565f7ce9ad4f902e3b66e719bc716a68e9a5b819b64f48086d0483",
+        "sourceDigest": "799be7be17cd666aca1d2e7c21c416699edcba844e14ddead50b93fc3828b16d",
+        "status": "PASS",
+        "tapSummary": [
+          "# tests 2",
+          "# pass 2",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 858.704917"
+        ]
+      },
+      {
+        "name": "raw/targeted-6.log",
+        "sha256": "d5a0236694be9879ef0440a719866c80f9473103bd438887cb87c41026084c41",
+        "sourceDigest": "5229a53c06ae10f6fd5b274ebb102372c7755650a226024583c9663c5a01f226",
+        "status": "FAIL_RECORDED",
+        "tapSummary": [
+          "# tests 2",
+          "# pass 1",
+          "# fail 1",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 25122.66275"
+        ]
+      },
+      {
+        "name": "raw/targeted-7.log",
+        "sha256": "c5f9ce9f51d287458ba14ddfb517b7411c1cdb844bafa28abcacde14eb6e666f",
+        "sourceDigest": "c5f5d1792ea4e9306d79068070298509a34db972f49b60142d35ed8e8e73a073",
+        "status": "PASS",
+        "tapSummary": [
+          "# tests 2",
+          "# pass 2",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 2226.033667"
+        ]
+      },
+      {
+        "name": "raw/targeted-8.log",
+        "sha256": "380eacb80cc206f7064472faa0fe4370c99c0de7a479a5fefcd185fbc21ddfd0",
+        "sourceDigest": "282f23df1b5964763e8fc2b7fb6664379da7997e842164929135e4a46a2a8bf6",
+        "status": "PASS",
+        "tapSummary": [
+          "# tests 1",
+          "# pass 1",
+          "# fail 0",
+          "# cancelled 0",
+          "# skipped 0",
+          "# duration_ms 26953.363"
+        ]
+      }
+    ],
+    "countPolicy": "Different source identities and overlapping runs are not one final suite; invalid invocation excluded.",
+    "crossVolume": {
+      "archiveEntry": "raw/volume-probe-v2.log",
+      "cacheDevice": 16777234,
+      "clone": "CROSS_VOLUME",
+      "existingJavaReadAndParse": "PASS",
+      "newMac03Capture": "NOT_RUN",
+      "sourceDevice": 16777239,
+      "status": "PASS",
+      "targetAbsent": true
+    },
+    "independentCloseout": {
+      "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z/independent-closeout.json",
+      "sha256": "082062e159f47057944c10ebd3ceefce5c1945654f1cfbd240323b4a03b334b1",
+      "status": "PASS"
+    },
+    "independentReview": {
+      "configuredTests": "7/7 PASS at prior source identity",
+      "defaultRuntimeTests": "1/1 PASS at final source identity",
+      "reviewer": "/root/mac01_gate_review",
+      "sha256": "3e67009d510838c83e0a7ead320fd330a4aa328a2255fab2ae594ed64823676d",
+      "status": "PASS"
+    },
+    "invalidInvocation": {
+      "name": "targeted-4",
+      "reason": "shell alternation split argv; 245 file-level collection passes are not counted as a full assertion suite PASS",
+      "status": "INVALID_INVOCATION"
+    },
+    "ordinaryBuild": {
+      "archiveEntry": "raw/ordinary-build.log",
+      "status": "PASS"
+    },
+    "privateEvidence": {
+      "archive": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02a/20261014T023317Z/raw-evidence.tar.gz",
+      "archiveSha256": "cf3edae1d4ba0108cfe19388b60682d0760d1ba4391fd07bd57739c1af8b36b8",
+      "closeout": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z/closeout.json",
+      "closeoutSha256": "a5a9c9dba133a5819beda387ae8fee031069be62bc82496b40c262e09b2f1e23",
+      "manifest": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02a/20261014T023317Z/raw-files.json",
+      "manifestSha256": "14afb8277fcd35ecd07f35b76ec79baaa53bccb55d24a2b788574975fc7d287d",
+      "status": "PASS",
+      "taskResult": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z/task-result.json",
+      "taskResultSha256": "3ea05de5e1beb15119ca2b826340bfbd6703d9b7378decb36bf664ccde4d81bb",
+      "verifiedBytes": 402059,
+      "verifiedFiles": 95
+    },
+    "remainingGaps": [
+      "MAC-02B/flock/launchd/real JDT/Gradle NOT_RUN",
+      "MAC-02C/FSEvents NOT_RUN",
+      "formal K/PR/release product acceptance and formal three-repo matrix NOT_RUN",
+      "MAC-03 new capture NOT_RUN",
+      "production installation/calls/deployment NOT_RUN"
+    ],
+    "testData": {
+      "carryOver": [
+        {
+          "class": "INPUT",
+          "consumer": "MAC-02B..MAC-19",
+          "expiresAtGate": "PROGRAM_END",
+          "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/plans/mac-00/20261013T144536Z"
+        },
+        {
+          "class": "INPUT",
+          "consumer": "MAC-02B..MAC-16",
+          "expiresAtGate": "LAST_INPUT_CONSUMER",
+          "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/inputs/frozen-java-repos"
+        },
+        {
+          "class": "LOCAL",
+          "consumer": "shared two-slot fixture quota",
+          "expiresAtGate": "N/A",
+          "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/control/fixture-daemons/quota.sqlite"
+        },
+        {
+          "class": "LOCAL",
+          "consumer": "retained G02A audit archive",
+          "expiresAtGate": "N/A",
+          "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02a/20261014T023317Z"
+        }
+      ],
+      "expiredResidualBytes": 0,
+      "expiredResidualPaths": [],
+      "unregisteredPaths": []
+    }
+  },
+  "next": "MAC-02B, then MAC-02C; parent G02 still not PASS",
+  "notValidated": [
+    "formal K/PR/release product acceptance",
+    "formal three-repository matrix",
+    "MAC-03 new capture",
+    "flock/launchd",
+    "real JDT/Gradle",
+    "FSEvents",
+    "production installation/calls/deployment"
+  ],
+  "privateEvidence": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z",
+  "schema": "ilv2-task-result/v1",
+  "status": "IN_PROGRESS",
+  "taskId": "MAC-02"
+}

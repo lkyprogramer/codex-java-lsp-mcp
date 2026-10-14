@@ -8,7 +8,7 @@
     "codex-java-lsp-mcp": "dist/server.js"
   },
   "scripts": {
-    "build": "npm run clean && tsc -p tsconfig.json && node scripts/write-build-stamp.mjs",
+    "build": "sh scripts/run-isolated-node.sh scripts/build-macos-native.mjs --build",
     "build:isolated": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile",
     "clean": "rm -rf dist",
     "test": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full",

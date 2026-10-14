@@ -14,10 +14,14 @@ HTTP_PORT="${JAVA_LSP_HTTP_PORT:-38456}"
 HTTP_CANARY_PORT="${JAVA_LSP_HTTP_CANARY_PORT:-38457}"
 ACTIVATE_HTTP="false"
 HTTP_ACTIVATION_ATTESTATION="${CODEX_JAVA_LSP_HTTP_ACTIVATION_ATTESTATION:-}"
+PREFLIGHT_RUNTIME="false"
 
 usage() {
   cat <<'EOF'
 Usage: ./install-runtime.sh [--activate-http <attestation.json>] [--port <fixed-port>] [--canary-port <candidate-port>]
+       ./install-runtime.sh --preflight-runtime
+
+ILV2_NODE_BIN and ILV2_RUNTIME_MANIFEST must identify the frozen runtime.
 
 By default this installs an immutable release and starts the launchd-managed HTTP daemon,
 but preserves the existing Codex MCP registration. --activate-http is a separate,
@@ -32,6 +36,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --preflight-runtime)
+      PREFLIGHT_RUNTIME="true"
+      shift
+      ;;
     --activate-http)
       ACTIVATE_HTTP="true"
       HTTP_ACTIVATION_ATTESTATION="${2:-}"
@@ -101,7 +109,19 @@ validate_port() {
   fi
 }
 
-for command_name in node npm curl rsync launchctl; do
+unset NODE_OPTIONS NODE_PATH NODE_REPL_HISTORY NODE_V8_COVERAGE NODE_COMPILE_CACHE NODE_REDIRECT_WARNINGS
+if [[ "$PREFLIGHT_RUNTIME" == "true" ]]; then
+  exec sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-runtime.mjs" --identity
+fi
+sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-runtime.mjs" --verify
+NODE_BIN="$ILV2_NODE_BIN"
+NPM_BIN="$(dirname "$NODE_BIN")/../lib/node_modules/npm/bin/npm-cli.js"
+if [[ ! -r "$NPM_BIN" ]]; then
+  echo "The frozen Node installation must provide npm-cli.js." >&2
+  exit 2
+fi
+export ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST
+for command_name in curl rsync launchctl; do
   require_command "$command_name"
 done
 if [[ "$ACTIVATE_HTTP" == "true" ]]; then
@@ -109,8 +129,6 @@ if [[ "$ACTIVATE_HTTP" == "true" ]]; then
   normalize_absolute_path HTTP_ACTIVATION_ATTESTATION
 fi
 
-NODE_BIN="$(command -v node)"
-NPM_BIN="$(command -v npm)"
 JDTLS_BIN="${JDTLS_BIN:-$(command -v jdtls || true)}"
 if [[ -z "$JDTLS_BIN" || "$JDTLS_BIN" != /* || ! -x "$JDTLS_BIN" ]]; then
   echo "jdtls was not found as an executable absolute path. Install it with: brew install jdtls" >&2
@@ -348,11 +366,11 @@ copy_release() {
   (
     cd "$RELEASE_DIR"
     if [[ -f package-lock.json ]]; then
-      "$NPM_BIN" ci
+      "$NODE_BIN" "$NPM_BIN" ci
     else
-      "$NPM_BIN" install
+      "$NODE_BIN" "$NPM_BIN" install
     fi
-    CODEX_JAVA_LSP_BUILD_SHA="$BUILD_SHA" "$NPM_BIN" run build
+    CODEX_JAVA_LSP_BUILD_SHA="$BUILD_SHA" "$NODE_BIN" "$NPM_BIN" run build
   )
   run_release_tests_in_isolated_environment
   chmod +x "$RELEASE_DIR/run.sh" "$RELEASE_DIR/run-daemon.sh" "$RELEASE_DIR/run-stdio.sh" "$RELEASE_DIR/run-hook-gate.sh" \
@@ -428,7 +446,7 @@ run_release_tests_in_isolated_environment() {
       "XDG_CONFIG_HOME=$INSTALL_TEST_ROOT/config" \
       "CODEX_HOME=$INSTALL_TEST_ROOT/codex-home" \
       "HOME=$INSTALL_TEST_ROOT/home" \
-      "$NPM_BIN" test
+      "$NODE_BIN" "$NPM_BIN" test
   ); then
     cleanup_install_test_environment
     return 1

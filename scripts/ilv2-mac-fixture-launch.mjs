@@ -24,7 +24,10 @@ process.once("message", message => {
     requireValue(message.type === "start" && Array.isArray(message.argv) && message.argv[0] === process.execPath, "invalid fixture launch commit");
     child = spawn(message.argv[0], message.argv.slice(1), { env: message.env, stdio: ["ignore", "inherit", "inherit"] });
     child.once("error", () => { process.exitCode = 2; stop(); });
-    child.once("close", () => stop());
+    child.once("close", (code, signal) => {
+      if (process.connected) process.send({ type: "service-exited", pid: child.pid, code, signal });
+      stop();
+    });
     child.once("spawn", () => {
       if (!process.connected) { stop(); return; }
       process.send({ type: "started", pid: child.pid, pgid: process.pid }, error => { if (error) stop(); });

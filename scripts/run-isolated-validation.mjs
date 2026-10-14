@@ -8,14 +8,15 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { captureCandidatePatch } from "./run-three-repo-cold-matrix.mjs";
-import { createRegisteredBrokerRoot } from "./ilv2-mac-contracts.mjs";
+import { createRegisteredBrokerRoot, verifyRuntime } from "./ilv2-mac-contracts.mjs";
 import {
   bindCandidateNodeCommand,
   copyIsolatedNodeModules,
   createDetachedLocalClone,
   dependencyTreeInventory,
   sameDependencyInventory,
-  scrubHostNodeRuntimeState
+  scrubHostNodeRuntimeState,
+  expandCandidateTestGlobs
 } from "./isolation-utils.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -110,6 +111,7 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
 async function main() {
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
+  await verifyRuntime();
   const validationRoot = await createRegisteredBrokerRoot("codex-java-lsp-isolated-validation-");
   const candidateRoot = path.join(validationRoot, "candidate");
   const patchFile = path.join(validationRoot, "candidate.patch");
@@ -159,10 +161,11 @@ async function main() {
       executableTree
     }));
     await run(process.execPath, [path.join(candidateRoot, "node_modules", ".bin", "tsc"), "-p", path.join(candidateRoot, "tsconfig.json")], { cwd: candidateRoot, env });
+    await run(process.execPath, [path.join(candidateRoot, "scripts", "build-macos-native.mjs")], { cwd: candidateRoot, env });
     await run(process.execPath, [path.join(candidateRoot, "scripts", "write-build-stamp.mjs")], { cwd: candidateRoot, env });
     if (cli.profile === "full") {
-      await run(process.execPath, ["--test", "--test-concurrency=1", "dist/**/*.test.js"], { cwd: candidateRoot, env });
-      await run(process.execPath, ["--test", "--test-concurrency=1", "scripts/*.test.mjs"], { cwd: candidateRoot, env });
+      await run(process.execPath, expandCandidateTestGlobs(["--test", "--test-concurrency=1", "dist/**/*.test.js"], candidateRoot), { cwd: candidateRoot, env });
+      await run(process.execPath, expandCandidateTestGlobs(["--test", "--test-concurrency=1", "scripts/*.test.mjs"], candidateRoot), { cwd: candidateRoot, env });
       await run(process.execPath, [path.join(candidateRoot, "dist", "smoke.js")], {
         cwd: candidateRoot,
         env: {

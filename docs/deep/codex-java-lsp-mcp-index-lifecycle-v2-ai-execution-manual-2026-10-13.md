@@ -3,7 +3,7 @@
 | 项 | 值 |
 | --- | --- |
 | 版本 | `ILV2-MAC/4`，2026-10-13，替代本文件的旧 P0–P4 执行顺序 |
-| 当前状态 | `IN_PROGRESS`：MAC-00 / G00 有限诊断门、MAC-01 / G01 验收工具门已通过；下一张为 MAC-02A，其余任务仍为 PLAN |
+| 当前状态 | `IN_PROGRESS`：MAC-00 / G00、MAC-01 / G01、MAC-02A / G02A 已按各自范围通过；下一张为 MAC-02B，MAC-02C及后续任务仍为 PLAN，父G02未通过 |
 | 目标 | 消除构建活锁、错误新鲜度、跨 worktree 内容污染和请求失控；让同内容复用、真实差量构建及后续 agent 收益可测 |
 | 平台 | Mac 专用：2026-10-13 读取为 `arm64`、macOS `26.5.1 (25F80)`、Node `22.16.0`、SQLite `3.49.1`；MAC-00 冻结绝对可执行路径、digest和完整versions，并核对实际生产工件；不自动升级 |
 | 技术路线 | TypeScript + SQLite + 小型 macOS 原生 helper；APFS 硬前提；唯一 daemon、不可变内容快照、显式 full/delta、统一 lease |
@@ -321,6 +321,8 @@ G11正确性通过后可以准备提前候选，避免把数据集/模型实验/
 
 **G02A：** 运行、安装预检和manifest的Node/SQLite完全一致；不同PATH不影响选择；native改动影响身份；编译失败/错误架构/跨卷clone明确失败；业务仓库在另一卷的read capture不受此限制。D06为计划层替换，无需虚构删除不存在的源码。
 
+**执行状态：PASS。** 固定Node/native构建与clone边界、定向入口/真实受管HTTP、独立复验、私有镜像卸载、归档和实际收尾均完成，见[MAC-02聚合证据](../index-lifecycle-v2/mac/mac-02/README.md)。历史baseline没有native时保留原始树并明确标注；当前candidate必须完整构建。wrapper fixture只证明运行时选择；正式K/PR/release、三仓、生产安装与后续MAC-03新capture仍未运行。
+
 #### MAC-02B — flock launcher与launchd生命周期证明
 
 **依赖：** MAC-02A。**范围：** 小型exec/flock launcher、Node spawn/fd传递辅助、`jdtls-lsp-io.ts`/`jdtls-semantic-backend.ts`的Gradle home与停止接入、隔离launchd/harness fixture；不写生产plist。
@@ -537,9 +539,9 @@ MAC-14输出`removed-paths.json`，区分`CODE`与`PLAN`：代码项记录真实
 
 ### 5.1 当前可用命令与新增 CLI 的边界
 
-当前已有隔离验证入口，但shell broker仍用PATH `node`。以下先固定可执行路径并清宿主Node加载/输出环境，再直接进入现有JS隔离broker；MAC-02A还要把native builder和runtime manifest校验接入所有入口，不能仅修改`npm run build`。正式证据均记录实际`process.execPath`、binary digest和完整`process.versions`；缺manifest、运行时不匹配或安装器重新选择PATH版本均阻断门。
+MAC-02A已将native builder和runtime manifest校验接入普通构建、隔离/当前三仓候选、v4及K入口，并让安装预检使用同一冻结Node。shell入口显式使用绝对Node并清宿主加载/输出环境及测试IPC上下文。正式证据记录实际`process.execPath`、binary digest和完整`process.versions`；缺manifest或运行时不匹配均阻断门。完整产品门和生产安装仍需其后续任务验收。
 
-`ILV2_NODE_BIN`是执行命令的任务变量，`runtime.json`中的可执行身份才是真源。MAC-02A修改shell broker为显式接受该路径并与`ILV2_RUNTIME_MANIFEST`校验，保留当前六项环境清理；不允许静默回退PATH。安装器也读相同manifest生成launcher命令。**当前**JS broker仅允许字面`node`或与自身`process.execPath`相同的绝对路径，没有把前者重绑定，字面`node`仍按PATH执行；因此现在就必须在`--`后的子命令使用同一个绝对`ILV2_NODE_BIN`。MAC-02A再实现重绑定和实际子进程身份测试。
+`ILV2_NODE_BIN`是执行命令的任务变量，`runtime.json`中的可执行身份才是真源。shell broker校验该路径和`ILV2_RUNTIME_MANIFEST`，保留原六项环境清理并移除`NODE_TEST_CONTEXT`，不回退PATH。JS binder在任何嵌套分支返回前将字面`node`重绑定为当前绝对`process.execPath`；quoted test glob在编译候选中展开。安装器使用同一manifest及冻结Node安装中的npm-cli，不重新查PATH；`--preflight-runtime`只读返回身份。实际另一Node的PATH漂移证据已保留；普通测试自建私有execPath fixture，不另加必须安装备用版本的前提。
 
 以下为完整子shell模板，在源码checkout执行，替换freeze/task/run ID及测试路径。也可保存为任务脚本后用`/bin/sh`执行，禁止source到持久shell。每次新建并登记运行根；环境在子shell退出后恢复。MAC-00尚无manifest时直接固定并记录runtime；后续指向持久冻结文件。`TMPDIR`必须在broker启动前设置，子进程的`--env TMPDIR=...`不能约束broker自身mkdtemp。
 
@@ -567,7 +569,7 @@ MAC-14输出`removed-paths.json`，区分`CODE`与`PLAN`：代码项记录真实
 
 示例是一个既有定向测试；新任务换成其真实测试文件。若任务明确要求全源码测试，参数写成`'dist/**/*.test.js'`；脚本套件写成`'scripts/*.test.mjs'`。**glob必须加引号**，作为一个argv交给候选中的Node展开，不能让bash/zsh先在源checkout里枚举陈旧dist。具体文件列表逐个引用。compile/full任务只替换子shell最后的broker调用为`--profile compile`或`--profile full`，删去`--`及其后子命令；不逐项重复全跑。
 
-v4的PR入口`"$ILV2_NODE_BIN" scripts/run-v4-gates.mjs --profile pr`与release profile均**仅在MAC-02A完成后**作为固定runtime命令使用，并放在上述子shell内部。现有PR/release向broker传字面node，release还固定端口38491；外层绝对路径不能修正内层漂移。此前需同范围源码测试时，用上述绝对Node定向入口和`'dist/**/*.test.js'`，只记定向源码测试，不冒充新版PR/release门。
+v4的PR入口`"$ILV2_NODE_BIN" scripts/run-v4-gates.mjs --profile pr`与release profile现在可以作为固定runtime命令使用，仍放在上述子shell内部。内层字面node由binder重绑定，release HTTP smoke使用自身实际绑定的随机端口并核对PID/instance/runtime及整组退出，绑定失败不附加现有服务。G02A运行的是入口调度fixture及定向真实HTTP smoke，不能据此宣称正式PR/release产品门通过。
 
 MAC-01的runner入口已实现；MAC-04/10对应的产品/评测入口仍为目标CLI。driver兼容发生在离线测量工具，不进入正式产品。统一退出码：0 全部所选门 PASS；1 已测但失败；2 前置/身份/环境/授权/产物错误。NOT_RUN/BLOCKED不能以0混入所选门的全部PASS。
 
