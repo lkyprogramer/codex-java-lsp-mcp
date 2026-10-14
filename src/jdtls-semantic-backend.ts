@@ -2,6 +2,7 @@
 // output: Typed SemanticBackend results for hover/definition/references/symbols/hierarchy.
 // pos: Extracted from JdtlsSession so the gateway switch is not mixed with lifecycle.
 import path from "node:path";
+import { jdtGradleHome } from "./mac-platform/gradle-domain.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import type { JdtRestartBackoffStatus } from "./jdt-restart-backoff.js";
@@ -238,6 +239,7 @@ export function buildJavaSettings(input: {
   buildSystem: BuildSystem;
   projectJdk: ProjectJdkStatus;
   generatedCode: GeneratedCodeStatus;
+  gradleHome?: string;
 }): Record<string, unknown> {
   const runtime = input.projectJdk.resolvedHome && input.projectJdk.runtimeName
     ? [{ name: input.projectJdk.runtimeName, path: input.projectJdk.resolvedHome, default: true }]
@@ -248,6 +250,7 @@ export function buildJavaSettings(input: {
       import: {
         gradle: {
           enabled: input.buildSystem !== "maven",
+          user: { home: input.gradleHome ?? jdtGradleHome() },
           // Gradle's JDT APT tooling model resolves processors across projects.
           // Serialize that import only; target-repository build settings stay unchanged.
           jvmArguments: ["-Dorg.gradle.parallel=false"],

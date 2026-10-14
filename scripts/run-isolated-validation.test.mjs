@@ -52,7 +52,8 @@ test("isolated validation never inherits or accepts overrides for active LSP sta
   assert.equal(env.NODE_V8_COVERAGE, undefined);
   assert.equal(env.NODE_COMPILE_CACHE, undefined);
   assert.equal(env.NODE_REDIRECT_WARNINGS, undefined);
-  assert.equal(env.GRADLE_USER_HOME, path.join(root, "gradle-home"));
+  assert.equal(env.GRADLE_USER_HOME, path.join(root, "service-state", "jdt-gradle-home"));
+  assert.equal(env.JAVA_LSP_SERVICE_STATE_ROOT, path.join(root, "service-state"));
   assert.equal(env.MAVEN_USER_HOME, path.join(root, "maven-home"));
   assert.equal(env.JDTLS_BIN, "/usr/bin/false");
   assert.equal(env.TASK_MARKER, "yes");

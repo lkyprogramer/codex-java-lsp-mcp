@@ -143,7 +143,7 @@ export async function connectDriver(config, options) {
       const env = {
         PATH: process.env.PATH, HOME: path.join(serviceWork, "home"), TMPDIR: path.join(serviceWork, "tmp"),
         JAVA_LSP_CACHE_ROOT: expected.cacheRoot, JAVA_LSP_OWNERSHIP_BASE: expected.ownerRoot,
-        JAVA_LSP_PROJECTS_JSON: path.join(serviceWork, "projects.json"), GRADLE_USER_HOME: path.join(serviceWork, "gradle-home"),
+        JAVA_LSP_PROJECTS_JSON: path.join(serviceWork, "projects.json"), GRADLE_USER_HOME: path.join(serviceWork, "service-state", "jdt-gradle-home"), JAVA_LSP_SERVICE_STATE_ROOT: path.join(serviceWork, "service-state"),
         JDTLS_BIN: "/usr/bin/false", JAVA_LSP_ISOLATED_VALIDATION: "1", ILV2_INSTANCE_ID: expected.instanceId,
         ILV2_EXPECTED_IDENTITY: JSON.stringify(expected), ILV2_RUNTIME_MANIFEST: options.runtimeManifest
       };

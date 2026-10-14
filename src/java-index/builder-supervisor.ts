@@ -4,6 +4,7 @@ import { createInterface, type Interface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { close, openIndexDb } from "./sql/driver.js";
 import { readBuildProgress } from "../index-builder/progress.js";
+import { ownerChildStdio } from "../mac-platform/owner-lock.js";
 
 export const DEFAULT_BUILDER_IDLE_MS = 60_000;
 export const DEFAULT_WATCHDOG_INTERVAL_MS = 30_000;
@@ -247,10 +248,11 @@ export class BuilderSupervisor {
   }
 
   private spawn(role: "serve" | "cold"): ChildProcess {
+    const env = builderEnv(this.options.env);
     const child = fork(this.scriptPath, ["--repo", this.options.repoRoot, "--db", this.options.dbPath, "--mode", role], {
       execArgv: builderExecArgv(),
-      env: builderEnv(this.options.env),
-      stdio: ["pipe", "pipe", "inherit", "ipc"]
+      env,
+      stdio: ownerChildStdio(["pipe", "pipe", "inherit", "ipc"], env)
     });
     this.child = child;
     this.role = role;

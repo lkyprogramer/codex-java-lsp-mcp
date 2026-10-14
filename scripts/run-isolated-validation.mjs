@@ -62,7 +62,8 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
     JDTLS_DATA_DIR: path.join(root, "cache", "jdt-workspace"),
     JDTLS_LOG_DIR: path.join(root, "cache", "jdt-logs"),
     JAVA_LSP_PROJECTS_JSON: path.join(root, "projects.json"),
-    GRADLE_USER_HOME: path.join(root, "gradle-home"),
+    GRADLE_USER_HOME: path.join(root, "service-state", "jdt-gradle-home"),
+    JAVA_LSP_SERVICE_STATE_ROOT: path.join(root, "service-state"),
     MAVEN_USER_HOME: path.join(root, "maven-home"),
     JAVA_LSP_ISOLATED_VALIDATION: "1",
     JDTLS_BIN: typeof overrides.JDTLS_BIN === "string" ? overrides.JDTLS_BIN : "/usr/bin/false"

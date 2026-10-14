@@ -67,8 +67,12 @@ static int clone_database(const char *source, const char *target) {
     return 0;
 }
 
+#include "owner-lock.h"
+
 int main(int argc, char **argv) {
     if (argc == 3 && strcmp(argv[1], "capability") == 0) return capability(argv[2]);
     if (argc == 4 && strcmp(argv[1], "clone") == 0) return clone_database(argv[2], argv[3]);
+    if (argc >= 4 && strcmp(argv[1], "owner") == 0) return launch_owner(argc, argv);
+    if (argc == 3 && strcmp(argv[1], "verify-owner-lock") == 0) return verify_owner_lock(argv[2]);
     return failure("INVALID_ARGUMENTS", 0);
 }

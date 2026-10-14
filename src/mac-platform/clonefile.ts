@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { MAC_NATIVE_PROTOCOL } from "./native-protocol.js";
+import { executeMacNativeProcess } from "./native-exec.js";
 
-export const MAC_NATIVE_PROTOCOL = "ilv2-mac-native/v1";
-const execute = promisify(execFile);
+export { MAC_NATIVE_PROTOCOL } from "./native-protocol.js";
+const execute = executeMacNativeProcess;
 const nativeDirectory = fileURLToPath(new URL("../native/", import.meta.url));
 export type MacNativeIdentity = {
   schema: "ilv2-mac-native-build/v1";

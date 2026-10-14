@@ -41,7 +41,8 @@ test("real JDT benchmark environment forces private runtime state and detached r
   assert.equal(env.NODE_PATH, undefined);
   assert.equal(env.NODE_V8_COVERAGE, undefined);
   assert.equal(env._JAVA_OPTIONS, undefined);
-  assert.equal(env.GRADLE_USER_HOME, path.join(root, "gradle-home"));
+  assert.equal(env.GRADLE_USER_HOME, path.join(root, "service-state", "jdt-gradle-home"));
+  assert.equal(env.JAVA_LSP_SERVICE_STATE_ROOT, path.join(root, "service-state"));
   assert.equal(env.MAVEN_USER_HOME, path.join(root, "maven-home"));
   assert.equal(env.JAVA_LSP_ISOLATED_VALIDATION, "1");
   assert.equal(env.JAVA_LSP_ISOLATED_REPO_WORKTREE, "1");

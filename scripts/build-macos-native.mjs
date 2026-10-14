@@ -33,7 +33,9 @@ export async function buildMacNative(repoRoot = root) {
   await mkdir(output, { recursive: true });
   const binary = path.join(output, "ilv2-mac");
   const args = ["-std=c17", "-O2", "-Wall", "-Wextra", "-Werror", "-arch", runtime.arch === "arm64" ? "arm64" : "x86_64", "-isysroot", sdk,
-    `-mmacosx-version-min=${DEPLOYMENT_TARGET}`, `-DILV2_NATIVE_PROTOCOL=\"${NATIVE_PROTOCOL}\"`, path.join(repoRoot, "native/macos/ilv2-mac.c"), "-o", binary];
+    `-mmacosx-version-min=${DEPLOYMENT_TARGET}`, `-DILV2_NATIVE_PROTOCOL=\"${NATIVE_PROTOCOL}\"`,
+    `-DILV2_NODE_BIN=${JSON.stringify(runtime.execPath)}`, `-DILV2_OWNER_GUARD=${JSON.stringify(path.join(repoRoot, "dist/mac-platform/owner-lock-guard.js"))}`,
+    path.join(repoRoot, "native/macos/ilv2-mac.c"), "-o", binary];
   try {
     await execute(compiler, args);
     const capability = JSON.parse((await execute(binary, ["capability", output])).stdout);

@@ -6,12 +6,21 @@
       "independentReview": "PASS",
       "sourceDigest": "83a6ed49935ecb6f34a20e05983032383e23b514cb95b799e8e6c8a3d2f7794f",
       "status": "PASS",
-      "taskId": "MAC-02A"
+      "taskId": "MAC-02A",
+      "commit": "2c70544eeaf58358eb65a03cb4f0d6b3fd435cfd"
     },
     {
+      "taskId": "MAC-02B",
       "gateId": "G02B",
-      "status": "PLAN",
-      "taskId": "MAC-02B"
+      "status": "PASS",
+      "componentVerification": "8/8 PASS at final37 candidate; earlier launchd9 retained at e095 identity",
+      "independentTargetedVerification": "8/8 PASS at final37 candidate",
+      "sourceReview": "PASS",
+      "sourceDigest": "c04f2ae68c4476276d63ac9abe4988959599f8a7f4339dcd7fc223f7b4dc05cd",
+      "evidence": "../mac-02b/task-result.json",
+      "previousVerification": "18/18 and independent 4/4 at prior 31-file candidate",
+      "executableTree": "dc34aabf0ddc167860afcc563e1da9f1dc5184cb",
+      "closeout": "PASS"
     },
     {
       "gateId": "G02C",
@@ -271,14 +280,13 @@
       "unregisteredPaths": []
     }
   },
-  "next": "MAC-02B, then MAC-02C; parent G02 still not PASS",
+  "next": "G02B PASS; commit B and start MAC-02C. Parent G02 requires G02C PASS.",
   "notValidated": [
+    "MAC-02C FSEvents",
+    "G09 complete product recovery and restart JDT reinitialize",
     "formal K/PR/release product acceptance",
     "formal three-repository matrix",
     "MAC-03 new capture",
-    "flock/launchd",
-    "real JDT/Gradle",
-    "FSEvents",
     "production installation/calls/deployment"
   ],
   "privateEvidence": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02a/20261014T023317Z",

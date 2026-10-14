@@ -53,6 +53,7 @@ const RUNTIME_STATE_KEYS = [
   "JDTLS_LOG_DIR",
   "JAVA_LSP_PROJECTS_JSON",
   "GRADLE_USER_HOME",
+  "JAVA_LSP_SERVICE_STATE_ROOT",
   "MAVEN_USER_HOME"
 ];
 
@@ -70,7 +71,8 @@ export function matrixRuntimeEnvironment(root, telemetry = "0") {
     JDTLS_DATA_DIR: path.join(root, "jdt-data"),
     JDTLS_LOG_DIR: path.join(root, "jdt-logs"),
     JAVA_LSP_PROJECTS_JSON: path.join(root, "projects.json"),
-    GRADLE_USER_HOME: path.join(root, "gradle-home"),
+    GRADLE_USER_HOME: path.join(root, "service-state", "jdt-gradle-home"),
+    JAVA_LSP_SERVICE_STATE_ROOT: path.join(root, "service-state"),
     MAVEN_USER_HOME: path.join(root, "maven-home")
   };
 }
@@ -967,6 +969,7 @@ export function isolatedChildEnvironment(overrides = {}) {
   }
   for (const name of [
     "JDTLS_EXTRA_ARGS",
+    "JAVA_LSP_SERVICE_STATE_ROOT",
     "JAVA_LSP_RESOURCE_TELEMETRY_FILE",
     "JAVA_LSP_RESOURCE_INTERVAL_MS",
     "JAVA_LSP_REPO_ROOT",

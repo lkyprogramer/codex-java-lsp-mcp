@@ -2,6 +2,7 @@
 // output: Uncached raw LSP responses and process/path helpers for JdtlsSession.
 // pos: Extracted from JdtlsSession so lifecycle does not own request I/O.
 import { spawnSync } from "node:child_process";
+import { jdtGradleHome } from "./mac-platform/gradle-domain.js";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -773,7 +774,7 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-export function buildJdtlsEnv(runtimeJavaHome?: string): NodeJS.ProcessEnv {
+export function buildJdtlsEnv(runtimeJavaHome?: string, gradleHome = jdtGradleHome()): NodeJS.ProcessEnv {
   return {
     HOME: process.env.HOME,
     PATH: process.env.PATH,
@@ -785,7 +786,9 @@ export function buildJdtlsEnv(runtimeJavaHome?: string): NodeJS.ProcessEnv {
     XDG_STATE_HOME: process.env.XDG_STATE_HOME,
     LANG: process.env.LANG,
     LC_ALL: process.env.LC_ALL,
-    JAVA_HOME: runtimeJavaHome
+    JAVA_HOME: runtimeJavaHome,
+    GRADLE_USER_HOME: gradleHome,
+    ILV2_OWNER_CACHE_ROOT: process.env.ILV2_OWNER_CACHE_ROOT
   };
 }
 
@@ -905,8 +908,8 @@ export function validateJdtlsTransportEnvironment(
     }
   }
   const extraArgs = (env.JDTLS_EXTRA_ARGS ?? "").split(/\s+/).filter(Boolean);
-  if (extraArgs.some(arg => arg === "-data" || arg.startsWith("-data=") || arg.startsWith("--jvm-arg=-data"))) {
-    throw new Error("JDTLS_EXTRA_ARGS must not override -data; repository workspaces are managed by codex-java-lsp.");
+  if (extraArgs.some(arg => ["-data", "-configuration"].some(option => arg === option || arg.startsWith(`${option}=`) || arg.startsWith(`--jvm-arg=${option}`)))) {
+    throw new Error("JDTLS_EXTRA_ARGS must not override -data or -configuration; repository workspaces are managed by codex-java-lsp.");
   }
 }
 

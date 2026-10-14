@@ -3,7 +3,7 @@
 | 项 | 值 |
 | --- | --- |
 | 版本 | `ILV2-MAC/4`，2026-10-13，替代本文件的旧 P0–P4 执行顺序 |
-| 当前状态 | `IN_PROGRESS`：MAC-00 / G00、MAC-01 / G01、MAC-02A / G02A 已按各自范围通过；下一张为 MAC-02B，MAC-02C及后续任务仍为 PLAN，父G02未通过 |
+| 当前状态 | `IN_PROGRESS`：MAC-00/G00、MAC-01/G01、MAC-02A/G02A、MAC-02B/G02B均已按各自范围通过；A已提交`2c70544`。B真实launchd/JDT/Gradle、定向与独立复验、归档及实际收尾通过；整理提交B后进入MAC-02C。C及后续仍为PLAN，父G02未通过 |
 | 目标 | 消除构建活锁、错误新鲜度、跨 worktree 内容污染和请求失控；让同内容复用、真实差量构建及后续 agent 收益可测 |
 | 平台 | Mac 专用：2026-10-13 读取为 `arm64`、macOS `26.5.1 (25F80)`、Node `22.16.0`、SQLite `3.49.1`；MAC-00 冻结绝对可执行路径、digest和完整versions，并核对实际生产工件；不自动升级 |
 | 技术路线 | TypeScript + SQLite + 小型 macOS 原生 helper；APFS 硬前提；唯一 daemon、不可变内容快照、显式 full/delta、统一 lease |
@@ -327,19 +327,21 @@ G11正确性通过后可以准备提前候选，避免把数据集/模型实验/
 
 **依赖：** MAC-02A。**范围：** 小型exec/flock launcher、Node spawn/fd传递辅助、`jdtls-lsp-io.ts`/`jdtls-semantic-backend.ts`的Gradle home与停止接入、隔离launchd/harness fixture；不写生产plist。
 
-**步骤：** 按§2.1实现固定锁inode、fd4/IPC3映射及所有正式入口的lock校验。先用fixture逐级spawn，再核对真实builder/parser、FSEvents和JDT wrapper→JVM的组/锁；Gradle daemon按外部类单独核验private home、实际版本/PGID/fd、按版本stop及退出。隔离launchd job的label/plist/cache受本次manifest管理，plist只在本次run root，禁止写`~/Library/LaunchAgents`；结束后bootout，再用`launchctl print gui/<uid>/<label>`确认job不存在，核实进程退出后清理本次资源。
+**步骤：** 按§2.1实现固定锁inode、fd4/IPC3映射及所有正式入口的lock校验。先用fixture逐级spawn，再核对真实builder/parser和JDT wrapper→JVM的组/锁；Gradle daemon按外部类单独核验private home、实际版本/PGID/fd、按版本stop及退出。G02B保留原生子进程继承合同及实测；按用户2026-10-14确认，真实FSEvents helper的fd/PGID实测归入G02C。隔离launchd job的label/plist/cache受本次manifest管理，plist只在本次run root，禁止写`~/Library/LaunchAgents`；结束后bootout，再用`launchctl print gui/<uid>/<label>`确认job不存在，核实进程退出后清理本次资源。
 
 **目标测试/命令：** `scripts/ilv2-mac-owner-lifecycle.test.mjs`：`same-root-second-owner-is-rejected`、`bounded-lock-wait-and-owner-busy-restart`、`crash-soon-after-start-honors-recovery-budget`、`lock-survives-daemon-sigkill-until-descendants-exit`、`launchd-restart-reaps-owned-group`、`child-alive-after-parent-sigkill`、`jdt-wrapper-preserves-lock-and-pgid`、`gradle-private-home-and-bounded-recovery`、`gradle-failure-preserves-static-admission-state`。真实Gradle fixture用冻结9.3.1，覆盖正常stop和活动导入中SIGKILL/重启，并用另一私有home的对照daemon证明不误停；多版本分派用定向测试，实际采用其他版本时再补真实fixture。经§5.1及JDT隔离入口运行，不能用假日志代替实际存活/锁观察。
 
 **G02B：** 旧持锁OWNER_PROCESS尚存时第二launcher等待且不exec，超时非零退出；旧组退出后锁释放。验收刚启动即崩溃和锁暂占用两条实际launchd时间线，核对KeepAlive/ThrottleInterval以及OWNER_BUSY重启；两类旧进程正常清理须在同一≤10 s窗口退出。Gradle stop失败时用明确的恢复状态机fixture证明静态准入状态不被语义阻塞状态覆盖，且不会启动新JDT；有效home/按版本stop/实际exit/launchd卸载留证，对照域不误停。本卡不要求尚未实现的SnapshotStore、正式transport或GC，也不把fixture状态当正确查询的证明；完整产品恢复由G09必验。环境不足BLOCKED_ENV，不用guardian绕过证明。
 
+**执行状态：PASS。** 最终37文件候选受影响定向8/8、独立8/8及源码评审通过；前候选真实launchd7场景与quota2测试保留其身份。实际JDT配置驱动两个私有Gradle域导入，活动故障后旧owner/JDT组与daemon从同一故障起点2156.013291ms退出，对照域存活。Documents权限经用户允许且观察到系统放行；两个EPERM夹具FAIL及定向RED保留，修复只以ESRCH证明退出、原10秒门不变。566文件归档完整解包核验、独立收尾、到期carry删除及job/PID/组/quota无残留均完成。详见[MAC-02B证据](../index-lifecycle-v2/mac/mac-02b/README.md)。G09完整查询恢复/重新initialize仍未运行；FSEvents锁/组实测归G02C，现可按顺序进入C。
+
 #### MAC-02C — FSEvents传输和fence
 
-**依赖：** MAC-02A。**范围：** native FSEvents模式与TS协议解码，不持久化原生eventId。
+**依赖：** MAC-02A、MAC-02B（按用户明确执行顺序）。**范围：** native FSEvents模式与TS协议解码，不持久化原生eventId；真实helper的fd4、同OFD锁和PGID继承实测。
 
 **目标测试/命令：** `dist/mac-platform/fsevents.test.js`：`raw-flags-and-fence-order`、`drop-and-root-change-remain-observable`、`stream-restart-creates-new-epoch`，用§5.1定向入口。原始flags、drop、root变化、事件流重建都有结构化传递和顺序证明；native协议错误明确失败，不退回fs.watch。
 
-**G02C：** watcher先建再扫的接入合同可执行，内存cursor没有被误写成持久freshness；供MAC-03B集成。
+**G02C：** watcher先建再扫的接入合同可执行，内存cursor没有被误写成持久freshness；真实FSEvents helper继承owner的fd4/同OFD锁且同PGID，父引用关闭后锁仍有效，退出后锁引用释放。此实测由G02B转入本门，未运行不得算PASS；供MAC-03B集成。
 
 ### MAC-03 — 同字节捕获与tracker分开推进
 

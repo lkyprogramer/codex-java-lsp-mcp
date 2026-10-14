@@ -1,6 +1,6 @@
 # MAC-02：Mac 原生边界
 
-状态：**IN_PROGRESS（MAC-02A / G02A PASS）**。G01已通过并提交`6fd8032ac45b3b32bf7d3cf6fd0033e4999a4ae4`。G02A定向验证、独立复验、归档和实际收尾均通过；MAC-02B/02C尚未验收，父门G02须三个子门全部通过。
+状态：**MAC-02A/G02A、MAC-02B/G02B均PASS；MAC-02C尚未实施，父G02未通过。** A已提交`2c70544`。B最终37文件定向8/8、独立8/8与独立收尾通过，真实launchd/JDT/Gradle合同已实测；见[MAC-02B证据](../mac-02b/README.md)。按用户顺序，整理提交B后进入C。
 
 MAC-02A提供C17 capability/clonefile helper、同一native builder、冻结Node入口、候选native源码身份、native/runtime构建stamp与受管HTTP smoke。helper只克隆缓存同卷的文件，跨卷/非APFS/身份错误明确失败，不复制fallback。安装器的`--preflight-runtime`是只读身份检查，不安装或调用生产服务。
 
@@ -12,6 +12,6 @@ release HTTP smoke使用自身服务实际绑定的随机端口。独立fixture 
 
 跨卷实验使用登记根内的64MiB私有APFS镜像。clone明确返回`CROSS_VOLUME`且未创建目标；现有Java reader/parser实际读取并解析镜像内合成源码。该证据不代表MAC-03新capture协议通过。
 
-PR/release/K样本只证明真实wrapper的运行时选择，生成的fixture TAP不证明正式业务K门或产品性能。失败尝试均保留。一次未引用的shell正则`|`导致无文件列表的误收集，记录为`INVALID_INVOCATION`，不计为全仓PASS。正式三仓矩阵、生产安装/调用、真实JDT/Gradle、launchd/flock及FSEvents仍未运行。
+PR/release/K样本只证明真实wrapper的运行时选择，生成的fixture TAP不证明正式业务K门或产品性能。失败尝试均保留。一次未引用的shell正则`|`导致无文件列表的误收集，记录为`INVALID_INVOCATION`，不计为全仓PASS。G02A范围未运行真实JDT/Gradle、launchd/flock或FSEvents；后续B证据单独记录。正式三仓矩阵和生产安装/调用仍未运行。
 
 原始记录归档于本机持久工作根的`archives/mac-02a/20261014T023317Z/`：95个文件、402059字节已逐路径/字节/SHA-256解包核对。运行根只保留本地摘要，RAW/BULK已删除，私有镜像已卸载；实际未登记路径、到期残留、关联进程及共享配额均为空。最终状态与精确证据hash见`task-result.json`，不同候选及重叠样本不合并计数。

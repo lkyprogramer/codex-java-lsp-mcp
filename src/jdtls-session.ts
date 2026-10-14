@@ -21,6 +21,7 @@ import {
 import { repoHash } from "./path-utils.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
+import type { GradleDomain } from "./mac-platform/gradle-domain.js";
 import { DocumentLru } from "./document-lru.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
@@ -166,6 +167,7 @@ type CacheEntry<T> = {
 const DEFAULT_CACHE_TTL_MS = positiveInteger(process.env.JDTLS_CACHE_TTL_MS, 300000);
 
 export type JdtlsSessionOptions = {
+  gradleDomain?: Pick<GradleDomain, "home" | "assertSemanticAdmission">;
   transportMode?: RepoOwnerTransport;
   ownershipLifecycle?: Pick<RepoOwnershipLease, "markJdtlsStarting" | "markJdtlsRunning" | "clearJdtlsState">;
   transportFactory?: JdtlsTransportFactory;
@@ -243,6 +245,7 @@ export class JdtlsSession extends JdtlsLspClient {
   private ownershipLifecycle?: JdtlsSessionOptions["ownershipLifecycle"];
   private ownershipJdtlsMarked = false;
   private terminallyStopped = false;
+  private readonly gradleDomain?: JdtlsSessionOptions["gradleDomain"];
 
   constructor(
     repoRoot: string,
@@ -254,6 +257,7 @@ export class JdtlsSession extends JdtlsLspClient {
   ) {
     super(repoRoot);
     const options = isJdtlsSessionOptions(factoryOrOptions) ? factoryOrOptions : {};
+    this.gradleDomain = options.gradleDomain;
     this.transportFactory = isJdtlsSessionOptions(factoryOrOptions)
       ? (options.transportFactory ?? defaultJdtlsTransportFactory)
       : factoryOrOptions;
@@ -396,6 +400,7 @@ export class JdtlsSession extends JdtlsLspClient {
   ): Promise<void> {
     const startedAt = Date.now();
     try {
+      this.gradleDomain?.assertSemanticAdmission();
       if (this.stopPromise) {
         await callerBudget.race("jdtls.stop.wait", this.stopPromise);
       }
@@ -775,11 +780,12 @@ export class JdtlsSession extends JdtlsLspClient {
     const spawnStartedAt = performance.now();
     let attempt: JdtlsTransportAttempt;
     try {
+      this.gradleDomain?.assertSemanticAdmission();
       attempt = this.transportFactory.spawn({
         binary: this.jdtlsBin,
         args: this.launchArgs(),
         cwd: this.repoRoot,
-        env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome)
+        env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome, this.gradleDomain?.home)
       });
     } finally {
       this.activeFirstTouchTrace?.recordStartupPhase("processSpawnCallMs", performance.now() - spawnStartedAt);
@@ -917,6 +923,8 @@ export class JdtlsSession extends JdtlsLspClient {
       ...jvmArgs(this.generatedCode),
       "-data",
       this.dataDir,
+      "-configuration",
+      path.join(this.dataDir, "configuration"),
       ...splitArgs(process.env.JDTLS_EXTRA_ARGS),
       ...(process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.HOME
         ? [`--jvm-arg=-Duser.home=${process.env.HOME}`]
@@ -1165,7 +1173,8 @@ export class JdtlsSession extends JdtlsLspClient {
       repoRoot: this.repoRoot,
       buildSystem: this.buildSystem,
       projectJdk: this.projectJdk,
-      generatedCode: this.generatedCode
+      generatedCode: this.generatedCode,
+      gradleHome: this.gradleDomain?.home
     });
   }
 

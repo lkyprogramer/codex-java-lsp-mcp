@@ -53,7 +53,7 @@ export async function runOwnedHttpSmoke({ port = 0, timeoutMs = 60000, signal } 
     for (const name of ["ilv2-mac-fixture-launch.mjs", "ilv2-mac-contracts.mjs"]) await copyFile(path.join(root, "scripts", name), path.join(directory, name));
     const env = { PATH: process.env.PATH, HOME: path.join(directory, "home"), TMPDIR: path.join(directory, "tmp"),
       JAVA_LSP_CACHE_ROOT: path.join(directory, "cache"), JAVA_LSP_OWNERSHIP_BASE: path.join(directory, "owner"), JAVA_LSP_PROJECTS_JSON: path.join(directory, "projects.json"),
-      GRADLE_USER_HOME: path.join(directory, "gradle-home"), JDTLS_BIN: "/usr/bin/false", JAVA_LSP_ISOLATED_VALIDATION: "1",
+      GRADLE_USER_HOME: path.join(directory, "service-state", "jdt-gradle-home"), JAVA_LSP_SERVICE_STATE_ROOT: path.join(directory, "service-state"), JDTLS_BIN: "/usr/bin/false", JAVA_LSP_ISOLATED_VALIDATION: "1",
       ILV2_NODE_BIN: process.execPath, ILV2_RUNTIME_MANIFEST: process.env.ILV2_RUNTIME_MANIFEST };
     lease = await acquireFixtureSlot(MAC_WORK_ROOT, { signal });
     signal?.throwIfAborted();
