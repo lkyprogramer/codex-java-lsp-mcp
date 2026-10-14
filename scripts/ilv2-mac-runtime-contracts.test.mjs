@@ -172,8 +172,8 @@ test("targeted-pr-release-k-descendants-ignore-host-path", async t => {
   catch (error) { assert.equal(error.code, 1, error.stderr); result = error; }
   assert.match(result.stdout, /"K01"/);
   assert.doesNotMatch(result.stderr, /runtime drift/);
-  const descriptor = JSON.parse(result.stdout.split('\n').find(line => line.startsWith('{"isolation"')));
-  const state = path.dirname(descriptor.candidateRoot);
+  const descriptor = JSON.parse(result.stdout.split('\n').findLast(line => line.startsWith('{"validationRoot"')));
+  const state = descriptor.validationRoot;
   assert.ok(state.startsWith(path.resolve(os.tmpdir()) + path.sep));
   t.after(() => rm(state, { recursive: true, force: true }));
   const log = await readFile(path.join(state, "k-proof/raw/K01.stdout.log"), "utf8");
