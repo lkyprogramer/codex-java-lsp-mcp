@@ -59,6 +59,14 @@ test("logical export ignores sym ids, rowids, generations and insertion order", 
       assert.match(String(column("from_sym")), /^(method|type|field):/);
       assert.equal(typeof column("kind_sym"), "string");
       assert.ok(exported.tables.source_root_coverage!.rows.includes(JSON.stringify(["src/main/java", "COMPLETE"])), exported.tables.source_root_coverage!.rows.join());
+      // A posting names its document by identity, not by the surrogate search_doc.id.
+      const docColumn = exported.tables.search_doc_token!.columns.indexOf("doc");
+      const doc = JSON.parse(String((JSON.parse(exported.tables.search_doc_token!.rows[0]!) as unknown[])[docColumn])) as unknown[];
+      assert.equal(doc.length, 6);
+      assert.match(String(doc[0]), /^(method|type|field):/);
+      // The shared facts database never names the checkout it was built from.
+      for (const [table, { rows }] of Object.entries(exported.tables)) assert.equal(rows.some(row => row.includes(repo)), false, table);
+      assert.equal(left.prepare("SELECT count(*) AS n FROM sym WHERE instr(text, ?) > 0").get(repo)?.n, 0);
     } finally {
       close(left);
       close(right);
@@ -109,6 +117,30 @@ test("an incremental refresh is logically equal to a cold build of the edited tr
   });
 });
 
+test("a line-shifting edit re-indexes its search documents without growing the sym dictionary", async () => {
+  await withRepo(async repo => {
+    const db = await build(repo);
+    try {
+      const count = () => Number((db.prepare("SELECT count(*) AS n FROM sym").get() as { n: number }).n);
+      const before = count();
+      const docs = db.prepare("SELECT count(*) AS n FROM search_doc").get()?.n;
+      const service = path.join(repo, serviceRel);
+      // Every document range of the file moves and its content hash changes; no name changes.
+      await writeFile(service, `\n\n${await readFile(service, "utf8")}`);
+      const result = await applyBuilderJob({ repoRoot: repo, db, job: { id: 1, kind: "refresh", generation: 2, changed: [serviceRel] } });
+      assert.equal(result.ok, true, result.error);
+      assert.equal(db.prepare("SELECT count(*) AS n FROM search_doc").get()?.n, docs);
+      assert.equal(count(), before);
+      // The identity key still rejects a duplicate document, as the old sym primary key did.
+      const row = db.prepare("SELECT declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len FROM search_doc LIMIT 1").get() as Record<string, number | string>;
+      assert.throws(() => db.prepare("INSERT INTO search_doc(declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(row.declaration_sym!, row.path_sym!, row.source_path_sym!, row.content_hash!, row.kind!, row.start_line!, row.end_line!, row.token_len!), /UNIQUE constraint/);
+    } finally {
+      close(db);
+    }
+  });
+});
+
 test("dangling references are rejected by SQLite or by the export", async () => {
   await withRepo(async repo => {
     const db = await build(repo);
@@ -120,6 +152,14 @@ test("dangling references are rejected by SQLite or by the export", async () => 
       assert.throws(() => logicalDigest(db), /orphan reference in kg_edge/);
     } finally {
       close(db);
+    }
+    const docs = await build(repo);
+    try {
+      docs.exec("PRAGMA foreign_keys=OFF");
+      docs.prepare("UPDATE search_doc_token SET doc_id=999999999 WHERE (doc_id, token_sym)=(SELECT doc_id, token_sym FROM search_doc_token LIMIT 1)").run();
+      assert.throws(() => logicalDigest(docs), /orphan reference in search_doc_token/);
+    } finally {
+      close(docs);
     }
   });
 });

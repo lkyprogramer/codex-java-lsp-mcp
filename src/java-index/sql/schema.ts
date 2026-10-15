@@ -12,8 +12,10 @@ import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 // v9 drops it with the experiment (no product reader). v10 (MAC-04): sym rows
 // are found by a 16-byte hash and confirmed by text (no long TEXT UNIQUE
 // index), and file/resource stat and the repo root left the facts database
-// for the per-workspace stat store (workspace-stat.ts).
-export const SCHEMA_VERSION = 10;
+// for the per-workspace stat store (workspace-stat.ts). v11 (MAC-04 review):
+// search documents got a surrogate id so their per-edit identity is no longer
+// interned into sym.
+export const SCHEMA_VERSION = 11;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -82,16 +84,19 @@ CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df IN
 -- maintained stats and never rescan the corpus. path_sym is the owning Java
 -- file (the target declaration's file, the undo handle of a Java rewrite);
 -- source_path_sym/content_hash/start_line/end_line are the evidence source
--- (R08: a MyBatis statement's source is its XML file).
-CREATE TABLE search_doc(sym INTEGER PRIMARY KEY REFERENCES sym(id), declaration_sym INTEGER NOT NULL,
+-- (R08: a MyBatis statement's source is its XML file). id is a surrogate: the
+-- document identity (target, kind, source range and hash) changes with every
+-- edit, so it is enforced by search_doc_identity instead of being interned
+-- into sym, where each edit would leak a dictionary row (MAC-04).
+CREATE TABLE search_doc(id INTEGER PRIMARY KEY, declaration_sym INTEGER NOT NULL,
   path_sym INTEGER, source_path_sym INTEGER NOT NULL, content_hash TEXT NOT NULL, kind TEXT NOT NULL,
   start_line INTEGER NOT NULL, end_line INTEGER NOT NULL, token_len INTEGER NOT NULL);
-CREATE INDEX search_doc_declaration ON search_doc(declaration_sym);
+CREATE UNIQUE INDEX search_doc_identity ON search_doc(declaration_sym, kind, source_path_sym, start_line, end_line, content_hash);
 CREATE INDEX search_doc_path ON search_doc(path_sym);
 CREATE INDEX search_doc_source_path ON search_doc(source_path_sym);
-CREATE TABLE search_doc_token(doc_sym INTEGER NOT NULL REFERENCES search_doc(sym) ON DELETE CASCADE,
+CREATE TABLE search_doc_token(doc_id INTEGER NOT NULL REFERENCES search_doc(id) ON DELETE CASCADE,
   token_sym INTEGER NOT NULL, tf INTEGER NOT NULL,
-  PRIMARY KEY(doc_sym, token_sym)) WITHOUT ROWID;
+  PRIMARY KEY(doc_id, token_sym)) WITHOUT ROWID;
 CREATE INDEX search_doc_token_lookup ON search_doc_token(token_sym);
 CREATE TABLE search_doc_df(token_sym INTEGER NOT NULL, df INTEGER NOT NULL, PRIMARY KEY(token_sym)) WITHOUT ROWID;
 `;

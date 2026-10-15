@@ -143,6 +143,10 @@ export function onRollback(db: IndexDatabase, hook: () => void): void {
   hooks.add(hook);
 }
 
+export function rollbackHookCountForTesting(db: IndexDatabase): number {
+  return rollbackHooks.get(db)?.size ?? 0;
+}
+
 /**
  * Runs read-only work on one WAL snapshot (BEGIN DEFERRED takes the read
  * snapshot at the first SELECT). Nested inside an open transaction it simply

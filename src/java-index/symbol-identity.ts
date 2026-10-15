@@ -127,13 +127,23 @@ export function resolveSymbolId(db: IndexDatabase, workspaceId: string, symbolId
   const row = declarationRow(db, kind, parsed.declarationKey);
   if (row) return { status: "FOUND", declarationKey: parsed.declarationKey, kind, relativePath: row.relativePath };
   const name = memberName(kind, parsed.declarationKey);
-  const column = kind === "type" ? "simple_name" : "name";
-  const candidates = Number((prepareCached(db, `SELECT count(*) AS n FROM ${TABLE[kind]} WHERE ${column}=?`).get(name) as { n: number }).n);
   return {
     status: "NOT_FOUND",
     declarationKey: parsed.declarationKey,
-    hint: { kind, name, sameNameCandidates: candidates, relocate: "path, name or signature changed or the declaration was deleted; query by name to re-locate" }
+    hint: { kind, name, sameNameCandidates: sameNameCandidates(db, kind, name), relocate: "path, name or signature changed or the declaration was deleted; query by name to re-locate" }
   };
+}
+
+// Fields have no name index: a field miss scans the field table, and a count
+// equal to the cap means "at least".
+export const FIELD_CANDIDATE_CAP = 100;
+
+/** Same-name declarations a name query can re-locate: types and methods through the indexed entity table. */
+function sameNameCandidates(db: IndexDatabase, kind: DeclarationKind, name: string): number {
+  const row = kind === "field"
+    ? prepareCached(db, "SELECT count(*) AS n FROM (SELECT 1 FROM field WHERE name=? LIMIT ?)").get(name, FIELD_CANDIDATE_CAP)
+    : prepareCached(db, "SELECT count(*) AS n FROM entity WHERE simple_name_lc=? AND simple_name=? AND kind=?").get(name.toLowerCase(), name, kind);
+  return Number((row as { n: number }).n);
 }
 
 const position = (value: unknown): boolean => Number.isSafeInteger(value) && (value as number) >= 0;

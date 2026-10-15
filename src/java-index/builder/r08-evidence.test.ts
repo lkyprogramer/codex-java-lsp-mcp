@@ -44,9 +44,10 @@ type DocRow = { declaration: string; owner: string; source: string; contentHash:
 function mybatisDocs(db: ReturnType<typeof openIndexDb>): DocRow[] {
   return db.prepare(
     `SELECT ds.text AS declaration, op.text AS owner, sp.text AS source, d.content_hash AS contentHash,
-            d.start_line AS startLine, d.end_line AS endLine, ds2.text AS doc
+            d.start_line AS startLine, d.end_line AS endLine,
+            ds.text||'|'||d.kind||'|'||sp.text||'|'||d.start_line||'|'||d.end_line||'|'||d.content_hash AS doc
        FROM search_doc d JOIN sym ds ON ds.id=d.declaration_sym JOIN sym op ON op.id=d.path_sym
-       JOIN sym sp ON sp.id=d.source_path_sym JOIN sym ds2 ON ds2.id=d.sym
+       JOIN sym sp ON sp.id=d.source_path_sym
       WHERE sp.text LIKE '%.xml' ORDER BY sp.text`
   ).all() as DocRow[];
 }
@@ -92,7 +93,8 @@ test("K16/P01: same-named statements in two namespaces: source is each XML path/
     assert.ok(item.declaration.includes("ItemMapper#load"), item.declaration);
     assert.ok(order.declaration.includes("OrderMapper#load"), order.declaration);
     assert.equal(item.owner, ITEM_JAVA, "the owning Java file stays the undo handle");
-    assert.ok(item.doc.includes(`|${ITEM_XML}|`) && item.doc.endsWith("|2"), "the id names source path and representation v2");
+    // The document identity (search_doc_identity) names its source path and hash.
+    assert.ok(item.doc.includes(`|${ITEM_XML}|`) && item.doc.endsWith(`|${item.contentHash}`), item.doc);
 
     const hits = documentHits(db, "mybatis");
     const itemHit = hits.find(hit => hit.relativePath === ITEM_JAVA);

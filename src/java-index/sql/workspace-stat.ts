@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { FileStat, JavaFileBundle } from "../index-types.js";
-import { indexDbPath, isMemoryPath, isReadOnlyConnection, prepareCached, type IndexDatabase } from "./driver.js";
+import { indexDbPath, isMemoryPath, isReadOnlyConnection, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
 
 // Filesystem stat belongs to one workspace, not to the shared facts database.
 // It lives in a sibling file attached as `ws`, so restamping after a checkout,
@@ -26,17 +26,32 @@ export function attachWorkspaceStat(db: IndexDatabase): void {
   if (factsPath === undefined) throw new Error("workspace stat needs a connection from openIndexDb");
   if (isReadOnlyConnection(db)) throw new Error("workspace stat is written only by the builder connection");
   db.prepare("ATTACH DATABASE ? AS ws").run(workspaceStatPath(factsPath));
-  // A lost stat commit only costs a re-hash, so it needs no fsync per transaction.
-  if (!isMemoryPath(factsPath)) db.exec("PRAGMA ws.journal_mode=WAL; PRAGMA ws.synchronous=NORMAL; PRAGMA ws.journal_size_limit=4194304");
-  const version = Number((db.prepare("PRAGMA ws.user_version").get() as { user_version: number }).user_version);
-  if (version !== STAT_SCHEMA_VERSION) {
-    // Stat is a pure cache; an unknown layout is dropped, never migrated.
-    db.exec(`DROP TABLE IF EXISTS ws.file_stat;
-      CREATE TABLE ws.file_stat(path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('java','resource')),
-        content_hash TEXT NOT NULL, size INTEGER NOT NULL, mtime_ms REAL NOT NULL, ctime_ms REAL NOT NULL) WITHOUT ROWID;
-      PRAGMA ws.user_version=${STAT_SCHEMA_VERSION};`);
+  try {
+    initializeStatStore(db, factsPath);
+  } catch (error) {
+    // Leave the connection as it was, so a later attach can retry (e.g. after SQLITE_BUSY).
+    try { db.exec("DETACH DATABASE ws"); } catch { /* already detached */ }
+    throw error;
   }
   attached.add(db);
+}
+
+function initializeStatStore(db: IndexDatabase, factsPath: string): void {
+  // A lost stat commit only costs a re-hash, so it needs no fsync per transaction.
+  if (!isMemoryPath(factsPath)) db.exec("PRAGMA ws.journal_mode=WAL; PRAGMA ws.synchronous=NORMAL; PRAGMA ws.journal_size_limit=4194304");
+  const version = () => Number((db.prepare("PRAGMA ws.user_version").get() as { user_version: number }).user_version);
+  if (version() !== STAT_SCHEMA_VERSION) {
+    // Re-checked under the write lock: two connections attaching a fresh store
+    // must not both drop and recreate it.
+    withTransaction(db, () => {
+      if (version() === STAT_SCHEMA_VERSION) return;
+      // Stat is a pure cache; an unknown layout is dropped, never migrated.
+      db.exec(`DROP TABLE IF EXISTS ws.file_stat;
+        CREATE TABLE ws.file_stat(path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('java','resource')),
+          content_hash TEXT NOT NULL, size INTEGER NOT NULL, mtime_ms REAL NOT NULL, ctime_ms REAL NOT NULL) WITHOUT ROWID;
+        PRAGMA ws.user_version=${STAT_SCHEMA_VERSION};`);
+    });
+  }
 }
 
 function requireAttached(db: IndexDatabase): void {

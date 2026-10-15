@@ -52,7 +52,7 @@ export function commitSearchDocStats(db: IndexDatabase): void {
 function deleteTokensForPath(db: IndexDatabase, pathSym: number): void {
   prepareCached(
     db,
-    `DELETE FROM search_doc_token WHERE doc_sym IN (SELECT sym FROM search_doc WHERE path_sym=?)`
+    `DELETE FROM search_doc_token WHERE doc_id IN (SELECT id FROM search_doc WHERE path_sym=?)`
   ).run(pathSym);
   prepareCached(db, "DELETE FROM search_doc WHERE path_sym=?").run(pathSym);
 }
@@ -60,7 +60,7 @@ function deleteTokensForPath(db: IndexDatabase, pathSym: number): void {
 function deleteTokensForSource(db: IndexDatabase, sourcePathSym: number): void {
   prepareCached(
     db,
-    `DELETE FROM search_doc_token WHERE doc_sym IN (SELECT sym FROM search_doc WHERE source_path_sym=?)`
+    `DELETE FROM search_doc_token WHERE doc_id IN (SELECT id FROM search_doc WHERE source_path_sym=?)`
   ).run(sourcePathSym);
   prepareCached(db, "DELETE FROM search_doc WHERE source_path_sym=?").run(sourcePathSym);
 }
@@ -69,15 +69,14 @@ function insertDocuments(db: IndexDatabase, ownerPath: string, documents: readon
   const ownerSym = internSymNullable(db, ownerPath);
   const insertDoc = prepareCached(
     db,
-    `INSERT INTO search_doc(sym, declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO search_doc(declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  const insertToken = prepareCached(db, "INSERT INTO search_doc_token(doc_sym, token_sym, tf) VALUES (?, ?, ?)");
+  const insertToken = prepareCached(db, "INSERT INTO search_doc_token(doc_id, token_sym, tf) VALUES (?, ?, ?)");
   for (const doc of documents) {
-    const docSym = internSym(db, doc.documentId);
     const tokens = documentTokens(doc.normalizedText);
-    insertDoc.run(
-      docSym,
+    // search_doc_identity rejects a duplicate documentId, as the old sym PK did.
+    const docId = Number(insertDoc.run(
       internSym(db, doc.declarationId),
       ownerSym,
       internSym(db, doc.source.relativePath),
@@ -86,10 +85,10 @@ function insertDocuments(db: IndexDatabase, ownerPath: string, documents: readon
       doc.source.startLine,
       doc.source.endLine,
       tokens.length
-    );
+    ).lastInsertRowid);
     const tf = new Map<string, number>();
     for (const token of tokens) tf.set(token, (tf.get(token) ?? 0) + 1);
-    for (const [token, count] of tf) insertToken.run(docSym, internSym(db, token), count);
+    for (const [token, count] of tf) insertToken.run(docId, internSym(db, token), count);
   }
 }
 

@@ -30,14 +30,19 @@ type Caches = {
 };
 
 const caches = new WeakMap<IndexDatabase, Caches>();
+const rollbackHooked = new WeakSet<IndexDatabase>();
 
 function cacheOf(db: IndexDatabase): Caches {
   let cache = caches.get(db);
   if (!cache) {
     cache = { intern: new Map(), byText: new Map(), byId: new Map() };
     caches.set(db, cache);
+  }
+  if (!rollbackHooked.has(db)) {
     // A rolled-back insert leaves no row: a cached id would later bind another
-    // text that reuses the rowid, merging two identities.
+    // text that reuses the rowid, merging two identities. One hook per db: it
+    // drops whichever cache is current.
+    rollbackHooked.add(db);
     onRollback(db, () => caches.delete(db));
   }
   return cache;

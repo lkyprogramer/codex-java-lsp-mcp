@@ -28,7 +28,8 @@ export function readMeta(db: IndexDatabase, key: string): string | undefined {
 export function writeMeta(db: IndexDatabase, key: string, value: string): void {
   prepareCached(
     db,
-    "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    // An unchanged value is not rewritten (no meta page write for this key).
+    "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value<>excluded.value"
   ).run(key, value);
 }
 

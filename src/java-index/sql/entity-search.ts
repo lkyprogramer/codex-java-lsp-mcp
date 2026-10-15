@@ -548,21 +548,21 @@ function docHits(
   }
   if (postingTokens.length === 0) return [];
   const docs = staged(context, "postings:document", () => {
-    // docSym -> { tfByToken, docLen, declarationSym }
+    // docId -> { tfByToken, docLen, declarationSym }
     const byDoc = new Map<number, { tf: Map<string, number>; docLen: number; declarationSym: number }>();
     let visited = 0;
     const scope = context.scope;
-    const columns = `SELECT t.doc_sym AS docSym, t.tf AS tf, d.token_len AS docLen, d.declaration_sym AS declarationSym
-           FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym`;
+    const columns = `SELECT t.doc_id AS docId, t.tf AS tf, d.token_len AS docLen, d.declaration_sym AS declarationSym
+           FROM search_doc_token t JOIN search_doc d ON d.id=t.doc_id`;
     const source: PostingSource = {
-      key: row => asInt(postingValue(row, 0, "docSym")),
+      key: row => asInt(postingValue(row, 0, "docId")),
       batch: (tokenSym, after, limit) => postingStatement(db,
-        `${columns} WHERE t.token_sym=? AND t.doc_sym>? ORDER BY t.doc_sym LIMIT ?`)
+        `${columns} WHERE t.token_sym=? AND t.doc_id>? ORDER BY t.doc_id LIMIT ?`)
         .all(tokenSym, after, limit) as PostingRow[],
       pageEnd: (tokenSym, after) => {
         const row = prepareCached(
           db,
-          "SELECT doc_sym AS k FROM search_doc_token WHERE token_sym=? AND doc_sym>? ORDER BY doc_sym LIMIT 1 OFFSET ?"
+          "SELECT doc_id AS k FROM search_doc_token WHERE token_sym=? AND doc_id>? ORDER BY doc_id LIMIT 1 OFFSET ?"
         ).get(tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
         return row ? asInt(row.k) : undefined;
       },
@@ -571,32 +571,35 @@ function docHits(
       page: (tokenSym, after, upTo) => postingStatement(
         db,
         `${columns} JOIN entity e ON e.sym=d.declaration_sym
-          WHERE t.token_sym=? AND t.doc_sym>? AND t.doc_sym<=?${scope?.sql ?? ""}`
+          WHERE t.token_sym=? AND t.doc_id>? AND t.doc_id<=?${scope?.sql ?? ""}`
       ).iterate(tokenSym, after, upTo, ...(scope?.params ?? [])) as Iterable<PostingRow>
     };
     scanPostings(context, postingTokens, source, (row, tokenSym) => {
       if (!billPosting(context)) return false;
       visited += 1;
-      const docSym = asInt(postingValue(row, 0, "docSym"));
-      const bucket = byDoc.get(docSym) ?? { tf: new Map<string, number>(), docLen: asInt(postingValue(row, 2, "docLen")), declarationSym: asInt(postingValue(row, 3, "declarationSym")) };
+      const docId = asInt(postingValue(row, 0, "docId"));
+      const bucket = byDoc.get(docId) ?? { tf: new Map<string, number>(), docLen: asInt(postingValue(row, 2, "docLen")), declarationSym: asInt(postingValue(row, 3, "declarationSym")) };
       bucket.tf.set(tokenBySym.get(tokenSym)!, asInt(postingValue(row, 1, "tf")));
-      byDoc.set(docSym, bucket);
+      byDoc.set(docId, bucket);
       return true;
     });
     return { value: byDoc, visited };
   });
   if (docs.size === 0) return [];
   return staged(context, "rank:document", () => {
-    const bestByDeclaration = new Map<number, { score: number; docSym: number }>();
-    for (const [docSym, bucket] of docs) {
+    const bestByDeclaration = new Map<number, { score: number; docId: number }>();
+    for (const [docId, bucket] of docs) {
       const score = bm25Score(queryTokens, bucket.tf, bucket.docLen, avgdl, dfByToken, stats.docCount);
       if (score <= 0) continue;
       const current = bestByDeclaration.get(bucket.declarationSym);
-      if (!current || score > current.score || (score === current.score && docSym < current.docSym)) {
-        bestByDeclaration.set(bucket.declarationSym, { score, docSym });
+      // Equal-score ties take the earliest inserted document; insertion order
+      // (hence the evidence shown on a tie) may differ between an incremental
+      // and a cold build of the same tree.
+      if (!current || score > current.score || (score === current.score && docId < current.docId)) {
+        bestByDeclaration.set(bucket.declarationSym, { score, docId });
       }
     }
-    const scored = [...bestByDeclaration].map(([sym, best]) => ({ sym, score: best.score, docSym: best.docSym }));
+    const scored = [...bestByDeclaration].map(([sym, best]) => ({ sym, score: best.score, docId: best.docId }));
     // Declarations without an entity row never resolve, as before.
     const top = selectTop(scored, cap, syms => entityIds(db, syms, context));
     const rows = entityRows(db, top.map(item => item.sym));
@@ -604,7 +607,7 @@ function docHits(
     for (const item of top) {
       const entity = rows.get(item.sym);
       if (!entity) continue;
-      const evidence = documentEvidence(db, item.docSym);
+      const evidence = documentEvidence(db, item.docId);
       out.push({ ...toHit(entity, "DOCUMENT", item.score), ...(evidence ? { evidence } : {}) });
     }
     return { value: out, visited: scored.length };
@@ -612,11 +615,11 @@ function docHits(
 }
 
 /** The matched document's own source (XML for a MyBatis statement). */
-function documentEvidence(db: IndexDatabase, docSym: number): EntityHitEvidence | undefined {
+function documentEvidence(db: IndexDatabase, docId: number): EntityHitEvidence | undefined {
   const row = prepareCached(
     db,
-    "SELECT source_path_sym AS sourcePathSym, content_hash AS contentHash, kind AS kind, start_line AS startLine, end_line AS endLine FROM search_doc WHERE sym=?"
-  ).get(docSym) as Record<string, SQLOutputValue> | undefined;
+    "SELECT source_path_sym AS sourcePathSym, content_hash AS contentHash, kind AS kind, start_line AS startLine, end_line AS endLine FROM search_doc WHERE id=?"
+  ).get(docId) as Record<string, SQLOutputValue> | undefined;
   if (!row || row.sourcePathSym == null) return undefined;
   return {
     relativePath: symText(db, asInt(row.sourcePathSym)),

@@ -118,7 +118,7 @@ function explainPlans(db: IndexDatabase, sampleFqn: string, sampleSimple: string
       "EXPLAIN QUERY PLAN SELECT t.token_sym FROM entity_token t WHERE t.field = 0 AND t.token_sym IN (1, 2, 3)"
     ],
     "doc:search_doc_postings": [
-      "EXPLAIN QUERY PLAN SELECT t.doc_sym, t.tf FROM search_doc_token t WHERE t.token_sym IN (1, 2, 3)"
+      "EXPLAIN QUERY PLAN SELECT t.doc_id, t.tf FROM search_doc_token t WHERE t.token_sym IN (1, 2, 3)"
     ],
     "old:avg_length_scan": ["EXPLAIN QUERY PLAN SELECT count(*) AS n, coalesce(sum(ident_len), 0) AS total FROM entity"]
   };

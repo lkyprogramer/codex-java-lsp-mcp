@@ -8,7 +8,8 @@ import { decodeFacts } from "./rows.js";
 // insertion order each one happened to produce. Sym and file references are
 // exported as their text/path, facts BLOBs as canonical JSON. Excluded:
 //   - the sym dictionary itself (an encoding; unreferenced entries are garbage),
-//   - INTEGER PRIMARY KEY `id` surrogates,
+//   - INTEGER PRIMARY KEY `id` surrogates (a reference to one, such as
+//     search_doc_token.doc_id, is exported as the referenced row's identity),
 //   - `generation` columns and facts fields (a publication counter, not a fact),
 //   - meta other than the format versions (progress, publication state and
 //     stats derivable from the exported rows).
@@ -33,6 +34,10 @@ function isSymColumn(name: string): boolean {
   return name === "sym" || name.endsWith("_sym");
 }
 
+// search_doc's logical identity: the columns of its search_doc_identity key.
+const DOC_IDENTITY = "json_array(d_decl.text, d_ref.kind, d_src.text, d_ref.start_line, d_ref.end_line, d_ref.content_hash)";
+const DOC_JOIN = "LEFT JOIN main.search_doc d_ref ON d_ref.id=t.doc_id LEFT JOIN main.sym d_decl ON d_decl.id=d_ref.declaration_sym LEFT JOIN main.sym d_src ON d_src.id=d_ref.source_path_sym";
+
 function tableNames(db: IndexDatabase): string[] {
   return (db.prepare("SELECT name FROM main.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as Array<{ name: string }>)
     .map(row => row.name)
@@ -49,6 +54,10 @@ function planTable(db: IndexDatabase, table: string): TablePlan {
     if (isSymColumn(column.name)) {
       const alias = quote(`s_${column.name}`);
       plans.push({ name: column.name, select: `${alias}.text`, join: `LEFT JOIN main.sym ${alias} ON ${alias}.id=${ref}`, orphan: `(${ref} IS NOT NULL AND ${alias}.id IS NULL)` });
+    } else if (column.name === "doc_id") {
+      // DOC_JOIN is written for search_doc_token's single reference to search_doc.
+      if (table !== "search_doc_token") throw new Error(`no logical plan for ${table}.doc_id`);
+      plans.push({ name: "doc", select: DOC_IDENTITY, join: DOC_JOIN, orphan: `(${ref} IS NOT NULL AND (d_ref.id IS NULL OR d_decl.id IS NULL OR d_src.id IS NULL))` });
     } else if (column.name === "file_id") {
       plans.push({ name: "file", select: "f_ref.path", join: `LEFT JOIN main.file f_ref ON f_ref.id=${ref}`, orphan: `(${ref} IS NOT NULL AND f_ref.id IS NULL)` });
     } else {

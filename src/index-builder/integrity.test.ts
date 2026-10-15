@@ -223,7 +223,7 @@ for (const changeJava of [false, true]) test(`cold resolve resume reconciles XML
       assert.ok(docs.length > 0, rel);
       assert.ok(docs.every(doc => doc.hash === hash), rel);
     }
-    const stale = f.db.prepare(`SELECT d.sym FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text IN (?,?)`).all("src/main/resources/delete.xml", "src/main/resources/replace.xml");
+    const stale = f.db.prepare(`SELECT d.id FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text IN (?,?)`).all("src/main/resources/delete.xml", "src/main/resources/replace.xml");
     assert.equal(stale.length, 0);
     assert.deepEqual((f.db.prepare("SELECT path FROM resource_scan ORDER BY path").all() as Array<{ path: string }>).map(row => row.path),
       ["src/main/resources/add.xml", "src/main/resources/change.xml", "src/main/resources/replace.xml"]);

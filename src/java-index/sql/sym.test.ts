@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { close, openIndexDb, withTransaction } from "./driver.js";
+import { close, openIndexDb, rollbackHookCountForTesting, withTransaction } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { internSym, setSymHashForTesting, SYM_HASH_BYTES, symId, symText } from "./sym.js";
 
@@ -52,6 +52,22 @@ test("a rolled-back intern is forgotten, so its rowid cannot alias another text"
     const other = internSym(db, "kept");
     assert.equal(symText(db, other), "kept");
     assert.notEqual(internSym(db, "rolled-back"), other);
+  } finally {
+    close(db);
+  }
+});
+
+test("every rollback forgets interned rows through one hook per connection", () => {
+  const db = memoryDb();
+  try {
+    for (const text of ["first", "second", "third"]) {
+      assert.throws(() => withTransaction(db, () => {
+        internSym(db, text);
+        throw new Error("abort");
+      }), /abort/);
+      assert.equal(symId(db, text), undefined);
+    }
+    assert.equal(rollbackHookCountForTesting(db), 1);
   } finally {
     close(db);
   }

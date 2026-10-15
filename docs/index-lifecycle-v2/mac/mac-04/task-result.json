@@ -5,16 +5,16 @@
   "gateId": "G04",
   "status": "PASS",
   "dependency": {
-    "head": "3ff0532",
-    "previous": "MAC-03A not required (03A ∥ 04 → 05)"
+    "head": "cacf89c",
+    "previous": "MAC-04 first close at cacf89c (run 20261015T024312Z); this run re-gates the review follow-up patch"
   },
   "identity": {
-    "sourceDigest": "45e756ad03d98c5e588fcabe5079c1863f02e304e83d3732b4f3815ade31b0b0",
+    "sourceDigest": "7ccf6b7222b1549d8c2edbd8ce897da69ded5ec20b1a1cc71186c22b8d100a83",
     "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
     "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
     "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
-    "buildStampSha256": "329961e9970dffc0acf9c31f928a3b8a43501b1a52dcd5a46bf41050ff62edb6",
-    "distInventorySha256": "098c9f20b144c6804cf3080ad6d2e61ab1e17fcc61110856a9c5cef72e477af5",
+    "buildStampSha256": "b0ed7c190bd4fda25f6c1df492d4652449d46c81781623dcc618bb39a364d883",
+    "distInventorySha256": "29d1c43431a4c389554ce8a8f352cac324731e80f827baa4bdcfa845b2dd45eb",
     "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
   },
   "checks": [
@@ -24,20 +24,26 @@
       "status": "SELECTED_COMMANDS_PASSED",
       "mainError": null,
       "result": "raw/validation/main-g04/result.json",
-      "sourceDigest": "45e756ad03d98c5e588fcabe5079c1863f02e304e83d3732b4f3815ade31b0b0",
+      "sourceDigest": "7ccf6b7222b1549d8c2edbd8ce897da69ded5ec20b1a1cc71186c22b8d100a83",
       "commands": 4,
-      "tests": 261,
-      "pass": 261,
+      "tests": 300,
+      "pass": 300,
       "fail": 0,
-      "elapsedMs": 62915,
+      "elapsedMs": 57171,
       "argv": [
         "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
         "--test",
         "--test-concurrency=1",
+        "dist/benchmark/release-index-contracts.test.js",
+        "dist/discovery/evidence-unit.test.js",
         "dist/index-builder/integrity.test.js",
         "dist/java-index/ast-extractor.test.js",
         "dist/java-index/build-fingerprint.test.js",
         "dist/java-index/builder-supervisor.test.js",
+        "dist/java-index/builder/cold-build.test.js",
+        "dist/java-index/builder/incremental.test.js",
+        "dist/java-index/builder/r08-evidence.test.js",
+        "dist/java-index/builder/review-fixes.test.js",
         "dist/java-index/edge-builder.test.js",
         "dist/java-index/entity-search.test.js",
         "dist/java-index/framework-index-view.test.js",
@@ -57,6 +63,7 @@
         "dist/java-index/sql/entity-tokens.test.js",
         "dist/java-index/sql/facts-store.test.js",
         "dist/java-index/sql/knowledge-graph.test.js",
+        "dist/java-index/sql/logical-export.test.js",
         "dist/java-index/sql/registry-view.test.js",
         "dist/java-index/sql/rows.test.js",
         "dist/java-index/sql/search-docs.test.js",
@@ -65,12 +72,10 @@
         "dist/java-index/sql/sql-client.test.js",
         "dist/java-index/sql/sql-queries.test.js",
         "dist/java-index/sql/sql-read-ranges.test.js",
-        "dist/java-index/stable-id.test.js",
         "dist/java-index/sql/sym.test.js",
-        "dist/java-index/sql/logical-export.test.js",
+        "dist/java-index/sql/workspace-stat.test.js",
+        "dist/java-index/stable-id.test.js",
         "dist/java-index/symbol-identity.test.js",
-        "dist/java-index/builder/incremental.test.js",
-        "dist/java-index/builder/cold-build.test.js",
         "scripts/ilv2-mac-snapshot-equivalence.test.mjs",
         "scripts/ilv2-mac-status.test.mjs",
         "scripts/ilv2-mac-task-result.test.mjs"
@@ -82,12 +87,12 @@
       "status": "SELECTED_COMMANDS_PASSED",
       "mainError": null,
       "result": "raw/validation/main-full/result.json",
-      "sourceDigest": "45e756ad03d98c5e588fcabe5079c1863f02e304e83d3732b4f3815ade31b0b0",
+      "sourceDigest": "7ccf6b7222b1549d8c2edbd8ce897da69ded5ec20b1a1cc71186c22b8d100a83",
       "commands": 1,
-      "tests": 1405,
-      "pass": 1405,
+      "tests": 1410,
+      "pass": 1410,
       "fail": 0,
-      "elapsedMs": 249955,
+      "elapsedMs": 234116,
       "argv": [
         "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
         "--test",
@@ -215,6 +220,7 @@
         "dist/java-index/sql/sql-queries.test.js",
         "dist/java-index/sql/sql-read-ranges.test.js",
         "dist/java-index/sql/sym.test.js",
+        "dist/java-index/sql/workspace-stat.test.js",
         "dist/java-index/stable-id.test.js",
         "dist/java-index/symbol-identity.test.js",
         "dist/java-knowledge/call-resolver.test.js",
@@ -280,58 +286,73 @@
   ],
   "evidence": [
     {
-      "name": "structural-page-diff",
-      "file": "g04-structural.json",
-      "sha256": "ed75b143593182c9c1ad00750fdd1600d56b919db7ef7e537bd49b978134beec",
+      "name": "structural-page-diff-1000",
+      "file": "g04-structural-1000.json",
+      "sha256": "62905857ee3d317e3648490f65e10bc45777732c943a9d1df48c9aa6ef3c6a35",
       "status": "PASS",
-      "provenance": "broker run g04-structural (same candidate)"
+      "provenance": "broker run g04-structural-1000 (same candidate)"
+    },
+    {
+      "name": "structural-page-diff-4000",
+      "file": "g04-structural-4000.json",
+      "sha256": "b71cead37fdb75af1679c568cf8c9f980aac6a3c25ff4649b02e262e5492082b",
+      "status": "PASS",
+      "provenance": "broker run g04-structural-4000 (same candidate)"
     },
     {
       "name": "query-plan",
       "file": "g04-query-plan.json",
-      "sha256": "34601c4a0c9c74ce58cc9c7e9d043a0275323c97a641f3f1e1f718bd3ce34046",
+      "sha256": "b71cb3b5a5a213f3c98b7f29e5b7d55ce446d0f58e458f1a86fdd60a63cc178a",
       "status": "PASS",
-      "provenance": "author EXPLAIN QUERY PLAN, not a broker run"
+      "provenance": "author EXPLAIN QUERY PLAN (sqlite3 CLI, read-only), not a broker run"
     }
   ],
   "closeout": {
     "status": "PASS",
-    "sha256": "844e56681425c366181ae252b2bc87177af3e4948db1f9e10b47bdebf9719885",
-    "registeredPids": 7,
+    "sha256": "6a189a203db84e345a0c98fa57be23bff269b0d6da380c88e14b00c1bbe98505",
+    "registeredPids": 8,
     "ownedGroups": 0,
     "launchdJobs": 0,
     "unregisteredPaths": [],
     "expiredResidualBytes": 0,
     "carryOver": [],
     "archive": {
-      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-04/20261015T024312Z/closeout/raw-evidence.tar.gz",
-      "sha256": "d6084d3bbbbd64c635847951eefaf564213b405c531e5721472e083f6ff26da0",
-      "fileCount": 21,
-      "bytes": 469023,
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-04/20261015T040130Z/closeout/raw-evidence.tar.gz",
+      "sha256": "e97e5671c002759202d047da1aaea8ab3de11f67558f5071b314ebc953de059b",
+      "fileCount": 25,
+      "bytes": 499285,
       "physicalVerification": "PASS"
     }
   },
   "independent": {
     "review": {
       "status": "PASS",
-      "sha256": "59147437ea6f2b7f76583077941190a0cfd6626c1789255a57c66671776c5bea",
-      "source": "45e756ad03d98c5e588fcabe5079c1863f02e304e83d3732b4f3815ade31b0b0",
+      "sha256": "ad088c57ca01d9fd0323c53e71471a3f40d72aafcb77b34e6ed03479bab67ab1",
+      "source": "7ccf6b7222b1549d8c2edbd8ce897da69ded5ec20b1a1cc71186c22b8d100a83",
       "openFindings": []
     }
   },
-  "validationIndexSha256": "0697b76724c3a9a244537bc2363ab719c121c4c042edf3d9c48dc0ab0a05ca10",
+  "validationIndexSha256": "81cf5d4275a57580cc1d50349d7e9599d6014330c835e8e93d42a56ff69117dc",
   "notClaimed": [
-    "Card MAC-00 constraint 'stat/root changes write 0 pages to the facts DB' holds for fact tables only: a zero-change reconcile still writes meta progress/indexedGeneration and source_root_coverage publication pages (3 pages on the 1000-file synthetic repo). Registered as D08 residual ①; removed when MAC-05 moves publication into binding.json",
-    "D08 residual ②: framework adapters' in-process `type:<fqn>` lookup keys (v1AliasIds) kept; not persisted; no owner card assigned yet",
-    "Structural self-test is logical page structure on a synthetic repo, not a physical COW gate; sym_hash is the largest share (11-12%) because random hash keys scatter new-sym inserts",
+    "Card MAC-00 constraint 'stat/root changes write 0 pages to the facts DB' holds for fact tables only: a zero-change reconcile still writes the meta progress/indexedGeneration and source_root_coverage publication pages (3 pages at 1000 and 4000 synthetic files). D08 residual ①; owner MAC-07 (binding.json, zero-delta watermark-only update) with MAC-08B",
+    "D08 residual ②: framework adapters' in-process `type:<fqn>` lookup keys (v1AliasIds) kept; not persisted; owner card not yet assigned (MAC-13 proposed)",
+    "Structural self-test is logical page structure on a synthetic repo, not a physical COW gate. After the patch sym/sym_hash change 0 pages; B20/B200 change 515/1079 of ~2.45k pages (1000 files) and 823/1201 of ~9.8k (4000 files); the remaining spread is hash-keyed indexes (file_content_hash, token lookups) and entity_df/search_doc_df, which every job deletes and rebuilds in full (64/64 entity_df pages at 4000 files) — left to MAC-05/MAC-07",
+    "sym is never garbage-collected: texts no longer referenced (renamed/deleted declarations, dropped tokens) stay in the dictionary; GC is left to MAC-05/MAC-07. Search document identities are no longer interned",
+    "The sealed snapshot manifest carries no buildKey/environment inventory yet (MAC-07)",
+    "Duplicate-identity normalization (two declarations with one stable key) not done (MAC-12)",
+    "workspaceId generation/binding is not implemented; symbolId takes it as an argument (MAC-03B/MAC-07)",
+    "Racy stat: a same-size rewrite within the mtime granularity of the recorded stat is trusted as unchanged; no racy-clean rule yet (MAC-03B)",
+    "Query plans checked on synthetic DBs only (sqlite3 3.51 CLI; node:sqlite 3.49.1), not on a real repo",
+    "BM25 document ties within one declaration take the earliest inserted document (surrogate id order), so the evidence shown on an exact score tie may differ between an incremental and a cold build of the same tree",
+    "Only writeMeta skips unchanged values; commitSearchDocStats, entity stats and knowledge-graph meta upserts still rewrite on every job",
     "Unstable read (file written during parse -> no stat recorded) is implemented but not induced by a test",
     "symbolId/evidenceHandle are a library; wiring into MCP tool output is not in MAC-04 scope",
     "ctime_ms stored in the stat store but not compared (MAC-03 decides)",
-    "Full suite main-full ran serially; at concurrency 6 in the dev loop 4-8 native process timing tests flaked and passed on serial rerun",
+    "main-full ran serially. Concurrency-6 comparison, 2 alternating rounds each of 3ff0532 and cacf89c in a manual isolated env: identical failure sets on both sides (5 tests that require the detached validation harness), no timing flakes on either; earlier dev-loop c=6 runs of cacf89c had 1-3 native process timing flakes that pass serially",
     "Real repos (lishu-v2 etc.), production cache/install, push: NOT_RUN"
   ],
   "next": "MAC-03A, then MAC-05 (03A ∥ 04 → 05).",
-  "authorization": "User instruction 2026-10-15 '串行,先只做 04'. Local commit only; no push.",
-  "notes": "Facts DB schema v10: sym hash BLOB + text, stat/root moved to workspace-stat.sqlite (ATTACH ws) guarded by the facts content hash; logical export/logicalDigest, sealed snapshot manifest schema, mac1 symbolId/evidenceHandle, snapshot-equivalence script. B20/B200 on 1000 synthetic files: 555/1206 changed pages of ~2.6k; stat-only: 3 publication pages; all scenarios logically equal to a fresh cold build.",
-  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-04/20261015T024312Z"
+  "authorization": "User instructions 2026-10-15 '串行,先只做 04' and '先 补丁提交,完成后更新文档'. Local commit only; no push.",
+  "notes": "Follow-up to the MAC-04 review: search_doc gets a surrogate id with a UNIQUE identity index instead of interning the per-edit document id into sym; the logical export resolves search_doc_token.doc_id to the document identity; one sym rollback hook per connection; workspace-stat schema creation under BEGIN IMMEDIATE, detached again on failure; writeMeta skips unchanged values; symbolId NOT_FOUND hint counts through indexed entity rows. Schema bumped to v11 so facts DBs built at cacf89c (v10 search_doc layout) rebuild instead of failing on doc_id.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-04/20261015T040130Z"
 }

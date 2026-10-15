@@ -87,7 +87,7 @@ test("signature, path or deletion changes report NOT_FOUND with a hint and never
   assert.equal(signature.status, "NOT_FOUND");
   assert.equal(signature.status === "NOT_FOUND" && signature.hint.name, "create");
   // The new overload is one of the same-name candidates the caller can re-query; none is bound.
-  const sameName = Number((db.prepare("SELECT count(*) AS n FROM method WHERE name='create'").get() as { n: number }).n);
+  const sameName = Number((db.prepare("SELECT count(*) AS n FROM entity WHERE kind='method' AND simple_name='create'").get() as { n: number }).n);
   assert.ok(sameName >= 1);
   assert.equal(signature.status === "NOT_FOUND" && signature.hint.sameNameCandidates, sameName);
 
