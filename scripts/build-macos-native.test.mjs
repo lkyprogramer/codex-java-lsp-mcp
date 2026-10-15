@@ -5,8 +5,8 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildMacNative } from "./build-macos-native.mjs";
-import { MAC_WORK_ROOT, writeJson } from "./ilv2-mac-contracts.mjs";
+import { SIGNING_IDENTIFIER, buildMacNative, signLauncher } from "./build-macos-native.mjs";
+import { MAC_WORK_ROOT, execute, writeJson } from "./ilv2-mac-contracts.mjs";
 import { acquireFixtureSlot } from "./ilv2-mac-fixture-quota.mjs";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -106,4 +106,17 @@ test("native-build-relocates-with-identical-bytes-and-loads-only-bundled-guard",
     });
     if (!error?.preserveFixture) await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("launcher-signing-records-adhoc-and-rejects-unstable-identity", async t => {
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), "mac-native-signing-")));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const binary = path.join(directory, "launcher");
+  await cp("/bin/echo", binary);
+  await execute("/usr/bin/codesign", ["--force", "--sign", "-", binary]);
+  const adhoc = await signLauncher(binary, { identity: "" });
+  assert.equal(adhoc.mode, "adhoc"); assert.match(adhoc.designatedRequirement, /^cdhash /);
+  // "-" signs ad-hoc: it has no team and a cdhash requirement, so a Documents grant would not survive a rebuild.
+  await assert.rejects(signLauncher(binary, { identity: "-" }), /not a stable identity/);
+  assert.notEqual(SIGNING_IDENTIFIER, adhoc.identifier);
 });

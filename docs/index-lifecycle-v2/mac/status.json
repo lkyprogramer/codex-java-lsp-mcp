@@ -227,11 +227,12 @@
       ],
       "decisionOwner": "user",
       "decision": {
-        "choice": "business worktrees outside TCC-protected folders",
+        "choice": "stable code-signing identity for the launcher plus one recorded Documents grant",
         "decidedBy": "user",
-        "decidedAt": "2026-10-14",
-        "state": "DECIDED_PENDING_MIGRATION",
-        "note": "Stays open until the migration plan is confirmed and executed and MAC-17/18 re-probe reads without a TCC prompt."
+        "decidedAt": "2026-10-15",
+        "state": "DECIDED_PENDING_IMPLEMENTATION",
+        "supersedes": "2026-10-14 choice 'business worktrees outside TCC-protected folders' (dry-run plan never executed; business repos and worktrees stay in place)",
+        "note": "Open until the launcher is signed with a stable identity, the user grants Documents once, and the A4 probe reads without a prompt both before and after a rebuild."
       }
     }
   ],

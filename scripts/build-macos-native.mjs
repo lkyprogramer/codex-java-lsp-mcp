@@ -24,6 +24,29 @@ export async function nativeSourceFiles(repoRoot = root) {
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+export const SIGNING_IDENTIFIER = "com.lky.codex-java-lsp-mcp.ilv2-mac";
+
+/**
+ * Sign the launcher. TCC binds a Documents grant to the responsible code's
+ * designated requirement: ad-hoc (cdhash) changes on every rebuild, while a
+ * certificate-based one survives rebuilds. Unset identity keeps ad-hoc.
+ */
+export async function signLauncher(binary, { identity = process.env.ILV2_CODESIGN_IDENTITY, keychain = process.env.ILV2_CODESIGN_KEYCHAIN } = {}) {
+  const codesign = "/usr/bin/codesign";
+  if (identity) {
+    await execute(codesign, ["--force", "--sign", identity, "--identifier", SIGNING_IDENTIFIER, "--timestamp=none",
+      ...(keychain ? ["--keychain", keychain] : []), binary]);
+    await execute(codesign, ["--verify", "--strict", binary]);
+  }
+  const details = (await execute(codesign, ["-dv", binary])).stderr;
+  const field = name => new RegExp(`^${name}=(.*)$`, "m").exec(details)?.[1] ?? null;
+  const requirement = (await execute(codesign, ["-d", "-r-", binary])).stdout.match(/designated => (.*)/)?.[1] ?? null;
+  const signing = { mode: identity ? "identity" : "adhoc", identifier: field("Identifier"), teamIdentifier: field("TeamIdentifier"), designatedRequirement: requirement };
+  if (identity && (signing.identifier !== SIGNING_IDENTIFIER || !signing.teamIdentifier || signing.teamIdentifier === "not set" || /^cdhash /.test(requirement ?? "")))
+    throw new Error(`launcher signature is not a stable identity: ${JSON.stringify(signing)}`);
+  return signing;
+}
+
 export async function buildMacNative(repoRoot = root) {
   const runtime = await verifyRuntime();
   const runtimeManifest = JSON.parse(await readFile(process.env.ILV2_RUNTIME_MANIFEST, "utf8"));
@@ -43,11 +66,12 @@ export async function buildMacNative(repoRoot = root) {
     path.join(repoRoot, "native/macos/ilv2-mac.c"), "-fblocks", "-pthread", "-framework", "CoreServices", "-framework", "CoreFoundation", "-o", binary];
   try {
     await execute(compiler, args);
+    const signing = await signLauncher(binary);
     const capability = JSON.parse((await execute(binary, ["capability", output])).stdout);
     if (capability.protocol !== NATIVE_PROTOCOL || capability.arch !== runtime.arch) throw new Error("native architecture/protocol mismatch");
     const manifest = { schema: "ilv2-mac-native-build/v1", protocol: NATIVE_PROTOCOL, arch: runtime.arch, deploymentTarget: DEPLOYMENT_TARGET,
       sourceFiles: files, sourceDigest: sha256(JSON.stringify(files)), binary: "ilv2-mac", binarySha256: sha256(await readFile(binary)),
-      compiler, compilerSha256: sha256(await readFile(compiler)), toolchain, sdk, compilerArgs: args, runtime };
+      compiler, compilerSha256: sha256(await readFile(compiler)), toolchain, sdk, compilerArgs: args, signing, runtime };
     await writeFile(path.join(output, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     return manifest;
   } catch (error) { await rm(output, { recursive: true, force: true }); throw error; }
@@ -62,5 +86,5 @@ if (isMain(import.meta.url)) runCli(async () => {
   }
   const manifest = await buildMacNative();
   if (process.argv[2] === "--build") await execute(process.execPath, [path.join(root, "scripts/write-build-stamp.mjs")], { cwd: root });
-  console.log(JSON.stringify({ nativeBuild: "PASS", sourceDigest: manifest.sourceDigest, binarySha256: manifest.binarySha256, runtimeManifestSha256: manifest.runtime.runtimeManifestSha256 }));
+  console.log(JSON.stringify({ nativeBuild: "PASS", sourceDigest: manifest.sourceDigest, binarySha256: manifest.binarySha256, signing: manifest.signing.mode, runtimeManifestSha256: manifest.runtime.runtimeManifestSha256 }));
 });
