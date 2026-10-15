@@ -1,0 +1,91 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-03A",
+  "gateId": "G03A",
+  "status": "PASS",
+  "dependency": {
+    "head": "8c1544b",
+    "requiredGate": "G01"
+  },
+  "identity": {
+    "sourceDigest": "ce8a6ea1b40a31813628ae1c5b8045957230f4e372b7b4b3f80e98f29345804c",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "90982be69ab1d591d835c4f93500f3921a0d7760e7f457bd6e3cacd25885f17b",
+    "distInventorySha256": "603911e5875306d6496aacd01227b650a1e3fce86fb3a7940abfe14285c0426f",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g03a",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g03a/result.json",
+      "sourceDigest": "ce8a6ea1b40a31813628ae1c5b8045957230f4e372b7b4b3f80e98f29345804c",
+      "commands": 1,
+      "tests": 78,
+      "pass": 78,
+      "fail": 0,
+      "elapsedMs": 8832,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/index-builder/content-capture.test.js",
+        "dist/index-builder/integrity.test.js",
+        "dist/discovery/query-preview.test.js",
+        "dist/java-index/java-index-file-parse.test.js",
+        "dist/java-index/builder/cold-build.test.js",
+        "dist/java-index/builder/incremental.test.js",
+        "dist/java-index/sql/rows.test.js",
+        "dist/java-index/sql/sql-client-incremental.test.js",
+        "dist/java-index/sql/logical-export.test.js",
+        "dist/java-index/manifest.test.js",
+        "dist/layout-probe.test.js",
+        "dist/layout-manager.test.js"
+      ]
+    }
+  ],
+  "evidence": [],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "c042d9a155234a7e991adf89edf0f736f10cd6bf0ac2baac9748db7fd795f2b7",
+    "registeredPids": 20,
+    "ownedGroups": 3,
+    "launchdJobs": 3,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-03a/20261015T062823Z/closeout/raw-evidence.tar.gz",
+      "sha256": "716d3d6277a70714a8fbfbc06932859792f0560e5ee494a0d1bd0ed75d5c8bd9",
+      "fileCount": 62,
+      "bytes": 152797,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "7404d17a658d9b435486152c272a7e0d7e238631ea51a1229e1a6fca2ea15cdd",
+      "source": "ce8a6ea1b40a31813628ae1c5b8045957230f4e372b7b4b3f80e98f29345804c",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "859e4d24356ea6ce8a277bd05f2d774294793e533f6394c79026973668f36fda",
+  "notClaimed": [
+    "MAC-03B tracker/racy-stat/watermark/root-generation integration: NOT_RUN",
+    "MAC-05 full/delta pipeline, stable evidence tie-break, four-repository equivalence and performance: NOT_RUN",
+    "Real cross-volume filesystem run: NOT_RUN. source-root contract test uses separate source/cache paths without a device restriction; no volume was mounted",
+    "BuildKey/environment inventory/content-manifest publication: MAC-07, NOT_RUN",
+    "Unrelated whole-repository tests: NOT_RUN. Targeted and directly affected regressions only",
+    "Tier-0 mutation RED detected the original live reread through an actual SQL postings assertion; dev loop is not gate evidence"
+  ],
+  "next": "Commit G03A before starting MAC-05",
+  "authorization": "User instruction: documentation commit, MAC-03A implementation/targeted validation/independent review/closeout/commit, then MAC-05.",
+  "notes": "Capture original bytes once; persist bounded declaration text in facts; schema v12 invalidates v11; strict capture/discovery root and I/O boundaries. Earlier candidates are retained in the validation index and are not the final gate candidate. Final environment READY is archived at raw/validation/env-probe-final/3.evidence/env-probe.json; matches final source. Independent actual evidence/archive/resource/residual verification passed after closeout.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-03a/20261015T062823Z"
+}

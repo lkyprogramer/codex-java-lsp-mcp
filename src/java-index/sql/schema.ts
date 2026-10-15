@@ -15,7 +15,8 @@ import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 // for the per-workspace stat store (workspace-stat.ts). v11 (MAC-04 review):
 // search documents got a surrogate id so their per-edit identity is no longer
 // interned into sym.
-export const SCHEMA_VERSION = 11;
+// v12: declaration signatures are captured with AST bytes; old facts must rebuild.
+export const SCHEMA_VERSION = 12;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);

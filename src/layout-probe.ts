@@ -1,7 +1,7 @@
 // input: Java repository root plus coarse layout hint.
 // output: Detected source/resource roots for router and watcher reuse.
 // pos: Shared lightweight layout probe; falls back to current broad scan behavior.
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 export type LayoutKind = "gradle-multi" | "maven-multi" | "single" | "flat-layers";
@@ -68,10 +68,10 @@ function resourceRootInfos(repoRoot: string): string[] {
 }
 
 function detectLayout(repoRoot: string, sourceRoots: SourceRootInfo[]): LayoutKind {
-  if (existsSync(path.join(repoRoot, "settings.gradle")) || existsSync(path.join(repoRoot, "settings.gradle.kts"))) {
+  if (pathExists(path.join(repoRoot, "settings.gradle")) || pathExists(path.join(repoRoot, "settings.gradle.kts"))) {
     return sourceRoots.some(root => root.relativePath.startsWith("modules/") || root.relativePath.startsWith("apps/")) ? "gradle-multi" : "single";
   }
-  if (existsSync(path.join(repoRoot, "pom.xml"))) {
+  if (pathExists(path.join(repoRoot, "pom.xml"))) {
     return mavenModules(repoRoot).length > 0 || sourceRoots.some(root => root.module !== ".") ? "maven-multi" : "single";
   }
   return sourceRoots.length > 0 ? "single" : "flat-layers";
@@ -182,7 +182,8 @@ function fileFingerprint(filePath: string): string {
   try {
     const stat = statSync(filePath);
     return `${filePath}:${stat.size}:${stat.mtimeMs}`;
-  } catch {
+  } catch (error) {
+    if (!isMissing(error)) throw error;
     return `${filePath}:absent`;
   }
 }
@@ -191,7 +192,8 @@ function mavenModules(repoRoot: string): string[] {
   try {
     const text = readFileSync(path.join(repoRoot, "pom.xml"), "utf8");
     return [...text.matchAll(/<module>\s*([^<\s]+)\s*<\/module>/g)].map(match => match[1]);
-  } catch {
+  } catch (error) {
+    if (!isMissing(error)) throw error;
     return [];
   }
 }
@@ -206,7 +208,22 @@ function listDirectories(dir: string): string[] {
 function isDirectory(filePath: string): boolean {
   try {
     return statSync(filePath).isDirectory();
-  } catch {
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+    return false;
+  }
+}
+
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+function pathExists(filePath: string): boolean {
+  try {
+    statSync(filePath);
+    return true;
+  } catch (error) {
+    if (!isMissing(error)) throw error;
     return false;
   }
 }

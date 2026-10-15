@@ -1,5 +1,6 @@
-import { createHash } from "node:crypto";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { signatureText } from "./declaration-signature.js";
+import { captureSource, type SourceCapture } from "./source-capture.js";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
 import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
@@ -75,6 +76,7 @@ export async function parseJavaSourceFile(args: {
   backend: JavaParserBackend;
   cache: ParseTreeCache;
   layout?: Pick<LayoutContext, "sourceRoots">;
+  capture?: SourceCapture;
 }): Promise<JavaFileBundle> {
   const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveJavaSourceLayout(
     args.repoRoot,
@@ -83,12 +85,9 @@ export async function parseJavaSourceFile(args: {
   );
   const readablePath = await resolvedPathWithinRepo(absolutePath, args.resolvedRepoRoot);
   if (!readablePath) throw new Error(`Java source resolves outside repo root: ${args.inputPath}`);
-  // Stat brackets the read: a write in between leaves no stat, so the next
-  // reconcile re-hashes instead of trusting a stamp newer than the content.
-  const stats = await stat(readablePath);
-  const content = await readFile(readablePath, "utf8");
-  const after = await stat(readablePath);
-  const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+  const capture = args.capture ?? await captureSource(args.resolvedRepoRoot, readablePath);
+  const { bytes, contentHash } = capture;
+  const content = bytes.toString("utf8");
   const { tree } = refreshParseTree(args.cache, args.backend, relativePath, content);
   const input: ExtractJavaInput = {
     repoRoot: args.repoRoot,
@@ -98,14 +97,18 @@ export async function parseJavaSourceFile(args: {
     module,
     sourceSet,
     content,
-    size: stats.size,
+    size: bytes.length,
     contentHash,
     generation: args.generation
   };
-  const stable = after.size === stats.size && after.mtimeMs === stats.mtimeMs && after.ctimeMs === stats.ctimeMs;
+  const extracted = extractFromParsedTree(input, tree);
+  for (const type of extracted.types) type.capturedSignature = signatureText(content, type.range.start.line, type.range.end.line);
+  for (const method of extracted.methods) {
+    method.capturedSignature = signatureText(content, method.range.start.line, method.bodyRange?.start.line ?? method.range.end.line);
+  }
   return {
-    ...extractFromParsedTree(input, tree),
+    ...extracted,
     edges: [],
-    ...(stable ? { observed: { size: stats.size, mtimeMs: stats.mtimeMs, ctimeMs: stats.ctimeMs } } : {})
+    ...(capture.observed ? { observed: capture.observed } : {})
   };
 }

@@ -97,6 +97,8 @@ export type JavaLeadingComment = {
 };
 
 export type JavaMethodFacts = {
+  /** Bounded declaration text captured with the parsed bytes. */
+  capturedSignature?: string;
   methodId: string;
   ownerTypeId: string;
   name: string;
@@ -119,6 +121,8 @@ export type JavaMethodFacts = {
 };
 
 export type JavaTypeFacts = {
+  /** Bounded declaration text captured with the parsed bytes. */
+  capturedSignature?: string;
   typeId: string;
   fqn?: string;
   simpleName: string;

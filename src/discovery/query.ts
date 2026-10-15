@@ -8,7 +8,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { StringDecoder } from "node:string_decoder";
 import path from "node:path";
 import { classifyQuery } from "./query-intent.js";
 import { QueryTrace, type QueryStageTrace } from "./query-budget.js";
@@ -302,16 +301,14 @@ type SourceRead =
   | { state: "missing" }
   | { state: "file_too_large" | "read_budget" | "deadline" };
 
-/** sha256 of the UTF-8 decoded text (the indexer's definition), streamed. */
+/** sha256 of actual source bytes, streamed. */
 async function streamContentHash(absolute: string): Promise<{ hash: string; bytes: number }> {
   const hash = createHash("sha256");
-  const decoder = new StringDecoder("utf8");
   let bytes = 0;
   for await (const chunk of createReadStream(absolute)) {
     bytes += (chunk as Buffer).length;
-    hash.update(decoder.write(chunk as Buffer), "utf8");
+    hash.update(chunk as Buffer);
   }
-  hash.update(decoder.end(), "utf8");
   return { hash: hash.digest("hex"), bytes };
 }
 
@@ -387,11 +384,11 @@ export class RequestSourceReader {
     }
     if (bytes.length > DISCOVERY_FILE_READ_MAX_BYTES) return { state: "file_too_large" };
     this.bytesRead += bytes.length;
-    // Same hash definition as the indexer (sha256 of the UTF-8 decoded text).
+    // Hash the actual bytes, including malformed UTF-8, just like capture.
     const content = bytes.toString("utf8");
     return {
       state: "ok",
-      contentHash: createHash("sha256").update(content, "utf8").digest("hex"),
+      contentHash: createHash("sha256").update(bytes).digest("hex"),
       lines: splitSourceLines(content)
     };
   }

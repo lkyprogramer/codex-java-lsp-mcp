@@ -1,5 +1,6 @@
+import { captureSource, type SourceCapture } from "../java-index/source-capture.js";
+import { captureCensus, finishCaptureCensus, type CaptureCensusEntry } from "./capture-census.js";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
@@ -35,7 +36,7 @@ import { readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, wr
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "exit";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
-export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; error?: string };
+export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; error?: string };
 
 function errCode(err: unknown): string | undefined {
   return typeof err === "object" && err !== null && "code" in err ? String((err as { code: unknown }).code) : undefined;
@@ -54,13 +55,15 @@ async function resolveInput(repoRoot: string, input: string): Promise<{ abs: str
     return { abs, rel: asRepoRel(repoRoot, abs), exists: true };
   } catch (err) {
     if (err instanceof Error && err.message.startsWith("path outside repo:")) throw err;
+    if (errCode(err) !== "ENOENT") throw err;
     let cursor = path.dirname(joined);
     const tail = [path.basename(joined)];
     while (cursor !== path.dirname(cursor)) {
       try {
         const relBase = asRepoRel(repoRoot, await realpath(cursor));
         return { abs: joined, rel: [relBase, ...tail.slice().reverse()].join("/"), exists: false };
-      } catch {
+      } catch (parentError) {
+        if (errCode(parentError) !== "ENOENT") throw parentError;
         tail.push(path.basename(cursor));
         cursor = path.dirname(cursor);
       }
@@ -213,20 +216,11 @@ function rewriteGraphAndEntities(
     if (!bundle) continue;
     for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
     // Same-transaction document update keeps text and facts on one hash.
-    const content = readFileSyncSafe(path.join(repoRoot, relativePath));
-    replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources, bindsMyBatis }));
+    replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, myBatisResources: resources, bindsMyBatis }));
   }
   rebuildEntityDf(db);
   rebuildSearchDocDf(db);
   commitSearchDocStats(db);
-}
-
-function readFileSyncSafe(absolutePath: string): string | undefined {
-  try {
-    return readFileSync(absolutePath, "utf8");
-  } catch {
-    return undefined;
-  }
 }
 
 function listMyBatisResources(db: IndexDatabase): MyBatisMapperResourceFacts[] {
@@ -247,7 +241,8 @@ async function parseChanged(
   repoRoot: string,
   layout: LayoutContext,
   generation: number,
-  absolutePaths: readonly string[]
+  absolutePaths: readonly string[],
+  captures?: Map<string, SourceCapture>
 ): Promise<{ bundles: JavaFileBundle[]; missing: string[] }> {
   const backend = await createJavaParserBackend();
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
@@ -258,7 +253,7 @@ async function parseChanged(
     writeBuildProgress(db, { phase: "declare", done: index, total });
     try {
       const bundle = await parseJavaSourceFile({
-        repoRoot, resolvedRepoRoot: repoRoot, inputPath, generation, backend, cache, layout
+        repoRoot, resolvedRepoRoot: repoRoot, inputPath, generation, backend, cache, layout, capture: captures?.get(inputPath)
       });
       cache.delete(bundle.file.relativePath);
       bundles.push(bundle);
@@ -425,7 +420,7 @@ async function applyResources(
   generation: number,
   changedInputs: readonly string[],
   deletedInputs: readonly string[],
-  options: { publish?: boolean } = {}
+  options: { publish?: boolean; captures?: Map<string, SourceCapture> } = {}
 ): Promise<void> {
   const layout = probeLayout(repoRoot);
   writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, changedInputs.length + deletedInputs.length) });
@@ -443,10 +438,11 @@ async function applyResources(
     const relativePath = resolved.rel;
     const before = readMyBatisResource(db, relativePath);
     try {
-      const info = await stat(resolved.abs);
-      const content = await readFile(resolved.abs, "utf8");
-      const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-      scans.push({ path: relativePath, contentHash, ...fileStatOf(info) });
+      const capture = options.captures?.get(resolved.abs) ?? await captureSource(repoRoot, resolved.abs);
+      const bytes = capture.bytes;
+      const content = bytes.toString("utf8");
+      const contentHash = capture.contentHash;
+      scans.push({ path: relativePath, contentHash, ...(capture.observed ?? {size:-1,mtimeMs:-1,ctimeMs:-1}) });
       if (before?.contentHash === contentHash) continue;
       const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation });
       // A non-mapper XML that was never indexed stays a no-op (reconcile
@@ -492,9 +488,10 @@ type IndexedFileRow = {
   parseState: string | null;
 };
 
-async function contentHashOf(absolutePath: string): Promise<string> {
-  const content = await readFile(absolutePath, "utf8");
-  return createHash("sha256").update(content, "utf8").digest("hex");
+async function contentHashOf(repoRoot: string, absolutePath: string, captures?: Map<string, SourceCapture>): Promise<string> {
+  const capture = await captureSource(repoRoot, absolutePath);
+  captures?.set(absolutePath, capture);
+  return capture.contentHash;
 }
 
 /**
@@ -509,7 +506,7 @@ export async function changedResources(
   db: IndexDatabase,
   repoRoot: string,
   layout: LayoutContext
-): Promise<{ changed: string[]; deleted: string[]; stamps: StatRow[] }> {
+): Promise<{ changed: string[]; deleted: string[]; stamps: StatRow[]; captures: Map<string, SourceCapture> }> {
   const scanned = new Map(
     (prepareCached(db, "SELECT path, content_hash AS contentHash FROM resource_scan").all() as Array<{ path: string; contentHash: string }>)
       .map(row => [row.path, row.contentHash])
@@ -519,6 +516,7 @@ export async function changedResources(
     ...scanned.keys(),
     ...(prepareCached(db, "SELECT path FROM mybatis_resource").all() as Array<{ path: string }>).map(row => row.path)
   ]);
+  const captures = new Map<string, SourceCapture>();
   const changed: string[] = [];
   const stamps: StatRow[] = [];
   const seen = new Set<string>();
@@ -528,15 +526,17 @@ export async function changedResources(
     const info = await stat(file.absolutePath);
     const stamp = stats.get(file.relativePath);
     if (previous && stamp?.contentHash === previous && statUnchanged(stamp, info)) continue;
-    const hash = await contentHashOf(file.absolutePath);
+    const hash = await contentHashOf(repoRoot, file.absolutePath, captures);
     if (previous && hash === previous) {
-      stamps.push({ path: file.relativePath, contentHash: hash, ...fileStatOf(info) });
+      const observed = captures.get(file.absolutePath)?.observed;
+      if (observed) stamps.push({ path: file.relativePath, contentHash: hash, ...observed });
+      captures.delete(file.absolutePath);
       continue;
     }
     changed.push(file.absolutePath);
   }
   const deleted = [...known].filter(relativePath => !seen.has(relativePath));
-  return { changed, deleted, stamps };
+  return { changed, deleted, stamps, captures };
 }
 
 async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number): Promise<void> {
@@ -548,7 +548,7 @@ async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: n
   const resources = await changedResources(db, repoRoot, layout);
   if (resources.stamps.length > 0) withTransaction(db, () => recordStats(db, "resource", resources.stamps));
   if (resources.changed.length > 0 || resources.deleted.length > 0) {
-    await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false });
+    await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false, captures: resources.captures });
   }
   await applyJavaReconcile(db, repoRoot, generation, layout, roots);
 }
@@ -568,6 +568,7 @@ async function applyJavaReconcile(
     ).all() as IndexedFileRow[]).map(row => [row.path, row])
   );
   const stats = readStats(db, "java");
+  const captures = new Map<string, SourceCapture>();
   const changed: string[] = [];
   const recovering = readMeta(db, "buildState") !== "READY" || readMeta(db, "coverageRevision") !== "1";
   const stamps: StatRow[] = [];
@@ -584,8 +585,11 @@ async function applyJavaReconcile(
     // The stamp only stands in for hashing when it vouches for the hash the facts hold.
     if (stamp?.contentHash === previous.contentHash && statUnchanged(stamp, info)) continue;
     // git worktree add rewrites mtimes; an identical hash is restamped, not reparsed.
-    if (Number(previous.size) === info.size && await contentHashOf(file.absolutePath) === previous.contentHash) {
-      stamps.push({ path: file.relativePath, contentHash: previous.contentHash, ...fileStatOf(info) });
+    const capturedHash = await contentHashOf(repoRoot, file.absolutePath, captures);
+    if (Number(previous.size) === info.size && capturedHash === previous.contentHash) {
+      const observed = captures.get(file.absolutePath)?.observed;
+      if (observed) stamps.push({ path: file.relativePath, contentHash: previous.contentHash, ...observed });
+      captures.delete(file.absolutePath);
       continue;
     }
     changed.push(file.absolutePath);
@@ -607,7 +611,7 @@ async function applyJavaReconcile(
     return;
   }
   if (stamps.length > 0) withTransaction(db, () => recordStats(db, "java", stamps));
-  const parsed = await parseChanged(db, repoRoot, layout, generation, changed);
+  const parsed = await parseChanged(db, repoRoot, layout, generation, changed, captures);
   applyParsedRefresh(db, repoRoot, generation, roots, [...deleted, ...parsed.missing], parsed.bundles, discovered);
 }
 
@@ -618,12 +622,14 @@ export async function applyBuilderJob(options: {
 }): Promise<BuilderJobResult> {
   const id = typeof options.job.id === "number" ? options.job.id : -1;
   if (options.job.kind === "exit") return statusResult(options.db, id, true);
-  const repoRoot = await realpath(options.repoRoot).catch(() => path.resolve(options.repoRoot));
+  let repoRoot = path.resolve(options.repoRoot);
   attachWorkspaceStat(options.db);
   const current = indexedGenerationOf(options.db);
   const generation = options.job.generation ?? current + 1;
   if (generation < current) return statusResult(options.db, id, true);
+  const beforeCapture = captureCensus(options.db);
   try {
+    repoRoot = await realpath(repoRoot);
     if (options.job.kind === "refresh") {
       await applyRefresh(options.db, repoRoot, generation, options.job.changed ?? [], options.job.deleted ?? []);
     } else if (options.job.kind === "resources") {
@@ -633,13 +639,13 @@ export async function applyBuilderJob(options: {
     } else {
       return statusResult(options.db, id, false, `unknown kind ${String((options.job as BuilderJob).kind)}`);
     }
-    return statusResult(options.db, id, true);
+    return { ...statusResult(options.db, id, true), census: finishCaptureCensus(options.db, beforeCapture), censusComplete: true };
   } catch (err) {
     withTransaction(options.db, () => {
       writeMeta(options.db, "buildState", "DEGRADED");
       options.db.prepare("UPDATE source_root_coverage SET state='DEGRADED'").run();
     });
-    return statusResult(options.db, id, false, err instanceof Error ? err.message : String(err));
+    return { ...statusResult(options.db, id, false, err instanceof Error ? err.message : String(err)), census: finishCaptureCensus(options.db, beforeCapture), censusComplete: false };
   }
 }
 

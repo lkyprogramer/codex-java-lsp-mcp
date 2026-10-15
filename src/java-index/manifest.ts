@@ -1,4 +1,5 @@
-import { opendir } from "node:fs/promises";
+import { sourcePathWithinRoot } from "./source-capture.js";
+import { opendir, realpath } from "node:fs/promises";
 import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
 
@@ -13,6 +14,7 @@ export type DiscoveredResourceFile = {
 };
 
 export async function discoverMyBatisResourceFiles(repoRoot: string, layout: LayoutContext): Promise<DiscoveredResourceFile[]> {
+  await realpath(repoRoot);
   const files: DiscoveredResourceFile[] = [];
   for (const resourceRoot of layout.resourceRoots) {
     await walkResourceDirectory(path.join(repoRoot, resourceRoot), repoRoot, resourceRoot, files);
@@ -37,9 +39,11 @@ async function walkResourceDirectory(
 ): Promise<void> {
   let dir;
   try {
-    dir = await opendir(absoluteDir);
-  } catch {
-    return;
+    const readable = await sourcePathWithinRoot(repoRoot, absoluteDir);
+    dir = await opendir(readable);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
   for await (const entry of dir) {
     if (entry.isDirectory()) {
@@ -60,6 +64,7 @@ export type DiscoveredJavaFile = {
 };
 
 export async function discoverJavaFiles(repoRoot: string, layout: LayoutContext): Promise<DiscoveredJavaFile[]> {
+  await realpath(repoRoot);
   const files: DiscoveredJavaFile[] = [];
   for (const sourceRoot of layout.sourceRoots) {
     await walkDirectory(path.join(repoRoot, sourceRoot.relativePath), repoRoot, sourceRoot.relativePath, files);
@@ -76,9 +81,11 @@ async function walkDirectory(
 ): Promise<void> {
   let dir;
   try {
-    dir = await opendir(absoluteDir);
-  } catch {
-    return;
+    const readable = await sourcePathWithinRoot(repoRoot, absoluteDir);
+    dir = await opendir(readable);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw error;
   }
   for await (const entry of dir) {
     if (entry.isDirectory()) {

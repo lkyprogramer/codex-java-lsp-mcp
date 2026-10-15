@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { realpath, readFile, stat } from "node:fs/promises";
+import { captureSource, type SourceCapture } from "../java-index/source-capture.js";
+import { captureCensus, finishCaptureCensus, type CaptureCensusEntry } from "./capture-census.js";
+import { realpath } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
@@ -28,7 +28,7 @@ import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
-import { attachWorkspaceStat, clearStats, fileStatOf, observedStats, recordStats, type StatRow } from "../java-index/sql/workspace-stat.js";
+import { attachWorkspaceStat, clearStats, observedStats, recordStats, type StatRow } from "../java-index/sql/workspace-stat.js";
 import {
   clearIndexData,
   publishIndexCoverage,
@@ -55,6 +55,7 @@ export type SqlColdBuildOptions = {
 
 export type SqlColdBuildResult = IndexCounts & {
   ok: true;
+  census: CaptureCensusEntry[];
   parseFailed: number;
   parseFailures: Array<{ relativePath: string; message: string }>;
 };
@@ -108,10 +109,11 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   const parallelism = builderParallelism(options.parallelism);
   const db = options.db;
   db.exec("PRAGMA cache_size=-16384");
-  const resolvedRepoRoot = await realpath(options.repoRoot).catch(() => path.resolve(options.repoRoot));
+  const resolvedRepoRoot = await realpath(options.repoRoot);
   const layout = probeLayout(resolvedRepoRoot);
   attachWorkspaceStat(db);
 
+  const beforeCapture = captureCensus(db);
   if (readMeta(db, "buildState") !== "BUILDING") {
     withTransaction(db, () => {
       clearIndexData(db);
@@ -129,10 +131,14 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   const known = db.prepare("SELECT path, content_hash AS hash, source_root AS root, parse_state AS state FROM file").all() as Array<{ path: string; hash: string; root: string; state: string }>;
   const manifest = new Map(discovered.map(file => [file.relativePath, file]));
   const stale: string[] = [];
+  const captures = new Map<string, SourceCapture>();
   for (const row of known) {
     const file = manifest.get(row.path);
-    if (!file || file.sourceRoot !== row.root || row.state === "FAILED" ||
-      createHash("sha256").update(await readFile(file.absolutePath, "utf8"), "utf8").digest("hex") !== row.hash) stale.push(row.path);
+    const captured = file ? await captureSource(resolvedRepoRoot, file.absolutePath).catch(error => { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }) : undefined;
+    if (captured) captures.set(file!.relativePath, captured);
+    if (!file || !captured || file.sourceRoot !== row.root || row.state === "FAILED" ||
+      captured.contentHash !== row.hash) stale.push(row.path);
+    else captures.delete(row.path);
   }
   if (stale.length > 0 || known.length !== total && readBuildProgress(db)?.phase === "resolve") {
     withTransaction(db, () => {
@@ -159,6 +165,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
         const cache = caches[workerId]!;
         try {
           const bundle = await parseJavaSourceFile({
+            capture: captures.get(file.relativePath),
             repoRoot: resolvedRepoRoot,
             resolvedRepoRoot,
             inputPath: file.absolutePath,
@@ -167,6 +174,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
             cache,
             layout
           });
+          captures.delete(file.relativePath);
           cache.delete(bundle.file.relativePath);
           if (bundle.file.parseState === "FAILED") {
             parseFailures.push({ relativePath: file.relativePath, message: `Java parse failed (${bundle.file.parseErrorCount} errors)` });
@@ -195,11 +203,14 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   const xmlFiles = await discoverMyBatisResourceFiles(resolvedRepoRoot, layout);
   const resources: MyBatisMapperResourceFacts[] = [];
   const scans: StatRow[] = [];
+  const resourceHashes: Array<{path:string;contentHash:string}> = [];
   for (const file of xmlFiles) {
-    const info = await stat(file.absolutePath);
-    const content = await readFile(file.absolutePath, "utf8");
-    const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-    scans.push({ path: file.relativePath, contentHash, ...fileStatOf(info) });
+    const capture = await captureSource(resolvedRepoRoot, file.absolutePath);
+    const bytes = capture.bytes;
+    const content = bytes.toString("utf8");
+    const contentHash = capture.contentHash;
+    resourceHashes.push({path:file.relativePath,contentHash});
+    if(capture.observed) scans.push({ path: file.relativePath, contentHash, ...capture.observed });
     const resource = extractMyBatisMapperFacts({
       relativePath: file.relativePath,
       content,
@@ -216,7 +227,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     db.exec("DELETE FROM mybatis_resource; DELETE FROM resource_scan;");
     clearStats(db, "resource");
     for (const resource of resources) writeMyBatisResource(db, resource);
-    for (const scan of scans) recordResourceScan(db, scan.path, scan.contentHash);
+    for (const scan of resourceHashes) recordResourceScan(db, scan.path, scan.contentHash);
     recordStats(db, "resource", scans);
     const next: BuildProgress = declared ? { phase: "resolve", done: 0, total } : progress;
     commitProgress(db, next);
@@ -266,7 +277,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     return publishIndexCoverage(db, generation, roots, discovered);
   });
 
-  return { ok: true, parseFailed, parseFailures, ...counts };
+  return { ok: true, parseFailed, parseFailures, census: finishCaptureCensus(db, beforeCapture, parseFailures.map(f => f.relativePath)), ...counts };
 }
 
 function isFatalIndexIoError(err: unknown): boolean {
@@ -298,14 +309,13 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number, repoRo
   for (const relativePath of paths) {
     const bundle = readBundle(db, relativePath);
     if (!bundle) continue;
-    const content = readFileSyncSafe(path.join(repoRoot, relativePath));
     withTransaction(db, () => {
       builder.replaceFile(bundle, sql, generation);
       for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
       // Documents, entities and the file row move in one transaction so a
       // query can never rank text from a newer hash against facts of an older
       // one.
-      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources, bindsMyBatis }));
+      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, myBatisResources: resources, bindsMyBatis }));
     });
     sql.clearRequestCache();
   }
@@ -313,14 +323,6 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number, repoRo
   rebuildSearchDocDf(db);
   commitSearchDocStats(db);
   graph.flushMeta();
-}
-
-function readFileSyncSafe(absolutePath: string): string | undefined {
-  try {
-    return readFileSync(absolutePath, "utf8");
-  } catch {
-    return undefined;
-  }
 }
 
 function listMyBatisResources(db: IndexDatabase): MyBatisMapperResourceFacts[] {
