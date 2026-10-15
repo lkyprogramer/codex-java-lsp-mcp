@@ -1,0 +1,101 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-06B",
+  "gateId": "G06B",
+  "status": "PASS",
+  "dependency": {
+    "head": "90f97fb827eb50bac1caf74d0b09dd998f10427c",
+    "requiredGates": [
+      "G06A"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "ad3812c8962d97a05144d6dc1e0767898d268bdfaa30bd53174834d918084631",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "f2712571a800e46e943b6a84792da8cb127f70d5aba64294a39c5bce953a6572",
+    "distInventorySha256": "4bfd940327e8a04bc7aacc0a7e1e2f0f74c0c5f96a7f549cdc4de3a56a05c088",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g06b-fixed",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g06b-fixed/result.json",
+      "sourceDigest": "ad3812c8962d97a05144d6dc1e0767898d268bdfaa30bd53174834d918084631",
+      "commands": 4,
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "elapsedMs": 7730,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/java-index/snapshot/query-pool.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "query-process-lease-and-budget-summary",
+      "file": "query-summary.json",
+      "sha256": "d56254e5fea532e8ba08f75e73df8160cafc76e1815bd10cde32addbdee3459c",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "unchanged-g06a-native-runtime-reuse",
+      "file": "unaffected-reuse.json",
+      "sha256": "09566b56e9c27155108850d5a8d76e28684f8635e216bfbda0f41b112701d9c5",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-resource-archive-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "2d003c11f4e6ead5b0bab95777b489b86a2b62584771d96692ff9568fa787511",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "03b2c0738599fd384aea9f2369085dfef15c6241d0b51dcd1d0dbdccbab69a1c",
+    "registeredPids": 43,
+    "ownedGroups": 0,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06b/20261015T170801Z/closeout/raw-evidence.tar.gz",
+      "sha256": "384ae0649b185ef99d3b5b741b13a462d82134adb16dea12bcf23ce5ea5eccb6",
+      "fileCount": 30,
+      "bytes": 143995,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "3dbff476c86c1e4802be254df9dd86779d69ba35b5e1e39322c4c0797db11069",
+      "source": "ad3812c8962d97a05144d6dc1e0767898d268bdfaa30bd53174834d918084631",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "56cbc79a4cd4fb83c2035f802e84c0a951422bcbb5ec281ad68339e56a3b6a78",
+  "notClaimed": [
+    "MAC-06C actual builder/query adapter and owner-restart integration: NOT_RUN",
+    "MAC-07/08 file snapshot lease, production entry switch, whole-request budget across prepare/preview/serialization: NOT_RUN",
+    "Unrelated full suite, four-repository matrix, JDT/Gradle: NOT_RUN"
+  ],
+  "next": "Stop after MAC-06B local commit. Manual next is MAC-06C, not started; parent G06 still waits for G06C.",
+  "authorization": "User: G06A genuine PASS and local commit before continuing MAC-06B, retain independent review and actual exit; reuse unaffected evidence and only run affected tests.",
+  "notes": "Only final-g06b-fixed10/10 is main. Earlier final-g06b8/8 keeps its pre-fix identity and coverage, not combined as finalPASS. Dev regression two failures and two passes are diagnostics, not gate totals. Real native SQLite hang/process kill tested, production SQL adapter/file leases not claimed.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06b/20261015T170801Z"
+}
