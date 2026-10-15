@@ -13,6 +13,7 @@ import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { applyBuilderJob } from "../index-builder/incremental.js";
 import { BuilderSupervisor } from "../java-index/builder-supervisor.js";
 import { close, openIndexDb } from "../java-index/sql/driver.js";
+import { readMyBatisResource } from "../java-index/sql/rows.js";
 import { ensureSchema } from "../java-index/sql/schema.js";
 import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
@@ -169,7 +170,8 @@ test("K21: real sibling copy reconciles changed XML before READY without Java ch
   const javaPath = "src/main/java/demo/Mapper.java";
   const java = "package demo; public interface Mapper { int load(); }";
   const xml = '<mapper namespace="demo.Mapper">\n<select id="load">SELECT oldledger FROM oldledger</select>\n</mapper>\n';
-  const changed = xml.replaceAll("oldledger", "newledger");
+  // The edit also moves the statement a line down: a stale document keeps the old lines.
+  const changed = xml.replaceAll("oldledger", "newledger").replace("<select", "\n<select");
   const w = await worktrees({ [javaPath]: java, [xmlPath]: xml });
   const sibling = path.join(w.home, "sibling.sqlite"), dest = path.join(w.home, "dest.sqlite");
   const supervisor = new BuilderSupervisor({ repoRoot: w.b, dbPath: dest, idleMs: 500, maxRestarts: 0, env: w.env });
@@ -188,9 +190,12 @@ test("K21: real sibling copy reconciles changed XML before READY without Java ch
     assert.ok(evidence.preview?.includes("newledger")); assert.ok(!evidence.preview?.includes("oldledger"));
     const db = openIndexDb(dest, { readOnly: true });
     try {
-      const docs = db.prepare("SELECT d.content_hash AS hash FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text=?").all(xmlPath) as { hash: string }[];
-      assert.ok(docs.length);
-      assert.ok(docs.every(d => d.hash === sha(changed)), "all XML documents are reconciled; no stale sibling evidence survives");
+      const resource = readMyBatisResource(db, xmlPath)!;
+      assert.equal(resource.contentHash, sha(changed));
+      const docs = db.prepare("SELECT d.start_line AS startLine, d.end_line AS endLine FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text=?").all(xmlPath) as { startLine: number; endLine: number }[];
+      assert.deepEqual(docs.map(d => [d.startLine, d.endLine]), resource.statements.map(statement => [statement.range!.start.line, statement.range!.end.line]),
+        "all XML documents are reconciled; no stale sibling evidence survives");
+      assert.deepEqual(docs.map(d => d.startLine), [3], "the moved statement's current line");
     } finally { close(db); }
     console.log(JSON.stringify({ contract: "K21", generation: result.generation, javaHash: sha(java), xmlHash: evidence.evidenceRange!.contentHash }));
   } finally { await client.close(); await supervisor.stop(); await rm(w.home, { recursive: true, force: true }); }

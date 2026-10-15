@@ -60,7 +60,8 @@ export async function computeBuildFingerprintEntries(repoRoot: string, layout: L
       let content: Buffer;
       try {
         content = await readFile(path.join(repoRoot, relativePath));
-      } catch {
+      } catch (error) {
+        if((error as NodeJS.ErrnoException).code!=="ENOENT") throw error;
         continue;
       }
       const contentHash = createHash("sha256").update(content).digest("hex");

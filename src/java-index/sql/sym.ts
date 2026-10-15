@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { BoundedCache } from "./bounded-cache.js";
 import { onRollback, prepareCached, type IndexDatabase } from "./driver.js";
 
 // sym rows are looked up by a fixed-length hash prefix and confirmed by the
@@ -24,9 +25,9 @@ const INTERN_LIMIT = 65_536;
 const READ_LIMIT = 4_096;
 
 type Caches = {
-  intern: Map<string, number>;
-  byText: Map<string, number>;
-  byId: Map<number, string>;
+  intern: BoundedCache<string, number>;
+  byText: BoundedCache<string, number>;
+  byId: BoundedCache<number, string>;
 };
 
 const caches = new WeakMap<IndexDatabase, Caches>();
@@ -35,7 +36,7 @@ const rollbackHooked = new WeakSet<IndexDatabase>();
 function cacheOf(db: IndexDatabase): Caches {
   let cache = caches.get(db);
   if (!cache) {
-    cache = { intern: new Map(), byText: new Map(), byId: new Map() };
+    cache = { intern: new BoundedCache(INTERN_LIMIT), byText: new BoundedCache(READ_LIMIT), byId: new BoundedCache(READ_LIMIT) };
     caches.set(db, cache);
   }
   if (!rollbackHooked.has(db)) {
@@ -57,20 +58,10 @@ function asId(value: unknown): number {
   return id;
 }
 
-function lruTouch<K, V>(map: Map<K, V>, key: K, value: V, limit: number): void {
-  if (map.has(key)) map.delete(key);
-  map.set(key, value);
-  while (map.size > limit) {
-    const oldest = map.keys().next().value;
-    if (oldest === undefined) break;
-    map.delete(oldest);
-  }
-}
-
 function remember(cache: Caches, text: string, id: number, intern: boolean): void {
-  if (intern) lruTouch(cache.intern, text, id, INTERN_LIMIT);
-  lruTouch(cache.byText, text, id, READ_LIMIT);
-  lruTouch(cache.byId, id, text, READ_LIMIT);
+  if (intern) cache.intern.set(text, id);
+  cache.byText.set(text, id);
+  cache.byId.set(id, text);
 }
 
 const LOOKUP_SQL = "SELECT id FROM sym WHERE hash=? AND text=?";
@@ -83,9 +74,11 @@ function lookup(db: IndexDatabase, text: string, hash: Uint8Array): number | und
 
 export function internSym(db: IndexDatabase, text: string): number {
   const cache = cacheOf(db);
-  const hit = cache.intern.get(text) ?? cache.byText.get(text);
+  const interned = cache.intern.get(text);
+  if (interned !== undefined) return interned;
+  const hit = cache.byText.get(text);
   if (hit !== undefined) {
-    remember(cache, text, hit, true);
+    cache.intern.set(text, hit);
     return hit;
   }
   // Only the builder writes a facts database, so lookup-then-insert has no concurrent writer.
@@ -102,10 +95,7 @@ export function internSymNullable(db: IndexDatabase, text: string | null | undef
 export function symId(db: IndexDatabase, text: string): number | undefined {
   const cache = cacheOf(db);
   const hit = cache.intern.get(text) ?? cache.byText.get(text);
-  if (hit !== undefined) {
-    remember(cache, text, hit, false);
-    return hit;
-  }
+  if (hit !== undefined) return hit;
   const id = lookup(db, text, symHash(db, text));
   if (id === undefined) return undefined;
   remember(cache, text, id, false);
@@ -115,11 +105,7 @@ export function symId(db: IndexDatabase, text: string): number | undefined {
 export function symText(db: IndexDatabase, id: number): string {
   const cache = cacheOf(db);
   const hit = cache.byId.get(id);
-  if (hit !== undefined) {
-    lruTouch(cache.byId, id, hit, READ_LIMIT);
-    lruTouch(cache.byText, hit, id, READ_LIMIT);
-    return hit;
-  }
+  if (hit !== undefined) return hit;
   const row = prepareCached(db, "SELECT text FROM sym WHERE id=?").get(id) as { text?: unknown } | undefined;
   if (typeof row?.text !== "string") throw new Error(`missing sym ${id}`);
   remember(cache, row.text, id, false);

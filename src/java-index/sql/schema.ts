@@ -16,7 +16,12 @@ import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 // search documents got a surrogate id so their per-edit identity is no longer
 // interned into sym.
 // v12: declaration signatures are captured with AST bytes; old facts must rebuild.
-export const SCHEMA_VERSION = 12;
+// v13 (MAC-05): graph ownership is a relation (kg_node_owner/kg_edge_owner), so
+// a shared node or edge lives while any owner does; the meta owner maps,
+// kg_edge.file_sym and kg_summary (no product reader, derivable from kg_edge)
+// are gone; search_doc identity no longer names the source hash, which
+// evidence reads from the source row.
+export const SCHEMA_VERSION = 13;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -49,7 +54,7 @@ CREATE INDEX edge_from_kind ON edge(from_sym, kind_sym);
 CREATE INDEX edge_to_kind ON edge(to_sym, kind_sym);
 CREATE INDEX edge_file ON edge(file_id);
 -- Every identifier a file uses in a type position (type refs, imports, call
--- receivers, annotations), lower-cased and interned: a superset of the names
+-- receivers, annotations), case-sensitive and interned: a superset of the names
 -- whose declarations can change how this file resolves.
 CREATE TABLE type_ref_name(name_sym INTEGER NOT NULL, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
   PRIMARY KEY(name_sym, file_id)) WITHOUT ROWID;
@@ -61,16 +66,23 @@ CREATE TABLE mybatis_resource(path TEXT PRIMARY KEY, namespace TEXT, content_has
 CREATE INDEX mybatis_ns ON mybatis_resource(namespace);
 CREATE TABLE source_root_coverage(root TEXT PRIMARY KEY, state TEXT NOT NULL, generation INTEGER NOT NULL);
 CREATE TABLE kg_node(sym INTEGER PRIMARY KEY REFERENCES sym(id), kind_sym INTEGER NOT NULL, path_sym INTEGER, simple_name TEXT,
-  jid_sym INTEGER, owner_sym INTEGER, generation INTEGER NOT NULL);
+  jid_sym INTEGER, generation INTEGER NOT NULL);
 CREATE INDEX kg_node_path ON kg_node(path_sym);
 CREATE INDEX kg_node_jid ON kg_node(jid_sym);
-CREATE INDEX kg_node_owner ON kg_node(owner_sym);
+-- Graph ownership: the Java file whose build produced a row. A row shared by
+-- several files (a CALLED_BY reverse, a module node, a bound mapper XML) has
+-- one owner row per file and is deleted with its last owner. Only the
+-- repository root has no owner and is never deleted.
+CREATE TABLE kg_node_owner(node_sym INTEGER NOT NULL REFERENCES kg_node(sym) ON DELETE CASCADE, owner_sym INTEGER NOT NULL,
+  PRIMARY KEY(node_sym, owner_sym)) WITHOUT ROWID;
+CREATE INDEX kg_node_owner_by_owner ON kg_node_owner(owner_sym);
 CREATE TABLE kg_edge(id INTEGER PRIMARY KEY, from_sym INTEGER NOT NULL, to_sym INTEGER NOT NULL, kind_sym INTEGER NOT NULL, ordinal INTEGER NOT NULL,
-  file_sym INTEGER, owner_sym INTEGER, generation INTEGER NOT NULL);
-CREATE INDEX kg_edge_from ON kg_edge(from_sym, kind_sym);
+  generation INTEGER NOT NULL);
+CREATE UNIQUE INDEX kg_edge_identity ON kg_edge(from_sym, kind_sym, to_sym, ordinal);
 CREATE INDEX kg_edge_to ON kg_edge(to_sym, kind_sym);
-CREATE INDEX kg_edge_owner ON kg_edge(owner_sym);
-CREATE TABLE kg_summary(method_sym INTEGER PRIMARY KEY REFERENCES sym(id), facts BLOB NOT NULL);
+CREATE TABLE kg_edge_owner(edge_id INTEGER NOT NULL REFERENCES kg_edge(id) ON DELETE CASCADE, owner_sym INTEGER NOT NULL,
+  PRIMARY KEY(edge_id, owner_sym)) WITHOUT ROWID;
+CREATE INDEX kg_edge_owner_by_owner ON kg_edge_owner(owner_sym);
 CREATE TABLE entity(sym INTEGER PRIMARY KEY REFERENCES sym(id), kind TEXT NOT NULL, fqn TEXT NOT NULL, simple_name TEXT NOT NULL, simple_name_lc TEXT NOT NULL,
   path_sym INTEGER, owner_sym INTEGER, ident_len INTEGER NOT NULL, chunk_len INTEGER NOT NULL);
 CREATE INDEX entity_fqn ON entity(fqn);
@@ -86,13 +98,15 @@ CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df IN
 -- file (the target declaration's file, the undo handle of a Java rewrite);
 -- source_path_sym/content_hash/start_line/end_line are the evidence source
 -- (R08: a MyBatis statement's source is its XML file). id is a surrogate: the
--- document identity (target, kind, source range and hash) changes with every
--- edit, so it is enforced by search_doc_identity instead of being interned
--- into sym, where each edit would leak a dictionary row (MAC-04).
+-- document identity (target, kind, source range) changes with edits, so it is
+-- enforced by search_doc_identity instead of being interned into sym, where
+-- each edit would leak a dictionary row (MAC-04). The evidence hash is the
+-- source row's (file or mybatis_resource) content_hash, written in the same
+-- transaction; a copy here would rewrite every document of an edited file.
 CREATE TABLE search_doc(id INTEGER PRIMARY KEY, declaration_sym INTEGER NOT NULL,
-  path_sym INTEGER, source_path_sym INTEGER NOT NULL, content_hash TEXT NOT NULL, kind TEXT NOT NULL,
+  path_sym INTEGER, source_path_sym INTEGER NOT NULL, kind TEXT NOT NULL,
   start_line INTEGER NOT NULL, end_line INTEGER NOT NULL, token_len INTEGER NOT NULL);
-CREATE UNIQUE INDEX search_doc_identity ON search_doc(declaration_sym, kind, source_path_sym, start_line, end_line, content_hash);
+CREATE UNIQUE INDEX search_doc_identity ON search_doc(declaration_sym, kind, source_path_sym, start_line, end_line);
 CREATE INDEX search_doc_path ON search_doc(path_sym);
 CREATE INDEX search_doc_source_path ON search_doc(source_path_sym);
 CREATE TABLE search_doc_token(doc_id INTEGER NOT NULL REFERENCES search_doc(id) ON DELETE CASCADE,

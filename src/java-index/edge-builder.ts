@@ -170,7 +170,7 @@ function walkSuperChain(
     if (visited.has(superTypeId)) continue;
     visited.add(superTypeId);
 
-    const candidates = (registry.methodsByOwnerTypeId.get(superTypeId) ?? []).filter(
+    const candidates = (registry.methodsByOwnerTypeId.get(superTypeId, name) ?? []).filter(
       m => m.name === name && arityOf(m) === arity
     );
     if (candidates.length === 1) {
@@ -215,7 +215,7 @@ function resolveCallSite(
     if (!callSite.receiverDeclaredType || callSite.receiverDeclaredType.resolution.state !== "RESOLVED_REPO") return undefined;
     const ownerTypeId = callSite.receiverDeclaredType.resolution.typeId;
     const ownerStrategy = callSite.receiverDeclaredType.resolution.strategy;
-    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId) ?? []).filter(m => m.name === callSite.name);
+    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId, callSite.name) ?? []).filter(m => m.name === callSite.name);
     if (candidates.length !== 1) return undefined;
     return {
       toId: candidates[0]!.methodId,
@@ -243,7 +243,7 @@ function resolveCallSite(
     if (callSite.receiverDeclaredType.resolution.state !== "RESOLVED_REPO") return undefined;
     const ownerTypeId = callSite.receiverDeclaredType.resolution.typeId;
     const ownerStrategy = callSite.receiverDeclaredType.resolution.strategy;
-    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId) ?? []).filter(
+    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId, callSite.name) ?? []).filter(
       m => m.name === callSite.name && arityOf(m) === callSite.arity
     );
     if (candidates.length !== 1) return undefined;
@@ -261,7 +261,7 @@ function resolveCallSite(
   }
 
   // Unqualified call: same owner first, per architecture's priority order.
-  const sameOwnerCandidates = (registry.methodsByOwnerTypeId.get(method.ownerTypeId) ?? []).filter(
+  const sameOwnerCandidates = (registry.methodsByOwnerTypeId.get(method.ownerTypeId, callSite.name) ?? []).filter(
     m => m.name === callSite.name && arityOf(m) === callSite.arity
   );
   if (sameOwnerCandidates.length === 1) {

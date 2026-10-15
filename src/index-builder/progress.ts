@@ -90,7 +90,8 @@ export function clearIndexData(db: IndexDatabase): void {
     DELETE FROM search_doc_token;
     DELETE FROM search_doc;
     DELETE FROM search_doc_df;
-    DELETE FROM kg_summary;
+    DELETE FROM kg_edge_owner;
+    DELETE FROM kg_node_owner;
     DELETE FROM kg_edge;
     DELETE FROM kg_node;
     DELETE FROM mybatis_resource;
@@ -101,6 +102,9 @@ export function clearIndexData(db: IndexDatabase): void {
   `);
 }
 
+/** Set when a job failed after its changes were lost; only a full traversal clears it. */
+export const COVERAGE_GAP = "coverageGap";
+
 /** A full source traversal, not a partial watcher update, establishes coverage. */
 export function publishIndexCoverage(
   db: IndexDatabase,
@@ -109,7 +113,7 @@ export function publishIndexCoverage(
   discovered?: readonly { sourceRoot: string }[]
 ): IndexCounts {
   const previous = readSourceRootCounts(db);
-  const baselineComplete = readMeta(db, "buildState") === "READY" && readMeta(db, "coverageRevision") === "1";
+  const baselineComplete = readMeta(db, "pipelineComplete") !== "0" && readMeta(db, "coverageRevision") === "1" && readMeta(db, COVERAGE_GAP) === undefined;
   const rows = db.prepare(`SELECT source_root AS root, count(*) AS indexedFiles,
     sum(parse_state='FAILED') AS failedFiles, sum(parse_state='RECOVERED') AS recoveredFiles
     FROM file GROUP BY source_root`).all() as Array<{ root: string; indexedFiles: number; failedFiles: number; recoveredFiles: number }>;
@@ -130,14 +134,19 @@ export function publishIndexCoverage(
       : baselineComplete && oldRoots.has(root) ? indexedFiles : previous[root]?.discoveredFiles ?? 0;
     const covered = (discovered !== undefined || baselineComplete && oldRoots.has(root)) && discoveredFiles === indexedFiles && failedFiles === 0 && Number(row?.recoveredFiles ?? 0) === 0;
     if (!covered) complete = false;
-    const state = covered ? "COMPLETE" : discovered === undefined && readMeta(db, "buildState") === "BUILDING" ? "BUILDING" : "DEGRADED";
+    const state = covered ? "COMPLETE" : "DEGRADED";
     upsert.run(root, state, generation);
     counts[root] = { discoveredFiles, indexedFiles, failedFiles, recoveredFiles: Number(row?.recoveredFiles ?? 0), extractorVersion: computeExtractorVersion() };
   }
   writeMeta(db, "sourceRootCounts", JSON.stringify(counts));
   writeMeta(db, "indexedGeneration", String(generation));
-  writeMeta(db, "buildState", complete ? "READY" : readMeta(db, "buildState") === "BUILDING" && discovered === undefined ? "BUILDING" : "DEGRADED");
-  if (discovered !== undefined) writeMeta(db, "coverageRevision", "1");
+  // Every caller publishes a finished job: a delta's own BUILDING phase marker
+  // is not a cold build to resume (compatibleDeltaBase rejects BUILDING bases).
+  writeMeta(db, "buildState", complete ? "READY" : "DEGRADED");
+  if (discovered !== undefined) {
+    writeMeta(db, "coverageRevision", "1");
+    db.prepare("DELETE FROM meta WHERE key=?").run(COVERAGE_GAP);
+  }
   return refreshIndexCounts(db);
 }
 

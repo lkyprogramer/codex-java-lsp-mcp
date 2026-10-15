@@ -20,6 +20,7 @@
 | D10 | 上述删除后无读取者的 env/config（逐项盘点，如 `JAVA_LSP_BUILDER_IDLE_MS`）、重复缓存根别名/旧 installer 分支 | MAC-08、MAC-14、MAC-17 | 当前 canonical 配置、runtime、test/env filter、安装器与文档一致；不保留空壳兼容选项 |
 | D11 | **计划层**：旧P3 family共享JDT同URI overlay；未把它声称成已有实现 | 本手册、MAC-16 | 计划撤销；真实专用session零串扰，若后来发现实现另登记实际调用点 |
 | D12 | **计划层+独立代码子项**：旧P0→v9→v10强制顺序/旧阶段任务为计划撤销；比较器旧pilot隐含输入是已存在代码 | 本手册；代码子项MAC-10 | 计划不再强制双格式部署；比较器另提供真实diff；提前新版本按§3.1选择 |
+| D13 | **代码**：`kg_summary`表与`src/java-knowledge/method-summary.ts`（`fillMethodSummaries`、`summariesByMethodId`；无产品读取者，可由`kg_edge`推导）；`kg_node.owner_sym`、`kg_edge.file_sym/owner_sym`及meta中的额外owner JSON；`search_doc.content_hash`（证据hash改为读时取`file`/`mybatis_resource`当前行） | MAC-05（schema v13） | owner改为`kg_node_owner`/`kg_edge_owner`关系表并按最后一个owner释放；源码无上述名称；`checkIndexInvariants`的owner/反向边/xor/df项0违例；delta与独立full逻辑一致 |
 
 MAC-14输出`removed-paths.json`，区分`CODE`与`PLAN`：代码项记录真实定义/调用者/测试迁移/rg与构建结果；计划项记录旧commit章节、新合同和无对应当前实现的核查，不要求不存在的源码删除diff。D12拆开记录其代码子项。源码、脚本中出现历史名称必须逐个解释为离线 baseline driver/历史 fixture/明确的负向断言；不能只用“文件仍在但不会调用”交差。历史文档提及旧名不要求删除。
 

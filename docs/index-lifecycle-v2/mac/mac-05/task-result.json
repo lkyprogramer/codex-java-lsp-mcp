@@ -1,0 +1,221 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-05",
+  "gateId": "G05",
+  "status": "PASS",
+  "dependency": {
+    "head": "4daafb24658efada984b762ced7b855e3c339068",
+    "requiredGates": [
+      "G02A",
+      "G03A",
+      "G04"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "72f9caaff731a922ed1a7362b0996b2faad0f426b613f29f6a272bcf383cabcd",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "15de32277669dbdffb65fa9e1ee95a1f5b411e243638dcc0abdafe8bac56d973",
+    "distInventorySha256": "6ab0654a592e0573871ee3c33c0d3f0ca939c595cbfe82ddb6854eebe22ae220",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "main-checkout-fix",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/main-checkout-fix/result.json",
+      "sourceDigest": "72f9caaff731a922ed1a7362b0996b2faad0f426b613f29f6a272bcf383cabcd",
+      "commands": 4,
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "elapsedMs": 13198,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=history tier checkout|full-delta-driver-chains",
+        "scripts/ilv2-mac-full-delta.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "frozen-input-preflight",
+      "file": "input-preflight.json",
+      "sha256": "32ce02d3185d84f259e2710ab876f896d946038aeb8b0336773720e41a8635a9",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "prior-result-preserved",
+      "file": "prior-task-result.json",
+      "sha256": "29f71e6e82890ab16a554e79daaa61861aa75d22e1e41741618312563b01d9fc",
+      "status": "IN_PROGRESS",
+      "provenance": null
+    },
+    {
+      "name": "earlier-unaffected-check-provenance",
+      "file": "unaffected-evidence-reuse.json",
+      "sha256": "2501f76ea1369c6baba556b04a00fbdcfe76d12335b0eb1522af216bc3470492",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "runner-fix-provenance",
+      "file": "runner-only-reuse.json",
+      "sha256": "bc36add65723aba6bd12a6adcd513783f810802e32bf6cc4f2f7611432b189e4",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "final-source-and-scoped-tests",
+      "file": "final-source-review.json",
+      "sha256": "2bb4386a2e0e0b4d56ca44d435aa3510740ed744276177eace1ce7fb0ff140d7",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-three-repository-check",
+      "file": "independent-three-repo-review.json",
+      "sha256": "a4668b4984fffa50a0b99ac10b37b9cd6df1ec1d8f338ae13124a3f6da521676",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "four-repository-correctness",
+      "file": "correctness-summary.json",
+      "sha256": "ed81467cd7d5efed8b30cce394c6ba1aeacbd6934ef5c36fab9344e47917ac3c",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "prior-resource-exit-before-performance",
+      "file": "resource-exit.json",
+      "sha256": "285a8871762e3c6e5e26ba443587a5dfec2ebb0a4cdae0a2e64eaaacd0c33160",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "old-run-archive-and-cleanup-independent",
+      "file": "old-cleanup-independent.json",
+      "sha256": "78dc47d642cf3e2a8de9ccec834dadf307e15e3151236e8fa2a21a02e0681313",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "performance-prerequisite-diagnostics",
+      "file": "performance-prerequisite-summary.json",
+      "sha256": "2b8f3c552956f593fd66ccb2717a1c15d5791ef31f0064e389adc95f675c0e2d",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "four-file-independent-source-review",
+      "file": "runner-performance-source-review.json",
+      "sha256": "327fefb7adcf1aff6ddd3a177e41e07c3c256cb9bfde6963e04b59bf301e3a9f",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "four-repo-history-input-byte-equivalence",
+      "file": "history-materializer-equivalence-review.json",
+      "sha256": "7d83ab8a6aa40d66b94d7c82e24641adc43de81361345fe60ae8c5ebbf5ab930",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "prior-correctness-independent-review",
+      "file": "prior-correctness-review.json",
+      "sha256": "e78e6c849ee4e9b9b3e9d5d2592c052c1c8c9bba1ac3a4a12b45f7abd4eb5116",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "final-candidate-g05-normal-matrix",
+      "file": "g05-gate-summary.json",
+      "sha256": "6ccbd1929621efcbf8d217d7431956f7e9a0ad38abc603766f9046af2ae41602",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-current-resource-archive-closeout",
+      "file": "closeout/independent-resource-archive-review.json",
+      "sha256": "f96cd7cbdb074a11f1b118cd31f99e65c8799960241c19fbf34de1d3d4cb8433",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "e3280da7cbfa8af62566ea49497c0e123238b058672c0f8e02a1767ca1520e27",
+    "registeredPids": 92,
+    "ownedGroups": 4,
+    "launchdJobs": 4,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-05/20261015T135800Z/closeout/raw-evidence.tar.gz",
+      "sha256": "e49ac18705ecf2bec9d6641bf3c9eba8b0e8fef2da5c7af300a5440e45066a75",
+      "fileCount": 312,
+      "bytes": 170298595,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "5f099335703ab1289c779128a73840d4307bf3bd75e4a713e99b4466e21a9927",
+      "source": "72f9caaff731a922ed1a7362b0996b2faad0f426b613f29f6a272bcf383cabcd",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "ba8a60f48875ca568cd10200e580836972fe2c4dd5c2c7e04fcb10623c725c47",
+  "notClaimed": [
+    "Other three repositories retain original107936b1 correctness matrices, reused only by explicit product/source/input-byte equivalence; not rerun on72f9",
+    "Other three repositories native clone and performance were not retested and are not PASS",
+    "Physical COW/extent sharing, publisher, GC, tracker, JDT and production acceptance are outside G05",
+    "Real-repository XML/build-file changes are held at HEAD; affected resource/closure behavior is covered by the separately identified targeted checks",
+    "Unrelated whole-repository tests were not rerun; historical checks retain their own source and raw failure provenance",
+    "No single50/50 final run: earlier49PASS/1FAIL and two-case repair have one overlapping case; no summed pass count",
+    "Binding-only zero-facts writes remain MAC-07 + MAC-08B; racy-stat remains MAC-03B",
+    "Pre-optimization BYTE_COPY CPU diagnostics and earlier above-target timings are not gate evidence; macOS internal native-start root cause remains unproved"
+  ],
+  "next": "Stop after the MAC-05 local commit. Manual next card is MAC-06A; MAC-03B must complete before MAC-07. No later card was started.",
+  "authorization": {
+    "correctnessFirst": "User explicitly chose correctness first and performance later; no permission expansion or performance gate waiver",
+    "performanceNow": "User explicitly enabled performance testing and authorized per-file-verified archive cleanup of old run20261015T064909Z; no gate waiver"
+  },
+  "notes": {
+    "correctness": "Original107936b1 four-repository correctness PASS is retained under its identity. Three-repo results are reused by independently checked product/input equivalence; final72f9 lishu normal gate completed all11 steps, fresh fulls, chain/oracle and full2 injection/determinism PASS.",
+    "targetedTests": "Original 261 affected checks remain historical evidence. After closure changes 44/44 ran; final membership batch49/1 retained. Only failed directory case and membership case reran2/2 on final source; no count sums. Current performance prerequisite batch:12PASS/1FAIL (Git batch filtered-size mismatch), preserved. Standard checkout repair2/2 PASS on source72f9; product methodsNamed4/4 on XPZ retained with its source provenance. No summed final test count.",
+    "closedDefects": [
+      "File-wide invalidation replaced by resolved declaration propagation in the existing fixpoint, with member-list and inheritance dependencies retained",
+      "Explicit refresh now obeys full source membership; original192 historical input paths unchanged",
+      "Directory input errors still fail and mark coverage DEGRADED"
+    ],
+    "closure": "lishu-v2 actual20/192 loads yield closure79/359; earlier427/402 and extra-three-file falsifiers remain preserved as diagnostics",
+    "resourceExit": "Final closeout PASS: 92PIDs, 4ownedgroups, 4launchdjobs; actual exit/quota/argv scan verified; no unregistered paths or expired bytes.",
+    "history": "Prior task result and validation-index preserve original failures; no failure record overwritten as PASS",
+    "pendingArtifacts": [],
+    "oldCleanup": {
+      "run": "20261015T064909Z",
+      "status": "PASS",
+      "archiveSha256": "7f984cd2e5bf7fe25c9b646ea8f676d02fb3d2962afad4c05a99a232eef61dab",
+      "files": 180,
+      "perFilePathSizeSha256": "PASS",
+      "independentReview": "old-cleanup-independent.json",
+      "rawAndBulkOriginals": "DELETED_EXACT_MANIFEST_PATHS",
+      "archiveSummariesAndHistoricalFailures": "RETAINED"
+    },
+    "commit": "Local commit is permitted only after generated G05PASS and staged-blob scan/diff checks; no push",
+    "performance": "Final72f9 normal fresh matrix PASS with native clone. Full170052.311625/161097.388958ms, noop859.552667/379.109042ms, real20 median4791.260375ms(3 idle samples), real192 14107.342083ms(1 idle sample); page ratios.032203147/.104984927; chain/oracle/full2 deterministic PASS.",
+    "correctnessReuse": "Original107936b1 four-repository matrices are retained under their original identity. Final72f9 product differs only by the owner-prefix comparison, with96112 methodId prefixes checked and no violations. Eight actual tiers711path/states,448 present-file byte comparisons and263 absent states match; old three-repo matrices are reused under explicit equivalence, not claimed as rerun. Final lishu normal G05 matrix completed PASS on72f9."
+  },
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-05/20261015T135800Z"
+}

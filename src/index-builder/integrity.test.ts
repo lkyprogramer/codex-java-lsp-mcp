@@ -48,16 +48,21 @@ test("repeat cold build survives close/reopen/serve schema check and partial ref
 });
 
 for (const state of ["BUILDING", "DEGRADED"]) {
-  test(`partial and empty refresh cannot promote ${state}; complete reconcile recovers`, async () => {
+  test(`unattested ${state} base explicitly falls back to full before promotion`, async () => {
     const f = await fixture();
     try {
       writeMeta(f.db, "buildState", state);
       for (const changed of [["src/main/java/A.java"], []]) {
+        writeMeta(f.db,"buildState",state);
+        f.db.prepare("DELETE FROM meta WHERE key='coverageRevision'").run();
         const result = await applyBuilderJob({ repoRoot: f.repo, db: f.db, job: { kind: "refresh", changed } });
         assert.equal(result.ok, true, result.error);
-        assert.notEqual(readMeta(f.db, "buildState"), "READY");
+        assert.equal(result.stages?.mode,"full");
+        assert.equal(result.stages?.reason,"no compatible published base");
+        assert.equal(result.files,2);
+        assert.equal(readMeta(f.db, "buildState"), "READY");
         const complete = f.db.prepare("SELECT root FROM source_root_coverage WHERE state='COMPLETE'").all();
-        assert.equal(complete.length, 0);
+        assert.equal(complete.length, 2);
       }
       const result = await applyBuilderJob({ repoRoot: f.repo, db: f.db, job: { kind: "reconcile" } });
       assert.equal(result.ok, true, result.error);
@@ -84,6 +89,18 @@ test("failed parses and failed refresh never publish complete coverage; reconcil
     const failed = await applyBuilderJob({ repoRoot: f.repo, db: f.db, job: { kind: "refresh", changed: ["src/main/java"] } });
     assert.equal(failed.ok, false);
     assert.equal(readMeta(f.db, "buildState"), "DEGRADED");
+    const completeRoots = () => Number((f.db.prepare("SELECT count(*) AS n FROM source_root_coverage WHERE state='COMPLETE'").get() as { n: number }).n);
+    assert.equal(completeRoots(), 0, "no root stays COMPLETE after a lost job");
+    // The failed job's rollback restored the facts, not the coverage: a later
+    // successful delta does not certify the tree, only a reconcile does.
+    await writeFile(path.join(f.repo, "src/main/java/A.java"), "class A { void a() {} void b() {} }");
+    const refreshed = await applyBuilderJob({ repoRoot: f.repo, db: f.db, job: { kind: "refresh", changed: ["src/main/java/A.java"] } });
+    assert.equal(refreshed.ok, true, refreshed.error);
+    assert.equal(refreshed.stages?.mode, "delta");
+    assert.equal(readMeta(f.db, "buildState"), "DEGRADED");
+    assert.equal(completeRoots(), 0);
+    assert.equal((await applyBuilderJob({ repoRoot: f.repo, db: f.db, job: { kind: "reconcile" } })).ok, true);
+    assert.equal(readMeta(f.db, "buildState"), "READY");
   } finally { close(f.db); await rm(f.repo, { recursive: true, force: true }); }
 });
 
@@ -140,7 +157,7 @@ test("recovery rebuild resets graph digest metadata with the derived rows", asyn
     await runSqlColdBuild({ repoRoot: f.repo, db: f.db });
     const digest = new SqlKnowledgeGraph(f.db).digest();
     writeMeta(f.db, "buildState", "BUILDING");
-    f.db.exec("DELETE FROM kg_summary; DELETE FROM kg_edge; DELETE FROM kg_node;");
+    f.db.exec("DELETE FROM kg_edge_owner; DELETE FROM kg_node_owner; DELETE FROM kg_edge; DELETE FROM kg_node;");
     assert.equal((await applyBuilderJob({ repoRoot: f.repo, db: f.db, job: { kind: "reconcile" } })).ok, true);
     assert.equal(new SqlKnowledgeGraph(f.db).digest(), digest);
   } finally { close(f.db); await rm(f.repo, { recursive: true, force: true }); }
@@ -215,13 +232,21 @@ for (const changeJava of [false, true]) test(`cold resolve resume reconciles XML
     assert.equal(readMeta(f.db, "buildState"), "READY");
     assert.equal(readMyBatisResource(f.db, "src/main/resources/delete.xml"), undefined);
     assert.equal(readMyBatisResource(f.db, "src/main/resources/replace.xml"), undefined);
+    const methods = readBundle(f.db, "src/main/java/A.java")!.methods;
     for (const [name, id] of [["change", "b"], ["add", "c"]]) {
       const rel = `src/main/resources/${name}.xml`;
       const hash = createHash("sha256").update(xml(id)).digest("hex");
-      assert.equal(readMyBatisResource(f.db, rel)?.contentHash, hash);
-      const docs = f.db.prepare(`SELECT d.content_hash AS hash FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text=?`).all(rel) as Array<{ hash: string }>;
-      assert.ok(docs.length > 0, rel);
-      assert.ok(docs.every(doc => doc.hash === hash), rel);
+      const resource = readMyBatisResource(f.db, rel);
+      assert.equal(resource?.contentHash, hash);
+      // Evidence hashes are read through the source row, so a stale document
+      // shows as a declaration or range the current statements do not derive
+      // (change.xml's old statement `a` binds A.a, not A.b).
+      const expected = resource!.statements.flatMap(statement => methods.filter(method => method.name === statement.id)
+        .map(method => `${method.methodId}|${statement.range!.start.line}|${statement.range!.end.line}`));
+      const docs = (f.db.prepare(`SELECT ds.text||'|'||d.start_line||'|'||d.end_line AS doc FROM search_doc d JOIN sym s ON s.id=d.source_path_sym
+        JOIN sym ds ON ds.id=d.declaration_sym WHERE s.text=? ORDER BY doc`).all(rel) as Array<{ doc: string }>).map(row => row.doc);
+      assert.ok(expected.length > 0, rel);
+      assert.deepEqual(docs, expected.sort(), rel);
     }
     const stale = f.db.prepare(`SELECT d.id FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text IN (?,?)`).all("src/main/resources/delete.xml", "src/main/resources/replace.xml");
     assert.equal(stale.length, 0);

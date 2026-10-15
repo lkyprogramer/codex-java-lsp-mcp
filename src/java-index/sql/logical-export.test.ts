@@ -45,7 +45,7 @@ test("logical export ignores sym ids, rowids, generations and insertion order", 
       assert.deepEqual(diffLogical(exportLogical(left), exportLogical(right)), []);
       assert.equal(logicalDigest(left).digest, logicalDigest(right).digest);
       const tables = logicalDigest(left).tables;
-      for (const table of ["file", "type", "method", "edge", "kg_node", "kg_edge", "entity", "search_doc", "mybatis_resource", "resource_scan"]) {
+      for (const table of ["file", "type", "method", "edge", "kg_node", "kg_node_owner", "kg_edge", "kg_edge_owner", "entity", "search_doc", "mybatis_resource", "resource_scan"]) {
         assert.ok(tables[table]!.rows > 0, `${table} exported no rows`);
       }
       assert.equal(tables.sym, undefined);
@@ -62,7 +62,7 @@ test("logical export ignores sym ids, rowids, generations and insertion order", 
       // A posting names its document by identity, not by the surrogate search_doc.id.
       const docColumn = exported.tables.search_doc_token!.columns.indexOf("doc");
       const doc = JSON.parse(String((JSON.parse(exported.tables.search_doc_token!.rows[0]!) as unknown[])[docColumn])) as unknown[];
-      assert.equal(doc.length, 6);
+      assert.equal(doc.length, 5);
       assert.match(String(doc[0]), /^(method|type|field):/);
       // The shared facts database never names the checkout it was built from.
       for (const [table, { rows }] of Object.entries(exported.tables)) assert.equal(rows.some(row => row.includes(repo)), false, table);
@@ -126,15 +126,17 @@ test("a line-shifting edit re-indexes its search documents without growing the s
       const docs = db.prepare("SELECT count(*) AS n FROM search_doc").get()?.n;
       const service = path.join(repo, serviceRel);
       // Every document range of the file moves and its content hash changes; no name changes.
+      const postings = db.prepare("SELECT count(*) AS n FROM search_doc_token").get()?.n;
       await writeFile(service, `\n\n${await readFile(service, "utf8")}`);
       const result = await applyBuilderJob({ repoRoot: repo, db, job: { id: 1, kind: "refresh", generation: 2, changed: [serviceRel] } });
       assert.equal(result.ok, true, result.error);
       assert.equal(db.prepare("SELECT count(*) AS n FROM search_doc").get()?.n, docs);
+      assert.equal(db.prepare("SELECT count(*) AS n FROM search_doc_token").get()?.n, postings);
       assert.equal(count(), before);
       // The identity key still rejects a duplicate document, as the old sym primary key did.
-      const row = db.prepare("SELECT declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len FROM search_doc LIMIT 1").get() as Record<string, number | string>;
-      assert.throws(() => db.prepare("INSERT INTO search_doc(declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(row.declaration_sym!, row.path_sym!, row.source_path_sym!, row.content_hash!, row.kind!, row.start_line!, row.end_line!, row.token_len!), /UNIQUE constraint/);
+      const row = db.prepare("SELECT declaration_sym, path_sym, source_path_sym, kind, start_line, end_line, token_len FROM search_doc LIMIT 1").get() as Record<string, number | string>;
+      assert.throws(() => db.prepare("INSERT INTO search_doc(declaration_sym, path_sym, source_path_sym, kind, start_line, end_line, token_len) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(row.declaration_sym!, row.path_sym!, row.source_path_sym!, row.kind!, row.start_line!, row.end_line!, row.token_len!), /UNIQUE constraint/);
     } finally {
       close(db);
     }
@@ -160,6 +162,14 @@ test("dangling references are rejected by SQLite or by the export", async () => 
       assert.throws(() => logicalDigest(docs), /orphan reference in search_doc_token/);
     } finally {
       close(docs);
+    }
+    const owned = await build(repo);
+    try {
+      owned.exec("PRAGMA foreign_keys=OFF");
+      owned.prepare("UPDATE kg_edge_owner SET edge_id=999999999 WHERE (edge_id, owner_sym)=(SELECT edge_id, owner_sym FROM kg_edge_owner LIMIT 1)").run();
+      assert.throws(() => logicalDigest(owned), /orphan reference in kg_edge_owner/);
+    } finally {
+      close(owned);
     }
   });
 });

@@ -83,9 +83,14 @@ export async function parseJavaSourceFile(args: {
     args.inputPath,
     args.layout
   );
-  const readablePath = await resolvedPathWithinRepo(absolutePath, args.resolvedRepoRoot);
-  if (!readablePath) throw new Error(`Java source resolves outside repo root: ${args.inputPath}`);
-  const capture = args.capture ?? await captureSource(args.resolvedRepoRoot, readablePath);
+  let capture = args.capture;
+  if (capture) {
+    if (capture.repoRoot !== args.resolvedRepoRoot || capture.inputPath !== absolutePath) throw new Error("Captured source binding mismatch");
+  } else {
+    const readablePath = await resolvedPathWithinRepo(absolutePath, args.resolvedRepoRoot);
+    if (!readablePath) throw new Error(`Java source resolves outside repo root: ${args.inputPath}`);
+    capture = await captureSource(args.resolvedRepoRoot, absolutePath);
+  }
   const { bytes, contentHash } = capture;
   const content = bytes.toString("utf8");
   const { tree } = refreshParseTree(args.cache, args.backend, relativePath, content);
@@ -102,9 +107,10 @@ export async function parseJavaSourceFile(args: {
     generation: args.generation
   };
   const extracted = extractFromParsedTree(input, tree);
-  for (const type of extracted.types) type.capturedSignature = signatureText(content, type.range.start.line, type.range.end.line);
+  const sourceLines=content.split(/\r?\n/);
+  for (const type of extracted.types) type.capturedSignature = signatureText(sourceLines, type.range.start.line, type.range.end.line);
   for (const method of extracted.methods) {
-    method.capturedSignature = signatureText(content, method.range.start.line, method.bodyRange?.start.line ?? method.range.end.line);
+    method.capturedSignature = signatureText(sourceLines, method.range.start.line, method.bodyRange?.start.line ?? method.range.end.line);
   }
   return {
     ...extracted,

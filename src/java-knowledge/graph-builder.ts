@@ -7,32 +7,22 @@ import { addCallEdges } from "./call-resolver.js";
 import { isStructuralEdgeKind } from "./edge-kinds.js";
 import { addFrameworkEdges } from "./framework-edge-builder.js";
 import { addPersistenceEdges } from "./persistence-edge-builder.js";
-import { emptyMethodSummary } from "./method-summary.js";
 import {
   KNOWLEDGE_REPOSITORY_ID,
   knowledgeEdgeId,
   knowledgeExternalTypeId,
   knowledgeFileId,
+  knowledgeIdForType,
   knowledgeMemberId,
   knowledgeModuleId,
-  knowledgeSourceRootId,
-  knowledgeTypeId
+  knowledgeSourceRootId
 } from "./entity-id.js";
+import { GraphFragment } from "./graph-fragment.js";
 import type { KnowledgeGraphStore } from "./graph-reader.js";
 import type { GraphEdge, GraphNode, NodeKind } from "./schema.js";
 
 function relativePathOfFileId(fileId: string): string {
   return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
-}
-
-function typeNameOf(type: JavaTypeFacts): string {
-  // Local types (and their nested types) have position-based JavaIndex IDs;
-  // their simple names may repeat in different methods of the same file.
-  return type.fqn || type.typeId;
-}
-
-export function knowledgeIdForType(type: JavaTypeFacts): string {
-  return knowledgeTypeId(relativePathOfFileId(type.fileId), typeNameOf(type));
 }
 
 export function knowledgeIdForMethod(method: JavaMethodFacts, owner: JavaTypeFacts | undefined): string {
@@ -65,21 +55,33 @@ function edge(kind: GraphEdge["kind"], fromId: string, toId: string, generation:
 export class KnowledgeGraphBuilder {
   constructor(private readonly graph: KnowledgeGraphStore) {}
 
-  rebuildFromStore(store: FactsReader & FactsIter, generation: number): void {
+  /** An empty graph still has its repository root, as every delta leaves it. */
+  reset(generation: number): void {
     this.graph.clear();
     this.graph.generation = generation;
     this.ensureRepository(generation);
+  }
+
+  rebuildFromStore(store: FactsReader & FactsIter, generation: number): void {
+    this.reset(generation);
     for (const file of store.iterFiles()) {
       const bundle = store.files([file.relativePath])[0];
-      if (bundle) this.addBundle(bundle, store, generation);
+      if (bundle) this.appendFile(bundle, store, generation);
     }
   }
 
+  /** Add one file's rows. Full and delta share this: the store applies the
+   * file's fragment as a set, so a fresh graph only inserts. */
+  appendFile(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
+    this.replaceFile(bundle, store, generation);
+  }
+
   replaceFile(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
-    this.graph.removeFiles([bundle.file.relativePath]);
     this.graph.generation = Math.max(this.graph.generation, generation);
     this.ensureRepository(generation);
-    this.addBundle(bundle, store, generation);
+    const fragment = new GraphFragment(bundle.file.relativePath);
+    this.addBundle(fragment, bundle, store, generation);
+    this.graph.replaceOwner(fragment);
   }
 
   removeFiles(relativePaths: readonly string[]): void {
@@ -87,29 +89,30 @@ export class KnowledgeGraphBuilder {
     this.graph.generation += 1;
   }
 
+  // The repository root is the only ownerless row: it exists in every graph.
   private ensureRepository(generation: number): void {
     if (!this.graph.nodesById.has(KNOWLEDGE_REPOSITORY_ID)) {
       this.graph.upsertNode(node(KNOWLEDGE_REPOSITORY_ID, "REPOSITORY", generation, { simpleName: "repository" }));
     }
   }
 
-  private addBundle(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
+  private addBundle(graph: GraphFragment, bundle: JavaFileBundle, store: FactsReader, generation: number): void {
     const owner = bundle.file.relativePath;
     const fileId = knowledgeFileId(owner);
     const moduleId = knowledgeModuleId(bundle.file.module);
     const rootId = knowledgeSourceRootId(bundle.file.sourceRoot);
-    this.graph.upsertNode(node(moduleId, "MODULE", generation, { simpleName: bundle.file.module }));
-    this.graph.upsertNode(node(rootId, "SOURCE_ROOT", generation, { relativePath: bundle.file.sourceRoot }));
-    this.graph.upsertNode(node(fileId, "FILE", generation, {
+    // Hierarchy above FILE is shared: every file of a module owns the module
+    // and its CONTAINS edges, so they go with the module's last file.
+    graph.upsertNode(node(moduleId, "MODULE", generation, { simpleName: bundle.file.module }), owner);
+    graph.upsertNode(node(rootId, "SOURCE_ROOT", generation, { relativePath: bundle.file.sourceRoot }), owner);
+    graph.upsertNode(node(fileId, "FILE", generation, {
       relativePath: owner,
       simpleName: owner.split("/").pop(),
       javaIndexId: bundle.file.fileId
     }), owner);
-    // Hierarchy above FILE is repo-global; owning it per file would drop
-    // MODULE/SOURCE_ROOT rows when a sibling in the same module is edited.
-    this.graph.addEdge(edge("CONTAINS", KNOWLEDGE_REPOSITORY_ID, moduleId, generation));
-    this.graph.addEdge(edge("CONTAINS", moduleId, rootId, generation));
-    this.graph.addEdge(edge("CONTAINS", rootId, fileId, generation, owner), owner);
+    graph.addEdge(edge("CONTAINS", KNOWLEDGE_REPOSITORY_ID, moduleId, generation), owner);
+    graph.addEdge(edge("CONTAINS", moduleId, rootId, generation), owner);
+    graph.addEdge(edge("CONTAINS", rootId, fileId, generation, owner), owner);
 
     const typeByJavaId = new Map(bundle.types.map(type => [type.typeId, type]));
     const knowledgeByJavaId = new Map<string, string>();
@@ -118,15 +121,15 @@ export class KnowledgeGraphBuilder {
     for (const type of bundle.types) {
       const typeId = knowledgeIdForType(type);
       knowledgeByJavaId.set(type.typeId, typeId);
-      this.graph.upsertNode(node(typeId, "TYPE", generation, {
+      graph.upsertNode(node(typeId, "TYPE", generation, {
         relativePath: owner,
         simpleName: type.simpleName,
         javaIndexId: type.typeId
       }), owner);
       if (type.enclosingTypeId && typeByJavaId.has(type.enclosingTypeId)) {
-        this.graph.addEdge(edge("CONTAINS", knowledgeIdForType(typeByJavaId.get(type.enclosingTypeId)!), typeId, generation, owner), owner);
+        graph.addEdge(edge("CONTAINS", knowledgeIdForType(typeByJavaId.get(type.enclosingTypeId)!), typeId, generation, owner), owner);
       } else {
-        this.graph.addEdge(edge("CONTAINS", fileId, typeId, generation, owner), owner);
+        graph.addEdge(edge("CONTAINS", fileId, typeId, generation, owner), owner);
       }
     }
 
@@ -135,25 +138,25 @@ export class KnowledgeGraphBuilder {
       const typeId = ownerType ? knowledgeIdForType(ownerType) : knowledgeExternalTypeId(field.ownerTypeId);
       const fieldId = knowledgeMemberId(typeId, field.name, field.name);
       knowledgeByJavaId.set(field.fieldId, fieldId);
-      this.graph.upsertNode(node(fieldId, "FIELD", generation, {
+      graph.upsertNode(node(fieldId, "FIELD", generation, {
         relativePath: owner,
         simpleName: field.name,
         javaIndexId: field.fieldId
       }), owner);
-      this.graph.addEdge(edge("DECLARES", typeId, fieldId, generation, owner), owner);
+      graph.addEdge(edge("DECLARES", typeId, fieldId, generation, owner), owner);
     }
 
     for (const method of bundle.methods) {
       const ownerType = typeByJavaId.get(method.ownerTypeId) ?? store.typesById.get(method.ownerTypeId);
       const methodId = knowledgeIdForMethod(method, ownerType);
       knowledgeByJavaId.set(method.methodId, methodId);
-      this.graph.upsertNode(node(methodId, method.constructor ? "CONSTRUCTOR" : "METHOD", generation, {
+      graph.upsertNode(node(methodId, method.constructor ? "CONSTRUCTOR" : "METHOD", generation, {
         relativePath: owner,
         simpleName: method.name,
         javaIndexId: method.methodId
       }), owner);
       if (ownerType) {
-        this.graph.addEdge(edge("DECLARES", knowledgeIdForType(ownerType), methodId, generation, owner), owner);
+        graph.addEdge(edge("DECLARES", knowledgeIdForType(ownerType), methodId, generation, owner), owner);
       }
       // PARAMETER/LOCAL/STATEMENT stay reserved kinds. N1 does not materialize
       // them; N2b fills parameters that actually participate in data-flow.
@@ -162,19 +165,19 @@ export class KnowledgeGraphBuilder {
     const ordinals = new Map<string, number>();
     for (const staticEdge of bundle.edges) {
       if (!isStructuralEdgeKind(staticEdge.kind)) continue;
-      const fromId = this.resolveEndpoint(staticEdge.fromId, knowledgeByJavaId, store);
-      const toId = this.resolveEndpoint(staticEdge.toId, knowledgeByJavaId, store);
+      const fromId = this.resolveEndpoint(graph, staticEdge.fromId, knowledgeByJavaId, store, generation);
+      const toId = this.resolveEndpoint(graph, staticEdge.toId, knowledgeByJavaId, store, generation);
       if (!fromId || !toId) continue;
       const key = `${staticEdge.kind}:${fromId}->${toId}`;
       const ordinal = ordinals.get(key) ?? 0;
       ordinals.set(key, ordinal + 1);
-      this.graph.addEdge(edge(staticEdge.kind, fromId, toId, generation, owner, ordinal), owner);
+      graph.addEdge(edge(staticEdge.kind, fromId, toId, generation, owner, ordinal), owner);
       if (staticEdge.kind === "IMPORTS") {
         const fromFile = bundle.file;
         const toType = store.typesById.get(staticEdge.toId);
         const toModule = toType ? store.filesByPath.get(relativePathOfFileId(toType.fileId))?.module : undefined;
         if (toModule && toModule !== fromFile.module) {
-          this.graph.addEdge(
+          graph.addEdge(
             edge("MODULE_DEPENDS_ON", knowledgeModuleId(fromFile.module), knowledgeModuleId(toModule), generation, owner),
             owner
           );
@@ -182,37 +185,18 @@ export class KnowledgeGraphBuilder {
       }
     }
 
-    const resolve = (javaIndexId: string) => this.resolveEndpoint(javaIndexId, knowledgeByJavaId, store);
-    addCallEdges(this.graph, bundle, store, generation, resolve);
-    addFrameworkEdges(this.graph, bundle, store, generation, resolve);
-    addPersistenceEdges(this.graph, bundle, store, generation, resolve);
-    this.fillMethodSummaries(bundle, knowledgeByJavaId);
-  }
-
-  private fillMethodSummaries(bundle: JavaFileBundle, knowledgeByJavaId: Map<string, string>): void {
-    for (const method of bundle.methods) {
-      const methodId = knowledgeByJavaId.get(method.methodId);
-      if (!methodId) continue;
-      const summary = emptyMethodSummary(methodId);
-      for (const item of this.graph.successors(methodId)) {
-        if (item.kind === "CALLS_EXACT" || item.kind === "CONSTRUCTS" || item.kind === "METHOD_REFERENCE") {
-          summary.directCalls.push({ toId: item.toId, kind: item.kind });
-        } else if (item.kind === "CALLS_VIRTUAL" || item.kind === "DISPATCHES_TO") {
-          summary.virtualCalls.push({ toId: item.toId, kind: item.kind });
-        } else if (item.kind === "MYBATIS_METHOD_BINDS_STATEMENT" || item.kind === "REPOSITORY_MANAGES_ENTITY") {
-          summary.persistenceTouches.push(item.toId);
-        } else if (item.kind === "SPRING_INJECTS" || item.kind === "PUBLISHES_EVENT" || item.kind === "CONSUMES_EVENT" || item.kind === "SPRING_BEAN_BINDS_TO") {
-          summary.frameworkTouches.push(item.toId);
-        }
-      }
-      this.graph.summariesByMethodId.set(methodId, summary);
-    }
+    const resolve = (javaIndexId: string) => this.resolveEndpoint(graph, javaIndexId, knowledgeByJavaId, store, generation);
+    addCallEdges(graph, bundle, store, generation, resolve);
+    addFrameworkEdges(graph, bundle, store, generation, resolve);
+    addPersistenceEdges(graph, bundle, store, generation, resolve);
   }
 
   private resolveEndpoint(
+    graph: GraphFragment,
     javaIndexId: string,
     local: Map<string, string>,
-    store: FactsReader
+    store: FactsReader,
+    generation: number
   ): string | undefined {
     const hit = local.get(javaIndexId);
     if (hit) return hit;
@@ -231,9 +215,8 @@ export class KnowledgeGraphBuilder {
     if (javaIndexId.startsWith("external:") || javaIndexId.startsWith("type:")) {
       const name = javaIndexId.replace(/^external:/, "").replace(/^type:/, "");
       const id = knowledgeExternalTypeId(name);
-      if (!this.graph.nodesById.has(id)) {
-        this.graph.upsertNode(node(id, "TYPE", this.graph.generation, { simpleName: name.split(".").pop(), javaIndexId }));
-      }
+      // Owned by each referring file, so it goes with the last reference.
+      graph.upsertNode(node(id, "TYPE", generation, { simpleName: name.split(".").pop(), javaIndexId }), graph.owner);
       return id;
     }
     return undefined;

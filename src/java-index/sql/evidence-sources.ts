@@ -68,14 +68,13 @@ export function queryEvidenceSources(db: IndexDatabase, file: string, line: numb
       const declaration = symId(db, anchor.symbolId);
       if (declaration !== undefined) {
         let n = 0;
-        for (const row of prepareCached(db, `SELECT p.text AS path,d.content_hash,d.start_line,d.end_line,d.kind,r.facts AS resource_facts FROM search_doc d JOIN sym p ON p.id=d.source_path_sym JOIN mybatis_resource r ON r.path=p.text WHERE d.declaration_sym=? ORDER BY p.text,d.start_line,d.end_line,d.kind LIMIT 65`).iterate(declaration)) {
+        for (const row of prepareCached(db, `SELECT p.text AS path,d.start_line,d.end_line,d.kind,r.facts AS resource_facts FROM search_doc d JOIN sym p ON p.id=d.source_path_sym JOIN mybatis_resource r ON r.path=p.text WHERE d.declaration_sym=? ORDER BY p.text,d.start_line,d.end_line,d.kind LIMIT 65`).iterate(declaration)) {
           if (expired()) { partial("DEADLINE_EXCEEDED"); break; }
           if (++n > 64) { partial("DOCUMENT_SCAN_CAP"); break; }
           const resource = resourceFacts(row.resource_facts);
           if (!resource) continue;
           if (resource.parseState !== "COMPLETE") { partial("RESOURCE_PARSE_INCOMPLETE"); continue; }
-          if (resource.contentHash !== row.content_hash) { partial("RESOURCE_DOCUMENT_STALE"); continue; }
-          add({ relativePath: String(row.path), contentHash: String(row.content_hash), startLine: Number(row.start_line), endLine: Number(row.end_line), sourceKind: String(row.kind), relation: "declaration-document" });
+          add({ relativePath: String(row.path), contentHash: resource.contentHash, startLine: Number(row.start_line), endLine: Number(row.end_line), sourceKind: String(row.kind), relation: "declaration-document" });
         }
       }
     } else if (anchor.type?.fqn) {

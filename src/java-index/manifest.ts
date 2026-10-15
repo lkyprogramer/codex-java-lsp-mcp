@@ -63,6 +63,17 @@ export type DiscoveredJavaFile = {
   sourceRoot: string;
 };
 
+/** Membership of the full Java census, also used for explicit refresh paths. */
+export function javaSourceRoot(relativePath: string, layout: Pick<LayoutContext, "sourceRoots">): string | undefined {
+  const normalized = relativePath.replace(/\\/g, "/");
+  if (!normalized.endsWith(".java")) return undefined;
+  const root = layout.sourceRoots.map(item => item.relativePath.replace(/\\/g, "/"))
+    .sort((left, right) => right.length - left.length || left.localeCompare(right))
+    .find(item => normalized.startsWith(`${item}/`));
+  if (!root) return undefined;
+  return normalized.slice(root.length + 1).split("/").slice(0, -1).some(part => IGNORED_DIRECTORY_NAMES.has(part)) ? undefined : root;
+}
+
 export async function discoverJavaFiles(repoRoot: string, layout: LayoutContext): Promise<DiscoveredJavaFile[]> {
   await realpath(repoRoot);
   const files: DiscoveredJavaFile[] = [];

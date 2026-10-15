@@ -131,6 +131,22 @@ export function withTransaction<T>(db: IndexDatabase, fn: () => T): T {
   }
 }
 
+/** Keeps asynchronous capture/stages inside one writer transaction when serving
+ * still reads this inode. Never pass an async callback to withTransaction. */
+export async function withAsyncTransaction<T>(db: IndexDatabase, fn: () => Promise<T>): Promise<T> {
+  if (db.isTransaction) return fn();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const value=await fn();
+    db.exec("COMMIT");
+    return value;
+  } catch (error) {
+    try {db.exec("ROLLBACK");} catch { /* original failure wins */ }
+    for(const hook of rollbackHooks.get(db) ?? []) hook();
+    throw error;
+  }
+}
+
 const rollbackHooks = new WeakMap<IndexDatabase, Set<() => void>>();
 
 /** Per-connection caches of rows written inside a transaction register here to forget them on rollback. */

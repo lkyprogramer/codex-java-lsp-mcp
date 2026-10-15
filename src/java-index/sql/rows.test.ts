@@ -216,12 +216,11 @@ const TEXT_BLOB_ALLOW = new Set([
   "field.name", "field.facts",
   "method.name", "method.facts",
   "kg_node.simple_name",
-  "kg_summary.facts",
   "entity.kind", "entity.fqn", "entity.simple_name", "entity.simple_name_lc",
   "mybatis_resource.path", "mybatis_resource.namespace", "mybatis_resource.content_hash", "mybatis_resource.facts",
-  // T05: document kind is source metadata and content_hash pins each document
-  // to the file content it was derived from (freshness anchor).
-  "search_doc.kind", "search_doc.content_hash",
+  // T05: document kind is source metadata. Its freshness anchor is the source
+  // row's content_hash (file or mybatis_resource), not a copy (MAC-05).
+  "search_doc.kind",
   "source_root_coverage.root", "source_root_coverage.state",
   // R08 review: one row per resource XML ever examined (same shape as
   // mybatis_resource's path/hash), so reconcile can skip unchanged XML.

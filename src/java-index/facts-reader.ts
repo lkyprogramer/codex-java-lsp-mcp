@@ -31,6 +31,8 @@ export type FactsReader = {
   files(paths: readonly string[]): JavaFileBundle[];
   file(path: string): JavaFileFacts | undefined;
   methodsOfOwner(typeId: string): JavaMethodFacts[];
+  /** methodsOfOwner(typeId) named `name`, in order, when a reader can skip the rest. */
+  methodsNamed?(typeId: string, name: string): JavaMethodFacts[];
   typesByFqn(fqn: string): JavaTypeFacts[];
   declarationLocation(typeId: string): DeclarationLocation | undefined;
   implementers(typeId: string, limit?: number): JavaTypeFacts[];

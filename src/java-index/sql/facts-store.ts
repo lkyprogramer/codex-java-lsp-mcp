@@ -19,6 +19,7 @@ import { javaFileId, splitOwnerMemberKey } from "../stable-id.js";
 import { JavaNameResolver, locationOfFile, type DeclarationLocation, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
+import { BoundedCache } from "./bounded-cache.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { decodeFacts, readBundle, STATIC_EDGE_SELECT, staticEdgeFromSqlRow } from "./rows.js";
 import { internSym, symId } from "./sym.js";
@@ -96,9 +97,9 @@ export class SqlFactsStore {
   readonly typeIdsBySimpleName: PointLookup<ReadonlySet<string>>;
   readonly methodIdsByOwnerAndName: PointLookup<ReadonlySet<string>>;
   private readonly db: IndexDatabase;
-  private readonly lru = new Map<string, unknown>();
+  private readonly lru = new BoundedCache<string, unknown>(LRU_LIMIT);
 
-  constructor(db: IndexDatabase) {
+  constructor(db: IndexDatabase, private readonly options: { factsAreImmutable?: boolean } = {}) {
     this.db = db;
     this.typesById = new PointMap(id => this.cached(`type:${id}`, () => this.selectMemberFacts("type", id)), () => this.countTable("type"));
     this.methodsById = new PointMap(id => this.cached(`method:${id}`, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
@@ -136,20 +137,24 @@ export class SqlFactsStore {
 
   clearRequestCache(): void { this.lru.clear(); }
 
+  /** Drops what one file's rows fed after its facts were rewritten in place
+   * (updateBundleFacts): phase-1 resolution changes facts, never which
+   * declarations exist, their names, owners or fqns. */
+  forgetFile(bundle: JavaFileBundle): void {
+    this.lru.delete(`file:${bundle.file.relativePath}`);
+    for (const type of bundle.types) {
+      this.lru.delete(`type:${type.typeId}`);
+      this.lru.delete(`methodsOf:${type.typeId}`);
+    }
+    for (const method of bundle.methods) this.lru.delete(`method:${method.methodId}`);
+    for (const field of bundle.fields) this.lru.delete(`field:${field.fieldId}`);
+  }
+
   private cached<T>(key: string, load: () => T | undefined): T | undefined {
-    if (this.lru.has(key)) {
-      const hit = this.lru.get(key) as T;
-      this.lru.delete(key);
-      this.lru.set(key, hit);
-      return hit;
-    }
+    const hit = this.lru.get(key);
+    if (hit !== undefined) return hit as T;
     const value = load();
-    if (value === undefined) return undefined;
-    this.lru.set(key, value);
-    if (this.lru.size > LRU_LIMIT) {
-      const oldest = this.lru.keys().next().value;
-      if (oldest !== undefined) this.lru.delete(oldest);
-    }
+    if (value !== undefined) this.lru.set(key, value);
     return value;
   }
 
@@ -186,13 +191,35 @@ export class SqlFactsStore {
     return typeof row?.id === "string" ? row.id : undefined;
   }
 
+  /** Call resolution asks this once per call site; the list lives as long as its type's facts. */
   methodsOfOwner(typeId: string): JavaMethodFacts[] {
+    return this.cached(`methodsOf:${typeId}`, () => {
+      const type = this.typesById.get(typeId);
+      if (!type) return [];
+      const methods: JavaMethodFacts[] = [];
+      for (const methodId of type.methodIds) {
+        const method = this.methodsById.get(methodId);
+        if (method) methods.push(method);
+      }
+      return methods;
+    }) ?? [];
+  }
+
+  /** methodsOfOwner(typeId) named `name`, in order. Method ids are
+   * `method:<owner>#<name>(...)` (`<init>` for constructors), so only those
+   * facts are decoded. */
+  methodsNamed(typeId: string, name: string): JavaMethodFacts[] {
     const type = this.typesById.get(typeId);
     if (!type) return [];
+    // Every id in type.methodIds already belongs to this type. Comparing its
+    // long path/owner prefix again at every call site dominated edge building.
+    const memberOffset = `method:${typeId}#`.length;
+    const named = `${name}(`, constructors = "<init>(";
     const methods: JavaMethodFacts[] = [];
     for (const methodId of type.methodIds) {
+      if (!methodId.startsWith(named, memberOffset) && !methodId.startsWith(constructors, memberOffset)) continue;
       const method = this.methodsById.get(methodId);
-      if (method) methods.push(method);
+      if (method?.name === name) methods.push(method);
     }
     return methods;
   }
@@ -226,7 +253,7 @@ export class SqlFactsStore {
     const toSym = symId(this.db, typeId);
     const kindIds = this.existingSymIds(["IMPLEMENTS", "EXTENDS"]);
     if (toSym === undefined || kindIds.length === 0) {
-      this.clearRequestCache();
+      if (!this.options.factsAreImmutable) this.clearRequestCache();
       return [];
     }
     for (const row of prepareCached(
@@ -241,7 +268,7 @@ export class SqlFactsStore {
       results.push(type);
     }
     results.sort(compareTypes);
-    this.clearRequestCache();
+    if (!this.options.factsAreImmutable) this.clearRequestCache();
     return results.slice(0, limit);
   }
 

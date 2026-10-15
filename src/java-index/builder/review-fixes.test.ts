@@ -212,7 +212,12 @@ test("R08 review: reconcile skips unchanged XML by size+mtime, restamps mtime-on
   });
   const { db, dir } = await cold(root);
   try {
-    const plan = () => changedResources(db, root, probeLayout(root));
+    // The plan also carries its captures and discovery count; the decision is changed/deleted/stamps.
+    const plan = async () => {
+      const { changed, deleted, stamps, captures } = await changedResources(db, root, probeLayout(root));
+      assert.deepEqual([...captures.keys()].sort(), [...changed].sort(), "only changed XML keeps its captured bytes");
+      return { changed, deleted, stamps };
+    };
     assert.deepEqual(await plan(), { changed: [], deleted: [], stamps: [] }, "nothing to do after a cold build, logback.xml included");
     const later = new Date(Date.now() + 60_000);
     await utimes(path.join(root, "src/main/resources/logback.xml"), later, later);

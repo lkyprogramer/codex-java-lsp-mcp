@@ -123,6 +123,22 @@ clonefile 返回成功证明请求了原生克隆；`ls -l` 不能证明共享 e
 
 零差量直接绑定，新增事实 DB 数和 DB 写入字节必须为 0。20/200 变化的净物理增长分别以同输入 fresh full 的净增长为分母；通过门见 §6。checkpoint/同步成本计入总时延，不能只报 clone 毫秒数。
 
+### 5.5 MAC-05 full/delta runner
+
+`scripts/ilv2-mac-full-delta.mjs --history <冻结输入worktree> [--repo <run tmp内源码副本>] [--out <run内新目录>] [--work <run tmp内新目录>] [--changes 20,200] [--correctness-only true]`；`--repo`默认`$ILV2_RUN_ROOT/tmp/repos/<仓名>`，JSON报告`--out`默认`$ILV2_RUN_ROOT/raw/full-delta/<仓名>`，数据库`--work`默认`$ILV2_RUN_ROOT/tmp/full-delta/<仓名>`（分阶段提交要求位于run tmp，且数据库是bulk而非归档证据）。它是测试驱动，不实现publisher/tracker/GC，也不据此宣称它们。
+
+- **输入身份。** 副本不存在时先从冻结worktree复制构建输入（`relevantInput`，不含`.git`及其他文件）；随后总是核对副本与冻结worktree的构建输入集合及字节完全相同，得到census digest；git只读并加`--no-optional-locks`。不同即退出，不在漂移的副本上测。
+- **编辑负载是真实历史，不用合成编辑。** 每档cap用指数探测与二分确定性选择first-parent链上的`HEAD~k..HEAD`，核对其中Java净差异文件数≤cap且大于上一档cap；净差异数可能非单调，因此不宣称找到了全历史最长范围。门资格仍要求每档实际文件数≥cap的一半，选样不足不算PASS。把这些路径恢复为`HEAD~k`的工作区字节（在run tmp内建立临时`GIT_INDEX_FILE`，用`read-tree`与单次`checkout-index --stdin -z`导出；保留checkout filters，逐文件与原`cat-file --filters`语义核对，不改冻结输入index）：HEAD新增的删除、HEAD删除的重建，所需目录随之创建并在还原时删除。实际文件数、k、commit写入报告，不以cap代替。XML与构建文件保持HEAD并计数为`heldAtHead`：真库切片不声称XML/资源差量，其正确性由定向用例（`execution-plan.test`的闭包步骤）证明；构建文件变化本应升级full，不属于delta档。
+- **正确性分层。** ①每个发布状态（base、各档delta、chain、oracle、full-2）都跑`checkIndexInvariants`：graph边/节点owner、反向边与正向owner对应（库里没有CALLED_BY符号而存在前向调用边也算违例）、非`ext:`边端点都是kg_node、每个已索引文件有自己拥有的FILE节点、FILE/TYPE/METHOD/CONSTRUCTOR/FIELD节点由其path所在文件拥有、xor摘要等于行重算、owner是已索引文件、entity/search-doc的df与posting数及stats一致、search_doc来源行存在；任一违例即FAIL。②链式oracle：base→D(small)→D(small→large)与base→D(large)两个终态都必须等于同一棵large树的一次独立full；chain只提交两棵树字节不同的路径，所以small档中被chain第二步重写的文件只由①与定向用例覆盖。sealed base与full源文件先核对SHA256相等，再复用full逻辑摘要，base仍实际运行不变量；不重复解码同字节数据库。verified reconcile与空delta的逻辑摘要必须等于base。③full-1与带parse后注入编辑的full-2逻辑摘要相等。每仓因此是3次full（full-1、oracle、full-2）。delta应用顺序置换与单文件行移零写入由定向用例证明，不在真库重复。
+- **正确性与计时分开。** 计时窗口包含job、checkpoint/同步和第一次正确查询（delta命中变更文件、hash等于磁盘字节；full命中已捕获文件、hash等于捕获输入，parse后注入编辑不得混入）；不变量、逻辑摘要、页差在窗口外，CPU与未归因时间单列。阶段快照只在`--diagnostic true`时做；快照落在delta窗口内，所以诊断模式的delta计时只记录、不设限（NOT_GATED）。
+- **计时有效性。** 窗口起止的load1/逻辑CPU都≤1.0才有效，否则该项`INVALID_EXPERIMENT`，正确性仍照常判定；首样本距阈值±5%以内为INCONCLUSIVE，一旦进入补测便完成3次取中位数，第二次偏离临界带也不提前结束；无效主机样本仍直接记INVALID_EXPERIMENT。noop预算严格小于。full-1与full-2均受full时间门约束，并分别记录correctness与timing；full-2的每个补测样本均注入parse后编辑。oracle只承担正确性，计时记NOT_GATED。阈值是脚本`LIMITS`：full≤327.9 s、noop<2.5 s、20/200档首个正确查询≤5 s/15 s、页差比<10%/30%，与§6.1和MAC-05卡一致，不放宽。
+- **正确性专用运行。** `--correctness-only true`按用户明确选择仅完成正确性：full/delta保留实际墙钟、CPU、负载和页差，但timing一律NOT_GATED，不因时间/页比失败，不做临界补测；不变量、hash、chain oracle与full确定性断言保持不变。可与同run、同base key的`--resume-base`组合，完整继续oracle和full-2；复用full的计时不能冒充新full计时。与`--cost-only`互斥。该模式因已观察到的native启动环境阻塞，副本使用Node `copyFile`且每份facts/stat副本核对源/目标SHA256；report/result的`copyMode`及`notClaimed`显式记`BYTE_COPY_NOT_NATIVE`，不声称native clone或物理COW。普通gate、cost-only及diagnostic仍只使用`NATIVE_CLONE`，native失败即停止，不回退。成功仅记correctness PASS、总状态DIAGNOSTIC_ONLY，G05保持IN_PROGRESS，不提交。
+- **门资格。** 只有门运行（`--changes 20,200`、本run新做的full-1、非`--diagnostic`/`--cost-only`/`--correctness-only`/`--resume-base`、默认阈值与空闲上限、每档Java文件数不低于其cap的一半）可以得PASS；其他运行的结论只能是FAIL、INVALID_EXPERIMENT或DIAGNOSTIC_ONLY，原因写入`notGated`。没有阈值的档位记NOT_GATED，不记PASS。
+- **每次测量都是新的。** `--out`与`--work`必须不存在或为空，每个full在新的case目录里建库；计时full的`stages.mode`必须是`full`且parse文件数等于capture文件数（否则是续跑的full，FAIL）；delta与chain的`stages.mode`必须是`delta`，升级或回退成full即FAIL并记`ESCALATED_FULL: <原因>`，按§6.1归入full组，不当作delta通过。
+- **停止与记录。** 按成本顺序执行：full-1→base不变量→verified reconcile→空delta→small→large→chain→oracle→full-2→确定性。首个falsifier即停，full/delta成本失败均先停止，再将未执行的不变量与逻辑摘要记NOT_RUN；未到达的步骤记NOT_RUN；每步结果在产生时写入`full-delta-progress.json`；已建立新输出目录后的执行异常也必须记录原始error、当前步骤FAIL（native超时或已识别权限/磁盘环境错误记BLOCKED_ENV）与剩余NOT_RUN，禁止遗留IN_PROGRESS；失败或成功都把源码树还原到HEAD；还原本身失败时，成功路径以该错误停止（副本已不是HEAD），失败路径只记录它，不掩盖原始失败。
+- **复用封存base。** `--resume-base`只接受本run tmp内已完成full的目录，且base key（schema版本、facts revision、dist digest（`dist/`下全部运行时文件，不含测试、map、声明文件与`build-stamp.json`；后者由broker验证/记录，但builder不消费其generatedAt等构建元信息）、Node版本、输入census）完全相同；只用于`--cost-only true`的成本诊断或`--correctness-only true`的正确性续跑（runner拒绝其他组合）；前者不产出oracle/确定性结论，后者保留全部正确性检查但不能产出full计时或G05 PASS。
+- **变化边界即falsifier。** 实际Java文件数、resolve闭包、facts与workspace-stat页差分开报告；闭包或页差越过门限时先修MAC-04/05，不放宽阈值、不把档位改小来通过。
+
 ## 6. 验收门与停止条件
 
 ### 6.1 工程与收益指标

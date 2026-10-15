@@ -27,7 +27,9 @@ export type TypeRegistryView = {
   nestedByOwnerAndSimpleName: ReadonlyMap<string, string>;
   // Populated for Task 18's bounded call resolution (same-owner/receiver/
   // super-chain method lookup by owner type); Task 17 itself never reads it.
-  methodsByOwnerTypeId: { get(ownerTypeId: string): readonly JavaMethodFacts[] | undefined };
+  // `name` is a hint: a view may return only the methods so named, so
+  // callers filter by name either way.
+  methodsByOwnerTypeId: { get(ownerTypeId: string, name?: string): readonly JavaMethodFacts[] | undefined };
 };
 
 export function locationOfFile(file: Pick<JavaFileFacts, "module" | "sourceSet" | "sourceRoot">): DeclarationLocation {

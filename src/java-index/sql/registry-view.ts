@@ -1,12 +1,13 @@
 import type { JavaMethodFacts } from "../index-types.js";
 import type { TypeRegistryView } from "../name-resolver.js";
 import { splitOwnerMemberKey } from "../stable-id.js";
+import { BoundedCache } from "./bounded-cache.js";
 import type { SqlFactsStore } from "./facts-store.js";
 
 const LRU_LIMIT = 2048;
 
 export function buildSqlRegistryView(store: SqlFactsStore): TypeRegistryView {
-  const nested = new Map<string, string>();
+  const nested = new BoundedCache<string, string>(LRU_LIMIT);
   return {
     byId: store.typesById as unknown as TypeRegistryView["byId"],
     byFqn: store.typeIdsByFqn,
@@ -15,24 +16,16 @@ export function buildSqlRegistryView(store: SqlFactsStore): TypeRegistryView {
     nestedByOwnerAndSimpleName: {
       get(key: string): string | undefined {
         const cached = nested.get(key);
-        if (cached !== undefined) {
-          nested.delete(key);
-          nested.set(key, cached);
-          return cached === "" ? undefined : cached;
-        }
+        if (cached !== undefined) return cached === "" ? undefined : cached;
         const split = splitOwnerMemberKey(key);
         const id = split === undefined ? undefined : store.nestedTypeId(split.owner, split.member);
-        if (nested.size >= LRU_LIMIT) {
-          const oldest = nested.keys().next().value;
-          if (oldest !== undefined) nested.delete(oldest);
-        }
         nested.set(key, id ?? "");
         return id;
       }
     } as TypeRegistryView["nestedByOwnerAndSimpleName"],
     methodsByOwnerTypeId: {
-      get(ownerTypeId: string): readonly JavaMethodFacts[] | undefined {
-        const found = store.methodsOfOwner(ownerTypeId);
+      get(ownerTypeId: string, name?: string): readonly JavaMethodFacts[] | undefined {
+        const found = name === undefined ? store.methodsOfOwner(ownerTypeId) : store.methodsNamed(ownerTypeId, name);
         return found.length === 0 ? undefined : found;
       }
     }

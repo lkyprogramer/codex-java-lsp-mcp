@@ -21,7 +21,7 @@
 5. 不更换存储引擎、不重写语言。原生 helper 使用系统 API，作为版本化构建产物；不是插件式跨平台抽象。
 6. 不删除历史归档及其引用：`docs/evidence-archive/`、`/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/`。MAC/5之前的工作根`…/evidence-archive/codex-java-lsp-mcp/ilv2-mac/`属于后者，只读保留，新运行不再写入。
 7. 继续禁止 `--activate-http` 和 `JAVA_LSP_ENGINE`。保留 [HANDOFF](../../../HANDOFF.md) 与 [操作文档](../../phase-f/production-operations.md) 的“不得新增第四个 live daemon”限制，不据此把现有实例数当作已核验事实；常驻测试只用已授权 `:38457` canary，不增设第二个常驻canary。单次fixture daemon使用独立临时HOME/cache/owner/projects及随机未占用端口，默认禁用JDT（真实JDT专项除外），登记PID/PGID/端口并在运行结束回收；这类有界测试进程不计入常驻实例，不得接生产根。同机所有测试runner合计最多2个fixture daemon，受管配额同时约束并行测试；达到上限排队，不把每个runner的2个相加。
-8. 正式三仓矩阵遵守 [主机政策](../../phase-v4/three-repo-host-load-policy.md)：load < 20 应跑，load ≥ 20 仍跑并记录；唯一主机硬门是可用内存 ≥ 4 GiB。真实 ENOSPC 等执行失败如实报告。文档改写和小范围单测不触发矩阵。
+8. 正式三仓矩阵遵守 [主机政策](../../phase-v4/three-repo-host-load-policy.md)：load < 20 应跑，load ≥ 20 仍跑并记录；唯一主机硬门是可用内存 ≥ 4 GiB。真实 ENOSPC 等执行失败如实报告。文档改写和小范围单测不触发矩阵。该政策只适用于候选与基线交错运行、按比值判定的三仓矩阵；full墙钟、seed首次正确查询、noop等绝对时间门须在空闲主机测（窗口起止load1/逻辑CPU≤1.0，见[验证§5.5](verification.md#55-mac-05-fulldelta-runner)），否则该计时记`INVALID_EXPERIMENT`，不能记PASS或FAIL。
 9. 不修改TCC数据库，不代用户授予或撤销隐私权限。探针或测试引出TCC对话框时按拒绝处理并记`BLOCKED_ENV_TCC`；是否授权由用户另行决定（生产launcher的开放决定见§2.1）。
 
 ### 0.2 每项任务的完成合同

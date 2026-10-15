@@ -592,10 +592,9 @@ function docHits(
       const score = bm25Score(queryTokens, bucket.tf, bucket.docLen, avgdl, dfByToken, stats.docCount);
       if (score <= 0) continue;
       const current = bestByDeclaration.get(bucket.declarationSym);
-      // Equal-score ties take the earliest inserted document; insertion order
-      // (hence the evidence shown on a tie) may differ between an incremental
-      // and a cold build of the same tree.
-      if (!current || score > current.score || (score === current.score && docId < current.docId)) {
+      // Allocation order changes on incremental replacement. Only a tie needs
+      // these two point lookups; compare original identity values, not sym IDs.
+      if (!current || score > current.score || (score === current.score && earlierDocumentIdentity(db, docId, current.docId))) {
         bestByDeclaration.set(bucket.declarationSym, { score, docId });
       }
     }
@@ -614,16 +613,33 @@ function docHits(
   });
 }
 
-/** The matched document's own source (XML for a MyBatis statement). */
+function earlierDocumentIdentity(db: IndexDatabase, candidate: number, current: number): boolean {
+  // Within one declaration these columns are the unique document identity.
+  // BINARY ordering is independent of host locale; ranges stay numeric.
+  const row = prepareCached(db, `
+    SELECT d.id FROM search_doc d JOIN sym p ON p.id=d.source_path_sym
+    WHERE d.id IN (?, ?)
+    ORDER BY d.kind COLLATE BINARY, p.text COLLATE BINARY,
+      d.start_line, d.end_line LIMIT 1
+  `).get(candidate, current) as { id: SQLOutputValue };
+  return asInt(row.id) === candidate;
+}
+
+/** The matched document's own source (XML for a MyBatis statement). Its
+ *  hash is the source row's, written in the document's transaction. */
 function documentEvidence(db: IndexDatabase, docId: number): EntityHitEvidence | undefined {
   const row = prepareCached(
     db,
-    "SELECT source_path_sym AS sourcePathSym, content_hash AS contentHash, kind AS kind, start_line AS startLine, end_line AS endLine FROM search_doc WHERE id=?"
+    `SELECT p.text AS sourcePath, COALESCE(f.content_hash, r.content_hash) AS contentHash, d.kind AS kind,
+       d.start_line AS startLine, d.end_line AS endLine
+     FROM search_doc d JOIN sym p ON p.id=d.source_path_sym
+     LEFT JOIN file f ON f.path=p.text LEFT JOIN mybatis_resource r ON r.path=p.text
+     WHERE d.id=?`
   ).get(docId) as Record<string, SQLOutputValue> | undefined;
-  if (!row || row.sourcePathSym == null) return undefined;
+  if (!row || typeof row.contentHash !== "string") return undefined;
   return {
-    relativePath: symText(db, asInt(row.sourcePathSym)),
-    contentHash: String(row.contentHash),
+    relativePath: String(row.sourcePath),
+    contentHash: row.contentHash,
     startLine: asInt(row.startLine),
     endLine: asInt(row.endLine),
     sourceKind: String(row.kind)

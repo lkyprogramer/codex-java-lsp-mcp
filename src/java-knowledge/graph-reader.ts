@@ -1,5 +1,5 @@
 import type { EdgeKind } from "./edge-kinds.js";
-import type { MethodSummary } from "./method-summary.js";
+import type { GraphFragment, GraphSink } from "./graph-fragment.js";
 import type { GraphEdge, GraphNode } from "./schema.js";
 
 export type GraphNodeLookup = {
@@ -14,20 +14,15 @@ export type GraphReader = {
   readonly edgesById: { readonly size: number };
   successors(id: string, kind?: EdgeKind): GraphEdge[];
   predecessors(id: string, kind?: EdgeKind): GraphEdge[];
-  readonly summariesByMethodId: { get(id: string): MethodSummary | undefined };
   generation: number;
   digest(): string;
   nodesByPath(path: string): GraphNode[];
   nodeIdForJavaIndexId(jid: string): string | undefined;
 };
 
-export type KnowledgeGraphStore = Omit<GraphReader, "summariesByMethodId"> & {
-  upsertNode(node: GraphNode, ownerFile?: string): void;
-  addEdge(edge: GraphEdge, ownerFile?: string): GraphEdge;
+export type KnowledgeGraphStore = GraphReader & GraphSink & {
+  /** Makes the owner's rows exactly the fragment's: adds what is missing, releases the rest. */
+  replaceOwner(fragment: GraphFragment): void;
   removeFiles(relativePaths: readonly string[]): void;
   clear(): void;
-  summariesByMethodId: {
-    get(id: string): MethodSummary | undefined;
-    set(id: string, summary: MethodSummary): unknown;
-  };
 };

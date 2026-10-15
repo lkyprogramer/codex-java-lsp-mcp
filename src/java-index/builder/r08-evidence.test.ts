@@ -43,11 +43,11 @@ type DocRow = { declaration: string; owner: string; source: string; contentHash:
 
 function mybatisDocs(db: ReturnType<typeof openIndexDb>): DocRow[] {
   return db.prepare(
-    `SELECT ds.text AS declaration, op.text AS owner, sp.text AS source, d.content_hash AS contentHash,
+    `SELECT ds.text AS declaration, op.text AS owner, sp.text AS source, r.content_hash AS contentHash,
             d.start_line AS startLine, d.end_line AS endLine,
-            ds.text||'|'||d.kind||'|'||sp.text||'|'||d.start_line||'|'||d.end_line||'|'||d.content_hash AS doc
+            ds.text||'|'||d.kind||'|'||sp.text||'|'||d.start_line||'|'||d.end_line||'|'||r.content_hash AS doc
        FROM search_doc d JOIN sym ds ON ds.id=d.declaration_sym JOIN sym op ON op.id=d.path_sym
-       JOIN sym sp ON sp.id=d.source_path_sym
+       JOIN sym sp ON sp.id=d.source_path_sym LEFT JOIN mybatis_resource r ON r.path=sp.text
       WHERE sp.text LIKE '%.xml' ORDER BY sp.text`
   ).all() as DocRow[];
 }
@@ -123,7 +123,8 @@ test("R08: an XML-only resource job replaces the XML-sourced documents while Jav
     const item = after.find(row => row.source === ITEM_XML)!;
     assert.equal(item.contentHash, sha(nextXml), "the new XML hash");
     assert.deepEqual([item.startLine, item.endLine], [5, 7], "the moved element's current lines");
-    assert.ok(!after.some(row => before.find(old => old.source === ITEM_XML)!.doc === row.doc), "the old XML document is gone");
+    // Hashes come from the resource row, so the old document shows as its old lines.
+    assert.deepEqual(after.filter(row => row.source === ITEM_XML).map(row => [row.startLine, row.endLine]), [[5, 7]], "the old XML document is gone");
     assert.deepEqual(after.find(row => row.source === ORDER_XML), before.find(row => row.source === ORDER_XML), "other XML untouched");
     assert.equal((db.prepare("SELECT content_hash AS h FROM file WHERE path=?").get(ITEM_JAVA) as { h: string }).h, javaHash);
     const hit = documentHits(db, "mybatis update").find(candidate => candidate.relativePath === ITEM_JAVA);
@@ -172,6 +173,7 @@ test("R08: a Java refresh of the mapper keeps its XML-sourced documents (rebuilt
     const after = mybatisDocs(db).find(row => row.source === ITEM_XML);
     assert.ok(after, "the XML document survives the owner's rewrite");
     assert.equal(after!.contentHash, before!.contentHash, "its source is still the unchanged XML");
+    assert.deepEqual([after!.startLine, after!.endLine], [before!.startLine, before!.endLine]);
     assert.ok(after!.declaration.includes("ItemMapper#load"));
   } finally {
     close(db);

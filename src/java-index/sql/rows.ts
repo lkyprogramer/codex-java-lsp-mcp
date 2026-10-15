@@ -214,52 +214,75 @@ export function myBatisRow(resource: MyBatisMapperResourceFacts): MyBatisRow {
   };
 }
 
-export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: number): number {
+export type WriteBundleOptions = {
+  /** "keep" leaves an existing file's static edges for the resolve stage, which
+   *  replaces them in the same transaction (replaceBundleEdges); the parser
+   *  emits none, so writing the bundle's edges would delete and re-add them. */
+  edges?: "replace" | "keep";
+};
+
+/**
+ * Writes one parsed file. A file already indexed keeps its row id, so its
+ * members, type-reference names and edges are reconciled row by row instead
+ * of being cascade-deleted and re-inserted; unchanged rows are not written.
+ */
+export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, options: WriteBundleOptions = {}): number {
   return runInWriteTx(db, () => {
-    prepareCached(db, "DELETE FROM file WHERE path=?").run(bundle.file.relativePath);
     const row = fileRow(bundle);
-    const inserted = fileId === undefined
-      ? prepareCached(
+    const existing = prepareCached(db, "SELECT id FROM file WHERE path=?").get(row.path) as { id: number | bigint } | undefined;
+    let id: number;
+    if (existing) {
+      id = asRowId(existing.id);
+      prepareCached(
+        db,
+        `UPDATE file SET content_hash=?, size=?, source_root=?, module=?, package=?, parse_state=?, generation=?, facts=?
+         WHERE id=? AND (content_hash IS NOT ? OR size IS NOT ? OR source_root IS NOT ? OR module IS NOT ? OR package IS NOT ?
+           OR parse_state IS NOT ? OR facts IS NOT ?)`
+      ).run(
+        row.contentHash, row.size, row.sourceRoot, row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts),
+        id, row.contentHash, row.size, row.sourceRoot, row.module, row.packageName, row.parseState, encodeFacts(row.facts)
+      );
+    } else {
+      id = asRowId(prepareCached(
         db,
         `INSERT INTO file(path, content_hash, size, source_root, module, package, parse_state, generation, facts)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         row.path, row.contentHash, row.size, row.sourceRoot,
         row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
-      )
-      : prepareCached(
-        db,
-        `INSERT INTO file(id, path, content_hash, size, source_root, module, package, parse_state, generation, facts)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        fileId, row.path, row.contentHash, row.size, row.sourceRoot,
-        row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
-      );
-    const id = fileId ?? asRowId(inserted.lastInsertRowid);
+      ).lastInsertRowid);
+    }
+    const types = typeRows(bundle).map(type => ({ ...type, sym: internSym(db, type.typeId) }));
+    const fields = fieldRows(bundle).map(field => ({ ...field, sym: internSym(db, field.fieldId) }));
+    const methods = methodRows(bundle).map(method => ({ ...method, sym: internSym(db, method.methodId) }));
+    if (existing) {
+      dropMissingMembers(db, "type", id, types.map(type => type.sym));
+      dropMissingMembers(db, "field", id, fields.map(field => field.sym));
+      dropMissingMembers(db, "method", id, methods.map(method => method.sym));
+    }
     const insertType = prepareCached(
       db,
       `INSERT INTO type(sym, file_id, fqn, simple_name, kind, owner_sym, facts)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(sym) DO UPDATE SET
          file_id=excluded.file_id, fqn=excluded.fqn, simple_name=excluded.simple_name,
-         kind=excluded.kind, owner_sym=excluded.owner_sym, facts=excluded.facts`
+         kind=excluded.kind, owner_sym=excluded.owner_sym, facts=excluded.facts
+       WHERE type.file_id IS NOT excluded.file_id OR type.fqn IS NOT excluded.fqn OR type.simple_name IS NOT excluded.simple_name
+         OR type.kind IS NOT excluded.kind OR type.owner_sym IS NOT excluded.owner_sym OR type.facts IS NOT excluded.facts`
     );
-    for (const type of typeRows(bundle)) {
-      insertType.run(
-        internSym(db, type.typeId), id, type.fqn, type.simpleName, type.kind,
-        internSymNullable(db, type.ownerTypeId), encodeFacts(type.facts)
-      );
+    for (const type of types) {
+      insertType.run(type.sym, id, type.fqn, type.simpleName, type.kind, internSymNullable(db, type.ownerTypeId), encodeFacts(type.facts));
     }
     const insertField = prepareCached(
       db,
       `INSERT INTO field(sym, owner_sym, file_id, name, facts) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(sym) DO UPDATE SET
-         owner_sym=excluded.owner_sym, file_id=excluded.file_id, name=excluded.name, facts=excluded.facts`
+         owner_sym=excluded.owner_sym, file_id=excluded.file_id, name=excluded.name, facts=excluded.facts
+       WHERE field.owner_sym IS NOT excluded.owner_sym OR field.file_id IS NOT excluded.file_id
+         OR field.name IS NOT excluded.name OR field.facts IS NOT excluded.facts`
     );
-    for (const field of fieldRows(bundle)) {
-      insertField.run(
-        internSym(db, field.fieldId), internSym(db, field.ownerTypeId), id, field.name, encodeFacts(field.facts)
-      );
+    for (const field of fields) {
+      insertField.run(field.sym, internSym(db, field.ownerTypeId), id, field.name, encodeFacts(field.facts));
     }
     const insertMethod = prepareCached(
       db,
@@ -267,19 +290,80 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(sym) DO UPDATE SET
          owner_sym=excluded.owner_sym, file_id=excluded.file_id, name=excluded.name,
-         is_ctor=excluded.is_ctor, arity=excluded.arity, facts=excluded.facts`
+         is_ctor=excluded.is_ctor, arity=excluded.arity, facts=excluded.facts
+       WHERE method.owner_sym IS NOT excluded.owner_sym OR method.file_id IS NOT excluded.file_id OR method.name IS NOT excluded.name
+         OR method.is_ctor IS NOT excluded.is_ctor OR method.arity IS NOT excluded.arity OR method.facts IS NOT excluded.facts`
     );
-    for (const method of methodRows(bundle)) {
-      insertMethod.run(
-        internSym(db, method.methodId), internSym(db, method.ownerTypeId), id,
-        method.name, method.isCtor, method.arity, encodeFacts(method.facts)
-      );
+    for (const method of methods) {
+      insertMethod.run(method.sym, internSym(db, method.ownerTypeId), id, method.name, method.isCtor, method.arity, encodeFacts(method.facts));
     }
-    for (const edge of bundle.edges) insertStaticEdge(db, edge, id);
+    if (!existing || options.edges !== "keep") syncStaticEdges(db, id, bundle.edges, existing !== undefined);
+    const names = new Set(typeReferenceNames(bundle).map(name => internSym(db, name)));
+    if (existing) {
+      const deleteRefName = prepareCached(db, "DELETE FROM type_ref_name WHERE name_sym=? AND file_id=?");
+      for (const stored of prepareCached(db, "SELECT name_sym AS sym FROM type_ref_name WHERE file_id=?").all(id) as Array<{ sym: number }>) {
+        if (!names.delete(Number(stored.sym))) deleteRefName.run(stored.sym, id);
+      }
+    }
     const insertRefName = prepareCached(db, "INSERT OR IGNORE INTO type_ref_name(name_sym, file_id) VALUES (?, ?)");
-    for (const name of typeReferenceNames(bundle)) insertRefName.run(internSym(db, name), id);
+    for (const name of names) insertRefName.run(name, id);
     return id;
   });
+}
+
+function dropMissingMembers(db: IndexDatabase, table: "type" | "field" | "method", fileId: number, keep: readonly number[]): void {
+  const wanted = new Set(keep);
+  const drop = prepareCached(db, `DELETE FROM ${table} WHERE sym=?`);
+  for (const stored of prepareCached(db, `SELECT sym FROM ${table} WHERE file_id=?`).all(fileId) as Array<{ sym: number }>) {
+    if (!wanted.has(Number(stored.sym))) drop.run(stored.sym);
+  }
+}
+
+/**
+ * Makes one file's static edges exactly `edges`. An edge keeps its row while
+ * its identity (kind, endpoints, range) is unchanged; only a changed
+ * resolution rewrites it, and a rewrite alone (same facts, new generation)
+ * writes nothing.
+ */
+/** Writes only the difference to the file's stored edges; true when any row changed. */
+function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly StaticEdge[], existed: boolean): boolean {
+  let changed = false;
+  const stale = new Map<string, { id: number; confidence: number; resKind: number; resStrategy: number | null }>();
+  if (existed) {
+    for (const row of prepareCached(
+      db,
+      "SELECT id, kind_sym, from_sym, to_sym, sl, sc, el, ec, confidence, res_kind_sym, res_strategy_sym FROM edge WHERE file_id=?"
+    ).all(fileId) as Array<Record<string, number | null>>) {
+      stale.set([row.kind_sym, row.from_sym, row.to_sym, row.sl, row.sc, row.el, row.ec].join(":"), {
+        id: Number(row.id), confidence: Number(row.confidence), resKind: Number(row.res_kind_sym),
+        resStrategy: row.res_strategy_sym == null ? null : Number(row.res_strategy_sym)
+      });
+    }
+  }
+  const update = prepareCached(db, "UPDATE edge SET confidence=?, res_kind_sym=?, res_strategy_sym=?, generation=? WHERE id=?");
+  for (const edge of edges) {
+    const [sl, sc, el, ec] = rangeColumns(edge.range);
+    const kindSym = internSym(db, edge.kind);
+    const fromSym = internSym(db, edge.fromId);
+    const toSym = internSym(db, edge.toId);
+    const resKind = internSym(db, edge.resolution.kind);
+    const resStrategy = internSymNullable(db, edge.resolution.typeStrategy);
+    const key = [kindSym, fromSym, toSym, sl, sc, el, ec].join(":");
+    const old = stale.get(key);
+    if (old) {
+      stale.delete(key);
+      if (old.confidence !== edge.confidence || old.resKind !== resKind || old.resStrategy !== resStrategy) {
+        update.run(edge.confidence, resKind, resStrategy, edge.generation, old.id);
+        changed = true;
+      }
+      continue;
+    }
+    insertStaticEdge(db, edge, fileId);
+    changed = true;
+  }
+  const drop = prepareCached(db, "DELETE FROM edge WHERE id=?");
+  for (const old of stale.values()) drop.run(old.id);
+  return changed || stale.size > 0;
 }
 
 /** Records that a resource XML (mapper or not) with this content was examined. Its stat lives in the workspace store. */
@@ -298,7 +382,7 @@ export function deleteResourceScan(db: IndexDatabase, relativePath: string): voi
 const REF_IDENTIFIER = /[A-Za-z_$][A-Za-z0-9_$]*/g;
 
 /**
- * Lower-cased identifiers a file uses where a type name can appear: every
+ * Identifiers a file uses where a type name can appear: every
  * type reference (text, simple and qualified name, type arguments), import,
  * call receiver text and annotation name. Over-approximate on purpose: the
  * set only decides which files an incremental refresh re-resolves.
@@ -307,7 +391,8 @@ export function typeReferenceNames(bundle: JavaFileBundle): string[] {
   const names = new Set<string>();
   const addText = (text: unknown) => {
     if (typeof text !== "string") return;
-    for (const match of text.matchAll(REF_IDENTIFIER)) names.add(match[0].toLowerCase());
+    // Case-sensitive, as Java names are: a `scope` receiver is not type `Scope`.
+    for (const match of text.matchAll(REF_IDENTIFIER)) names.add(match[0]);
   };
   const visit = (value: unknown, parentKey: string | undefined): void => {
     if (Array.isArray(value)) {
@@ -322,6 +407,8 @@ export function typeReferenceNames(bundle: JavaFileBundle): string[] {
       addText(record.qualifiedName);
     }
     if (parentKey === "annotations") addText(record.name);
+    // `new N()` binds N from its text when edges are built.
+    if (record.kind === "CONSTRUCTOR_INVOCATION") addText(record.name);
     addText(record.receiverText);
     for (const [key, child] of Object.entries(record)) {
       if (child && typeof child === "object") visit(child, key);
@@ -340,38 +427,46 @@ function fileIdByPath(db: IndexDatabase, path: string): number {
   return asRowId(row.id as number | bigint);
 }
 
-export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): number {
+/** Rewrites one file's facts in place; true when any row changed. */
+export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): boolean {
   return runInWriteTx(db, () => {
     const id = fileIdByPath(db, bundle.file.relativePath);
     const row = fileRow(bundle);
-    prepareCached(db, "UPDATE file SET facts=?, parse_state=?, generation=? WHERE id=?").run(
-      encodeFacts(row.facts),
+    // A dependent whose resolution did not change re-encodes the same bytes;
+    // the guards keep such a refresh from writing any page.
+    const facts = encodeFacts(row.facts);
+    let changes = 0;
+    const count = (result: { changes: number | bigint }) => { changes += Number(result.changes); };
+    count(prepareCached(db, "UPDATE file SET facts=?, parse_state=?, generation=? WHERE id=? AND (facts IS NOT ? OR parse_state IS NOT ?)").run(
+      facts,
       row.parseState,
       row.generation,
-      id
-    );
-    const updateType = prepareCached(db, "UPDATE type SET facts=?, fqn=? WHERE sym=?");
+      id,
+      facts,
+      row.parseState
+    ));
+    const updateType = prepareCached(db, "UPDATE type SET facts=?, fqn=? WHERE sym=? AND (facts IS NOT ? OR fqn IS NOT ?)");
     for (const type of typeRows(bundle)) {
-      updateType.run(encodeFacts(type.facts), type.fqn, internSym(db, type.typeId));
+      const blob = encodeFacts(type.facts);
+      count(updateType.run(blob, type.fqn, internSym(db, type.typeId), blob, type.fqn));
     }
-    const updateField = prepareCached(db, "UPDATE field SET facts=? WHERE sym=?");
+    const updateField = prepareCached(db, "UPDATE field SET facts=? WHERE sym=? AND facts IS NOT ?");
     for (const field of fieldRows(bundle)) {
-      updateField.run(encodeFacts(field.facts), internSym(db, field.fieldId));
+      const blob = encodeFacts(field.facts);
+      count(updateField.run(blob, internSym(db, field.fieldId), blob));
     }
-    const updateMethod = prepareCached(db, "UPDATE method SET facts=?, arity=? WHERE sym=?");
+    const updateMethod = prepareCached(db, "UPDATE method SET facts=?, arity=? WHERE sym=? AND (facts IS NOT ? OR arity IS NOT ?)");
     for (const method of methodRows(bundle)) {
-      updateMethod.run(encodeFacts(method.facts), method.arity, internSym(db, method.methodId));
+      const blob = encodeFacts(method.facts);
+      count(updateMethod.run(blob, method.arity, internSym(db, method.methodId), blob, method.arity));
     }
-    return id;
+    return changes > 0;
   });
 }
 
-export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: readonly StaticEdge[]): void {
-  runInWriteTx(db, () => {
-    const id = fileIdByPath(db, filePath);
-    prepareCached(db, "DELETE FROM edge WHERE file_id=?").run(id);
-    for (const edge of edges) insertStaticEdge(db, edge, id);
-  });
+/** Replaces one file's static edges by difference; true when any row changed. */
+export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: readonly StaticEdge[]): boolean {
+  return runInWriteTx(db, () => syncStaticEdges(db, fileIdByPath(db, filePath), edges, true));
 }
 
 export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | undefined {
