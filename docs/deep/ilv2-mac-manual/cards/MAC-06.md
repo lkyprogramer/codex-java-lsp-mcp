@@ -4,7 +4,7 @@
 
 **范围：** 新owner/scheduler/query pool，`src/application.ts`、`repo-ownership-lease.ts`和builder启动点；正式入口通过MAC-02B launcher。保留有用的JDT孤儿诊断，但不以裸PID清未知进程。
 
-| 子卡 / 门 | 依赖 | 实施与目标测试（均待实现，经§5.1定向入口） | 完成判据 |
+| 子卡 / 门 | 依赖 | 实施与目标测试（经§5.1定向入口，实际状态见 status.json） | 完成判据 |
 | --- | --- | --- | --- |
 | MAC-06A / G06A | MAC-02B、MAC-05 | owner调度、full保留槽、workspace合并、候选dispatch重选、parser token；`dist/index-builder/build-scheduler.test.js`：`short-delta-not-starved-by-full`、`result-before-exit-keeps-slot`、`stop-settles-queued-promises` | 多root≤2 builder/full≤1，真实exit才放槽；fork失败/stop均settle |
 | MAC-06B / G06B | MAC-06A | query池/有界队列、caller取消与shared build分离；`dist/java-index/snapshot/query-pool.test.js`：`hung-query-is-terminated-and-reaped`、`caller-timeout-preserves-shared-build` | 请求按时返回，专属worker≤2 s回收，未退出前不释放其lease |
