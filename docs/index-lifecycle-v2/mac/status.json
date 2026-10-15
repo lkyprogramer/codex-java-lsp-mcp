@@ -230,9 +230,38 @@
         "choice": "stable code-signing identity for the launcher plus one recorded Documents grant",
         "decidedBy": "user",
         "decidedAt": "2026-10-15",
-        "state": "DECIDED_PENDING_IMPLEMENTATION",
+        "state": "PROVEN_AT_DEV_PATH",
         "supersedes": "2026-10-14 choice 'business worktrees outside TCC-protected folders' (dry-run plan never executed; business repos and worktrees stay in place)",
-        "note": "Open until the launcher is signed with a stable identity, the user grants Documents once, and the A4 probe reads without a prompt both before and after a rebuild."
+        "note": "Remaining before MAC-17/18: install the launcher at a stable unversioned path replaced in place on upgrade (releases/<id> paths would re-prompt on every release), grant it once there, and prove the production launchd job reads without a prompt; whether launching through the current symlink records the link or the resolved path is unverified.",
+        "proof": {
+          "at": "2026-10-15",
+          "grantedBy": "user (clicked Allow once)",
+          "teamIdentifier": "2UVGT2J459",
+          "identifier": "com.lky.codex-java-lsp-mcp.ilv2-mac",
+          "designatedRequirement": "certificate-based (Apple anchor + Apple Development leaf CN), no cdhash",
+          "probes": [
+            {
+              "run": 1,
+              "read": "OK",
+              "elapsedMs": 2061,
+              "note": "TCC prompted; tccd logged responsible identifier=com.lky.codex-java-lsp-mcp.ilv2-mac, binary_path=node"
+            },
+            {
+              "run": 2,
+              "read": "OK",
+              "elapsedMs": 42,
+              "note": "no prompt"
+            },
+            {
+              "run": 3,
+              "read": "OK",
+              "elapsedMs": 40,
+              "note": "after a code change, rebuild and re-sign at the same path (cdhash changed); no prompt"
+            }
+          ],
+          "finding": "tccd stored the grant with identifier_type=Path (the launcher's absolute path), so a different launcher path needs a new grant.",
+          "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/plans/tcc-sign/20261015T013938Z"
+        }
       }
     }
   ],

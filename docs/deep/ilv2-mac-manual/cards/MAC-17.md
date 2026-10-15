@@ -7,3 +7,5 @@
 **步骤：** 安装工件包含并校验native binary/权限/版本；移除旧stdio runtime迁移和双schema启动合同。生成release digest、唯一缓存/独立serviceStateRoot布局、§2.1完整launchd配置（RunAtLoad、KeepAlive/非零OWNER_BUSY、ThrottleInterval、AbandonProcessGroup、5 s锁等待）及停止/回退步骤，按生成plist读回核验。按§2.1的TCC决定落实launcher身份与授权方式，并在隔离launchd下用`ilv2-mac-env-probe.mjs --read <业务仓内文件>`证明READY；BLOCKED_ENV_TCC不能计入G17。canary用`:38457`独立cache和service-state，通过start启动后attach回放≥2 h、≥1000正常请求，含full/seed/编辑/重启/lease/GC；真实JDT专项另测，其余可禁用JDT。
 
 **验收G17：** 本卡修改构建输入后先补受影响G14门；运行实例build/source/native身份与候选匹配，§6正常窗口SLO达标，输出回滚演练和安装清单。部署请求精确到SHA/digest、生产路径、唯一owner、旧缓存和service-state保留/恢复方式；披露空私有Gradle home下首次发行版/依赖下载、首次语义可用耗时和新增磁盘实测，未测明确标注，静态与语义可用时间分开。只迁入核实必需且获授权的构建配置，不整份复制用户Gradle home或凭据；不能由“当前未见配置”推定生产永久无需配置。工程候选可READY_FOR_DEPLOY，尚非DEPLOYED或AGENT_IMPROVED。
+
+**launcher签名与路径（TCC-LAUNCHER-IDENTITY）：** 安装包内launcher须以稳定身份签名（`ILV2_CODESIGN_IDENTITY`，manifest `signing.mode=identity`），并装在不带版本号的固定路径、升级时原地原子替换；launchd Program指向该路径。用户在该路径一次性授权Documents后，生产launchd job读取业务仓须无提示，升级一次后再验一次。见`contract.md` §2.1。
