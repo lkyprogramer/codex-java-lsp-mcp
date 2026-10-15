@@ -15,7 +15,7 @@
 | D05 | 独立 stdio runtime/owner、旧 per-root ownership 允许跨 root 多 owner、旧安装迁移握手；检查 `extract-stdio-project-jdk-env.mjs`、`verify-stdio-ownership-handoff.mjs` 及调用者 | MAC-08、MAC-17 | stdio 只转发；旧迁移脚本无调用则删除；保留必要 JDK 选择与 JDT 孤儿清理，不整文件盲删 |
 | D06 | **计划层**：旧手册的`cp -c`/COPYFILE_FICLONE保证与复制fallback；当前src/scripts未发现对应克隆实现 | 本手册、MAC-02A | 旧方案被替换；新原语明确成功/失败；不虚构源码删除diff |
 | D07 | `fs.watch` 作为正式 tracker、仅 size+mtime 的跳过、持久游标直接恢复 FRESH | MAC-03 | 原生 flags + 确认水位；startup/drop/root/resume/同 stat 用例通过 |
-| D08 | 旧 schema 读取/迁移、事实库 root/stat 重戳、int64 hash number PK、旧 ID 兼容拼接 | MAC-04 | 一个新格式；stat 不改事实 DB；无 unsafe Number hash。MAC-04后两项显式残留：①零差量reconcile仍写meta进度/generation与source_root_coverage发布页（事实表0页），由MAC-07（noop经binding CAS只更新水位、不写事实库）与MAC-08B（新调用图替换旧builder运行时）消除；②框架adapter进程内`type:<fqn>`查找键（`v1AliasIds`，不落库、不读旧库）当前无卡认领（建议MAC-13，待确认；删除需adapter改走名称解析），MAC-04只删持久化旧ID拆分与死兼容函数 |
+| D08 | 旧 schema 读取/迁移、事实库 root/stat 重戳、int64 hash number PK、旧 ID 兼容拼接 | MAC-04；残留① MAC-07 + MAC-08B；残留② MAC-13 | 一个新格式；stat 不改事实 DB；无 unsafe Number hash。MAC-04后两项显式残留：①零差量reconcile仍写meta进度/generation与source_root_coverage发布页（事实表0页），由MAC-07（noop经binding CAS只更新水位、不写事实库）与MAC-08B（新调用图替换旧builder运行时）消除；②由MAC-13移除框架adapter进程内`type:<fqn>`及method/field派生查找键、`v1AliasIds`和alias map，改走上下文名称解析取得真实declaration ID；重复FQN不得按最低ID猜选。②不落库、不读旧库；MAC-04只删持久化旧ID拆分与死兼容函数，D08整体关闭仍须两项残留均有删除与验收证据 |
 | D09 | **代码+文档**：IDLE_WARMING、先acquire后fresh、无取消race，以及强制先status的guidance | MAC-08B删运行时；MAC-13删guidance要求 | 分别给源码删除与文档更新证据；不重复认领同一改动 |
 | D10 | 上述删除后无读取者的 env/config（逐项盘点，如 `JAVA_LSP_BUILDER_IDLE_MS`）、重复缓存根别名/旧 installer 分支 | MAC-08、MAC-14、MAC-17 | 当前 canonical 配置、runtime、test/env filter、安装器与文档一致；不保留空壳兼容选项 |
 | D11 | **计划层**：旧P3 family共享JDT同URI overlay；未把它声称成已有实现 | 本手册、MAC-16 | 计划撤销；真实专用session零串扰，若后来发现实现另登记实际调用点 |
