@@ -15,14 +15,12 @@ import type {
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { javaEdgeId } from "../stable-id.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
-import { internSym, internSymNullable } from "./sym.js";
+import { internSym, internSymNullable, symId } from "./sym.js";
 
 export type FileRow = {
   path: string;
   contentHash: string;
   size: number | null;
-  mtimeMs: number | null;
-  ctimeMs: number | null;
   sourceRoot: string | null;
   module: string | null;
   packageName: string | null;
@@ -86,8 +84,9 @@ export function decodeFacts<T>(value: SQLOutputValue): T {
 }
 
 function asRowId(value: number | bigint): number {
+  if (typeof value === "bigint" && value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`unsafe rowid ${value}`);
   const rowId = typeof value === "bigint" ? Number(value) : value;
-  if (!Number.isInteger(rowId) || rowId <= 0) throw new Error(`invalid rowid ${String(value)}`);
+  if (!Number.isSafeInteger(rowId) || rowId <= 0) throw new Error(`invalid rowid ${String(value)}`);
   return rowId;
 }
 
@@ -166,8 +165,6 @@ export function fileRow(bundle: JavaFileBundle): FileRow {
     path: file.relativePath,
     contentHash: file.contentHash,
     size: file.size,
-    mtimeMs: file.mtimeMs,
-    ctimeMs: file.ctimeMs ?? null,
     sourceRoot: file.sourceRoot,
     module: file.module,
     packageName: file.packageName,
@@ -224,18 +221,18 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
     const inserted = fileId === undefined
       ? prepareCached(
         db,
-        `INSERT INTO file(path, content_hash, size, mtime_ms, ctime_ms, source_root, module, package, parse_state, generation, facts)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO file(path, content_hash, size, source_root, module, package, parse_state, generation, facts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        row.path, row.contentHash, row.size, row.mtimeMs, row.ctimeMs, row.sourceRoot,
+        row.path, row.contentHash, row.size, row.sourceRoot,
         row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
       )
       : prepareCached(
         db,
-        `INSERT INTO file(id, path, content_hash, size, mtime_ms, ctime_ms, source_root, module, package, parse_state, generation, facts)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO file(id, path, content_hash, size, source_root, module, package, parse_state, generation, facts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        fileId, row.path, row.contentHash, row.size, row.mtimeMs, row.ctimeMs, row.sourceRoot,
+        fileId, row.path, row.contentHash, row.size, row.sourceRoot,
         row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
       );
     const id = fileId ?? asRowId(inserted.lastInsertRowid);
@@ -285,13 +282,13 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
   });
 }
 
-/** Records that a resource XML (mapper or not) was examined at this state. */
-export function recordResourceScan(db: IndexDatabase, relativePath: string, contentHash: string, size: number, mtimeMs: number): void {
+/** Records that a resource XML (mapper or not) with this content was examined. Its stat lives in the workspace store. */
+export function recordResourceScan(db: IndexDatabase, relativePath: string, contentHash: string): void {
   prepareCached(
     db,
-    `INSERT INTO resource_scan(path, content_hash, size, mtime_ms) VALUES (?, ?, ?, ?)
-     ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, size=excluded.size, mtime_ms=excluded.mtime_ms`
-  ).run(relativePath, contentHash, size, mtimeMs);
+    `INSERT INTO resource_scan(path, content_hash) VALUES (?, ?)
+     ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash WHERE content_hash<>excluded.content_hash`
+  ).run(relativePath, contentHash);
 }
 
 export function deleteResourceScan(db: IndexDatabase, relativePath: string): void {
@@ -420,10 +417,9 @@ export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | un
 }
 
 function lookupMemberFacts<T>(db: IndexDatabase, table: "type" | "field" | "method", id: string): T | undefined {
-  const row = prepareCached(
-    db,
-    `SELECT t.facts FROM ${table} t JOIN sym s ON s.id=t.sym WHERE s.text=?`
-  ).get(id);
+  const sym = symId(db, id);
+  if (sym === undefined) return undefined;
+  const row = prepareCached(db, `SELECT facts FROM ${table} WHERE sym=?`).get(sym);
   return row ? decodeFacts<T>(row.facts) : undefined;
 }
 

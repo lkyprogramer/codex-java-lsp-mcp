@@ -216,7 +216,8 @@ export class SqlKnowledgeGraph {
 
   upsertNode(node: GraphNode, ownerFile?: string): void {
     this.writeTx(() => {
-      const existing = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(node.id) as
+      const nodeSym = symId(this.db, node.id);
+      const existing = (nodeSym === undefined ? undefined : prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.sym=?`).get(nodeSym)) as
         | Record<string, SQLOutputValue>
         | undefined;
       if (!existing) {
@@ -388,7 +389,8 @@ export class SqlKnowledgeGraph {
 
   private nodeById(id: string): GraphNode | undefined {
     if (this.nodeMap) return this.nodeMap.get(id);
-    const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(id);
+    const sym = symId(this.db, id);
+    const row = sym === undefined ? undefined : prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.sym=?`).get(sym);
     return row ? graphNodeFromRow(row) : undefined;
   }
 

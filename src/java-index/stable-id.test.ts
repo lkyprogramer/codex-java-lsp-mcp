@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STABLE_ID_VERSION, javaEdgeId, javaFileId, javaMethodId, javaTypeId, scopedNamedTypeId } from "./stable-id.js";
+import { STABLE_ID_VERSION, javaEdgeId, javaFileId, javaMethodId, javaTypeId, scopedNamedTypeId, splitOwnerMemberKey } from "./stable-id.js";
 
 test("T02: named type IDs are source-scoped so duplicate FQNs across files stay distinct", () => {
   const a = javaTypeId({
@@ -108,4 +108,12 @@ test("two call sites to the same target retain distinct root-independent edge ID
   });
   assert.notEqual(first, second);
   assert.equal(first.includes("/Users/"), false);
+});
+
+test("owner#member keys split only for v2 and local owners; pre-v2 owners are malformed", () => {
+  const owner = scopedNamedTypeId("src/main/java/a/B.java", "a.B");
+  assert.deepEqual(splitOwnerMemberKey(`${owner}#save(int)`), { owner, member: "save(int)" });
+  assert.deepEqual(splitOwnerMemberKey("type-local:src/A.java:3:4#run()"), { owner: "type-local:src/A.java:3:4", member: "run()" });
+  assert.equal(splitOwnerMemberKey("type:a.B#save(int)"), undefined);
+  assert.equal(splitOwnerMemberKey("a.B#save(int)"), undefined);
 });

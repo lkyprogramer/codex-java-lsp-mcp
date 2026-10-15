@@ -3,6 +3,9 @@ import type { SourceRange } from "../runtime/source-range.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 export type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 
+/** Workspace filesystem stat; a cache key for skipping a re-hash, never a fact. */
+export type FileStat = { size: number; mtimeMs: number; ctimeMs: number };
+
 export type JavaSourceSet = "main" | "test" | "generated" | "unknown";
 export type JavaParseState = "COMPLETE" | "RECOVERED" | "FAILED";
 export type JavaTypeKind = "class" | "interface" | "record" | "enum" | "annotation";
@@ -150,9 +153,6 @@ export type JavaFileFacts = {
   allTypeIds: string[];
   contentHash: string;
   size: number;
-  mtimeMs: number;
-  /** Filesystem change time persisted for metadata-only own-snapshot validation. */
-  ctimeMs?: number;
   parseState: JavaParseState;
   parseErrorCount: number;
   generation: number;
@@ -316,6 +316,8 @@ export type JavaFileBundle = {
   fields: JavaFieldFacts[];
   methods: JavaMethodFacts[];
   edges: StaticEdge[];
+  /** Stat observed when this bundle was parsed; workspace-local and never written to the facts database. */
+  observed?: FileStat;
 };
 
 export type AnchorFacts = {

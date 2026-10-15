@@ -27,7 +27,7 @@ const relativePath = "Source.java";
 async function parse(content: string, repoRoot = "/fixture", file = relativePath) {
   return extractJavaFile({ repoRoot, absolutePath: path.join(repoRoot, file), relativePath: file,
     sourceRoot: ".", module: "fixture", sourceSet: "main", size: Buffer.byteLength(content),
-    mtimeMs: 0, contentHash: sha(content), generation: 1, content }, await createJavaParserBackend());
+    contentHash: sha(content), generation: 1, content }, await createJavaParserBackend());
 }
 
 async function database(content: string, root = "/fixture") {

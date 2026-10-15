@@ -32,7 +32,6 @@ const BUILD_MARKER_RELATIVE_PATHS = [
 // discovery locator points at (range starts at the first annotation).
 // Revision 5: local types/compact record constructors and concrete/super call resolution.
 export const JAVA_FACTS_REVISION = 5;
-const LEGACY_EXTRACTOR_CODE_SUFFIX = /\|extractor-code-[0-9a-f]{7,40}$/i;
 
 // Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION
 // bumps still invalidate snapshots; daemon gitSha does not.
@@ -40,12 +39,6 @@ export function computeExtractorVersion(): string {
   const treeSitterVersion = (require("tree-sitter/package.json") as { version: string }).version;
   const treeSitterJavaVersion = (require("tree-sitter-java/package.json") as { version: string }).version;
   return `schema-3|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}`;
-}
-
-/** Snapshots written when extractorVersion still ended with extractor-code-<gitSha>. */
-export function extractorVersionsCompatible(snapshot: string, expected: string): boolean {
-  if (snapshot === expected) return true;
-  return snapshot.startsWith(`${expected}|`) && LEGACY_EXTRACTOR_CODE_SUFFIX.test(snapshot.slice(expected.length));
 }
 
 /**

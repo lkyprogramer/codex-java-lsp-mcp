@@ -78,7 +78,6 @@ function serviceBundle(): JavaFileBundle {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1
@@ -152,7 +151,6 @@ function gatewayBundle(): JavaFileBundle {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1

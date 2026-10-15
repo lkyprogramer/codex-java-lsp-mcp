@@ -26,8 +26,6 @@ export type ExtractJavaInput = {
   sourceSet: JavaSourceSet;
   content: string;
   size: number;
-  mtimeMs: number;
-  ctimeMs?: number;
   contentHash: string;
   generation: number;
 };
@@ -115,8 +113,6 @@ export function extractFromParsedTree(input: ExtractJavaInput, tree: JavaSyntaxT
     allTypeIds: context.allTypeIds,
     contentHash: input.contentHash,
     size: input.size,
-    mtimeMs: input.mtimeMs,
-    ...(input.ctimeMs === undefined ? {} : { ctimeMs: input.ctimeMs }),
     parseState,
     parseErrorCount: errorCount,
     generation: input.generation

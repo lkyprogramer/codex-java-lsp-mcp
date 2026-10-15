@@ -59,7 +59,6 @@ function mapperBundle(): JavaFileBundle {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1
@@ -118,7 +117,6 @@ function entityBundle(): JavaFileBundle {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1
@@ -160,7 +158,6 @@ function templateBundle(entityTypeId: string): JavaFileBundle {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1

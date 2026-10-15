@@ -104,7 +104,6 @@ test("anchor source facts drop static imports from imports, since a static impor
       allTypeIds: [],
       contentHash: "hash",
       size: 0,
-      mtimeMs: 0,
       parseState: "COMPLETE",
       parseErrorCount: 0,
       generation: 1

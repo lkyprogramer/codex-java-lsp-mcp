@@ -9,14 +9,18 @@ import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 // type_ref_name lets an incremental refresh find the files whose type
 // references a declaration change can re-resolve (ambiguous refs have no edge).
 // v8 added search_doc_text (ordered document text) for the dense experiment;
-// v9 drops it with the experiment (no product reader).
-export const SCHEMA_VERSION = 9;
+// v9 drops it with the experiment (no product reader). v10 (MAC-04): sym rows
+// are found by a 16-byte hash and confirmed by text (no long TEXT UNIQUE
+// index), and file/resource stat and the repo root left the facts database
+// for the per-workspace stat store (workspace-stat.ts).
+export const SCHEMA_VERSION = 10;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE sym(id INTEGER PRIMARY KEY, text TEXT NOT NULL UNIQUE);
-CREATE TABLE file(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, content_hash TEXT NOT NULL, size INTEGER, mtime_ms REAL,
-  ctime_ms REAL, source_root TEXT, module TEXT, package TEXT, parse_state TEXT, generation INTEGER NOT NULL, facts BLOB NOT NULL);
+CREATE TABLE sym(id INTEGER PRIMARY KEY, hash BLOB NOT NULL CHECK(length(hash)=16), text TEXT NOT NULL);
+CREATE INDEX sym_hash ON sym(hash);
+CREATE TABLE file(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, content_hash TEXT NOT NULL, size INTEGER,
+  source_root TEXT, module TEXT, package TEXT, parse_state TEXT, generation INTEGER NOT NULL, facts BLOB NOT NULL);
 CREATE INDEX file_content_hash ON file(content_hash);
 CREATE INDEX file_source_root ON file(source_root);
 CREATE TABLE type(sym INTEGER PRIMARY KEY REFERENCES sym(id), file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
@@ -48,8 +52,8 @@ CREATE TABLE type_ref_name(name_sym INTEGER NOT NULL, file_id INTEGER NOT NULL R
   PRIMARY KEY(name_sym, file_id)) WITHOUT ROWID;
 CREATE INDEX type_ref_name_file ON type_ref_name(file_id);
 -- Every resource XML the builder has looked at (mapper or not) with its
--- hash/size/mtime, so reconcile can skip unchanged XML like unchanged Java.
-CREATE TABLE resource_scan(path TEXT PRIMARY KEY, content_hash TEXT NOT NULL, size INTEGER, mtime_ms REAL);
+-- content hash; with a matching workspace stat row reconcile skips it.
+CREATE TABLE resource_scan(path TEXT PRIMARY KEY, content_hash TEXT NOT NULL);
 CREATE TABLE mybatis_resource(path TEXT PRIMARY KEY, namespace TEXT, content_hash TEXT, facts BLOB NOT NULL);
 CREATE INDEX mybatis_ns ON mybatis_resource(namespace);
 CREATE TABLE source_root_coverage(root TEXT PRIMARY KEY, state TEXT NOT NULL, generation INTEGER NOT NULL);

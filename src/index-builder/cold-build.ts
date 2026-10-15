@@ -28,6 +28,7 @@ import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
+import { attachWorkspaceStat, clearStats, fileStatOf, observedStats, recordStats, type StatRow } from "../java-index/sql/workspace-stat.js";
 import {
   clearIndexData,
   publishIndexCoverage,
@@ -109,13 +110,16 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   db.exec("PRAGMA cache_size=-16384");
   const resolvedRepoRoot = await realpath(options.repoRoot).catch(() => path.resolve(options.repoRoot));
   const layout = probeLayout(resolvedRepoRoot);
+  attachWorkspaceStat(db);
 
   if (readMeta(db, "buildState") !== "BUILDING") {
-    withTransaction(db, () => clearIndexData(db));
+    withTransaction(db, () => {
+      clearIndexData(db);
+      clearStats(db);
+    });
   }
   writeMeta(db, "buildState", "BUILDING");
   db.prepare("UPDATE source_root_coverage SET state='BUILDING'").run();
-  writeMeta(db, "repoRoot", resolvedRepoRoot);
 
   const discovered = await discoverJavaFiles(resolvedRepoRoot, layout);
   const total = discovered.length;
@@ -181,6 +185,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
       parseFailed += parsed.length - bundles.length + bundles.filter(bundle => bundle.file.parseState === "FAILED").length;
       const next = withTransaction(db, () => {
         for (const bundle of bundles) writeBundle(db, bundle);
+        recordStats(db, "java", observedStats(bundles));
         return commitProgress(db, { phase: "declare", done: existingPaths(db).size, total });
       });
       afterCommit({ phase: "declare", done: next.files, total }, options);
@@ -189,12 +194,12 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
 
   const xmlFiles = await discoverMyBatisResourceFiles(resolvedRepoRoot, layout);
   const resources: MyBatisMapperResourceFacts[] = [];
-  const scans: Array<{ relativePath: string; contentHash: string; size: number; mtimeMs: number }> = [];
+  const scans: StatRow[] = [];
   for (const file of xmlFiles) {
     const info = await stat(file.absolutePath);
     const content = await readFile(file.absolutePath, "utf8");
     const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-    scans.push({ relativePath: file.relativePath, contentHash, size: info.size, mtimeMs: info.mtimeMs });
+    scans.push({ path: file.relativePath, contentHash, ...fileStatOf(info) });
     const resource = extractMyBatisMapperFacts({
       relativePath: file.relativePath,
       content,
@@ -209,8 +214,10 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     // its resource set so removed XML and mapper-to-nonmapper edits cannot
     // leave old evidence behind when the graph/documents rebuild below.
     db.exec("DELETE FROM mybatis_resource; DELETE FROM resource_scan;");
+    clearStats(db, "resource");
     for (const resource of resources) writeMyBatisResource(db, resource);
-    for (const scan of scans) recordResourceScan(db, scan.relativePath, scan.contentHash, scan.size, scan.mtimeMs);
+    for (const scan of scans) recordResourceScan(db, scan.path, scan.contentHash);
+    recordStats(db, "resource", scans);
     const next: BuildProgress = declared ? { phase: "resolve", done: 0, total } : progress;
     commitProgress(db, next);
     return next;
@@ -252,7 +259,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     afterCommit(progress, options);
   }
 
-  writeKnowledgeAndEntities(db, generation);
+  writeKnowledgeAndEntities(db, generation, resolvedRepoRoot);
 
   const roots = layout.sourceRoots.map(root => root.relativePath);
   const counts = withTransaction(db, () => {
@@ -271,7 +278,7 @@ function isFatalIndexIoError(err: unknown): boolean {
   return /invalid repo-relative|not within the repo/.test(message);
 }
 
-function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void {
+function writeKnowledgeAndEntities(db: IndexDatabase, generation: number, repoRoot: string): void {
   const sql = new SqlFactsStore(db);
   const graph = new SqlKnowledgeGraph(db);
   const builder = new KnowledgeGraphBuilder(graph);
@@ -282,7 +289,6 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
     db.exec("DELETE FROM search_doc_token; DELETE FROM search_doc; DELETE FROM search_doc_df;");
     db.prepare("DELETE FROM meta WHERE key=?").run("searchDocStats");
   });
-  const repoRoot = readMeta(db, "repoRoot") ?? "";
   const resources = listMyBatisResources(db);
   const bindsMyBatis = myBatisBindingFilter(db);
   // Paths are read up front: a cursor left open across the per-file write
@@ -292,7 +298,7 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
   for (const relativePath of paths) {
     const bundle = readBundle(db, relativePath);
     if (!bundle) continue;
-    const content = repoRoot ? readFileSyncSafe(path.join(repoRoot, relativePath)) : undefined;
+    const content = readFileSyncSafe(path.join(repoRoot, relativePath));
     withTransaction(db, () => {
       builder.replaceFile(bundle, sql, generation);
       for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);

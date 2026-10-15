@@ -68,7 +68,6 @@ function file(overrides: Partial<JavaFileFacts> = {}): JavaFileFacts {
     allTypeIds: ["type:demo.Widget"],
     contentHash: "h",
     size: 1,
-    mtimeMs: 0,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1,

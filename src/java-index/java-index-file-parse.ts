@@ -83,10 +83,11 @@ export async function parseJavaSourceFile(args: {
   );
   const readablePath = await resolvedPathWithinRepo(absolutePath, args.resolvedRepoRoot);
   if (!readablePath) throw new Error(`Java source resolves outside repo root: ${args.inputPath}`);
-  const [content, stats] = await Promise.all([
-    readFile(readablePath, "utf8"),
-    stat(readablePath)
-  ]);
+  // Stat brackets the read: a write in between leaves no stat, so the next
+  // reconcile re-hashes instead of trusting a stamp newer than the content.
+  const stats = await stat(readablePath);
+  const content = await readFile(readablePath, "utf8");
+  const after = await stat(readablePath);
   const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
   const { tree } = refreshParseTree(args.cache, args.backend, relativePath, content);
   const input: ExtractJavaInput = {
@@ -98,10 +99,13 @@ export async function parseJavaSourceFile(args: {
     sourceSet,
     content,
     size: stats.size,
-    mtimeMs: stats.mtimeMs,
-    ctimeMs: stats.ctimeMs,
     contentHash,
     generation: args.generation
   };
-  return { ...extractFromParsedTree(input, tree), edges: [] };
+  const stable = after.size === stats.size && after.mtimeMs === stats.mtimeMs && after.ctimeMs === stats.ctimeMs;
+  return {
+    ...extractFromParsedTree(input, tree),
+    edges: [],
+    ...(stable ? { observed: { size: stats.size, mtimeMs: stats.mtimeMs, ctimeMs: stats.ctimeMs } } : {})
+  };
 }

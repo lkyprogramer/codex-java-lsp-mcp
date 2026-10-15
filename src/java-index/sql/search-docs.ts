@@ -13,7 +13,7 @@ function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
 }
 import type { MyBatisBindingFilter, SearchDocument } from "../../discovery/search-document.js";
 import { documentTokens } from "../../discovery/search-document.js";
-import { internSym, internSymNullable } from "./sym.js";
+import { internSym, internSymNullable, symId } from "./sym.js";
 
 export const SEARCH_DOC_STATS_KEY = "searchDocStats";
 export const SEARCH_DOC_STATS_EMPTY = "0:0";
@@ -169,9 +169,9 @@ export function myBatisBindingFilter(db: IndexDatabase): MyBatisBindingFilter {
 
 export function deleteSearchDocumentsForPath(db: IndexDatabase, relativePath: string): void {
   runInWriteTx(db, () => {
-    const row = prepareCached(db, "SELECT id FROM sym WHERE text=?").get(relativePath) as { id: number | bigint } | undefined;
-    if (!row) return;
-    deleteTokensForPath(db, Number(row.id));
+    const pathSym = symId(db, relativePath);
+    if (pathSym === undefined) return;
+    deleteTokensForPath(db, pathSym);
     commitSearchDocStats(db);
   });
 }

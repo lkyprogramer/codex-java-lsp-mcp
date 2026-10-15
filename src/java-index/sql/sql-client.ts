@@ -31,7 +31,7 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
-import { readIndexCounts, readMeta, readSourceRootCounts, writeBuildProgress, writeMeta } from "../../index-builder/progress.js";
+import { readIndexCounts, readMeta, readSourceRootCounts, writeBuildProgress } from "../../index-builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { noteTelemetryHydratePhases } from "../../telemetry/impact-telemetry.js";
 import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, isMemoryPath, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
@@ -572,10 +572,10 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private retargetCopiedDb(): void {
     const db = openIndexDb(this.dbPath);
     try {
-      withTransaction(db, () => {
-        writeMeta(db, "repoRoot", this.repoRoot);
-        writeBuildProgress(db, { phase: "declare", done: 1, total: 1 });
-      });
+      // The copy holds only workspace-independent facts. Any stat row left in
+      // this workspace is trusted only where its hash matches the copied facts,
+      // so the reconcile below re-hashes everything else against this workspace.
+      withTransaction(db, () => writeBuildProgress(db, { phase: "declare", done: 1, total: 1 }));
     } finally {
       closeDb(db);
     }

@@ -289,7 +289,7 @@ for await (const line of rl) {
   }
 });
 
-test("sibling VACUUM INTO copy retargets repoRoot and waits for reconcile", async () => {
+test("sibling VACUUM INTO copy carries no workspace root or stat and waits for reconcile", async () => {
   const repo = await mkdtemp(path.join(tmpdir(), "iod-life-sib-"));
   await cp(fixturesRoot, repo, { recursive: true });
   const sibling = await coldDb(repo);
@@ -305,8 +305,9 @@ test("sibling VACUUM INTO copy retargets repoRoot and waits for reconcile", asyn
     assert.equal(status.state, "READY");
     const db = openIndexDb(dest, { readOnly: true });
     try {
-      const root = db.prepare("SELECT value FROM meta WHERE key='repoRoot'").get() as { value?: string } | undefined;
-      assert.equal(root?.value, repo);
+      assert.equal(db.prepare("SELECT value FROM meta WHERE key='repoRoot'").get(), undefined);
+      // The reconcile rebuilt stat next to this workspace copy, not in the sibling.
+      assert.equal(existsSync(path.join(destDir, "workspace-stat.sqlite")), true);
       const progress = db.prepare("SELECT value FROM meta WHERE key='buildProgress'").get() as { value?: string } | undefined;
       assert.match(progress?.value ?? "", /"phase":"declare"/);
     } finally {

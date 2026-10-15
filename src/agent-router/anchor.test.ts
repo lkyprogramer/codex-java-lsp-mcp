@@ -41,7 +41,6 @@ test("anchor foreground warmup prioritizes a referenced interface over an earlie
           allTypeIds: ["type:demo.Controller"],
           contentHash: "hash",
           size: 1,
-          mtimeMs: 1,
           parseState: "COMPLETE",
           parseErrorCount: 0,
           generation: 1

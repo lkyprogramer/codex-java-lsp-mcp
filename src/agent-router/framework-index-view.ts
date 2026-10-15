@@ -339,8 +339,8 @@ export function bundleToFrameworkFileFacts(bundle: JavaFileBundle): FrameworkFil
  */
 // A v2 declaration also answers legacy "type:<fqn>" (and
 // "method:type:<fqn>#<sig>" / "field:type:<fqn>#<name>") request ids: the
-// framework adapters and older persisted consumers still reference types by
-// bare FQN. A legacy alias that two declarations share (the same FQN in two
+// framework adapters build in-process lookup keys from a resolved FQN (never
+// persisted, never read back from a database). A legacy alias that two declarations share (the same FQN in two
 // source roots) is ambiguous and answers nothing (reported missing), the same
 // "never guess between duplicates" rule the name resolver applies.
 export function v1AliasIds(id: string): string[] {

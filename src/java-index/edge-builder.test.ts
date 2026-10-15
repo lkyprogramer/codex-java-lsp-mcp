@@ -21,7 +21,6 @@ function baseInput(overrides: Partial<ExtractJavaInput> & { content: string; rel
     module: "demo-module",
     sourceSet: "main",
     size: Buffer.byteLength(overrides.content, "utf8"),
-    mtimeMs: 0,
     contentHash: "test",
     generation: 1,
     ...overrides

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -110,9 +111,14 @@ function cascadeCounts(db: ReturnType<typeof openIndexDb>, relativePath: string)
   };
 }
 
+function fileFacts(db: ReturnType<typeof openIndexDb>) {
+  return db.prepare("SELECT id, path, content_hash, size, generation, hex(facts) AS facts FROM file ORDER BY path").all()
+    .concat(db.prepare("SELECT path, content_hash FROM resource_scan ORDER BY path").all());
+}
+
 function fileIdentity(db: ReturnType<typeof openIndexDb>) {
   return (db.prepare(
-    "SELECT path, content_hash AS contentHash, generation, mtime_ms AS mtime FROM file ORDER BY path"
+    "SELECT f.path AS path, f.content_hash AS contentHash, f.generation AS generation, s.mtime_ms AS mtime FROM file f LEFT JOIN ws.file_stat s ON s.path=f.path ORDER BY f.path"
   ).all() as Array<{ path: string; contentHash: string; generation: number; mtime: number }>).map(row => ({
     path: row.path,
     contentHash: row.contentHash,
@@ -195,6 +201,7 @@ test("reconcile with rewritten mtimes does not reparse identical Java content", 
   const incremental = await cold(repo, 1);
   try {
     const before = fileIdentity(incremental.db);
+    const factsBefore = fileFacts(incremental.db);
     const edgesBefore = edgeSnapshot(incremental.db);
     await bumpAllJavaMtimes(repo, Date.now() + 120_000);
     const result = await applyBuilderJob({
@@ -210,6 +217,8 @@ test("reconcile with rewritten mtimes does not reparse identical Java content", 
       before.map(row => ({ path: row.path, contentHash: row.contentHash, generation: row.generation }))
     );
     assert.ok(after.every((row, index) => row.mtime > before[index]!.mtime), "mtime stamps must follow the checkout");
+    // The restamp lands in the workspace stat store; file facts keep their bytes.
+    assert.deepEqual(fileFacts(incremental.db), factsBefore);
     assert.deepEqual(edgeSnapshot(incremental.db), edgesBefore);
   } finally {
     close(incremental.db);
@@ -342,6 +351,42 @@ test("serve mode answers refresh JSON jobs then exits", async () => {
     assert.ok(payload.files > 0);
   } finally {
     close(built.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+// A stat row that matches the file on disk but vouches for a different hash
+// than the facts (a torn main/ws commit, a foreign or stale stat store) must
+// never let reconcile skip the file.
+async function forgeStat(db: ReturnType<typeof openIndexDb>, repo: string, relativePath: string, kind: "java" | "resource") {
+  const file = path.join(repo, relativePath);
+  const info = await stat(file);
+  const hash = createHash("sha256").update(await readFile(file, "utf8"), "utf8").digest("hex");
+  db.prepare(`INSERT INTO ws.file_stat(path, kind, content_hash, size, mtime_ms, ctime_ms) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, size=excluded.size, mtime_ms=excluded.mtime_ms, ctime_ms=excluded.ctime_ms`)
+    .run(relativePath, kind, hash, info.size, info.mtimeMs, info.ctimeMs);
+  return hash;
+}
+
+test("a stat row matching the disk but not the facts hash forces Java and XML re-reads", async () => {
+  const repo = await copyFixtures();
+  const incremental = await cold(repo, 1);
+  try {
+    const service = path.join(repo, serviceRel);
+    await writeFile(service, (await readFile(service, "utf8")).replace("repository.save", "repository.save /* torn */"));
+    const javaHash = await forgeStat(incremental.db, repo, serviceRel, "java");
+    const xmlRel = "src/main/resources/mapper/ItemMapper.xml";
+    const xml = path.join(repo, xmlRel);
+    await writeFile(xml, (await readFile(xml, "utf8")).replace("</mapper>", "<!-- torn --></mapper>"));
+    const xmlHash = await forgeStat(incremental.db, repo, xmlRel, "resource");
+    const result = await applyBuilderJob({ repoRoot: repo, db: incremental.db, job: { id: 9, kind: "reconcile", generation: 2 } });
+    assert.equal(result.ok, true, result.error);
+    const java = incremental.db.prepare("SELECT content_hash AS hash, generation FROM file WHERE path=?").get(serviceRel) as { hash: string; generation: number };
+    assert.deepEqual({ hash: java.hash, generation: Number(java.generation) }, { hash: javaHash, generation: 2 });
+    const scanned = incremental.db.prepare("SELECT content_hash AS hash FROM resource_scan WHERE path=?").get(xmlRel) as { hash: string };
+    assert.equal(scanned.hash, xmlHash);
+  } finally {
+    close(incremental.db);
     await rm(repo, { recursive: true, force: true });
   }
 });

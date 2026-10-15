@@ -59,13 +59,29 @@ test("writeBundle/readBundle round-trips java-index-v2 and matches JavaIndexStor
     for (const bundle of bundles) {
       writeBundle(db, bundle);
       const read = readBundle(db, bundle.file.relativePath);
-      assert.deepEqual(read, bundle, bundle.file.relativePath);
+      // Parse-time stat is workspace-local: observed on parse, never persisted as a fact.
+      const { observed, ...facts } = bundle;
+      assert.ok(observed, bundle.file.relativePath);
+      assert.deepEqual(read, facts, bundle.file.relativePath);
     }
     const first = bundles[0]!;
     const rewritten = { ...first, file: { ...first.file, generation: 2, contentHash: "rewritten" } };
     writeBundle(db, rewritten);
     assert.deepEqual(readBundle(db, first.file.relativePath)?.file.generation, 2);
     assert.equal(db.prepare("SELECT count(*) AS n FROM file WHERE path=?").get(first.file.relativePath)?.n, 1);
+  } finally {
+    close(db);
+  }
+});
+
+test("file surrogate ids stop at the safe-integer boundary", async () => {
+  const [bundle] = await parseFixtures();
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    db.prepare("INSERT INTO file(id, path, content_hash, generation, facts) VALUES (9007199254740991, 'edge.java', 'h', 1, x'00')").run();
+    assert.throws(() => writeBundle(db, bundle!), /unsafe rowid|invalid rowid|too large/);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM file WHERE path=?").get(bundle!.file.relativePath)?.n, 0);
   } finally {
     close(db);
   }
@@ -194,7 +210,7 @@ test("artificially injected identical type_id keeps the documented last-write-wi
 const NO_FACTS_TABLES = ["edge", "kg_node", "kg_edge", "entity"] as const;
 const TEXT_BLOB_ALLOW = new Set([
   "meta.key", "meta.value",
-  "sym.text",
+  "sym.hash", "sym.text",
   "file.path", "file.content_hash", "file.source_root", "file.module", "file.package", "file.parse_state", "file.facts",
   "type.fqn", "type.simple_name", "type.kind", "type.facts",
   "field.name", "field.facts",

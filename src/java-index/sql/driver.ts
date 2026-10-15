@@ -39,6 +39,15 @@ const statementCache = new WeakMap<IndexDatabase, Map<string, StatementSync>>();
 // lock (and waits busy_timeout for it), which a reader in the MCP process must
 // never contend for while the builder child is writing.
 const readOnlyConnections = new WeakSet<IndexDatabase>();
+const connectionPaths = new WeakMap<IndexDatabase, string>();
+
+export function indexDbPath(db: IndexDatabase): string | undefined {
+  return connectionPaths.get(db);
+}
+
+export function isReadOnlyConnection(db: IndexDatabase): boolean {
+  return readOnlyConnections.has(db);
+}
 
 export function isMemoryPath(path: string): boolean {
   return path === ":memory:" || path.startsWith("file:");
@@ -59,6 +68,7 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
   }
   const db = new DatabaseSync(path, { readOnly: options.readOnly === true });
   if (options.readOnly === true) readOnlyConnections.add(db);
+  connectionPaths.set(db, path);
   db.exec(`PRAGMA busy_timeout=${DEFAULT_BUSY_TIMEOUT_MS}`);
   const cacheKb = resolveCacheKb(options.cacheKb);
   if (!options.readOnly) {
@@ -116,8 +126,21 @@ export function withTransaction<T>(db: IndexDatabase, fn: () => T): T {
     } catch {
       // The connection may already have aborted the transaction.
     }
+    for (const hook of rollbackHooks.get(db) ?? []) hook();
     throw error;
   }
+}
+
+const rollbackHooks = new WeakMap<IndexDatabase, Set<() => void>>();
+
+/** Per-connection caches of rows written inside a transaction register here to forget them on rollback. */
+export function onRollback(db: IndexDatabase, hook: () => void): void {
+  let hooks = rollbackHooks.get(db);
+  if (!hooks) {
+    hooks = new Set();
+    rollbackHooks.set(db, hooks);
+  }
+  hooks.add(hook);
 }
 
 /**

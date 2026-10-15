@@ -52,7 +52,6 @@ function bundle(simpleName: string, methods: string[] = []): JavaFileBundle {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1
@@ -175,7 +174,7 @@ test("same-named local types and their members remain distinct through graph rep
     ...extractJavaFile({
       repoRoot: "/unused", absolutePath: `/unused/${relativePath}`, relativePath,
       sourceRoot: "src/main/java", module: "demo", sourceSet: "main",
-      content, size: Buffer.byteLength(content), mtimeMs: 0, contentHash: `h${generation}`, generation
+      content, size: Buffer.byteLength(content), contentHash: `h${generation}`, generation
     }, backend),
     edges: []
   });

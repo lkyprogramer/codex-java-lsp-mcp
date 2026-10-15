@@ -634,8 +634,7 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
   const byEntity = new Map<string, EntityHit>();
   for (const hit of hits) byEntity.set(hit.entityId, hit);
   for (const hit of byEntity.values()) {
-    const symRow = prepareCached(db, "SELECT id FROM sym WHERE text=?").get(hit.entityId) as { id: SQLOutputValue } | undefined;
-    const sym = symRow ? asInt(symRow.id) : undefined;
+    const sym = symId(db, hit.entityId);
     if (sym === undefined) continue;
     const fileRow = hit.kind === "type"
       ? (prepareCached(db, "SELECT file_id AS fileId, facts FROM type WHERE sym=?").get(sym) as { fileId: SQLOutputValue; facts: SQLOutputValue } | undefined)
@@ -819,12 +818,15 @@ function queryVocabulary(db: IndexDatabase, task: string): { queryTokens: number
   const tokens = tokenize(task);
   const known = prepareCached(
     db,
-    `SELECT 1 AS ok FROM sym s WHERE s.text=? AND (
-       EXISTS(SELECT 1 FROM entity_df WHERE field=0 AND token_sym=s.id)
-       OR EXISTS(SELECT 1 FROM entity_df WHERE field=1 AND token_sym=s.id)
-       OR EXISTS(SELECT 1 FROM search_doc_df WHERE token_sym=s.id))`
+    `SELECT 1 AS ok WHERE EXISTS(SELECT 1 FROM entity_df WHERE field=0 AND token_sym=?)
+       OR EXISTS(SELECT 1 FROM entity_df WHERE field=1 AND token_sym=?)
+       OR EXISTS(SELECT 1 FROM search_doc_df WHERE token_sym=?)`
   );
-  return { queryTokens: tokens.length, knownTokens: tokens.filter(token => known.get(token) !== undefined).length };
+  const isKnown = (token: string) => {
+    const sym = symId(db, token);
+    return sym !== undefined && known.get(sym, sym, sym) !== undefined;
+  };
+  return { queryTokens: tokens.length, knownTokens: tokens.filter(isKnown).length };
 }
 
 // text intent merges both BM25 routes so a type hit never preempts a method

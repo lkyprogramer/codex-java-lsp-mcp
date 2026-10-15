@@ -531,10 +531,9 @@ export class SqlFactsStore {
   }
 
   private selectMemberFacts<T>(table: "type" | "field" | "method", id: string): T | undefined {
-    const row = prepareCached(
-      this.db,
-      `SELECT t.facts FROM ${table} t JOIN sym s ON s.id=t.sym WHERE s.text=?`
-    ).get(id);
+    const sym = symId(this.db, id);
+    if (sym === undefined) return undefined;
+    const row = prepareCached(this.db, `SELECT facts FROM ${table} WHERE sym=?`).get(sym);
     return row ? decodeFacts<T>(row.facts) : undefined;
   }
 

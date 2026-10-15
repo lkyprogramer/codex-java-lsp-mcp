@@ -30,6 +30,7 @@ import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { deleteResourceScan, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import { internSym, symId } from "../java-index/sql/sym.js";
+import { attachWorkspaceStat, deleteStats, fileStatOf, observedStats, readStats, recordStats, statUnchanged, type StatRow } from "../java-index/sql/workspace-stat.js";
 import { readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta } from "./progress.js";
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "exit";
@@ -184,6 +185,7 @@ function resolveTouched(db: IndexDatabase, relativePaths: readonly string[]): vo
 
 function rewriteGraphAndEntities(
   db: IndexDatabase,
+  repoRoot: string,
   generation: number,
   deleted: readonly string[],
   rewritten: readonly string[]
@@ -204,7 +206,6 @@ function rewriteGraphAndEntities(
     deleteEntity.run(internSym(db, relativePath));
     deleteSearchDocumentsForPath(db, relativePath);
   }
-  const repoRoot = readMeta(db, "repoRoot") ?? "";
   const resources = listMyBatisResources(db);
   const bindsMyBatis = myBatisBindingFilter(db);
   for (const relativePath of rewritten) {
@@ -212,7 +213,7 @@ function rewriteGraphAndEntities(
     if (!bundle) continue;
     for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
     // Same-transaction document update keeps text and facts on one hash.
-    const content = repoRoot ? readFileSyncSafe(path.join(repoRoot, relativePath)) : undefined;
+    const content = readFileSyncSafe(path.join(repoRoot, relativePath));
     replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources, bindsMyBatis }));
   }
   rebuildEntityDf(db);
@@ -272,6 +273,7 @@ async function parseChanged(
 
 function applyParsedRefresh(
   db: IndexDatabase,
+  repoRoot: string,
   generation: number,
   roots: readonly string[],
   deleted: readonly string[],
@@ -311,6 +313,8 @@ function applyParsedRefresh(
     }
     for (const relativePath of deleted) prepareCached(db, "DELETE FROM file WHERE path=?").run(relativePath);
     for (const bundle of bundles) writeBundle(db, bundle);
+    deleteStats(db, deleted);
+    recordStats(db, "java", observedStats(bundles));
     for (const relativePath of dependentPaths(db, [...oldIds, ...changed.flatMap(item => ownedIds(db, item))], exclude)) {
       dependents.add(relativePath);
     }
@@ -319,7 +323,7 @@ function applyParsedRefresh(
     for (const relativePath of nameDependentPaths(db, declaredBefore, declaredAfter, exclude, [...dispatchParentNames])) dependents.add(relativePath);
     const rewritten = [...changed, ...dependents].sort();
     resolveTouched(db, rewritten);
-    rewriteGraphAndEntities(db, generation, deleted, rewritten);
+    rewriteGraphAndEntities(db, repoRoot, generation, deleted, rewritten);
     rebindChangedNamespaces(db, declaredBefore, declaredAfter);
     publishIndexCoverage(db, generation, roots, discovered);
   });
@@ -372,7 +376,7 @@ async function applyRefresh(
   writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, existing.length) });
   const parsed = await parseChanged(db, repoRoot, layout, generation, existing);
   writeBuildProgress(db, { phase: "resolve", done: 0, total: Math.max(1, parsed.bundles.length) });
-  applyParsedRefresh(db, generation, roots, [...uniqueDeleted, ...parsed.missing], parsed.bundles);
+  applyParsedRefresh(db, repoRoot, generation, roots, [...uniqueDeleted, ...parsed.missing], parsed.bundles);
 }
 
 function resyncNamespace(db: IndexDatabase, generation: number, namespace: string | undefined): void {
@@ -429,7 +433,7 @@ async function applyResources(
   const deletePaths: string[] = [];
   for (const input of deletedInputs) deletePaths.push((await resolveInput(repoRoot, input)).rel);
   const writes: Array<{ relativePath: string; facts: ReturnType<typeof extractMyBatisMapperFacts> }> = [];
-  const scans: Array<{ relativePath: string; contentHash: string; size: number; mtimeMs: number }> = [];
+  const scans: StatRow[] = [];
   for (const relativePath of deletePaths) {
     const before = readMyBatisResource(db, relativePath);
     if (before?.namespace) namespaces.add(before.namespace);
@@ -442,7 +446,7 @@ async function applyResources(
       const info = await stat(resolved.abs);
       const content = await readFile(resolved.abs, "utf8");
       const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-      scans.push({ relativePath, contentHash, size: info.size, mtimeMs: info.mtimeMs });
+      scans.push({ path: relativePath, contentHash, ...fileStatOf(info) });
       if (before?.contentHash === contentHash) continue;
       const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation });
       // A non-mapper XML that was never indexed stays a no-op (reconcile
@@ -457,8 +461,10 @@ async function applyResources(
     }
   }
   withTransaction(db, () => {
-    for (const scan of scans) recordResourceScan(db, scan.relativePath, scan.contentHash, scan.size, scan.mtimeMs);
+    for (const scan of scans) recordResourceScan(db, scan.path, scan.contentHash);
+    recordStats(db, "resource", scans);
     for (const relativePath of deletePaths) deleteResourceScan(db, relativePath);
+    deleteStats(db, deletePaths);
     for (const relativePath of deletePaths) prepareCached(db, "DELETE FROM mybatis_resource WHERE path=?").run(relativePath);
     for (const write of writes) {
       if (write.facts) {
@@ -481,27 +487,14 @@ async function applyResources(
 
 type IndexedFileRow = {
   path: string;
-  mtime: number | null;
   size: number | null;
-  contentHash: string | null;
+  contentHash: string;
   parseState: string | null;
-};
-
-type MtimeStamp = {
-  path: string;
-  mtimeMs: number;
-  ctimeMs: number;
 };
 
 async function contentHashOf(absolutePath: string): Promise<string> {
   const content = await readFile(absolutePath, "utf8");
   return createHash("sha256").update(content, "utf8").digest("hex");
-}
-
-function stampFileTimes(db: IndexDatabase, stamps: readonly MtimeStamp[]): void {
-  if (stamps.length === 0) return;
-  const stmt = prepareCached(db, "UPDATE file SET mtime_ms=?, ctime_ms=? WHERE path=?");
-  for (const stamp of stamps) stmt.run(stamp.mtimeMs, stamp.ctimeMs, stamp.path);
 }
 
 /**
@@ -516,27 +509,28 @@ export async function changedResources(
   db: IndexDatabase,
   repoRoot: string,
   layout: LayoutContext
-): Promise<{ changed: string[]; deleted: string[]; stamps: Array<{ path: string; hash: string; size: number; mtimeMs: number }> }> {
+): Promise<{ changed: string[]; deleted: string[]; stamps: StatRow[] }> {
   const scanned = new Map(
-    (prepareCached(db, "SELECT path, content_hash AS contentHash, size AS size, mtime_ms AS mtime FROM resource_scan").all() as Array<{
-      path: string; contentHash: string; size: number | null; mtime: number | null;
-    }>).map(row => [row.path, row])
+    (prepareCached(db, "SELECT path, content_hash AS contentHash FROM resource_scan").all() as Array<{ path: string; contentHash: string }>)
+      .map(row => [row.path, row.contentHash])
   );
+  const stats = readStats(db, "resource");
   const known = new Set([
     ...scanned.keys(),
     ...(prepareCached(db, "SELECT path FROM mybatis_resource").all() as Array<{ path: string }>).map(row => row.path)
   ]);
   const changed: string[] = [];
-  const stamps: Array<{ path: string; hash: string; size: number; mtimeMs: number }> = [];
+  const stamps: StatRow[] = [];
   const seen = new Set<string>();
   for (const file of await discoverMyBatisResourceFiles(repoRoot, layout)) {
     seen.add(file.relativePath);
     const previous = scanned.get(file.relativePath);
     const info = await stat(file.absolutePath);
-    if (previous && Number(previous.size) === info.size && Math.abs(Number(previous.mtime) - info.mtimeMs) <= 0.5) continue;
+    const stamp = stats.get(file.relativePath);
+    if (previous && stamp?.contentHash === previous && statUnchanged(stamp, info)) continue;
     const hash = await contentHashOf(file.absolutePath);
-    if (previous && hash === previous.contentHash) {
-      stamps.push({ path: file.relativePath, hash, size: info.size, mtimeMs: info.mtimeMs });
+    if (previous && hash === previous) {
+      stamps.push({ path: file.relativePath, contentHash: hash, ...fileStatOf(info) });
       continue;
     }
     changed.push(file.absolutePath);
@@ -552,11 +546,7 @@ async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: n
   // XML first, unpublished: the Java pass below is what publishes this
   // generation, so no reader sees generation N with the old XML evidence.
   const resources = await changedResources(db, repoRoot, layout);
-  if (resources.stamps.length > 0) {
-    withTransaction(db, () => {
-      for (const stamp of resources.stamps) recordResourceScan(db, stamp.path, stamp.hash, stamp.size, stamp.mtimeMs);
-    });
-  }
+  if (resources.stamps.length > 0) withTransaction(db, () => recordStats(db, "resource", resources.stamps));
   if (resources.changed.length > 0 || resources.deleted.length > 0) {
     await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false });
   }
@@ -574,12 +564,13 @@ async function applyJavaReconcile(
   const indexed = new Map(
     (prepareCached(
       db,
-      "SELECT path, mtime_ms AS mtime, size AS size, content_hash AS contentHash, parse_state AS parseState FROM file"
+      "SELECT path, size, content_hash AS contentHash, parse_state AS parseState FROM file"
     ).all() as IndexedFileRow[]).map(row => [row.path, row])
   );
+  const stats = readStats(db, "java");
   const changed: string[] = [];
   const recovering = readMeta(db, "buildState") !== "READY" || readMeta(db, "coverageRevision") !== "1";
-  const mtimeStamps: MtimeStamp[] = [];
+  const stamps: StatRow[] = [];
   const seen = new Set<string>();
   for (const file of discovered) {
     seen.add(file.relativePath);
@@ -589,14 +580,12 @@ async function applyJavaReconcile(
       continue;
     }
     const info = await stat(file.absolutePath);
-    const size = Number(previous.size);
-    const mtime = Number(previous.mtime);
-    const sizeMatch = Number.isFinite(size) && size === info.size;
-    const mtimeMatch = Number.isFinite(mtime) && Math.abs(mtime - info.mtimeMs) <= 0.5;
-    if (sizeMatch && mtimeMatch) continue;
-    // git worktree add rewrites mtimes; identical size+hash must not reparse.
-    if (sizeMatch && previous.contentHash && await contentHashOf(file.absolutePath) === previous.contentHash) {
-      mtimeStamps.push({ path: file.relativePath, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs });
+    const stamp = stats.get(file.relativePath);
+    // The stamp only stands in for hashing when it vouches for the hash the facts hold.
+    if (stamp?.contentHash === previous.contentHash && statUnchanged(stamp, info)) continue;
+    // git worktree add rewrites mtimes; an identical hash is restamped, not reparsed.
+    if (Number(previous.size) === info.size && await contentHashOf(file.absolutePath) === previous.contentHash) {
+      stamps.push({ path: file.relativePath, contentHash: previous.contentHash, ...fileStatOf(info) });
       continue;
     }
     changed.push(file.absolutePath);
@@ -604,7 +593,7 @@ async function applyJavaReconcile(
   const deleted = [...indexed.keys()].filter(relativePath => !seen.has(relativePath));
   if (changed.length === 0 && deleted.length === 0) {
     withTransaction(db, () => {
-      stampFileTimes(db, mtimeStamps);
+      recordStats(db, "java", stamps);
       if (recovering) {
         const graph = new SqlKnowledgeGraph(db);
         graph.clear();
@@ -617,11 +606,9 @@ async function applyJavaReconcile(
     });
     return;
   }
-  if (mtimeStamps.length > 0) {
-    withTransaction(db, () => stampFileTimes(db, mtimeStamps));
-  }
+  if (stamps.length > 0) withTransaction(db, () => recordStats(db, "java", stamps));
   const parsed = await parseChanged(db, repoRoot, layout, generation, changed);
-  applyParsedRefresh(db, generation, roots, [...deleted, ...parsed.missing], parsed.bundles, discovered);
+  applyParsedRefresh(db, repoRoot, generation, roots, [...deleted, ...parsed.missing], parsed.bundles, discovered);
 }
 
 export async function applyBuilderJob(options: {
@@ -632,6 +619,7 @@ export async function applyBuilderJob(options: {
   const id = typeof options.job.id === "number" ? options.job.id : -1;
   if (options.job.kind === "exit") return statusResult(options.db, id, true);
   const repoRoot = await realpath(options.repoRoot).catch(() => path.resolve(options.repoRoot));
+  attachWorkspaceStat(options.db);
   const current = indexedGenerationOf(options.db);
   const generation = options.job.generation ?? current + 1;
   if (generation < current) return statusResult(options.db, id, true);

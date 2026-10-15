@@ -70,7 +70,6 @@ function emptyBundle(repoRoot: string, absolutePath: string, generation: number,
       allTypeIds: [],
       contentHash: "hash",
       size: 1,
-      mtimeMs: 1,
       parseState,
       parseErrorCount: parseState === "COMPLETE" ? 0 : 1,
       generation

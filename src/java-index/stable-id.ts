@@ -67,8 +67,8 @@ export function javaParameterId(methodId: string, index: number): string {
 
 // v2 owner ids ("type:v2:<path>#<fqn>") embed one "#" inside the owner itself,
 // so "owner#member" keys cannot be split on the first "#". Split on the owner
-// boundary instead: v2 owners end at their second "#", v1/local owners at their
-// first "#". Returns undefined for malformed keys.
+// boundary instead: v2 owners end at their second "#", local owners at their
+// first "#". Any other owner (including pre-v2 "type:<fqn>") is malformed.
 export function splitOwnerMemberKey(key: string): { owner: string; member: string } | undefined {
   if (key.startsWith("type:v2:")) {
     const first = key.indexOf("#");
@@ -77,6 +77,7 @@ export function splitOwnerMemberKey(key: string): { owner: string; member: strin
     if (second === -1) return undefined;
     return { owner: key.slice(0, second), member: key.slice(second + 1) };
   }
+  if (!key.startsWith("type-local:")) return undefined;
   const sep = key.indexOf("#");
   if (sep === -1) return undefined;
   return { owner: key.slice(0, sep), member: key.slice(sep + 1) };
