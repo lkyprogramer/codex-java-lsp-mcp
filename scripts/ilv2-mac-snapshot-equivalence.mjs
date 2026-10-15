@@ -137,7 +137,8 @@ async function scenario(out, base, name, files, mutate, payload) {
     equivalentToColdBuild: equivalence.equal, ...(equivalence.equal ? {} : { diff: equivalence.diff }) };
 }
 
-// Publication bookkeeping still written by the current builder on any job (MAC-05 moves it out of the facts DB).
+// Publication bookkeeping still written by the current builder on any job (D08 residual ①: removed by
+// MAC-07's binding-only noop and MAC-08B's replacement of the old builder runtime).
 export const PUBLICATION_PAGES = new Set(["sqlite_schema", "meta", "source_root_coverage"]);
 
 export async function selfTest({ out, files = 1000, changes = [20, 200] }) {
