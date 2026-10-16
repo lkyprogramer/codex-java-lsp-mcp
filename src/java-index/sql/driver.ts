@@ -62,7 +62,13 @@ function resolveCacheKb(cacheKb: number | undefined): number {
   return DEFAULT_SQLITE_CACHE_KB;
 }
 
+/** A published mac1 snapshot (contract §2.7): never opened by a writer. */
+export function isSealedSnapshotPath(path: string): boolean {
+  return /(^|\/)mac1\/snapshots\//.test(path);
+}
+
 export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): IndexDatabase {
+  if (!options.readOnly && isSealedSnapshotPath(path)) throw new Error("sealed snapshots are read-only");
   if (!options.readOnly && !isMemoryPath(path)) {
     mkdirSync(dirname(path), { recursive: true });
   }

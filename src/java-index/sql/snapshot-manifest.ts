@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
+import { computeExtractorVersion } from "../build-fingerprint.js";
 import type { IndexDatabase } from "./driver.js";
 import { LOGICAL_EXPORT_VERSION, logicalDigest, type LogicalTableDigest } from "./logical-export.js";
 
 // The sealed manifest written next to a published snapshot's index.sqlite
 // (contract §2.x). It names what the snapshot logically contains, independent
-// of workspace: no root, stat or workspaceId. The publisher (MAC-05) fills
-// snapshotId and the sealed file digest after the final checkpoint.
+// of workspace: no root, stat or workspaceId. The publisher (MAC-07 seal.ts)
+// fills snapshotId and the sealed file digest after the final checkpoint.
 export const SNAPSHOT_MANIFEST_FORMAT = "ilv2-snapshot-manifest/mac1";
 
 export type SnapshotManifest = {
@@ -16,6 +17,8 @@ export type SnapshotManifest = {
   factsRevision: number;
   /** sha256 over sorted "kind\0path\0contentHash" lines of every indexed Java file and scanned resource. */
   contentManifestId: string;
+  /** Which facts this content produced: schema/identity/facts revisions, extractor and build/resolver inputs (§2.3.4). */
+  buildKey: string;
   sources: { java: number; resources: number };
   logical: { version: typeof LOGICAL_EXPORT_VERSION; digest: string; tables: Record<string, LogicalTableDigest> };
   file: { bytes: number; pageSize: number; pages: number; sha256: string };
@@ -30,16 +33,38 @@ function metaNumber(db: IndexDatabase, key: string): number {
   return value;
 }
 
-export function contentManifestId(db: IndexDatabase): { id: string; java: number; resources: number } {
+export type ContentEntry = { kind: "java" | "resource"; path: string; hash: string };
+
+/** The same digest from a capture's census or a snapshot's rows: entries sorted by kind, then path. */
+export function contentManifestIdOf(entries: Iterable<ContentEntry>): { id: string; java: number; resources: number } {
+  const sorted = [...entries].sort((a, b) => a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   const hash = createHash("sha256");
   let java = 0;
   let resources = 0;
-  for (const row of db.prepare(`SELECT 'java' AS kind, path, content_hash AS hash FROM main.file
-      UNION ALL SELECT 'resource', path, content_hash FROM main.resource_scan ORDER BY kind, path`).iterate() as Iterable<{ kind: string; path: string; hash: string }>) {
+  for (const row of sorted) {
     hash.update(`${row.kind}\0${row.path}\0${row.hash}\n`, "utf8");
     if (row.kind === "java") java += 1; else resources += 1;
   }
   return { id: hash.digest("hex"), java, resources };
+}
+
+export function contentManifestId(db: IndexDatabase): { id: string; java: number; resources: number } {
+  return contentManifestIdOf(db.prepare(`SELECT 'java' AS kind, path, content_hash AS hash FROM main.file
+      UNION ALL SELECT 'resource', path, content_hash FROM main.resource_scan`).all() as ContentEntry[]);
+}
+
+/** buildKey of the facts in `db`: the revisions it was written with plus its build/resolver input fingerprint. */
+export function buildKeyOf(db: IndexDatabase): string {
+  const fingerprint = (db.prepare("SELECT value FROM main.meta WHERE key='buildFingerprint'").get() as { value?: string } | undefined)?.value;
+  if (!fingerprint) throw new Error("missing meta buildFingerprint");
+  return buildKeyFor({ schemaVersion: metaNumber(db, "schemaVersion"), identityVersion: metaNumber(db, "identityVersion"),
+    factsRevision: metaNumber(db, "factsRevision"), buildFingerprint: fingerprint });
+}
+
+/** The key a plan expects, from the same inputs; the extractor is this build of the daemon. */
+export function buildKeyFor(input: { schemaVersion: number; identityVersion: number; factsRevision: number; buildFingerprint: string }): string {
+  return createHash("sha256").update(JSON.stringify({ schemaVersion: input.schemaVersion, identityVersion: input.identityVersion,
+    factsRevision: input.factsRevision, extractor: computeExtractorVersion(), buildFingerprint: input.buildFingerprint })).digest("hex");
 }
 
 export function buildSnapshotManifest(db: IndexDatabase, sealed: { snapshotId: string; bytes: number; pageSize: number; sha256: string }): SnapshotManifest {
@@ -52,6 +77,7 @@ export function buildSnapshotManifest(db: IndexDatabase, sealed: { snapshotId: s
     identityVersion: metaNumber(db, "identityVersion"),
     factsRevision: metaNumber(db, "factsRevision"),
     contentManifestId: content.id,
+    buildKey: buildKeyOf(db),
     sources: { java: content.java, resources: content.resources },
     logical,
     file: { bytes: sealed.bytes, pageSize: sealed.pageSize, pages: sealed.bytes / sealed.pageSize, sha256: sealed.sha256 }
@@ -59,7 +85,7 @@ export function buildSnapshotManifest(db: IndexDatabase, sealed: { snapshotId: s
   return parseSnapshotManifest(JSON.parse(JSON.stringify(manifest)));
 }
 
-const KEYS = ["contentManifestId", "factsRevision", "file", "formatVersion", "identityVersion", "logical", "schemaVersion", "snapshotId", "sources"];
+const KEYS = ["buildKey", "contentManifestId", "factsRevision", "file", "formatVersion", "identityVersion", "logical", "schemaVersion", "snapshotId", "sources"];
 
 /** Strict reader: any other format or shape is rejected, never upgraded. */
 export function parseSnapshotManifest(value: unknown): SnapshotManifest {
@@ -71,6 +97,7 @@ export function parseSnapshotManifest(value: unknown): SnapshotManifest {
   if (typeof m.snapshotId !== "string" || !SNAPSHOT_ID.test(m.snapshotId)) fail("snapshotId");
   for (const key of ["schemaVersion", "identityVersion", "factsRevision"]) if (!Number.isSafeInteger(m[key]) || (m[key] as number) <= 0) fail(key);
   if (typeof m.contentManifestId !== "string" || !HEX64.test(m.contentManifestId)) fail("contentManifestId");
+  if (typeof m.buildKey !== "string" || !HEX64.test(m.buildKey)) fail("buildKey");
   const sources = m.sources as Record<string, unknown> | undefined;
   if (!sources || !Number.isSafeInteger(sources.java) || !Number.isSafeInteger(sources.resources)) fail("sources");
   const logical = m.logical as Record<string, unknown> | undefined;
