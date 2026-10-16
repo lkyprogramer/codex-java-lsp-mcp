@@ -1,3 +1,4 @@
+import type { BigIntStats } from "node:fs";
 import path from "node:path";
 import type { FileStat, JavaFileBundle } from "../index-types.js";
 import { indexDbPath, isMemoryPath, isReadOnlyConnection, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
@@ -5,10 +6,12 @@ import { indexDbPath, isMemoryPath, isReadOnlyConnection, prepareCached, withTra
 // Filesystem stat belongs to one workspace, not to the shared facts database.
 // It lives in a sibling file attached as `ws`, so restamping after a checkout,
 // worktree copy or root move writes no facts page. A stat row only short-cuts
-// hashing: it is trusted when size/mtime match the file AND its content_hash
-// equals the hash the facts database recorded for that path.
+// hashing: it is trusted when size, nanosecond mtime/ctime, inode and device all
+// match the file AND its content_hash equals the hash the facts database recorded
+// for that path. size+mtime alone is never enough (ledger D07): a same-size edit
+// with a restored mtime still moves ctime.
 export const WORKSPACE_STAT_FILE = "workspace-stat.sqlite";
-const STAT_SCHEMA_VERSION = 1;
+const STAT_SCHEMA_VERSION = 2;
 const attached = new WeakSet<IndexDatabase>();
 
 export type StatKind = "java" | "resource";
@@ -48,7 +51,8 @@ function initializeStatStore(db: IndexDatabase, factsPath: string): void {
       // Stat is a pure cache; an unknown layout is dropped, never migrated.
       db.exec(`DROP TABLE IF EXISTS ws.file_stat;
         CREATE TABLE ws.file_stat(path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('java','resource')),
-          content_hash TEXT NOT NULL, size INTEGER NOT NULL, mtime_ms REAL NOT NULL, ctime_ms REAL NOT NULL) WITHOUT ROWID;
+          content_hash TEXT NOT NULL, size INTEGER NOT NULL, mtime_ns TEXT NOT NULL, ctime_ns TEXT NOT NULL,
+          ino TEXT NOT NULL, dev TEXT NOT NULL) WITHOUT ROWID;
         PRAGMA ws.user_version=${STAT_SCHEMA_VERSION};`);
     });
   }
@@ -62,7 +66,7 @@ export function readStats(db: IndexDatabase, kind: StatKind): Map<string, StatRo
   requireAttached(db);
   const rows = prepareCached(
     db,
-    "SELECT path, content_hash AS contentHash, size, mtime_ms AS mtimeMs, ctime_ms AS ctimeMs FROM ws.file_stat WHERE kind=?"
+    "SELECT path, content_hash AS contentHash, size, mtime_ns AS mtimeNs, ctime_ns AS ctimeNs, ino, dev FROM ws.file_stat WHERE kind=?"
   ).all(kind) as StatRow[];
   return new Map(rows.map(row => [row.path, { ...row }]));
 }
@@ -71,11 +75,11 @@ export function recordStats(db: IndexDatabase, kind: StatKind, rows: Iterable<St
   requireAttached(db);
   const stmt = prepareCached(
     db,
-    `INSERT INTO ws.file_stat(path, kind, content_hash, size, mtime_ms, ctime_ms) VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO ws.file_stat(path, kind, content_hash, size, mtime_ns, ctime_ns, ino, dev) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(path) DO UPDATE SET kind=excluded.kind, content_hash=excluded.content_hash,
-       size=excluded.size, mtime_ms=excluded.mtime_ms, ctime_ms=excluded.ctime_ms`
+       size=excluded.size, mtime_ns=excluded.mtime_ns, ctime_ns=excluded.ctime_ns, ino=excluded.ino, dev=excluded.dev`
   );
-  for (const row of rows) stmt.run(row.path, kind, row.contentHash, row.size, row.mtimeMs, row.ctimeMs);
+  for (const row of rows) stmt.run(row.path, kind, row.contentHash, row.size, row.mtimeNs, row.ctimeNs, row.ino, row.dev);
 }
 
 export function deleteStats(db: IndexDatabase, paths: Iterable<string>): void {
@@ -90,13 +94,10 @@ export function clearStats(db: IndexDatabase, kind?: StatKind): void {
   else db.exec("DELETE FROM ws.file_stat");
 }
 
-/** Equal size and mtime (sub-ms tolerance for filesystems that round) against a stat taken now. */
-export function statUnchanged(previous: FileStat | undefined, current: { size: number; mtimeMs: number }): boolean {
-  return previous !== undefined && previous.size === current.size && Math.abs(previous.mtimeMs - current.mtimeMs) <= 0.5;
-}
-
-export function fileStatOf(info: { size: number; mtimeMs: number; ctimeMs: number }): FileStat {
-  return { size: info.size, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs };
+/** The whole stat identity is unchanged against a bigint stat taken now (exact, no tolerance). */
+export function statUnchanged(previous: FileStat | undefined, current: BigIntStats): boolean {
+  return previous !== undefined && previous.size === Number(current.size) && previous.mtimeNs === String(current.mtimeNs)
+    && previous.ctimeNs === String(current.ctimeNs) && previous.ino === String(current.ino) && previous.dev === String(current.dev);
 }
 
 /** Stat rows for freshly parsed bundles; a bundle whose file changed while it was read has none. */

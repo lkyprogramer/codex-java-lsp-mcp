@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 // intentionally omitted: they only affect JDT/Maven JVM selection, not
 // tree-sitter facts or layout. A parser/extractor code fix invalidates the
 // AST cache via extractorVersion (below), not via this list.
-const BUILD_MARKER_RELATIVE_PATHS = [
+export const BUILD_MARKER_RELATIVE_PATHS: readonly string[] = [
   "pom.xml",
   "settings.gradle",
   "settings.gradle.kts",

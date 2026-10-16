@@ -3,7 +3,8 @@ import { opendir, realpath } from "node:fs/promises";
 import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
 
-const IGNORED_DIRECTORY_NAMES = new Set([
+/** Directory names no discovery walk descends into (the tracker applies the same rule). */
+export const IGNORED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
   ".git", ".gradle", "build", "target", "out", "bin", "node_modules", "dist"
 ]);
 

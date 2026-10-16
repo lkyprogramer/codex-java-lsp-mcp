@@ -17,3 +17,5 @@
 **目标测试：** `dist/java-index/snapshot/workspace-tracker.test.js`：`same-stat-changes-are-hashed`、`touch-edit-revert-startup-noop`、`drop-during-scan-keeps-new-rescan-cut`、`root-replacement-invalidates-binding`、`stream-restart-requires-full-hash`、`new-epoch-rejects-old-result-with-same-seq`。经§5.1定向入口。
 
 **G03B：** Java/XML同stat变化能发现；扫描中新事件/drop不被旧cut清除；第一轮STALE、第二轮确认；持续编辑不无限重启。原生cursor只在内存，进程重启新epoch+全量hash；删除D07。父门G03需G03A/B全通过。
+
+**D07收尾边界（2026-10-16归属决定）：** G03B删除size+mtime跳过（builder与workspace-stat改用size、纳秒mtime/ctime、ino、dev全等的stat身份）并交付不持久化游标的新tracker；旧runtime的fs.watch tracker（`repo-fs-watch.ts`、`repo-change-coordinator.ts`）在新调用图接入前仍是其唯一watcher，作为D07显式残留由MAC-08B同提交删除，见[删除账本](../ledger.md)。G03B不代表D07整体关闭。

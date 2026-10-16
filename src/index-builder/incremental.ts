@@ -35,7 +35,7 @@ import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { deleteResourceScan, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import { symId } from "../java-index/sql/sym.js";
-import { attachWorkspaceStat, deleteStats, fileStatOf, observedStats, readStats, recordStats, statUnchanged, type StatRow } from "../java-index/sql/workspace-stat.js";
+import { attachWorkspaceStat, deleteStats, observedStats, readStats, recordStats, statUnchanged, type StatRow } from "../java-index/sql/workspace-stat.js";
 import { COVERAGE_GAP, readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta } from "./progress.js";
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full" | "exit";
@@ -891,7 +891,7 @@ async function applyResources(
       const bytes = capture.bytes;
       const content = bytes.toString("utf8");
       const contentHash = capture.contentHash;
-      scans.push({ path: relativePath, contentHash, ...(capture.observed ?? {size:-1,mtimeMs:-1,ctimeMs:-1}) });
+      scans.push({ path: relativePath, contentHash, ...(capture.observed ?? {size:-1,mtimeNs:"-1",ctimeNs:"-1",ino:"0",dev:"0"}) });
       if (before?.contentHash === contentHash) continue;
       const parseStarted=performance.now();
       const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation });
@@ -980,7 +980,7 @@ export async function changedResources(
   for (const file of await discoverMyBatisResourceFiles(repoRoot, layout)) {
     seen.add(file.relativePath);
     const previous = scanned.get(file.relativePath);
-    const info = await stat(file.absolutePath);
+    const info = await stat(file.absolutePath, { bigint: true });
     const stamp = stats.get(file.relativePath);
     if (previous && stamp?.contentHash === previous && statUnchanged(stamp, info)) continue;
     const hash = await contentHashOf(repoRoot, file.absolutePath, captures);
@@ -1035,13 +1035,13 @@ async function captureJavaDelta(db:IndexDatabase,repoRoot:string,layout:LayoutCo
       changed.push(file.absolutePath);
       continue;
     }
-    const info = await stat(file.absolutePath);
+    const info = await stat(file.absolutePath, { bigint: true });
     const stamp = stats.get(file.relativePath);
     // The stamp only stands in for hashing when it vouches for the hash the facts hold.
     if (stamp?.contentHash === previous.contentHash && statUnchanged(stamp, info)) continue;
     // git worktree add rewrites mtimes; an identical hash is restamped, not reparsed.
     const capturedHash = await contentHashOf(repoRoot, file.absolutePath, captures);
-    if (Number(previous.size) === info.size && capturedHash === previous.contentHash) {
+    if (Number(previous.size) === Number(info.size) && capturedHash === previous.contentHash) {
       const observed = captures.get(file.absolutePath)?.observed;
       if (observed) stamps.push({ path: file.relativePath, contentHash: previous.contentHash, ...observed });
       captures.delete(file.absolutePath);

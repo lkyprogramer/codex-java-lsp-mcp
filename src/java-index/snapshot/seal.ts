@@ -9,7 +9,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { compatibleDeltaBase } from "../../index-builder/execution-plan.js";
-import { buildSnapshotManifest, parseSnapshotManifest, type SnapshotManifest } from "../sql/snapshot-manifest.js";
+import { buildSnapshotManifest, parseSnapshotManifest, type ContentEntry, type SnapshotManifest } from "../sql/snapshot-manifest.js";
 
 export const DB_FILE = "index.sqlite";
 export const MANIFEST_FILE = "manifest.json";
@@ -144,4 +144,15 @@ export function openSealedDatabase(layout: Mac1Layout, snapshotId: string): Data
   url.searchParams.set("immutable", "1");
   url.searchParams.set("mode", "ro");
   return new DatabaseSync(url.href, { readOnly: true });
+}
+
+/** The content census a sealed snapshot was built from: what a tracker round compares its verified view to. */
+export async function readSnapshotContent(layout: Mac1Layout, snapshotId: string): Promise<{ manifest: SnapshotManifest; entries: Map<string, ContentEntry> }> {
+  const manifest = await readSealedManifest(layout, snapshotId);
+  const db = openSealedDatabase(layout, snapshotId);
+  try {
+    const rows = db.prepare(`SELECT 'java' AS kind, path, content_hash AS hash FROM main.file
+      UNION ALL SELECT 'resource', path, content_hash FROM main.resource_scan`).all() as ContentEntry[];
+    return { manifest, entries: new Map(rows.map(row => [row.path, { kind: row.kind, path: row.path, hash: row.hash }])) };
+  } finally { db.close(); }
 }

@@ -3,8 +3,9 @@ import type { SourceRange } from "../runtime/source-range.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 export type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 
-/** Workspace filesystem stat; a cache key for skipping a re-hash, never a fact. */
-export type FileStat = { size: number; mtimeMs: number; ctimeMs: number };
+/** Workspace filesystem stat; a cache key for skipping a re-hash, never a fact. Size, nanosecond
+ * mtime/ctime and inode/device (§2.4), the bigints as decimal strings. */
+export type FileStat = { size: number; mtimeNs: string; ctimeNs: string; ino: string; dev: string };
 
 export type JavaSourceSet = "main" | "test" | "generated" | "unknown";
 export type JavaParseState = "COMPLETE" | "RECOVERED" | "FAILED";

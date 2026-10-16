@@ -118,12 +118,13 @@ function fileFacts(db: ReturnType<typeof openIndexDb>) {
 
 function fileIdentity(db: ReturnType<typeof openIndexDb>) {
   return (db.prepare(
-    "SELECT f.path AS path, f.content_hash AS contentHash, f.generation AS generation, s.mtime_ms AS mtime FROM file f LEFT JOIN ws.file_stat s ON s.path=f.path ORDER BY f.path"
-  ).all() as Array<{ path: string; contentHash: string; generation: number; mtime: number }>).map(row => ({
+    "SELECT f.path AS path, f.content_hash AS contentHash, f.generation AS generation, s.mtime_ns AS mtime FROM file f LEFT JOIN ws.file_stat s ON s.path=f.path ORDER BY f.path"
+  ).all() as Array<{ path: string; contentHash: string; generation: number; mtime: string }>).map(row => ({
     path: row.path,
     contentHash: row.contentHash,
     generation: Number(row.generation),
-    mtime: Number(row.mtime)
+    // Nanoseconds exceed 2^53: compared as bigints, never as Numbers.
+    mtime: BigInt(row.mtime)
   }));
 }
 
@@ -360,11 +361,12 @@ test("serve mode answers refresh JSON jobs then exits", async () => {
 // never let reconcile skip the file.
 async function forgeStat(db: ReturnType<typeof openIndexDb>, repo: string, relativePath: string, kind: "java" | "resource") {
   const file = path.join(repo, relativePath);
-  const info = await stat(file);
+  const info = await stat(file, { bigint: true });
   const hash = createHash("sha256").update(await readFile(file, "utf8"), "utf8").digest("hex");
-  db.prepare(`INSERT INTO ws.file_stat(path, kind, content_hash, size, mtime_ms, ctime_ms) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, size=excluded.size, mtime_ms=excluded.mtime_ms, ctime_ms=excluded.ctime_ms`)
-    .run(relativePath, kind, hash, info.size, info.mtimeMs, info.ctimeMs);
+  db.prepare(`INSERT INTO ws.file_stat(path, kind, content_hash, size, mtime_ns, ctime_ns, ino, dev) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, size=excluded.size, mtime_ns=excluded.mtime_ns,
+      ctime_ns=excluded.ctime_ns, ino=excluded.ino, dev=excluded.dev`)
+    .run(relativePath, kind, hash, Number(info.size), String(info.mtimeNs), String(info.ctimeNs), String(info.ino), String(info.dev));
   return hash;
 }
 

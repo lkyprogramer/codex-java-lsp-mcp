@@ -7,7 +7,7 @@ import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { attachWorkspaceStat, readStats, recordStats } from "./workspace-stat.js";
 
-const row = { path: "src/main/java/A.java", contentHash: "h1", size: 10, mtimeMs: 1, ctimeMs: 1 };
+const row = { path: "src/main/java/A.java", contentHash: "h1", size: 10, mtimeNs: "1000000123", ctimeNs: "1000000456", ino: "18446744073709551615", dev: "16777234" };
 
 test("a second connection attaching an initialized stat store keeps its rows", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "workspace-stat-"));
@@ -47,7 +47,7 @@ test("an unknown stat layout is dropped and recreated, never migrated", async ()
     try {
       attachWorkspaceStat(db);
       assert.equal(readStats(db, "java").size, 0);
-      assert.equal((db.prepare("PRAGMA ws.user_version").get() as { user_version: number }).user_version, 1);
+      assert.equal((db.prepare("PRAGMA ws.user_version").get() as { user_version: number }).user_version, 2);
     } finally {
       close(db);
     }

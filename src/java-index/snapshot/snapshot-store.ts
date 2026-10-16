@@ -172,6 +172,9 @@ export class SnapshotStore {
   acquireBound(workspaceId: string, purpose: LeasePurpose): { lease: SnapshotLease; binding: WorkspaceBinding } | undefined {
     const binding = this.binding(workspaceId);
     if (!binding) return undefined; // NOT_READY: never another workspace's unverified snapshot.
+    // The root was replaced at the same path: the old binding is no longer this workspace's view.
+    const tracked = this.tracked.get(workspaceId);
+    if (tracked && !sameRoot(tracked.root, binding.root)) return undefined;
     return { lease: this.acquire(binding.snapshotId, purpose), binding };
   }
 

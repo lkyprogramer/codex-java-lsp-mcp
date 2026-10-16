@@ -7,7 +7,7 @@
 | 子卡 / 门 | 依赖 | 实施与目标测试（均待实现，经§5.1入口） | 完成判据 |
 | --- | --- | --- | --- |
 | MAC-08A / G08A | MAC-05、MAC-06、MAC-07 | budget→prepare→一次acquire→query worker→preview→取消/释放；`dist/java-index/snapshot/request-view.test.js`：`nonzero-deadline-bounds-all-stages`、`publish-does-not-upgrade-held-view`、`symbol-id-survives-unrelated-publish` | resolve/create/SQL/preview挂起均有界且收敛；hash/coverage/标签同view；NOT_READY/PARTIAL正确；跨请求稳定符号ID成功 |
-| MAC-08B / G08B | MAC-08A | stdio只转发、status纯读、新调用图与旧runtime同提交替换；MCP合同测试`status-only-does-not-bootstrap`、`stdio-http-share-one-owner` | 删除D01/D04/D05和D09运行时部分（IDLE_WARMING、先acquire后fresh、无取消race）；保留有效业务断言；guidance文字留MAC-13 |
+| MAC-08B / G08B | MAC-08A | stdio只转发、status纯读、新调用图与旧runtime同提交替换；MCP合同测试`status-only-does-not-bootstrap`、`stdio-http-share-one-owner` | 删除D01/D04/D05、D07残留（旧runtime的`repo-fs-watch.ts`/`repo-change-coordinator.ts` fs.watch tracker，新tracker接入同提交删除）和D09运行时部分（IDLE_WARMING、先acquire后fresh、无取消race）；保留有效业务断言；guidance文字留MAC-13 |
 | MAC-08C / G08C | MAC-08B | 前移K29的新版driver及三仓runner/verifier合同适配；运行容量和三仓门 | 新query池/IPC/lease/preview被负载经过；1000文件/20并发/p95≤150ms/eventloop≤20ms；三仓质量无回退、每cell 5次且严格p95比≤1.25，无+50ms宽限 |
 
 G08C不沿用绕过新query池的旧SQL直连benchmark冒充请求路径证明；输入/并发/样本分母相同，计时覆盖请求进入到返回。命令用§6.3，task-id取`mac-08`且run-id新建；K容量选`--cases K29`，无需JDT输入。同步修runner的selected-only退出码/汇总测试，不把其余NOT_RUN算全K PASS。

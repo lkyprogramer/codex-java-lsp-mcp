@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { computeExtractorVersion } from "../build-fingerprint.js";
+import { computeExtractorVersion, JAVA_FACTS_REVISION } from "../build-fingerprint.js";
+import { STABLE_ID_VERSION } from "../stable-id.js";
 import type { IndexDatabase } from "./driver.js";
 import { LOGICAL_EXPORT_VERSION, logicalDigest, type LogicalTableDigest } from "./logical-export.js";
+import { SCHEMA_VERSION } from "./schema.js";
 
 // The sealed manifest written next to a published snapshot's index.sqlite
 // (contract §2.x). It names what the snapshot logically contains, independent
@@ -59,6 +61,11 @@ export function buildKeyOf(db: IndexDatabase): string {
   if (!fingerprint) throw new Error("missing meta buildFingerprint");
   return buildKeyFor({ schemaVersion: metaNumber(db, "schemaVersion"), identityVersion: metaNumber(db, "identityVersion"),
     factsRevision: metaNumber(db, "factsRevision"), buildFingerprint: fingerprint });
+}
+
+/** The buildKey a build by this daemon writes for `buildFingerprint` (what a tracker round expects). */
+export function currentBuildKey(buildFingerprint: string): string {
+  return buildKeyFor({ schemaVersion: SCHEMA_VERSION, identityVersion: STABLE_ID_VERSION, factsRevision: JAVA_FACTS_REVISION, buildFingerprint });
 }
 
 /** The key a plan expects, from the same inputs; the extractor is this build of the daemon. */

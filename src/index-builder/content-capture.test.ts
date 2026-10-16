@@ -2,7 +2,7 @@ import { captureSource } from "../java-index/source-capture.js";
 import { applyBuilderJob } from "./incremental.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile, open, chmod, symlink } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile, open, chmod, symlink, utimes } from "node:fs/promises";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -153,3 +153,29 @@ test("capture-does-not-stamp-file-modified-before-after-stat", async t => {
   assert.equal(stats,2);assert.equal(capture.bytes.toString(),"class A {}");assert.equal(capture.observed,undefined);
  }finally{t.mock.restoreAll();await probe?.close();await rm(f.repo,{recursive:true,force:true});}
 });
+
+for (const kind of ["java", "resource"] as const) {
+ test(`reconcile-hashes-same-size-same-mtime-${kind}-edit`, async () => {
+  // Ledger D07: a stat row with equal size+mtime must not skip the hash; ctime/inode still moved.
+  const f = await fixture(); const db = openIndexDb(":memory:"); ensureSchema(db);
+  const target = kind === "java" ? f.file : path.join(f.repo, "src/main/resources/mapper/M.xml");
+  const [from, to] = kind === "java" ? ["class A { void alpha() {} }", "class A { void omega() {} }"] : ['<mapper namespace="demo.Alpha"/>', '<mapper namespace="demo.Omega"/>'];
+  try {
+   await mkdir(path.dirname(target), { recursive: true });
+   if (kind === "resource") await writeFile(f.file, "class A {}");
+   await writeFile(target, from);
+   const second = Math.floor(Date.now() / 1000) - 60;
+   await utimes(target, second, second);
+   await runSqlColdBuild({ repoRoot: f.repo, db });
+   const before = await lstat(target);
+   await writeFile(target, to); await utimes(target, second, second);
+   const after = await lstat(target);
+   assert.deepEqual([after.size, after.mtimeMs], [before.size, before.mtimeMs]);
+   const result = await applyBuilderJob({ repoRoot: f.repo, db, job: { kind: "reconcile" } });
+   assert.equal(result.ok, true, result.error);
+   const relative = path.relative(f.repo, target);
+   if (kind === "java") assert.equal(readBundle(db, relative)!.file.contentHash, sha(to));
+   else assert.equal((db.prepare("SELECT content_hash AS h FROM resource_scan WHERE path=?").get(relative) as { h: string }).h, sha(to));
+  } finally { close(db); await rm(f.repo, { recursive: true, force: true }); }
+ });
+}
