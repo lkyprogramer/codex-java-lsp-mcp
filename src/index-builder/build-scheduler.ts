@@ -16,19 +16,57 @@ export type BuildOutcome =
   | { kind: "result"; result: BuilderJobResult }
   | { kind: "needs-full"; captures: readonly SourceCapture[]; reason: string };
 export type BuildGrant = { parserTokens: number; captures: readonly SourceCapture[] };
+/** `result` settles before the child closes: the adapter sends it only after
+ * the job's writes are durable, then exits. */
 export type BuildAttempt = { child: ChildProcess; result: Promise<BuildOutcome> };
 export type BuildSelection = {
   kind: BuildKind;
   baseId?: string;
   start(grant: BuildGrant): BuildAttempt;
+  /** Called exactly once by the scheduler: when the selection is discarded
+   * unstarted, or after its started process closed. select() itself must not
+   * spawn; anything it reserves is returned here. */
+  release?(): void;
 };
-export type BuildCompletion = { ok: boolean; error?: string; result?: BuilderJobResult; baseId?: string };
+export type BuildCompletion = {
+  ok: boolean;
+  error?: string;
+  result?: BuilderJobResult;
+  baseId?: string;
+  /** The result arrived, but the builder did not exit within the grace period and was killed. */
+  forcedExit?: boolean;
+};
+export type BuildSchedulerEvent =
+  | { type: "forced-exit"; workspaceId: string; pid?: number }
+  | { type: "reap-overdue"; workspaceId: string; pid?: number; exited: boolean };
 export type BuildSchedulerOptions = {
   /** Select from the owner's current bindings at admission, never from a queued CURRENT path. */
   select(hint: Readonly<BuildHint>): BuildSelection;
+  /** Static admission: no builder starts while false (an owner restart before
+   * its slots are open). wake() re-checks it. */
+  admitted?(): boolean;
+  onEvent?(event: BuildSchedulerEvent): void;
+  timing?: { exitGraceMs?: number; reapWatchMs?: number };
 };
 
 type Change = { deleted: boolean; generation: number };
+/** One process run for an entry; a delta that escalates runs a second attempt. */
+type Attempt = {
+  selection: BuildSelection;
+  kind: BuildKind;
+  child?: ChildProcess;
+  state: "RUNNING" | "RESULT_RECEIVED" | "REAPING";
+  outcome?: BuildOutcome;
+  failure?: string;
+  forcedExit?: boolean;
+  exited: boolean;
+  closed: boolean;
+  /** SIGKILL is sent once: a failed kill emits "error" synchronously, which re-enters terminate. */
+  killSent: boolean;
+  reapOverdue: boolean;
+  timers: Set<NodeJS.Timeout>;
+};
+/** One workspace's merged request, from its first submit to its completion. */
 type Entry = {
   hint: BuildHint;
   order: number;
@@ -36,31 +74,39 @@ type Entry = {
   waiters: Array<(result: BuildCompletion) => void>;
   captures: readonly SourceCapture[];
   escalated?: boolean;
-  state: "RUNNING" | "RESULT_RECEIVED" | "REAPING";
-  kind: BuildKind;
-  child?: ChildProcess;
-  outcome?: BuildOutcome;
-  failure?: string;
+  attempt?: Attempt;
   baseId?: string;
-  timer?: NodeJS.Timeout;
   done: Promise<void>;
   reaped(): void;
 };
 
-const PARSERS_PER_BUILDER = 2;
+export const MAX_BUILDERS = 2;
+export const PARSERS_PER_BUILDER = 2;
 const JOB_MS = { delta: 60_000, full: 1_230_000 };
+/** A builder that sent its result exits on its own well within this. */
+const EXIT_GRACE_MS = 5_000;
+/** G06B/G06C: a killed process is reaped within 2 s, or reported. */
+const REAP_WATCH_MS = 2_000;
+/** A result posted just before exit may be delivered after the close event. */
+const RESULT_AFTER_CLOSE_MS = 50;
 
 /** Owner-scoped scheduling primitive. Transport/bindings switch to it in MAC-08;
  * the process adapter must use the grant, and must report escalation before doing a full. */
 export class BuildScheduler {
   private readonly queue: Entry[] = [];
   private readonly active = new Map<string, Entry>();
+  private readonly released = new WeakSet<BuildSelection>();
+  private readonly exitGraceMs: number;
+  private readonly reapWatchMs: number;
   private order = 0;
   private pumping = false;
   private stopped = false;
   private stopPromise?: Promise<void>;
 
-  constructor(private readonly options: BuildSchedulerOptions) {}
+  constructor(private readonly options: BuildSchedulerOptions) {
+    this.exitGraceMs = options.timing?.exitGraceMs ?? EXIT_GRACE_MS;
+    this.reapWatchMs = options.timing?.reapWatchMs ?? REAP_WATCH_MS;
+  }
 
   submit(hint: BuildHint): Promise<BuildCompletion> {
     if (this.stopped) return Promise.resolve({ ok: false, error: "scheduler stopped" });
@@ -73,8 +119,7 @@ export class BuildScheduler {
       if (!entry) {
         let reaped!: () => void;
         const done = new Promise<void>(finish => { reaped = finish; });
-        entry = { hint: { ...hint }, order: this.order++, changes: new Map(), waiters: [], captures: [],
-          state: "RUNNING", kind: hint.kind, done, reaped };
+        entry = { hint: { ...hint }, order: this.order++, changes: new Map(), waiters: [], captures: [], done, reaped };
         this.queue.push(entry);
       }
       this.mergeHint(entry, hint);
@@ -83,11 +128,18 @@ export class BuildScheduler {
     });
   }
 
+  /** Re-check admission and capacity, e.g. once an owner restart opens its slots. */
+  wake(): void {
+    this.schedule();
+  }
+
   status() {
-    const jobs = [...this.active.values()].map(entry => ({ workspaceId: entry.hint.workspaceId,
-      kind: entry.kind, state: entry.state, pid: entry.child?.pid, baseId: entry.baseId }));
-    return { stopped: this.stopped, builders: jobs.length, full: jobs.filter(job => job.kind === "full").length,
-      parserTokens: jobs.length * PARSERS_PER_BUILDER, queued: this.queue.length, jobs };
+    const jobs = [...this.active.values()].flatMap(entry => entry.attempt ? [{ workspaceId: entry.hint.workspaceId,
+      kind: entry.attempt.kind, state: entry.attempt.state, pid: entry.attempt.child?.pid, baseId: entry.baseId,
+      exited: entry.attempt.exited, reapOverdue: entry.attempt.reapOverdue }] : []);
+    return { stopped: this.stopped, admitted: this.admitted(), builders: this.active.size,
+      full: jobs.filter(job => job.kind === "full").length, parserTokens: this.active.size * PARSERS_PER_BUILDER,
+      queued: this.queue.length, reapOverdue: jobs.filter(job => job.reapOverdue).length, jobs };
   }
 
   stop(): Promise<void> {
@@ -96,12 +148,15 @@ export class BuildScheduler {
     for (const entry of this.queue.splice(0)) this.complete(entry, { ok: false, error: "scheduler stopped" });
     const running = [...this.active.values()];
     for (const entry of running) {
-      entry.failure = "scheduler stopped";
-      entry.state = "REAPING";
-      entry.child?.kill("SIGKILL");
+      // A received result stands: its writes are durable.
+      if (entry.attempt) this.terminate(entry, entry.attempt, "scheduler stopped");
     }
     this.stopPromise = Promise.all(running.map(entry => entry.done)).then(() => undefined);
     return this.stopPromise;
+  }
+
+  private admitted(): boolean {
+    return this.options.admitted?.() ?? true;
   }
 
   private mergeHint(entry: Entry, hint: BuildHint, changes?: ReadonlyMap<string, Change>): void {
@@ -131,10 +186,16 @@ export class BuildScheduler {
     });
   }
 
+  private release(selection: BuildSelection): void {
+    if (this.released.has(selection)) return;
+    this.released.add(selection);
+    selection.release?.();
+  }
+
   private pump(): void {
     const considered = new Set<Entry>();
-    while (!this.stopped && this.active.size < 2) {
-      const fullBusy = this.status().full !== 0;
+    while (!this.stopped && this.active.size < MAX_BUILDERS && this.admitted()) {
+      const fullBusy = [...this.active.values()].some(entry => entry.attempt?.kind === "full");
       const eligible = this.queue.filter(entry => !considered.has(entry) && !this.active.has(entry.hint.workspaceId)
         && (entry.hint.kind !== "full" || !fullBusy));
       // Once a full exits, an older waiting full gets the newly free slot.
@@ -143,57 +204,115 @@ export class BuildScheduler {
       if (!entry) return;
       considered.add(entry);
       this.queue.splice(this.queue.indexOf(entry), 1);
-      entry.kind = entry.hint.kind;
-      entry.state = "RUNNING";
       this.active.set(entry.hint.workspaceId, entry);
+      let selection: BuildSelection | undefined;
       try {
-        const selection = this.options.select(entry.hint);
-        if (this.stopped) { this.complete(entry, { ok: false, error: "scheduler stopped" }); continue; }
+        selection = this.options.select(entry.hint);
+        if (this.stopped) {
+          this.release(selection);
+          this.complete(entry, { ok: false, error: "scheduler stopped" });
+          continue;
+        }
         if (entry.escalated && selection.kind !== "full") throw new Error("escalated build requires a full selection");
         if (selection.kind === "full" && fullBusy) {
+          this.release(selection);
           this.active.delete(entry.hint.workspaceId);
           entry.hint.kind = "full";
           this.queue.push(entry);
           continue; // Discard this selection: admission must select the then-current base again.
         }
-        entry.kind = selection.kind;
-        entry.baseId = selection.baseId;
-        const attempt = selection.start({ parserTokens: PARSERS_PER_BUILDER, captures: entry.captures });
-        entry.child = attempt.child;
-        entry.child.once("error", error => this.terminate(entry, error.message));
-        entry.child.once("close", (code, signal) => this.closed(entry, code, signal));
-        attempt.result.then(outcome => {
-          if (this.active.get(entry.hint.workspaceId) !== entry) return;
-          entry.outcome = outcome;
-          if (!entry.failure) entry.state = "RESULT_RECEIVED";
-        }, error => this.terminate(entry, error instanceof Error ? error.message : String(error)));
-        entry.timer = setTimeout(() => this.terminate(entry, `${entry.kind} build deadline exceeded`), JOB_MS[entry.kind]);
-        if (this.stopped) this.terminate(entry, "scheduler stopped");
+        this.launch(entry, selection);
       } catch (error) {
+        if (selection && !entry.attempt?.child) this.release(selection);
+        entry.attempt = undefined;
         this.complete(entry, { ok: false, error: error instanceof Error ? error.message : String(error) });
       }
     }
   }
 
-  private terminate(entry: Entry, error: string): void {
-    if (this.active.get(entry.hint.workspaceId) !== entry) return;
-    entry.failure ??= error;
-    entry.state = "REAPING";
-    entry.child?.kill("SIGKILL");
+  private launch(entry: Entry, selection: BuildSelection): void {
+    const attempt: Attempt = { selection, kind: selection.kind, state: "RUNNING", exited: false, closed: false,
+      killSent: false, reapOverdue: false, timers: new Set() };
+    entry.attempt = attempt;
+    entry.baseId = selection.baseId;
+    const started = selection.start({ parserTokens: PARSERS_PER_BUILDER, captures: entry.captures });
+    const child = started.child;
+    attempt.child = child;
+    let resultSettled = false;
+    const settledResult = started.result.then(outcome => {
+      resultSettled = true;
+      if (entry.attempt !== attempt || attempt.closed) return;
+      attempt.outcome = outcome;
+      if (attempt.state !== "RUNNING") return;
+      attempt.state = "RESULT_RECEIVED";
+      this.arm(attempt, this.exitGraceMs, () => {
+        attempt.forcedExit = true;
+        this.options.onEvent?.({ type: "forced-exit", workspaceId: entry.hint.workspaceId, pid: child.pid });
+        this.kill(entry, attempt);
+      });
+    }, error => {
+      resultSettled = true;
+      this.terminate(entry, attempt, error instanceof Error ? error.message : String(error));
+    });
+    // ChildProcess may emit "error" more than once (spawn, kill, send).
+    child.on("error", error => this.terminate(entry, attempt, error.message));
+    child.once("exit", () => { attempt.exited = true; });
+    child.once("close", (code, signal) => {
+      const finish = () => this.closed(entry, attempt, code, signal);
+      // Only a child that exited on its own may still have a result in flight.
+      if (resultSettled || attempt.state === "REAPING") { finish(); return; }
+      const timer = setTimeout(finish, RESULT_AFTER_CLOSE_MS);
+      void settledResult.then(() => { clearTimeout(timer); finish(); });
+    });
+    this.arm(attempt, JOB_MS[attempt.kind], () => this.terminate(entry, attempt, `${attempt.kind} build deadline exceeded`));
+    if (this.stopped) this.terminate(entry, attempt, "scheduler stopped");
   }
 
-  private closed(entry: Entry, code: number | null, signal: NodeJS.Signals | null): void {
-    if (entry.timer) clearTimeout(entry.timer);
-    if (entry.failure || code !== 0 || !entry.outcome) {
-      this.complete(entry, { ok: false, error: entry.failure ?? `builder exited ${code ?? signal} without a successful result` });
+  private arm(attempt: Attempt, ms: number, action: () => void): void {
+    const timer = setTimeout(() => { attempt.timers.delete(timer); if (!attempt.closed) action(); }, ms);
+    attempt.timers.add(timer);
+  }
+
+  private terminate(entry: Entry, attempt: Attempt, error: string): void {
+    if (entry.attempt !== attempt || attempt.closed) return;
+    // After a durable result, ending the process is a forced exit, not a failure.
+    if (attempt.outcome) attempt.forcedExit = true;
+    else attempt.failure ??= error;
+    this.kill(entry, attempt);
+  }
+
+  /** Only the actual close frees the slot; a kill that is not reaped in time is reported, never assumed. */
+  private kill(entry: Entry, attempt: Attempt): void {
+    if (attempt.closed) return;
+    if (attempt.state !== "REAPING") {
+      attempt.state = "REAPING";
+      this.arm(attempt, this.reapWatchMs, () => {
+        attempt.reapOverdue = true;
+        this.options.onEvent?.({ type: "reap-overdue", workspaceId: entry.hint.workspaceId, pid: attempt.child?.pid, exited: attempt.exited });
+      });
+    }
+    if (!attempt.child || attempt.killSent) return;
+    attempt.killSent = true;
+    attempt.child.kill("SIGKILL");
+  }
+
+  private closed(entry: Entry, attempt: Attempt, code: number | null, signal: NodeJS.Signals | null): void {
+    if (attempt.closed) return;
+    attempt.closed = true;
+    for (const timer of attempt.timers) clearTimeout(timer);
+    attempt.timers.clear();
+    this.release(attempt.selection);
+    if (entry.attempt !== attempt) return;
+    const outcome = attempt.outcome;
+    if (!outcome || attempt.failure || (code !== 0 && !attempt.forcedExit)) {
+      this.complete(entry, { ok: false, error: attempt.failure ?? `builder exited ${code ?? signal} without a successful result` });
       return;
     }
-    const outcome = entry.outcome;
     if (outcome.kind === "needs-full") {
-      if (entry.kind === "full" || entry.escalated) { this.complete(entry, { ok: false, error: "full builder requested another full" }); return; }
+      if (attempt.kind === "full" || entry.escalated) { this.complete(entry, { ok: false, error: "full builder requested another full" }); return; }
+      if (this.stopped) { this.complete(entry, { ok: false, error: "scheduler stopped" }); return; }
       this.active.delete(entry.hint.workspaceId);
-      entry.child = undefined;
-      entry.outcome = undefined;
+      entry.attempt = undefined;
       entry.captures = outcome.captures;
       entry.escalated = true;
       entry.hint.kind = "full";
@@ -209,11 +328,10 @@ export class BuildScheduler {
       return;
     }
     this.complete(entry, { ok: outcome.result.ok, result: outcome.result, baseId: entry.baseId,
-      ...(outcome.result.error ? { error: outcome.result.error } : {}) });
+      ...(outcome.result.error ? { error: outcome.result.error } : {}), ...(attempt.forcedExit ? { forcedExit: true } : {}) });
   }
 
   private complete(entry: Entry, result: BuildCompletion): void {
-    if (entry.timer) clearTimeout(entry.timer);
     if (this.active.get(entry.hint.workspaceId) === entry) this.active.delete(entry.hint.workspaceId);
     for (const resolve of entry.waiters.splice(0)) resolve(result);
     entry.reaped();

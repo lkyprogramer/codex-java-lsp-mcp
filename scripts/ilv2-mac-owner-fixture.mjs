@@ -41,7 +41,8 @@ export async function createOwnerFixture(t, options = {}) {
   const label = `com.lky.ilv2-mac02b.${randomUUID()}`;
   const entry = path.join(root, "owner.mjs");
   await writeJson(path.join(root, "options.json"), { ...options, sourceRoot, cacheRoot });
-  await writeFile(entry, `import ${JSON.stringify(path.join(sourceRoot, "scripts/ilv2-mac-owner-process.mjs"))};\n`);
+  // `entry`: another owner process script under scripts/ (G06C scheduler harness).
+  await writeFile(entry, `import ${JSON.stringify(path.join(sourceRoot, options.entry ?? "scripts/ilv2-mac-owner-process.mjs"))};\n`);
   const launch = await ownerLaunchArguments(cacheRoot, entry, [root]);
   const env = { PATH: process.env.PATH, HOME: path.join(root, "home"), TMPDIR: path.join(root, "tmp"),
     ILV2_RUNTIME_MANIFEST: process.env.ILV2_RUNTIME_MANIFEST,

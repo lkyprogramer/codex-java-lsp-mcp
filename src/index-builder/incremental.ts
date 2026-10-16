@@ -40,7 +40,9 @@ import { COVERAGE_GAP, readIndexCounts, readMeta, refreshIndexCounts, publishInd
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full" | "exit";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
-export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; stages?: PipelineMetrics; error?: string };
+export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; stages?: PipelineMetrics; error?: string;
+  /** escalation "report": this delta needs a full; nothing was published. */
+  escalation?: string };
 
 /** ILV2 §6.1: a closure above this many files is published as an explicit full, never a delta. */
 export const DELTA_CLOSURE_LIMIT = 400;
@@ -48,6 +50,10 @@ const MAX_RESOLVE_ROUNDS = 16;
 
 /** The delta cannot prove a bounded dependency closure; the job runs as a full instead. */
 class DeltaEscalation extends Error {
+  constructor(readonly reason: string) { super(reason); }
+}
+/** escalation "report": unwinds the delta's transaction so the scheduler can queue the full. */
+class ReportedEscalation extends Error {
   constructor(readonly reason: string) { super(reason); }
 }
 
@@ -1076,6 +1082,12 @@ async function applyBuilderJobStages(options: {
   job: BuilderJob;
   onStage?: (name:string)=>Promise<void>;
   staged?: boolean;
+  /** "full" (default) runs a needed full in this job; "report" returns
+   * `escalation` instead, publishing nothing, so an owner scheduler can hold
+   * the full to its own capacity. */
+  escalation?: "full" | "report";
+  /** Parser concurrency of a full (the scheduler's parser grant). */
+  parallelism?: number;
 }): Promise<BuilderJobResult> {
   const id = typeof options.job.id === "number" ? options.job.id : -1;
   if (options.job.kind === "exit") return statusResult(options.db, id, true);
@@ -1095,11 +1107,13 @@ async function applyBuilderJobStages(options: {
     const baseCompatible=compatibleDeltaBase(options.db);
     const inputsMatch=readMeta(options.db,"buildFingerprint")===fingerprint;
     const full = async (reason: string): Promise<BuilderJobResult> => {
-      const result = await runSqlColdBuild({repoRoot,db:options.db,generation,onStage:options.onStage});
+      const result = await runSqlColdBuild({repoRoot,db:options.db,generation,onStage:options.onStage,...(options.parallelism ? {parallelism:options.parallelism} : {})});
       return {...statusResult(options.db,id,true),census:result.census,censusComplete:true,stages:{...result.stages,reason}};
     };
     if (options.job.kind === "full" || !baseCompatible || !inputsMatch) {
-      return await full(options.job.kind === "full" ? "explicit full" : baseCompatible && !inputsMatch ? "build/resolver inputs changed" : "no compatible published base");
+      const reason = options.job.kind === "full" ? "explicit full" : baseCompatible && !inputsMatch ? "build/resolver inputs changed" : "no compatible published base";
+      if (options.job.kind !== "full" && options.escalation === "report") return { ...statusResult(options.db, id, false, reason), escalation: reason };
+      return await full(reason);
     }
     try {
       if (options.job.kind === "refresh") {
@@ -1113,13 +1127,17 @@ async function applyBuilderJobStages(options: {
       }
     } catch (error) {
       if (!(error instanceof DeltaEscalation)) throw error;
+      const reason = `delta escalated to full: ${error.reason}`;
+      // An atomic job rolls the delta back; a staged one leaves it DEGRADED for the full.
+      if (options.escalation === "report" && !options.staged) throw new ReportedEscalation(reason);
       // Not BUILDING, so the full clears the abandoned delta instead of resuming it.
       writeMeta(options.db, "buildState", "DEGRADED");
-      return await full(`delta escalated to full: ${error.reason}`);
+      if (options.escalation === "report") return { ...statusResult(options.db, id, false, reason), escalation: reason };
+      return await full(reason);
     }
     return { ...statusResult(options.db, id, true), census: finishCaptureCensus(options.db, beforeCapture), censusComplete: true, stages };
   } catch (err) {
-    if(options.db.isTransaction) throw err;
+    if(options.db.isTransaction || err instanceof ReportedEscalation) throw err;
     withTransaction(options.db, () => {
       writeMeta(options.db, "buildState", "DEGRADED");
       writeMeta(options.db, COVERAGE_GAP, "job-failed");
@@ -1152,6 +1170,8 @@ export async function applyBuilderJob(options: Parameters<typeof applyBuilderJob
     if(result.stages){result.stages.sql.elapsedMs=performance.now()-started;result.stages.sql.rows=Number((options.db.prepare("SELECT total_changes() AS n").get() as {n:number}).n)-before;result.stages.sql.measurement="atomic transaction wall; overlaps capture/parse/resolve/graph";}
     return result;
   } catch(error) {
+    // Rolled back: the published index is as before this job.
+    if (error instanceof ReportedEscalation) return { ...statusResult(options.db, options.job.id ?? -1, false, error.reason), escalation: error.reason };
     // The rollback restored the old completeness markers; only a full
     // traversal (reconcile/full) may clear the gap this lost job left.
     withTransaction(options.db,()=>{

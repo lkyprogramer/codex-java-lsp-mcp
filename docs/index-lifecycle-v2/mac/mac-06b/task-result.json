@@ -5,18 +5,18 @@
   "gateId": "G06B",
   "status": "PASS",
   "dependency": {
-    "head": "90f97fb827eb50bac1caf74d0b09dd998f10427c",
+    "head": "efe6a498663ff59c9d433e92a277a1cbac9c3f8a",
     "requiredGates": [
       "G06A"
     ]
   },
   "identity": {
-    "sourceDigest": "ad3812c8962d97a05144d6dc1e0767898d268bdfaa30bd53174834d918084631",
+    "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
     "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
     "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
     "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
-    "buildStampSha256": "f2712571a800e46e943b6a84792da8cb127f70d5aba64294a39c5bce953a6572",
-    "distInventorySha256": "4bfd940327e8a04bc7aacc0a7e1e2f0f74c0c5f96a7f549cdc4de3a56a05c088",
+    "buildStampSha256": "f69fea0a6bf712f199c9fbfe0e2738113f9cbfe15127a08eccfb435aaf52bb14",
+    "distInventorySha256": "e7826d0d2e2eb53c0d71a1ffd120eeffa90b2f138cf49252d57dcc7b5bd5f847",
     "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
   },
   "checks": [
@@ -26,12 +26,12 @@
       "status": "SELECTED_COMMANDS_PASSED",
       "mainError": null,
       "result": "raw/validation/final-g06b-fixed/result.json",
-      "sourceDigest": "ad3812c8962d97a05144d6dc1e0767898d268bdfaa30bd53174834d918084631",
+      "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
       "commands": 4,
-      "tests": 10,
-      "pass": 10,
+      "tests": 17,
+      "pass": 17,
       "fail": 0,
-      "elapsedMs": 7730,
+      "elapsedMs": 9249,
       "argv": [
         "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
         "--test",
@@ -42,60 +42,60 @@
   ],
   "evidence": [
     {
-      "name": "query-process-lease-and-budget-summary",
+      "name": "query-pool-fix-summary",
       "file": "query-summary.json",
-      "sha256": "d56254e5fea532e8ba08f75e73df8160cafc76e1815bd10cde32addbdee3459c",
+      "sha256": "7adfedc408ef05b0ec5840a5af82c5a06f2843c551513d45c4551e6b26dde1e2",
       "status": "PASS",
       "provenance": null
     },
     {
-      "name": "unchanged-g06a-native-runtime-reuse",
-      "file": "unaffected-reuse.json",
-      "sha256": "09566b56e9c27155108850d5a8d76e28684f8635e216bfbda0f41b112701d9c5",
+      "name": "prior-result-preserved",
+      "file": "prior-task-result.json",
+      "sha256": "8c61fe3ab73f660516e0d2c1aa883a7e3550b6326e0e139ee3c7ae3a62d0e63f",
       "status": "PASS",
       "provenance": null
     },
     {
       "name": "independent-resource-archive-closeout",
       "file": "closeout/independent-closeout.json",
-      "sha256": "2d003c11f4e6ead5b0bab95777b489b86a2b62584771d96692ff9568fa787511",
+      "sha256": "a5a0453ef94a8a0d4a380f0fcdbb0e112aae560b5954cbf2a68ff0964a25be07",
       "status": "PASS",
       "provenance": null
     }
   ],
   "closeout": {
     "status": "PASS",
-    "sha256": "03b2c0738599fd384aea9f2369085dfef15c6241d0b51dcd1d0dbdccbab69a1c",
-    "registeredPids": 43,
+    "sha256": "8b057c7e4298b8f727323b3a646ae111d83a660db49075ce9f98c6efea407527",
+    "registeredPids": 52,
     "ownedGroups": 0,
     "launchdJobs": 0,
     "unregisteredPaths": [],
     "expiredResidualBytes": 0,
     "carryOver": [],
     "archive": {
-      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06b/20261015T170801Z/closeout/raw-evidence.tar.gz",
-      "sha256": "384ae0649b185ef99d3b5b741b13a462d82134adb16dea12bcf23ce5ea5eccb6",
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06b/20261016T020715Z/closeout/raw-evidence.tar.gz",
+      "sha256": "b4000073aac216111966265da46410d6f83df07b3c21c3df1721c99eaaf5f23f",
       "fileCount": 30,
-      "bytes": 143995,
+      "bytes": 173578,
       "physicalVerification": "PASS"
     }
   },
   "independent": {
     "review": {
       "status": "PASS",
-      "sha256": "3dbff476c86c1e4802be254df9dd86779d69ba35b5e1e39322c4c0797db11069",
-      "source": "ad3812c8962d97a05144d6dc1e0767898d268bdfaa30bd53174834d918084631",
+      "sha256": "de6a03868456f89d1e4f45f0060a51b4ddd2c3a61ea38ed48ce348c560bd376a",
+      "source": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
       "openFindings": []
     }
   },
-  "validationIndexSha256": "56cbc79a4cd4fb83c2035f802e84c0a951422bcbb5ec281ad68339e56a3b6a78",
+  "validationIndexSha256": "a69121ac2dddbfc2dc71e4aa98b2f4b15d63301c048e1003191c685076493850",
   "notClaimed": [
-    "MAC-06C actual builder/query adapter and owner-restart integration: NOT_RUN",
+    "Real query adapter and owner-restart integration: claimed only by G06C",
     "MAC-07/08 file snapshot lease, production entry switch, whole-request budget across prepare/preview/serialization: NOT_RUN",
     "Unrelated full suite, four-repository matrix, JDT/Gradle: NOT_RUN"
   ],
-  "next": "Stop after MAC-06B local commit. Manual next is MAC-06C, not started; parent G06 still waits for G06C.",
-  "authorization": "User: G06A genuine PASS and local commit before continuing MAC-06B, retain independent review and actual exit; reuse unaffected evidence and only run affected tests.",
-  "notes": "Only final-g06b-fixed10/10 is main. Earlier final-g06b8/8 keeps its pre-fix identity and coverage, not combined as finalPASS. Dev regression two failures and two passes are diagnostics, not gate totals. Real native SQLite hang/process kill tested, production SQL adapter/file leases not claimed.",
-  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06b/20261015T170801Z"
+  "next": "Recomposed after the review fixes; MAC-06C follows.",
+  "authorization": "User 2026-10-16: complete the review fixes in the proposed order: fix findings 1/2/3/5 (+4/6 interfaces) with regressions, rerun G06A/G06B and recompose results keeping the prior PASS, then implement MAC-06C with a fresh independent reviewer; local commits only.",
+  "notes": "Only final-g06b-fixed 17/17 is main. final-g06b-fix 16/16 (source 2f8a7d80…) is history. The prior rule 'a normal result also returns only after close' is withdrawn (finding 1); the prior PASS (efe6a498) is preserved as prior-task-result.json.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06b/20261016T020715Z"
 }

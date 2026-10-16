@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { fork, type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,7 +11,7 @@ import { BuildScheduler } from "../../index-builder/build-scheduler.js";
 import { ownerChildStdio } from "../../mac-platform/owner-lock.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
-import { QueryPool, waitForSharedBuild, type QueryLease } from "./query-pool.js";
+import { QueryPool, waitForSharedBuild, type QueryLease, type QueryPoolEvent, type QueryPoolOptions } from "./query-pool.js";
 
 // Run a deliberately long native SQLite step in the child. This proves process
 // cancellation, not the MAC-06C production query adapter or file snapshot lease.
@@ -67,11 +68,11 @@ type Attempt = {
   result: Promise<string>; resultReceived: boolean; busy: boolean;
   isClosed: boolean; closeAt?: number; closeSignal?: NodeJS.Signals | null; releaseFile: string;
 };
-async function fixture(t: TestContext, queueMax = 32) {
+async function fixture(t: TestContext, queueMax = 32, options: Omit<QueryPoolOptions, "queueMax"> = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "ilv2-query-pool-"));
   const script = path.join(root, "query.mjs");
   await writeFile(script, childScript);
-  const pool = new QueryPool<string>(queueMax);
+  const pool = new QueryPool<string>({ ...options, queueMax });
   const attempts: Attempt[] = [];
   const acquisitions: string[] = [];
   const releases: string[] = [];
@@ -248,16 +249,15 @@ test("queued deadline and abort never acquire a snapshot lease", async t => {
   assert.deepEqual((await Promise.all([a, b])).map(value => value.status), ["stopped", "stopped"]);
 });
 
-test("result before close keeps both snapshot lease and worker slot", async t => {
+test("result settles the caller while its lease and worker slot wait for actual close", async t => {
   const f = await fixture(t);
-  let settled = false;
-  const first = f.submit("a").then(value => { settled = true; return value; });
+  const first = f.submit("a");
   const a = await f.started("a");
   const second = f.submit("b");
   const b = await f.started("b");
   const queued = f.submit("c");
   await f.result(a);
-  assert.equal(settled, false);
+  assert.deepEqual(await bounded(first, "result returned before exit"), { status: "ok", value: "a" });
   assert.equal(a.isClosed, false);
   assert.equal(f.held.has("a"), true);
   assert.equal(f.pool.status().workers, 2);
@@ -265,8 +265,7 @@ test("result before close keeps both snapshot lease and worker slot", async t =>
   assert.deepEqual(f.acquisitions, ["a", "b"]);
   await writeFile(a.releaseFile, "release");
   await bounded(a.closed, "result holder actual close");
-  assert.deepEqual(await first, { status: "ok", value: "a" });
-  assert.equal(f.held.has("a"), false);
+  await until(() => !f.held.has("a"), "lease released at close");
   await f.finish(await f.started("c"));
   await f.finish(b);
   assert.equal((await second).status, "ok");
@@ -316,7 +315,7 @@ test("stop settles running and queued callers and awaits real child close", asyn
   assert.deepEqual((await Promise.all([first, second, queued])).map(value => value.status), ["stopped", "stopped", "stopped"]);
   assert.ok(f.attempts.every(attempt => attempt.isClosed));
   assert.equal(f.held.size, 0);
-  assert.deepEqual(f.pool.status(), { workers: 0, queued: 0, reaping: 0, pids: [] });
+  assert.deepEqual(f.pool.status(), { admitted: true, workers: 0, queued: 0, acquiring: 0, leases: 0, reaping: 0, reapOverdue: 0, pids: [] });
   assert.equal((await f.submit("after-stop")).status, "stopped");
   assert.deepEqual(f.acquisitions, ["a", "b"]);
   await f.pool.stop();
@@ -364,15 +363,155 @@ test("deadline is checked at shared promise delivery before its timer runs", asy
   await rejected;
 });
 
-test("deadline is checked at real child close before its timer runs", async t => {
+test("a result after the deadline returns deadline before its timer runs", async t => {
   const f = await fixture(t);
   let now = 0;
   const completion = f.submit("late", DeadlineBudget.fromTimeout(10_000, () => now));
   const attempt = await f.started("late");
+  now = 10_001;
+  await f.result(attempt);
+  assert.equal((await bounded(completion, "late result")).status, "deadline");
+  assert.equal(f.held.has("late"), true, "the lease outlives the caller until close");
+  await writeFile(attempt.releaseFile, "release");
+  await bounded(attempt.closed, "late child actual close");
+  await until(() => f.held.size === 0, "lease released at close");
+});
+
+test("a timely result is returned although its worker exits after the deadline", async t => {
+  const f = await fixture(t);
+  let now = 0;
+  const completion = f.submit("timely", DeadlineBudget.fromTimeout(10_000, () => now));
+  const attempt = await f.started("timely");
   await f.result(attempt);
   now = 10_001;
   await writeFile(attempt.releaseFile, "release");
-  await bounded(attempt.closed, "late child actual close");
-  assert.equal((await completion).status, "deadline");
-  assert.equal(f.held.size, 0);
+  await bounded(attempt.closed, "slow exit");
+  assert.deepEqual(await completion, { status: "ok", value: "timely" });
+  await until(() => f.held.size === 0, "lease released at close");
+});
+
+test("a worker hung after its result is killed after the exit grace", async t => {
+  const events: QueryPoolEvent[] = [];
+  const f = await fixture(t, 32, { timing: { exitGraceMs: 300 }, onEvent: event => events.push(event) });
+  const completion = f.submit("hung");
+  const attempt = await f.started("hung");
+  const resultAt = performance.now();
+  await f.result(attempt);
+  assert.deepEqual(await completion, { status: "ok", value: "hung" });
+  await bounded(attempt.closed, "forced exit", 2000);
+  record(t.name, "forced-exit-window", { elapsedMs: attempt.closeAt! - resultAt });
+  assert.equal(attempt.closeSignal, "SIGKILL");
+  assert.ok(attempt.closeAt! - resultAt >= 250);
+  assert.deepEqual(events.map(event => event.type), ["forced-exit"]);
+  await until(() => f.held.size === 0 && f.pool.status().workers === 0, "slot freed at close");
+});
+
+test("an asynchronous acquire holds its slot and a cancelled caller's late lease is released unstarted", async t => {
+  const f = await fixture(t);
+  const deliveries = new Map<string, { resolve(lease: QueryLease): void; reject(error: Error): void; signal: AbortSignal }>();
+  const submitAsync = (name: string, signal?: AbortSignal) => f.pool.submit({ budget: DeadlineBudget.fromTimeout(10_000), signal,
+    acquire: abort => new Promise<QueryLease>((resolve, reject) => { deliveries.set(name, { resolve, reject, signal: abort }); }),
+    start: lease => { const attempt = f.spawn(lease.snapshotId.replace("snapshot-", "")); return { child: attempt.child, result: attempt.result }; } });
+  const controller = new AbortController();
+  const a = submitAsync("a", controller.signal);
+  const b = submitAsync("b");
+  const c = f.submit("c");
+  await until(() => deliveries.size === 2, "two acquisitions in flight");
+  assert.deepEqual(f.pool.status().workers, 2);
+  assert.equal(f.pool.status().acquiring, 2);
+  assert.equal(f.pool.status().queued, 1);
+  controller.abort();
+  assert.equal((await bounded(a, "cancel during acquire")).status, "cancelled");
+  assert.equal(deliveries.get("a")!.signal.aborted, true);
+  assert.equal(f.pool.status().workers, 2, "the slot stays taken until the lease arrives");
+  deliveries.get("a")!.resolve(f.acquire("a"));
+  await until(() => f.releases.includes("a"), "late lease released");
+  assert.equal(f.attempts.some(attempt => attempt.name === "a"), false, "a cancelled caller never starts");
+  const cAttempt = await f.started("c");
+  deliveries.get("b")!.reject(new Error("fixture lease unavailable"));
+  assert.equal((await bounded(b, "rejected acquire")).status, "error");
+  await f.finish(cAttempt);
+  assert.equal((await c).status, "ok");
+  await until(() => f.pool.status().workers === 0 && f.held.size === 0, "all slots free");
+});
+
+test("closed admission takes no lease until wake", async t => {
+  let open = false;
+  const f = await fixture(t, 32, { admitted: () => open });
+  const completion = f.submit("gated");
+  await delay(50);
+  assert.deepEqual(f.acquisitions, []);
+  assert.equal(f.pool.status().queued, 1);
+  open = true;
+  f.pool.wake();
+  await f.finish(await f.started("gated"));
+  assert.equal((await completion).status, "ok");
+});
+
+function fakeChild(pid: number, reap: boolean, killError?: string) {
+  const child = Object.assign(new EventEmitter(), { pid, kills: 0, kill() {
+    child.kills += 1;
+    // Node emits a failed kill (other than ESRCH) as a synchronous "error".
+    if (killError) { child.emit("error", Object.assign(new Error(`kill ${killError}`), { code: killError })); return false; }
+    if (reap) setImmediate(() => { child.emit("exit", null, "SIGKILL"); child.emit("close", null, "SIGKILL"); });
+    return true;
+  } });
+  return child;
+}
+
+test("a kill that is not reaped in time is reported and keeps the worker slot and lease", async () => {
+  const events: QueryPoolEvent[] = [];
+  const pool = new QueryPool<string>({ timing: { reapWatchMs: 100 }, onEvent: event => events.push(event) });
+  const child = fakeChild(424242, false);
+  let released = 0;
+  const completion = pool.submit({ budget: DeadlineBudget.fromTimeout(100), acquire: () => ({ snapshotId: "s", release: () => { released += 1; } }),
+    start: () => ({ child: child as unknown as ChildProcess, result: new Promise<string>(() => {}) }) });
+  assert.equal((await bounded(completion, "deadline")).status, "deadline");
+  await until(() => events.length === 1, "reap overdue reported");
+  assert.deepEqual(events, [{ type: "reap-overdue", pid: 424242, exited: false }]);
+  assert.equal(pool.status().workers, 1);
+  assert.equal(pool.status().reapOverdue, 1);
+  assert.equal(released, 0);
+  child.emit("exit", null, "SIGKILL");
+  child.emit("close", null, "SIGKILL");
+  await until(() => pool.status().workers === 0, "slot freed at actual close");
+  assert.equal(released, 1);
+});
+
+test("a kill that fails synchronously is sent once and reported, not re-entered", async () => {
+  const events: QueryPoolEvent[] = [];
+  const pool = new QueryPool<string>({ timing: { reapWatchMs: 100 }, onEvent: event => events.push(event) });
+  const child = fakeChild(444444, false, "EPERM");
+  let released = 0;
+  const completion = pool.submit({ budget: DeadlineBudget.fromTimeout(5000), acquire: () => ({ snapshotId: "s", release: () => { released += 1; } }),
+    start: () => ({ child: child as unknown as ChildProcess, result: new Promise<string>(() => {}) }) });
+  await until(() => pool.status().workers === 1, "started");
+  child.emit("error", new Error("send failed"));
+  const outcome = await bounded(completion, "error settles");
+  assert.equal(outcome.status, "error");
+  assert.equal(child.kills, 1);
+  const stopping = pool.stop();
+  assert.equal(child.kills, 1);
+  await until(() => events.length === 1, "reap overdue");
+  assert.deepEqual(events, [{ type: "reap-overdue", pid: 444444, exited: false }]);
+  assert.equal(pool.status().workers, 1);
+  assert.equal(released, 0);
+  child.emit("exit", null, "SIGKILL");
+  child.emit("close", null, "SIGKILL");
+  await bounded(stopping, "stop after actual close");
+  assert.equal(released, 1);
+});
+
+test("repeated child errors settle once without an unhandled error", async () => {
+  const pool = new QueryPool<string>();
+  const child = fakeChild(434343, true);
+  const completion = pool.submit({ budget: DeadlineBudget.fromTimeout(5000), acquire: () => ({ snapshotId: "s", release() {} }),
+    start: () => ({ child: child as unknown as ChildProcess, result: new Promise<string>(() => {}) }) });
+  await delay(10);
+  child.emit("error", new Error("send failed"));
+  child.emit("error", new Error("kill failed"));
+  const outcome = await bounded(completion, "error settles");
+  assert.equal(outcome.status, "error");
+  await until(() => pool.status().workers === 0, "reaped");
+  await pool.stop();
 });
