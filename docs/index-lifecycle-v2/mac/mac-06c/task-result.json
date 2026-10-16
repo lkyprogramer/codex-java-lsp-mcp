@@ -1,0 +1,123 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-06C",
+  "gateId": "G06C",
+  "status": "PASS",
+  "dependency": {
+    "head": "93c777f92a534e1c9d63769dee277f76e4437995",
+    "requiredGates": [
+      "G06B"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "463fde48958003f7e853dfc05489b09dc2529b9a500d947566c610a4981e9b03",
+    "distInventorySha256": "7e723deda9ee093c1ac3ab7db13551d35beba7cabeb174321c2df4fa560a86ed",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g06c-fixed",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g06c-fixed/result.json",
+      "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+      "commands": 4,
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "elapsedMs": 45865,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=owner-restart-admission-with-active-workers|mixed-full-load-short-delta-queue-latency",
+        "dist/index-builder/build-scheduler.test.js"
+      ]
+    },
+    {
+      "name": "g02b-launchd-rerun-fixed",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/g02b-launchd-rerun-fixed/result.json",
+      "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+      "commands": 4,
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "elapsedMs": 33244,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-owner-lifecycle.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "owner-restart-admission-and-fairness",
+      "file": "owner-restart-summary.json",
+      "sha256": "0377e3cdbd06a2fcba2eccd472a89b209dbf9b5c06fffff65a032c7a792d8b5a",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "g02b-launchd-rerun-after-lock-code-change",
+      "file": "launchd-rerun.json",
+      "sha256": "c7f7288e10184f0ab8273032e22e5f91b3b23683f338edcc6fcde87384ad4fe3",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-resource-archive-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "b11520f090043b48785732df7deb6cb773fc8046e62445e725f44e45b6ca27bd",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "d804c152728e8532ddd4efe72e83edffc6008d3fd96962af96458614bf8585d1",
+    "registeredPids": 81,
+    "ownedGroups": 18,
+    "launchdJobs": 26,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06c/20261016T020738Z/closeout/raw-evidence.tar.gz",
+      "sha256": "33f7320b83d3873c508bf6293779c3de38eaaa4037597dce6230261f3f7ba35e",
+      "fileCount": 208,
+      "bytes": 925400,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "7f07bb4a75d2d7b6bba2c382e318b9c50356e36d97d0901a33e1e50503119178",
+      "source": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "f78a07fb21bb461c14962f1b4869d5f121f33f85deb87894a8d36ed62c8fc54a",
+  "notClaimed": [
+    "Formal binding, stdio/HTTP transport, file snapshot leases, GC and the launchd product recovery (both old process classes exit in one <=10 s window): G09, NOT_RUN",
+    "Production call-chain switch and BuilderSupervisor removal: MAC-08, NOT_RUN",
+    "G02B JDT/Gradle tests: NOT_RUN on this candidate; G02B status unchanged",
+    "Real Gradle daemon external cleanup: fixture GradleDomain without daemons",
+    "Performance gates beyond the G06 fairness measurement: G11/G12"
+  ],
+  "next": "G06C PASS completes parent G06; manual next is MAC-07.",
+  "authorization": "User 2026-10-16: complete the review fixes in the proposed order: fix findings 1/2/3/5 (+4/6 interfaces) with regressions, rerun G06A/G06B and recompose results keeping the prior PASS, then implement MAC-06C with a fresh independent reviewer; local commits only.",
+  "notes": "Main: final-g06c-fixed 2/2 and g02b-launchd-rerun-fixed 6/6 on one candidate. final-g06c and g02b-launchd-rerun (source 2f8a7d80…) are history: the first review found the test did not prove worker lock retention. Fairness: 12 short deltas under two fulls, queued p95/max and full handoff in owner-restart-summary.json.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06c/20261016T020738Z"
+}
