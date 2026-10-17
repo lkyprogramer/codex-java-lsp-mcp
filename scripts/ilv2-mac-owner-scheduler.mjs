@@ -10,7 +10,7 @@ import { BuildScheduler } from "../dist/index-builder/build-scheduler.js";
 import { builderJobFor, startBuildProcess } from "../dist/index-builder/build-process.js";
 import { OwnerAdmission } from "../dist/index-builder/owner-admission.js";
 import { QueryPool } from "../dist/java-index/snapshot/query-pool.js";
-import { queryProcessTask } from "../dist/java-index/snapshot/query-process.js";
+import { queryOpTask, spawnQueryWorker } from "../dist/java-index/snapshot/query-process.js";
 import { DeadlineBudget } from "../dist/runtime/deadline-budget.js";
 
 const root = process.argv[2];
@@ -52,10 +52,34 @@ const scheduler = new BuildScheduler({
     } };
   }
 });
-const pool = new QueryPool({ admitted: admission.admitted, onEvent: event => { record({ type: "pool-event", event }); snapshot("pool-event"); } });
+// Persistent query workers: each fork/close is recorded with the query it was running (by lease key).
+const runningOn = new Map();
+const pool = new QueryPool({ admitted: admission.admitted, onEvent: event => { record({ type: "pool-event", event }); snapshot("pool-event"); },
+  // The fixture leases are per query: no connection outlives its query.
+  retain: () => false,
+  spawn() {
+    const child = spawnQueryWorker();
+    const send = child.send.bind(child);
+    child.send = (message, ...rest) => {
+      if (message?.type === "run") runningOn.set(child, keyNames.get(message.key));
+      return send(message, ...rest);
+    };
+    record({ type: "fork", role: "query", childPid: child.pid });
+    child.on("message", message => {
+      if (message?.type === "started") record({ type: "query-started", name: runningOn.get(child) });
+    });
+    child.once("close", (code, signal) => {
+      const name = runningOn.get(child);
+      record({ type: "close", role: "query", name, childPid: child.pid, code, signal, leaseHeld: [...held].some(key => keyNames.get(key) === name) });
+      snapshot("query-close");
+    });
+    queueMicrotask(() => snapshot("query-fork"));
+    return child;
+  } });
 admission.onOpen(() => { scheduler.wake(); pool.wake(); });
 let leaseCounter = 0;
 const held = new Set();
+const keyNames = new Map();
 const queries = new Map();
 
 for (const hint of settings.startup ?? []) {
@@ -73,23 +97,15 @@ function query(command) {
   const target = roots.get(command.workspaceId);
   const controller = new AbortController();
   const budget = DeadlineBudget.fromTimeout(command.timeoutMs ?? 10_000);
-  const task = queryProcessTask({ budget, signal: controller.signal, allowTestHooks: settings.allowTestHooks === true,
-    request: { dbPath: target.db, task: command.task, limit: command.limit ?? 10, mode: command.mode ?? "auto", ...(command.testBlockMs ? { testBlockMs: command.testBlockMs } : {}) },
-    onStarted: () => record({ type: "query-started", name: command.name }),
+  const task = queryOpTask({ budget, signal: controller.signal, allowTestHooks: settings.allowTestHooks === true, testBlockMs: command.testBlockMs,
+    request: { op: "search", args: { task: command.task, limit: command.limit ?? 10, mode: command.mode ?? "auto" } },
     acquire: () => {
-      const snapshotId = `${target.id}#${++leaseCounter}`;
+      const snapshotId = `${target.id}-${++leaseCounter}`;
       held.add(snapshotId);
+      keyNames.set(snapshotId, command.name);
       record({ type: "lease-acquire", name: command.name, snapshotId });
-      return { snapshotId, release() { held.delete(snapshotId); record({ type: "lease-release", name: command.name, snapshotId }); } };
+      return { snapshotId, dbPath: target.db, release() { held.delete(snapshotId); record({ type: "lease-release", name: command.name, snapshotId }); } };
     } });
-  const start = task.start;
-  task.start = lease => {
-    const attempt = start(lease);
-    record({ type: "fork", role: "query", name: command.name, childPid: attempt.child.pid });
-    attempt.child.once("close", (code, signal) => { record({ type: "close", role: "query", name: command.name, childPid: attempt.child.pid, code, signal, leaseHeld: held.has(lease.snapshotId) }); snapshot("query-close"); });
-    queueMicrotask(() => snapshot("query-fork"));
-    return attempt;
-  };
   queries.set(command.name, controller);
   const submittedAt = performance.timeOrigin + performance.now();
   void pool.submit(task).then(completion => record({ type: "query-complete", name: command.name, status: completion.status, error: completion.error,

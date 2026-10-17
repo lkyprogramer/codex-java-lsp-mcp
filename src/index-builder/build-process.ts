@@ -57,11 +57,14 @@ async function runWorker(): Promise<void> {
   const { openIndexDb, close } = await import("../java-index/sql/driver.js");
   const { ensureSchema } = await import("../java-index/sql/schema.js");
   const { applyBuilderJob } = await import("./incremental.js");
+  const { contentManifestId } = await import("../java-index/sql/snapshot-manifest.js");
   let reply: BuildProcessReply;
   const db = openIndexDb(request.dbPath);
   try {
     ensureSchema(db);
-    reply = { type: "result", result: await applyBuilderJob({ repoRoot: request.repoRoot, db, job: request.job, escalation: "report", parallelism: request.parallelism }) };
+    const result = await applyBuilderJob({ repoRoot: request.repoRoot, db, job: request.job, escalation: "report", parallelism: request.parallelism });
+    // The publish plan carries the content this builder actually captured (contract §2.7), never one derived later.
+    reply = { type: "result", result: result.ok && result.escalation === undefined ? { ...result, contentManifestId: contentManifestId(db).id } : result };
   } catch (error) {
     reply = { type: "failed", error: error instanceof Error ? error.message : String(error) };
   } finally {

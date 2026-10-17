@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
 export const DEFAULT_SQLITE_CACHE_KB = 32768;
@@ -86,6 +87,20 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
     db.exec(`PRAGMA journal_size_limit=${DEFAULT_JOURNAL_SIZE_LIMIT_BYTES}`);
   }
   db.exec(`PRAGMA cache_size=-${cacheKb}`);
+  db.exec("PRAGMA foreign_keys=ON");
+  db.exec("PRAGMA temp_store=MEMORY");
+  return db;
+}
+
+/** A SEALED snapshot reader: read-only and SQLite immutable (no locks, no WAL/SHM), registered like any reader. */
+export function openImmutableIndexDb(path: string, options: { cacheKb?: number } = {}): IndexDatabase {
+  const url = pathToFileURL(path);
+  url.searchParams.set("immutable", "1");
+  url.searchParams.set("mode", "ro");
+  const db = new DatabaseSync(url.href, { readOnly: true });
+  readOnlyConnections.add(db);
+  connectionPaths.set(db, path);
+  db.exec(`PRAGMA cache_size=-${resolveCacheKb(options.cacheKb)}`);
   db.exec("PRAGMA foreign_keys=ON");
   db.exec("PRAGMA temp_store=MEMORY");
   return db;

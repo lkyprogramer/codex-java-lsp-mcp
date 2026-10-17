@@ -48,35 +48,44 @@ export async function queryReadRanges(
       const readablePath = await resolvedPathWithinRepo(absolute, resolvedRepoRoot);
       if (!readablePath) return { file: request.file, ranges: [] };
       const content = await readFile(readablePath, "utf8");
-      const positions = request.positions.length > 0 ? request.positions : [{ line: 1, column: 1 }];
       const bundle = relative.endsWith(".java") ? deps.store.files([relative])[0] : undefined;
       const resource = bundle ? undefined : deps.store.myBatisResource(relative);
-      const java = bundle ? javaReadRanges(bundle, positions) : { ranges: [] as UnlocatedReadRange[], extremeMethod: false, anchorLines: [] as number[] };
-      const xmlRanges = !bundle && resource ? xmlReadRanges(resource, positions) : [];
-      const unmerged = java.ranges.length > 0 || xmlRanges.length > 0
-        ? [...java.ranges, ...xmlRanges]
-        : positions.map(position => fallbackReadRange(position));
-      const starts = lineStartOffsets(content);
-      const ranges = mergeWorkerReadRanges(unmerged).map(range => ({
-        ...range,
-        range: sourceRangeForLines(content, starts, range.startLine, range.endLine),
-        estimatedBytes: utf8BytesForLines(content, starts, range.startLine, range.endLine)
-      }));
-      // Anchors whose window no longer exists after budget-driven trimming must
-      // be reported explicitly - a trimmed plan may never claim complete.
-      const uncoveredAnchorLines = [...new Set(java.anchorLines)]
-        .filter(line => !ranges.some(range => range.startLine <= line && line <= range.endLine))
-        .sort((a, b) => a - b);
-      return {
-        file: request.file,
-        ranges,
-        ...(java.extremeMethod ? { extremeMethod: true } : {}),
-        ...(uncoveredAnchorLines.length > 0 ? { uncoveredAnchorLines } : {})
-      };
+      return { ...readRangesFor(bundle, resource, content, request.positions), file: request.file };
     } catch {
       return { file: request.file, ranges: [] };
     }
   }));
+}
+
+/** Plans the ranges of one file from its facts and the given content (which the caller has already read). */
+export function readRangesFor(
+  bundle: JavaFileBundle | undefined,
+  resource: MyBatisMapperResourceFacts | undefined,
+  content: string,
+  requested: Array<{ line: number; column: number }>
+): Omit<IndexedReadRangeResult, "file"> {
+  const positions = requested.length > 0 ? requested : [{ line: 1, column: 1 }];
+  const java = bundle ? javaReadRanges(bundle, positions) : { ranges: [] as UnlocatedReadRange[], extremeMethod: false, anchorLines: [] as number[] };
+  const xmlRanges = !bundle && resource ? xmlReadRanges(resource, positions) : [];
+  const unmerged = java.ranges.length > 0 || xmlRanges.length > 0
+    ? [...java.ranges, ...xmlRanges]
+    : positions.map(position => fallbackReadRange(position));
+  const starts = lineStartOffsets(content);
+  const ranges = mergeWorkerReadRanges(unmerged).map(range => ({
+    ...range,
+    range: sourceRangeForLines(content, starts, range.startLine, range.endLine),
+    estimatedBytes: utf8BytesForLines(content, starts, range.startLine, range.endLine)
+  }));
+  // Anchors whose window no longer exists after budget-driven trimming must
+  // be reported explicitly - a trimmed plan may never claim complete.
+  const uncoveredAnchorLines = [...new Set(java.anchorLines)]
+    .filter(line => !ranges.some(range => range.startLine <= line && line <= range.endLine))
+    .sort((a, b) => a - b);
+  return {
+    ranges,
+    ...(java.extremeMethod ? { extremeMethod: true } : {}),
+    ...(uncoveredAnchorLines.length > 0 ? { uncoveredAnchorLines } : {})
+  };
 }
 
 export function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: UnlocatedReadRange[]; extremeMethod: boolean; anchorLines: number[] } {

@@ -1,0 +1,317 @@
+import assert from "node:assert/strict";
+import { fork, execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { performance } from "node:perf_hooks";
+import test, { after, type TestContext } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { startBuildProcess } from "../../index-builder/build-process.js";
+import type { BuildAttempt } from "../../index-builder/build-scheduler.js";
+import { ownerChildStdio } from "../../mac-platform/owner-lock.js";
+import { DeadlineBudget } from "../../runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
+import { IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
+import type { QueryRequest } from "./query-ops.js";
+import { snapshotIndexStatus, SnapshotJavaIndexClient, withRequestView, type RequestView } from "./request-view.js";
+import { FSEVENT_FLAGS, type TrackerSourceFactory } from "./workspace-tracker.js";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
+const serviceRel = "src/main/java/demospring/OrderService.java";
+const orderRel = "src/main/java/demospring/Order.java";
+const FILE_MODIFIED = 0x1000 | FSEVENT_FLAGS.ItemIsFile;
+
+const evidence: Array<Record<string, unknown>> = [];
+after(async () => {
+  const root = process.env.ILV2_EVIDENCE_ROOT;
+  if (!root) return;
+  await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, "request-view.json"), JSON.stringify({ fixture: "fixtures/java-index-v2 copies; deterministic tracker signals; real builder and query processes", evidence }, null, 2));
+});
+
+/** Deterministic change streams per root: the test owns every hint and its order. */
+function fakeSources() {
+  const emitters = new Map<string, (flags: number, file: string) => void>();
+  const factory = (root: string): TrackerSourceFactory => async onSignal => {
+    emitters.set(root, onSignal);
+    let lose!: (error: Error) => void;
+    const closed = new Promise<void>((_, reject) => { lose = reject; });
+    void lose;
+    closed.catch(() => undefined);
+    return { epoch: randomBytes(16).toString("hex"), fence: async () => {}, stop: async () => {}, closed };
+  };
+  return { factory, emit: (root: string, relative: string) => emitters.get(root)!(FILE_MODIFIED, path.join(root, relative)) };
+}
+
+type Ctx = Awaited<ReturnType<typeof setup>>;
+async function setup(t: TestContext, options: Partial<IndexOwnerOptions> & { roots?: number; stalledRoot?: Promise<void> } = {}) {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-request-view-")));
+  const roots: string[] = [];
+  for (let index = 0; index < (options.roots ?? 1); index += 1) {
+    const repo = path.join(base, `repo-${index}`);
+    await cp(fixturesRoot, repo, { recursive: true });
+    roots.push(repo);
+  }
+  const sources = fakeSources();
+  const events: OwnerEvent[] = [];
+  const { roots: _roots, stalledRoot: _stalled, ...ownerOptions } = options;
+  const owner = await IndexOwner.open({ cacheRoot: path.join(base, "cache"), trackerSource: root => sources.factory(root), roundDelayMs: 5,
+    onEvent: event => events.push(event), ...ownerOptions });
+  t.after(async () => {
+    await owner.stop();
+    const writable = async (dir: string): Promise<void> => {
+      await chmod(dir, 0o755).catch(() => undefined);
+      for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) if (entry.isDirectory()) await writable(path.join(dir, entry.name));
+    };
+    await writable(base);
+    await rm(base, { recursive: true, force: true });
+  });
+  return { base, roots, repo: roots[0]!, owner, sources, events };
+}
+
+async function until<T>(probe: () => T | undefined | false, label: string, timeoutMs = 60_000): Promise<T> {
+  const deadline = performance.now() + timeoutMs;
+  for (;;) {
+    const value = probe();
+    if (value) return value;
+    if (performance.now() >= deadline) throw new Error(`Timed out: ${label}`);
+    await delay(10);
+  }
+}
+
+/** The workspace's first verified binding (a real full build through the scheduler). */
+async function bound(ctx: Ctx, root = ctx.repo) {
+  const workspace = await ctx.owner.workspace(root);
+  await until(() => ctx.owner.store.binding(workspace.workspaceId) && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, `first publish ${root}`, 120_000);
+  return { workspace, binding: ctx.owner.store.binding(workspace.workspaceId)! };
+}
+
+async function edit(ctx: Ctx, root: string, relative: string, transform: (text: string) => string) {
+  const file = path.join(root, relative);
+  await writeFile(file, transform(await readFile(file, "utf8")));
+  ctx.sources.emit(root, relative);
+}
+
+function request<T>(ctx: Ctx, root: string, timeoutMs: number, handler: (view: RequestView) => Promise<T>, extra: { resolve?: () => Promise<string>; signal?: AbortSignal } = {}) {
+  const budget = DeadlineBudget.fromTimeout(timeoutMs);
+  const started = performance.now();
+  const run = withRequestView({ owner: ctx.owner, budget, signal: extra.signal, resolve: extra.resolve ?? (async () => root), handler });
+  return { budget, started, run };
+}
+
+/** Settles within deadline + 1000 ms (contract §2.6), whatever the outcome. */
+async function settledWithin<T>(call: { budget: DeadlineBudget; started: number; run: Promise<T> }, label: string) {
+  const outcome = await call.run.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+  const returnedAt = performance.now();
+  const lateMs = returnedAt - call.budget.deadlineAtMs;
+  evidence.push({ label, elapsedMs: returnedAt - call.started, lateMs, ok: outcome.ok, error: outcome.ok ? undefined : String((outcome.error as Error).message) });
+  assert.ok(lateMs <= 1000, `${label}: returned ${lateMs.toFixed(0)} ms after its deadline`);
+  return outcome;
+}
+
+const code = (outcome: { ok: boolean; error?: unknown }) => outcome.ok ? "OK" : outcome.error instanceof JavaIntelligenceError ? outcome.error.code : "OTHER";
+
+function clientFor(view: RequestView, status: Awaited<ReturnType<RequestView["snapshotStatus"]>>) {
+  return new SnapshotJavaIndexClient(view.owner, view.snapshotId!, view.canonicalRoot, snapshotIndexStatus(status, view.snapshotId!));
+}
+
+const sleeper = `setInterval(() => {}, 1000); process.on('message', () => {});`;
+/** A builder stuck in its job: the round it belongs to cannot finish while it runs. */
+async function stuckBuilders(t: TestContext) {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-request-view-sleeper-")));
+  const file = path.join(base, "sleeper.mjs");
+  await writeFile(file, sleeper);
+  const held: BuildAttempt[] = [];
+  t.after(async () => {
+    for (const attempt of held) attempt.child.kill("SIGKILL");
+    await rm(base, { recursive: true, force: true });
+  });
+  return { held, start(): BuildAttempt {
+    const child = fork(file, [], { execArgv: [], stdio: ownerChildStdio(["ignore", "ignore", "inherit", "ipc"]) });
+    const attempt = { child, result: new Promise<never>(() => {}) };
+    held.push(attempt);
+    return attempt;
+  } };
+}
+
+test("nonzero-deadline-bounds-all-stages", { timeout: 240_000 }, async t => {
+  let holdBuild = false;
+  const stuck = await stuckBuilders(t);
+  const held = stuck.held;
+  let releaseCreate!: () => void;
+  const createGate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  const blocked = new Set<string>();
+  const ctx = await setup(t, {
+    roots: 2,
+    startBuild: input => holdBuild ? stuck.start() : startBuildProcess(input),
+    queryTestBlockMs: (query: QueryRequest) => blocked.has(query.op) ? 60_000 : undefined
+  });
+  const stalledRoot = ctx.roots[1]!;
+  // The second root's change source never comes up until released: workspace create stalls.
+  const sources = ctx.sources;
+  (ctx.owner.options as { trackerSource?: (root: string) => TrackerSourceFactory }).trackerSource = root => root !== stalledRoot ? sources.factory(root)
+    : async onSignal => { await createGate; return sources.factory(root)(onSignal); };
+  const { workspace, binding } = await bound(ctx);
+
+  // 1. resolve stalls.
+  const resolveStall = await settledWithin(request(ctx, ctx.repo, 800, async () => "unreachable", { resolve: () => new Promise<string>(() => {}) }), "resolve-stall");
+  assert.equal(code(resolveStall), "DEADLINE_EXCEEDED");
+
+  // 2. create stalls; the shared create keeps going and is reused once its source comes up.
+  const createStall = await settledWithin(request(ctx, stalledRoot, 800, async () => "unreachable"), "create-stall");
+  assert.equal(code(createStall), "DEADLINE_EXCEEDED");
+  assert.equal(ctx.owner.peek(stalledRoot), undefined);
+
+  // 3. prepare is capped at min(1000 ms, remaining) while a round cannot finish; the request then serves the held binding as STALE.
+  holdBuild = true;
+  await edit(ctx, ctx.repo, serviceRel, text => text.replace("class OrderService {", "class OrderService {\n  void prepareStall() {}"));
+  await until(() => held.length === 1, "stuck builder started");
+  const prepareCall = request(ctx, ctx.repo, 5000, async view => ({ labels: view.labels, hits: await view.query({ op: "type", args: { typeText: "demospring.OrderService" } }) }));
+  const prepared = await settledWithin(prepareCall, "prepare-stall");
+  assert.equal(prepared.ok, true);
+  const preparedElapsed = evidence.at(-1)!.elapsedMs as number;
+  assert.ok(preparedElapsed < 2000, `prepare took ${preparedElapsed} ms`);
+  assert.equal(prepared.ok && prepared.value.labels.state, "STALE");
+  assert.equal(prepared.ok && prepared.value.labels.snapshotId, binding.snapshotId);
+  assert.equal(prepared.ok && prepared.value.hits.state, "RESOLVED");
+  const shortPrepare = await settledWithin(request(ctx, ctx.repo, 300, async view => view.labels.state), "prepare-stall-short");
+  assert.equal(shortPrepare.ok && shortPrepare.value, "STALE", "a short request keeps time to answer from its binding");
+
+  // 4. a stuck SQL step in a query worker: the caller returns at its deadline, the worker is killed and reaped.
+  blocked.add("search");
+  const sqlStall = await settledWithin(request(ctx, ctx.repo, 1500, view => view.query({ op: "search", args: { task: "OrderService", limit: 5, mode: "auto" } })), "sql-stall");
+  assert.equal(code(sqlStall), "DEADLINE_EXCEEDED");
+  await until(() => ctx.events.some(event => event.type === "pool" && (event.event as { type: string }).type === "worker-close"), "stalled worker reaped", 5000);
+  blocked.delete("search");
+
+  // 5. a live preview that never finishes reading (a FIFO in place of the source).
+  const fifoRel = orderRel;
+  await rm(path.join(ctx.repo, fifoRel));
+  execFileSync("/usr/bin/mkfifo", [path.join(ctx.repo, fifoRel)]);
+  const previewStall = await settledWithin(request(ctx, ctx.repo, 1500, async view => {
+    const client = clientFor(view, await view.snapshotStatus());
+    return client.queryReadRanges([{ file: path.join(ctx.repo, fifoRel), positions: [{ line: 3, column: 7 }] }], { budget: view.budget });
+  }), "preview-stall");
+  assert.equal(code(previewStall), "DEADLINE_EXCEEDED");
+
+  // Convergence: release every stall; no lease or worker is left, the stuck round is abandoned and caught up.
+  await rm(path.join(ctx.repo, fifoRel));
+  await cp(path.join(fixturesRoot, orderRel), path.join(ctx.repo, orderRel));
+  ctx.sources.emit(ctx.repo, orderRel);
+  holdBuild = false;
+  for (const attempt of held) attempt.child.kill("SIGKILL");
+  releaseCreate();
+  await until(() => ctx.owner.store.binding(workspace.workspaceId)!.snapshotId !== binding.snapshotId && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, "stuck round caught up", 120_000);
+  const second = await ctx.owner.workspace(stalledRoot);
+  assert.equal(ctx.owner.peek(stalledRoot), second, "the stalled create converged and is shared");
+  const caughtUp = await settledWithin(request(ctx, ctx.repo, 5000, async view => ({ labels: view.labels,
+    method: await view.query({ op: "search", args: { task: "prepareStall", limit: 5, mode: "auto" } }) })), "after-stalls");
+  assert.equal(caughtUp.ok && caughtUp.value.labels.state, "FRESH");
+  assert.ok(caughtUp.ok && caughtUp.value.method.hits.some(hit => hit.simpleName === "prepareStall" || hit.relativePath === serviceRel));
+  await until(() => ctx.owner.pool.status().running === 0 && ctx.owner.pool.status().reaping === 0, "pool idle", 5000);
+  const current = ctx.owner.store.binding(workspace.workspaceId)!.snapshotId;
+  await until(() => ctx.owner.store.leaseCount(current) === ctx.owner.pool.status().leases, "only worker connection leases remain", 5000);
+  await ctx.owner.reclaim();
+  assert.equal(existsSync(path.join(ctx.owner.store.layout.snapshots, binding.snapshotId)), false, "the superseded snapshot was reclaimed");
+});
+
+test("publish-does-not-upgrade-held-view", { timeout: 180_000 }, async t => {
+  const ctx = await setup(t);
+  const { workspace, binding: first } = await bound(ctx);
+  const observed = await request(ctx, ctx.repo, 120_000, async view => {
+    const before = { labels: { ...view.labels }, status: await view.snapshotStatus(),
+      added: await view.query({ op: "search", args: { task: "addedLater", limit: 5, mode: "exact" } }),
+      anchor: await view.query({ op: "anchor", args: { relativePath: serviceRel, line: 8, column: 7 } }) };
+    // A publish lands while this request still holds its view.
+    await edit(ctx, ctx.repo, serviceRel, text => text.replace("class OrderService {", "class OrderService {\n  void addedLater() {}"));
+    await until(() => ctx.owner.store.binding(workspace.workspaceId)!.snapshotId !== first.snapshotId && !workspace.status().roundInFlight, "publish during request", 120_000);
+    assert.ok(ctx.owner.store.leaseCount(first.snapshotId) >= 1, "the held view keeps its snapshot leased");
+    const client = clientFor(view, before.status);
+    const afterPublish = { labels: { ...view.labels }, status: await view.snapshotStatus(),
+      added: await view.query({ op: "search", args: { task: "addedLater", limit: 5, mode: "exact" } }),
+      anchor: await view.query({ op: "anchor", args: { relativePath: serviceRel, line: 8, column: 7 } }),
+      preview: await client.queryReadRanges([{ file: path.join(ctx.repo, serviceRel), positions: [{ line: 8, column: 7 }] }], { budget: view.budget }),
+      unchangedPreview: await client.queryReadRanges([{ file: path.join(ctx.repo, orderRel), positions: [{ line: 3, column: 7 }] }], { budget: view.budget }) };
+    return { before, afterPublish };
+  }).run;
+  const { before, afterPublish } = observed;
+  evidence.push({ test: "publish-does-not-upgrade-held-view", first: first.snapshotId, labels: afterPublish.labels });
+  assert.deepEqual(afterPublish.labels, before.labels, "labels are frozen at the one acquire");
+  assert.equal(afterPublish.labels.snapshotId, first.snapshotId);
+  assert.equal(afterPublish.labels.state, "FRESH");
+  assert.deepEqual(afterPublish.status, before.status, "hash/coverage come from the held snapshot");
+  assert.equal(before.added.hits.length, 0);
+  assert.equal(afterPublish.added.hits.length, 0, "the held view never sees the newer publish");
+  assert.equal(afterPublish.anchor?.file.contentHash, before.anchor?.file.contentHash);
+  assert.equal(afterPublish.preview[0]!.ranges.length, 0, "a live file that no longer matches the held snapshot is a gap");
+  assert.equal(afterPublish.preview[0]!.sourceChanged, true);
+  assert.ok(afterPublish.unchangedPreview[0]!.ranges.length > 0, "an unchanged file previews from the held snapshot");
+
+  const next = await request(ctx, ctx.repo, 10_000, async view => ({ labels: view.labels, added: await view.query({ op: "search", args: { task: "addedLater", limit: 5, mode: "exact" } }),
+    anchor: await view.query({ op: "anchor", args: { relativePath: serviceRel, line: 9, column: 7 } }),
+    preview: await clientFor(view, await view.snapshotStatus()).queryReadRanges([{ file: path.join(ctx.repo, serviceRel), positions: [{ line: 9, column: 3 }] }], { budget: view.budget }) })).run;
+  assert.notEqual(next.labels.snapshotId, first.snapshotId);
+  assert.ok(next.added.hits.length > 0, "a new request acquires the new binding");
+  assert.notEqual(next.anchor?.file.contentHash, before.anchor?.file.contentHash);
+  assert.ok(next.preview[0]!.ranges.length > 0);
+  await until(() => ctx.owner.store.leaseCount(first.snapshotId) === 0 || undefined, "old view released", 5000).catch(() => undefined);
+  await ctx.owner.reclaim();
+  assert.equal(existsSync(path.join(ctx.owner.store.layout.snapshots, first.snapshotId)), false, "released and superseded: reclaimed");
+});
+
+test("symbol-id-survives-unrelated-publish", { timeout: 180_000 }, async t => {
+  const ctx = await setup(t);
+  const { workspace, binding: first } = await bound(ctx);
+  const issued = await request(ctx, ctx.repo, 10_000, view => view.query({ op: "symbolIdAt", args: { workspaceId: workspace.workspaceId, relativePath: serviceRel, line: 18, column: 17 } })).run;
+  assert.ok(issued?.startsWith("jsym:mac1:"), `symbolId ${issued}`);
+  await edit(ctx, ctx.repo, orderRel, text => text.replace("class Order {", "class Order {\n  static final int UNRELATED = 1;"));
+  await until(() => ctx.owner.store.binding(workspace.workspaceId)!.snapshotId !== first.snapshotId && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, "unrelated publish", 120_000);
+  const later = await request(ctx, ctx.repo, 10_000, async view => ({ labels: view.labels,
+    resolved: await view.query({ op: "resolveSymbol", args: { workspaceId: workspace.workspaceId, symbolId: issued! } }),
+    reissued: await view.query({ op: "symbolIdAt", args: { workspaceId: workspace.workspaceId, relativePath: serviceRel, line: 18, column: 17 } }) })).run;
+  evidence.push({ test: "symbol-id-survives-unrelated-publish", symbolId: issued, first: first.snapshotId, second: later.labels.snapshotId, resolved: later.resolved });
+  assert.notEqual(later.labels.snapshotId, first.snapshotId);
+  assert.equal(later.resolved.status, "FOUND");
+  assert.equal(later.resolved.status === "FOUND" && later.resolved.relativePath, serviceRel);
+  assert.equal(later.reissued, issued, "the same declaration keeps the same symbolId across publishes");
+  const foreign = await request(ctx, ctx.repo, 10_000, view => view.query({ op: "resolveSymbol", args: { workspaceId: "w-0000000000000000000000000000000000000000", symbolId: issued! } })).run;
+  assert.deepEqual(foreign, { status: "REJECTED", reason: "WORKSPACE_MISMATCH" });
+});
+
+test("a workspace without its own verified binding is NOT_READY, never a sibling", { timeout: 180_000 }, async t => {
+  let hold = false;
+  const stuck = await stuckBuilders(t);
+  const ctx = await setup(t, { roots: 2, startBuild: input => hold ? stuck.start() : startBuildProcess(input) });
+  await bound(ctx, ctx.roots[0]);
+  hold = true;
+  const sibling = ctx.roots[1]!;
+  const outcome = await request(ctx, sibling, 2000, async view => {
+    const refused = await view.query({ op: "type", args: { typeText: "demospring.OrderService" } }).then(() => "served", error => (error as JavaIntelligenceError).code);
+    return { labels: view.labels, refused };
+  }).run;
+  assert.equal(outcome.labels.state, "NOT_READY");
+  assert.equal(outcome.labels.snapshotId, undefined);
+  assert.equal(outcome.refused, "INDEX_PARTIAL");
+  // Status-only: an unknown root is NOT_READY without starting a workspace.
+  const third = path.join(ctx.base, "never-started");
+  await mkdir(third);
+  const statusOnly = await withRequestView({ owner: ctx.owner, budget: DeadlineBudget.fromTimeout(1000), start: false, resolve: async () => third, handler: async view => view.labels });
+  assert.equal(statusOnly.state, "NOT_READY");
+  assert.equal(ctx.owner.peek(third), undefined, "status-only never starts a workspace");
+});
+
+test("a snapshot with a broken file serves PARTIAL coverage, not a confident negative", { timeout: 180_000 }, async t => {
+  const ctx = await setup(t);
+  await writeFile(path.join(ctx.repo, "src/main/java/demospring/Broken.java"), "package demospring;\nclass Broken {\n  void open( {\n");
+  const { binding } = await bound(ctx);
+  const outcome = await request(ctx, ctx.repo, 10_000, async view => ({ status: await view.snapshotStatus(),
+    missing: await view.query({ op: "type", args: { typeText: "demospring.DoesNotExist" } }) })).run;
+  evidence.push({ test: "partial", snapshotId: binding.snapshotId, coverage: outcome.status.coverage, missing: outcome.missing });
+  assert.ok(outcome.status.coverage.some(entry => entry.failedFiles > 0 || entry.state !== "COMPLETE"), JSON.stringify(outcome.status.coverage));
+  assert.equal(outcome.missing.state, "UNRESOLVED");
+  assert.notEqual(outcome.missing.state === "UNRESOLVED" && outcome.missing.coverage, "COMPLETE");
+});

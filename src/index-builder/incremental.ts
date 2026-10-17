@@ -42,7 +42,9 @@ export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full" | "e
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
 export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; stages?: PipelineMetrics; error?: string;
   /** escalation "report": this delta needs a full; nothing was published. */
-  escalation?: string };
+  escalation?: string;
+  /** The committed job's content identity (the builder's own capture), reported by the build process. */
+  contentManifestId?: string };
 
 /** ILV2 §6.1: a closure above this many files is published as an explicit full, never a delta. */
 export const DELTA_CLOSURE_LIMIT = 400;

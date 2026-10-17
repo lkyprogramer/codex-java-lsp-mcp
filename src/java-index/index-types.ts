@@ -369,4 +369,6 @@ export type IndexedReadRangeResult = {
   extremeMethod?: boolean;
   /** Requested anchor lines that no returned range covers (budget trimming); presence means the plan is not complete. */
   uncoveredAnchorLines?: number[];
+  /** The live file's bytes differ from the held snapshot's captured bytes: no ranges, an explicit gap (contract §2.6). */
+  sourceChanged?: boolean;
 };
