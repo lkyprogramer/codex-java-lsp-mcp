@@ -17,6 +17,8 @@ import { resolveWorktreeIdentity } from "../worktree-identity.js";
 import { probeLayout } from "../layout-probe.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { SqlJavaIndexClient } from "./sql/sql-client.js";
+import { LocalBuilder } from "./local-builder.js";
+import { localRouterIndex } from "./local-index.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 
@@ -69,6 +71,10 @@ class FixedFileRgRunner extends RgRunner {
 class RecordingJavaIndexClient extends SqlJavaIndexClient {
   refreshCalls = 0;
 
+  constructor(repoRoot: string, dbPath: string) {
+    super(repoRoot, dbPath, new LocalBuilder({ repoRoot, dbPath }));
+  }
+
   override async refresh(generation: number, changed: string[], deleted: string[]) {
     this.refreshCalls += 1;
     return super.refresh(generation, changed, deleted);
@@ -115,7 +121,8 @@ async function waitForBackgroundSweep(client: SqlJavaIndexClient): Promise<void>
 }
 
 async function buildCompleteSnapshot(root: string, cacheDir: string): Promise<void> {
-  const client = new SqlJavaIndexClient(root, path.join(cacheDir, "index.sqlite"));
+  const dbPath = path.join(cacheDir, "index.sqlite");
+  const client = new SqlJavaIndexClient(root, dbPath, new LocalBuilder({ repoRoot: root, dbPath }));
   try {
     await client.open(0);
     await client.reconcile(0);
@@ -184,7 +191,8 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     ""
   ].join("\n"));
 
-  const client = new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
+  const dbPath = path.join(root, ".cache", "index.sqlite");
+  const client = new SqlJavaIndexClient(root, dbPath, new LocalBuilder({ repoRoot: root, dbPath }));
   const originalQueryFiles = client.queryFiles.bind(client);
   const originalQueryTypes = client.queryTypes.bind(client);
   let definitionFileQueryCount = 0;
@@ -339,7 +347,7 @@ test("production ranking observer sees the exact in-request family rank and sele
     "}",
     ""
   ].join("\n"));
-  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
+  const index = localRouterIndex(root, path.join(root, ".cache"));
   try {
     await index.open(0);
     await index.reconcile(0);
@@ -417,7 +425,7 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
     "}",
     ""
   ].join("\n"));
-  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
+  const index = localRouterIndex(root, path.join(root, ".cache"));
   try {
     await index.open(0);
     await index.reconcile(0);

@@ -296,9 +296,8 @@ hook 行为：
 | `JAVA_LSP_CACHE_BASE` | 覆盖统一 cache base；每个 canonical repo 始终追加独立 repoHash。 |
 | `JAVA_LSP_SQLITE_CACHE_KB` | sqlite page cache，默认 `32768`（32 MiB / 打开的连接）。 |
 | `JAVA_LSP_CONN_IDLE_MS` | 只读 sqlite 连接空闲后关闭的时间，默认 `600000`；关闭后会 truncate WAL。 |
-| `JAVA_LSP_BUILDER_IDLE_MS` | index builder 子进程空闲退出，默认 `60000`。 |
 | `JAVA_LSP_BUILDER_PARALLELISM` | 冷建解析并行度，默认 `min(4, cpus-1)`。 |
-| `JAVA_LSP_INDEX_DIR` | 若设置，该进程把 `index.sqlite` 写进这个目录（**不**再拼 repoHash）。生产 LaunchAgent **不要设**，否则多 root 会抢同一文件。 |
+| `JAVA_LSP_OWNER_ENDPOINT` | stdio 入口转发的 owner MCP 地址（仅 loopback `http://`）；未设置时读取 daemon 在 cache base 下写的 `owner-endpoint.json`。stdio 自身不建 index/JDT，owner 不可达时请求直接失败。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME` | 指定默认项目 JDK。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME_<ALIAS>` | 为某个 alias 指定项目 JDK，alias 会转成大写并把非字母数字替换成 `_`。 |
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |

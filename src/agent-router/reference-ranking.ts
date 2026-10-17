@@ -55,9 +55,8 @@ export type RankReferenceFilesContext = {
   readonly limitFiles: number;
 };
 
-// Conventional annotation-processing output roots (matches
-// repo-change-coordinator.ts's GENERATED_ROOT_CANDIDATES) - a generic
-// build-tool convention, not a repo-specific path.
+// Conventional annotation-processing output roots - a generic build-tool
+// convention, not a repo-specific path.
 const GENERATED_PATH_MARKERS = [
   "target/generated-sources",
   "target/generated-test-sources",

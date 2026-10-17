@@ -16,7 +16,6 @@ import {
   withTransaction
 } from "./driver.js";
 import { SCHEMA_VERSION, ensureSchema } from "./schema.js";
-import { vacuumInto } from "./vacuum-into.js";
 
 function pragma(db: ReturnType<typeof openIndexDb>, name: string): unknown {
   const row = db.prepare(`PRAGMA ${name}`).get() as Record<string, unknown> | undefined;
@@ -184,33 +183,6 @@ test("compactWalFile never commits and never waits on a live writer", () => {
     close(writer);
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("vacuumInto copies a file database to a new path", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "iod-vacuum-"));
-  const source = path.join(dir, "src.sqlite");
-  const dest = path.join(dir, "nested", "dst.sqlite");
-  const db = openIndexDb(source);
-  try {
-    ensureSchema(db);
-    db.exec("INSERT INTO file(path, content_hash, generation, facts) VALUES ('a.java', 'h', 1, jsonb('{}'))");
-  } finally {
-    close(db);
-  }
-  vacuumInto(source, dest);
-  assert.equal(existsSync(dest), true);
-  const copied = openIndexDb(dest, { readOnly: true });
-  try {
-    assert.equal(copied.prepare("SELECT count(*) AS n FROM file").get()?.n, 1);
-    assert.equal(copied.prepare("SELECT path AS path FROM file").get()?.path, "a.java");
-  } finally {
-    close(copied);
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("vacuumInto rejects quoted paths", () => {
-  assert.throws(() => vacuumInto("/tmp/a.sqlite", "/tmp/o'reilly.sqlite"), /unsafe dest/);
 });
 
 test("IN lists above SQLITE_MAX_VARIABLE_NUMBER fail unless chunked", () => {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { BuilderSupervisor } from "../builder-supervisor.js";
+import { LocalBuilder } from "../local-builder.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
@@ -43,10 +43,10 @@ async function mutateCreateSignature(repo: string): Promise<string> {
   return service;
 }
 
-test("refresh through the shipped supervisor updates queryFiles methods", async () => {
+test("refresh through a one-shot local builder updates queryFiles methods", async () => {
   const repo = await copyFixtures();
   const dbPath = await coldDb(repo);
-  const supervisor = new BuilderSupervisor({ repoRoot: repo, dbPath, idleMs: 10_000, stallMs: 60_000 });
+  const supervisor = new LocalBuilder({ repoRoot: repo, dbPath });
   const client = new SqlJavaIndexClient(repo, dbPath, supervisor);
   try {
     await client.open(1);
@@ -69,7 +69,7 @@ test("refresh through the shipped supervisor updates queryFiles methods", async 
 test("ensureFresh refreshes when indexedGeneration and file generation lag", async () => {
   const repo = await copyFixtures();
   const dbPath = await coldDb(repo);
-  const supervisor = new BuilderSupervisor({ repoRoot: repo, dbPath, idleMs: 10_000, stallMs: 60_000 });
+  const supervisor = new LocalBuilder({ repoRoot: repo, dbPath });
   const client = new SqlJavaIndexClient(repo, dbPath, supervisor);
   try {
     const opened = await client.open(1);

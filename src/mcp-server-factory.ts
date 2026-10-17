@@ -12,7 +12,7 @@ import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
 import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/impact.js";
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
-import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
+import { javaStatus, javaStatusFromMemory, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { javaSymbol, STATIC_QUERY_LIMIT_DESCRIPTION, symbolNeedsJdt, symbolSchema } from "./tools/symbol.js";
 import { logToolFailure } from "./log.js";
 import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
@@ -67,27 +67,28 @@ export function createMcpServer(
     title: "Java Status",
     description: "Return repo, JDT LS, watcher, JavaIndex, and router cache status; pass start=true to start JDT LS.",
     inputSchema: statusSchema
-  }, args => javaStatusFor(args));
+  }, (args, signal) => javaStatusFor(args, signal));
 
   register(track("java_impact"), {
     title: "Java Impact",
     description: JAVA_IMPACT_TOOL_DESCRIPTION,
     inputSchema: impactSchema
-  }, args => withContext(args, (context, request) => javaImpact(context, args, request), {
+  }, (args, signal) => withContext(args, (context, request) => javaImpact(context, args, request), {
     mayStartLsp: args.semanticPolicy !== "fast",
     requireLspEnabled: args.semanticPolicy === "required",
     requestOptions: {
       mode: args.mode,
       semanticPolicy: args.semanticPolicy,
       deadlineMs: args.deadlineMs
-    }
-  }).catch(rethrowUnlessIdleWarming));
+    },
+    signal
+  }));
 
   register(track("java_symbol"), {
     title: "Java Symbol",
     description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: " + STATIC_QUERY_LIMIT_DESCRIPTION + ", terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). Matching is lexical over code identifiers, comments and framework keys: write the query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. preview=head (default: short declaration heads, small per-request cap) | window (12-line windows) | none; read the code for evidence. operation=evidence (experimental, explicit): bounded XML source units linked to a located Java type/method at file/line/column; complete describes a source unit, not task coverage; no JDT. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and query with backend=jdt use live JDT.",
     inputSchema: symbolSchema
-  }, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
+  }, (args, signal) => withContext(args, (context, request) => javaSymbol(context, args, request), {
     // T06: the JDT admission predicate is computed per request and must match
     // the handler's own route, or a static query would be rejected by the
     // outer policy (or worse, start JDT the handler never uses).
@@ -97,39 +98,41 @@ export function createMcpServer(
       mode: "balanced",
       semanticPolicy: symbolNeedsJdt(args) ? "required" : "auto",
       deadlineMs: symbolNeedsJdt(args) ? args.semanticTimeoutMs : 15000
-    }
+    },
+    signal
   }));
 
   register(track("java_diagnostics"), {
     title: "Java Diagnostics",
     description: "Open Java files and return JDT LS diagnostics after a short wait.",
     inputSchema: diagnosticsSchema
-  }, args => withContext(args, (context, request) => javaDiagnostics(context, args, request), {
+  }, (args, signal) => withContext(args, (context, request) => javaDiagnostics(context, args, request), {
     mayStartLsp: true,
     requireLspEnabled: true,
     requestOptions: {
       mode: "balanced",
       semanticPolicy: "required",
       deadlineMs: Math.min(15000, Math.max(10000, args.waitMs + 5000))
-    }
+    },
+    signal
   }));
 
   register(track("java_runtime"), {
     title: "Java Runtime",
     description: "action=restart: restart JDT LS (clearCache=true also clears cache). action=shutdown: stop JDT LS (all=true stops every active repo).",
     inputSchema: runtimeSchema
-  }, args => runtimeFor(args));
+  }, (args, signal) => runtimeFor(args, signal));
 
   if (registered.join("\0") !== PUBLIC_JAVA_TOOLS.join("\0")) {
     throw new Error(`MCP registration drifted from PUBLIC_JAVA_TOOLS: ${registered.join(",")}`);
   }
   return server;
 
-  async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): Promise<unknown> {
+  async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>, signal?: AbortSignal): Promise<unknown> {
     const hasSelector = Boolean(args.projectId || args.repoRoot || args.file);
     if (!hasSelector && !args.start) {
       if (transportMode === "streamable_http") {
-        return daemonStatus(application);
+        return daemonStatus(application, await application.runtimes.indexStatus());
       }
       await application.registry.reloadIfChanged();
       return {
@@ -143,26 +146,28 @@ export function createMcpServer(
         activeRepos: application.runtimes.activeRepos()
       };
     }
-    return withContext(args, async (context, request) => {
-      const resource = application.runtimes.resourceStatus();
-      return {
-        ...await javaStatus(context, args, request),
-        resource: isDiagnosticDetail(args.detail) ? resource : summarizeResourceStatus(resource)
-      };
-    }, {
-      mayStartLsp: args.start,
-      // start:false still has to create the per-repo runtime (JDK probe, session,
-      // JavaIndex OPEN). The query default of ~2–3s expires before that finishes
-      // after a daemon restart, which is exactly "Deadline exceeded before runtime.create".
+    const resource = application.runtimes.resourceStatus();
+    const resourceView = isDiagnosticDetail(args.detail) ? resource : summarizeResourceStatus(resource);
+    if (!args.start) {
+      // Contract §2.6: status without start reads memory only. It creates no runtime entry, starts no
+      // workspace tracker, scans nothing and starts neither JDT nor a build.
+      return application.runtimes.statusOnly(args, async state => ({ ...javaStatusFromMemory(state, args), resource: resourceView }), { signal });
+    }
+    return withContext(args, async (context, request) => ({
+      ...await javaStatus(context, args, request),
+      resource: resourceView
+    }), {
+      mayStartLsp: true,
       requestOptions: {
         mode: "balanced",
-        semanticPolicy: args.start ? "required" : "auto",
+        semanticPolicy: "required",
         deadlineMs: 15000
-      }
-    }).catch(rethrowUnlessIdleWarming);
+      },
+      signal
+    });
   }
 
-  async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>): Promise<unknown> {
+  async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>, signal?: AbortSignal): Promise<unknown> {
     if (args.action === "shutdown" && args.all) {
       if (transportMode === "streamable_http") {
         throw new Error("java_runtime(all=true) is not available on the shared daemon; select one worktree.");
@@ -173,7 +178,8 @@ export function createMcpServer(
     }
     return withContext(args, context => javaRuntime(context, args), {
       mayStartLsp: args.action === "restart",
-      requireLspEnabled: args.action === "restart"
+      requireLspEnabled: args.action === "restart",
+      signal
     });
   }
 
@@ -184,6 +190,7 @@ export function createMcpServer(
       mayStartLsp?: boolean;
       requireLspEnabled?: boolean;
       requestOptions?: RequestOptionsInput;
+      signal?: AbortSignal;
     } = {}
   ): Promise<T> {
     return application.runtimes.withContext(args, async (context, request) => {
@@ -192,19 +199,20 @@ export function createMcpServer(
         throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
       }
       return handler(context, request);
-    }, { mayStartLsp: contextOptions.mayStartLsp, requestOptions: contextOptions.requestOptions });
+    }, { mayStartLsp: contextOptions.mayStartLsp, requestOptions: contextOptions.requestOptions, signal: contextOptions.signal });
   }
 
   function register<T extends z.ZodRawShape>(
     name: string,
     config: { title: string; description: string; inputSchema: T },
-    handler: (args: z.infer<z.ZodObject<T>>) => Promise<unknown>
+    handler: (args: z.infer<z.ZodObject<T>>, signal?: AbortSignal) => Promise<unknown>
   ): void {
     const callback = async (args: unknown, extra: { signal?: AbortSignal }): Promise<ToolResult> => {
       const operation = application.runRequest(() => withTelemetryRequestScope(async () => {
         const started = performance.now();
         try {
-          const value = await handler(args as z.infer<z.ZodObject<T>>);
+          // The signal reaches the request view: cancelling stops its waits and kills its query worker.
+          const value = await handler(args as z.infer<z.ZodObject<T>>, extra.signal);
           recordToolInvocation({
             tool: name,
             args,
@@ -250,7 +258,7 @@ function raceRequestAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promi
   });
 }
 
-function daemonStatus(application: JavaLspApplication): Record<string, unknown> {
+function daemonStatus(application: JavaLspApplication, index: Awaited<ReturnType<JavaLspApplication["runtimes"]["indexStatus"]>>): Record<string, unknown> {
   const state = application.state();
   const resource = application.runtimes.resourceStatus();
   const build = readRuntimeBuild();
@@ -270,7 +278,14 @@ function daemonStatus(application: JavaLspApplication): Record<string, unknown> 
       idleTtlMs: resource.idleTtlMs,
       importConcurrency: resource.importConcurrency,
       workspaceRetainedOnShutdown: resource.workspaceRetainedOnShutdown
-    }
+    },
+    index: index && ("unavailable" in index ? index : {
+      workspaces: index.workspaces.map(workspace => ({ canonicalRoot: workspace.canonicalRoot, view: workspace.view, snapshotId: workspace.snapshotId,
+        rounds: workspace.rounds, roundInFlight: workspace.roundInFlight })),
+      builders: index.scheduler.builders,
+      queued: index.scheduler.queued,
+      queryWorkers: index.pool.workers
+    })
   };
 }
 
@@ -286,22 +301,4 @@ function errorResult(error: unknown): ToolResult {
     isError: true,
     content: [{ type: "text", text: message }]
   };
-}
-
-const IDLE_WARMING_BEFORE =
-  /Deadline exceeded before (?:java-index\.status|runtime\.request-context|runtime\.create)\b/;
-
-/** S5: idle-close first query may still miss 15s; return a retryable plan, not isError. */
-function idleWarmingPayload(error: unknown): { evidenceGaps: string[] } | undefined {
-  const message = error instanceof Error ? error.message : String(error);
-  if (!IDLE_WARMING_BEFORE.test(message)) return undefined;
-  return {
-    evidenceGaps: ["Index runtime is warming after idle close; retry the same request."]
-  };
-}
-
-function rethrowUnlessIdleWarming(error: unknown): { evidenceGaps: string[] } {
-  const payload = idleWarmingPayload(error);
-  if (payload) return payload;
-  throw error;
 }

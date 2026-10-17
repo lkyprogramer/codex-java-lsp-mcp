@@ -11,6 +11,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { startBuildProcess } from "../../index-builder/build-process.js";
 import type { BuildAttempt } from "../../index-builder/build-scheduler.js";
+import { probeLayout } from "../../layout-probe.js";
 import { ownerChildStdio } from "../../mac-platform/owner-lock.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -116,7 +117,7 @@ async function settledWithin<T>(call: { budget: DeadlineBudget; started: number;
 const code = (outcome: { ok: boolean; error?: unknown }) => outcome.ok ? "OK" : outcome.error instanceof JavaIntelligenceError ? outcome.error.code : "OTHER";
 
 function clientFor(view: RequestView, status: Awaited<ReturnType<RequestView["snapshotStatus"]>>) {
-  return new SnapshotJavaIndexClient(view.owner, view.snapshotId!, view.canonicalRoot, snapshotIndexStatus(status, view.snapshotId!));
+  return new SnapshotJavaIndexClient(view.owner, view.snapshotId!, view.canonicalRoot, snapshotIndexStatus(status, view.snapshotId!), probeLayout(view.canonicalRoot));
 }
 
 const sleeper = `setInterval(() => {}, 1000); process.on('message', () => {});`;
@@ -183,9 +184,23 @@ test("nonzero-deadline-bounds-all-stages", { timeout: 240_000 }, async t => {
 
   // 4. a stuck SQL step in a query worker: the caller returns at its deadline, the worker is killed and reaped.
   blocked.add("search");
-  const sqlStall = await settledWithin(request(ctx, ctx.repo, 1500, view => view.query({ op: "search", args: { task: "OrderService", limit: 5, mode: "auto" } })), "sql-stall");
+  const eventsBefore = ctx.events.length;
+  const sqlCall = request(ctx, ctx.repo, 1500, view => view.query({ op: "search", args: { task: "OrderService", limit: 5, mode: "auto" } }));
+  const stallPids = new Set<number>();
+  let sampling = true;
+  void sqlCall.run.finally(() => { sampling = false; }).catch(() => undefined);
+  const sample = (async () => { while (sampling) { for (const pid of ctx.owner.pool.status().pids) stallPids.add(pid); await delay(10); } })();
+  const sqlStall = await settledWithin(sqlCall, "sql-stall");
+  await sample;
   assert.equal(code(sqlStall), "DEADLINE_EXCEEDED");
-  await until(() => ctx.events.some(event => event.type === "pool" && (event.event as { type: string }).type === "worker-close"), "stalled worker reaped", 5000);
+  // §2.6: the stalled worker itself is SIGKILLed and reaped within 2 s of the request deadline.
+  type PoolClose = { type: string; pid?: number; signal?: NodeJS.Signals | null };
+  const killed = await until(() => ctx.events.slice(eventsBefore).map(event => event.type === "pool" ? event.event as PoolClose : undefined)
+    .find(event => event?.type === "worker-close" && event.signal === "SIGKILL"), "stalled worker reaped", Math.max(1, sqlCall.budget.deadlineAtMs + 2000 - performance.now()));
+  evidence.push({ test: "sql-stall-reap", killedPid: killed.pid, stallPids: [...stallPids], reapedAfterDeadlineMs: performance.now() - sqlCall.budget.deadlineAtMs });
+  assert.ok(killed.pid !== undefined && stallPids.has(killed.pid), `the killed worker ${killed.pid} served the stalled query (${[...stallPids]})`);
+  assert.throws(() => process.kill(killed.pid!, 0), /ESRCH/, "the stalled worker is gone");
+  assert.equal(ctx.owner.pool.status().pids.includes(killed.pid!), false);
   blocked.delete("search");
 
   // 5. a live preview that never finishes reading (a FIFO in place of the source).
@@ -211,7 +226,7 @@ test("nonzero-deadline-bounds-all-stages", { timeout: 240_000 }, async t => {
   const caughtUp = await settledWithin(request(ctx, ctx.repo, 5000, async view => ({ labels: view.labels,
     method: await view.query({ op: "search", args: { task: "prepareStall", limit: 5, mode: "auto" } }) })), "after-stalls");
   assert.equal(caughtUp.ok && caughtUp.value.labels.state, "FRESH");
-  assert.ok(caughtUp.ok && caughtUp.value.method.hits.some(hit => hit.simpleName === "prepareStall" || hit.relativePath === serviceRel));
+  assert.ok(caughtUp.ok && caughtUp.value.method.hits.some(hit => hit.simpleName === "prepareStall"), "the caught-up snapshot has the method only the stuck round added");
   await until(() => ctx.owner.pool.status().running === 0 && ctx.owner.pool.status().reaping === 0, "pool idle", 5000);
   const current = ctx.owner.store.binding(workspace.workspaceId)!.snapshotId;
   await until(() => ctx.owner.store.leaseCount(current) === ctx.owner.pool.status().leases, "only worker connection leases remain", 5000);
@@ -231,14 +246,19 @@ test("publish-does-not-upgrade-held-view", { timeout: 180_000 }, async t => {
     await until(() => ctx.owner.store.binding(workspace.workspaceId)!.snapshotId !== first.snapshotId && !workspace.status().roundInFlight, "publish during request", 120_000);
     assert.ok(ctx.owner.store.leaseCount(first.snapshotId) >= 1, "the held view keeps its snapshot leased");
     const client = clientFor(view, before.status);
-    const afterPublish = { labels: { ...view.labels }, status: await view.snapshotStatus(),
+    // A fresh status read (snapshotStatus() is memoized per view) against the held snapshot.
+    const afterPublish = { labels: { ...view.labels }, status: await view.query({ op: "status", args: {} }),
       added: await view.query({ op: "search", args: { task: "addedLater", limit: 5, mode: "exact" } }),
       anchor: await view.query({ op: "anchor", args: { relativePath: serviceRel, line: 8, column: 7 } }),
       preview: await client.queryReadRanges([{ file: path.join(ctx.repo, serviceRel), positions: [{ line: 8, column: 7 }] }], { budget: view.budget }),
       unchangedPreview: await client.queryReadRanges([{ file: path.join(ctx.repo, orderRel), positions: [{ line: 3, column: 7 }] }], { budget: view.budget }) };
-    return { before, afterPublish };
+    // A captured file deleted from the live tree (no hint emitted, so no round) is a change, not a silent miss.
+    const deletedRel = "src/main/java/demospring/OrderCreated.java";
+    await rm(path.join(ctx.repo, deletedRel));
+    const deletedPreview = await client.queryReadRanges([{ file: path.join(ctx.repo, deletedRel), positions: [{ line: 3, column: 7 }] }], { budget: view.budget });
+    return { before, afterPublish, deletedPreview };
   }).run;
-  const { before, afterPublish } = observed;
+  const { before, afterPublish, deletedPreview } = observed;
   evidence.push({ test: "publish-does-not-upgrade-held-view", first: first.snapshotId, labels: afterPublish.labels });
   assert.deepEqual(afterPublish.labels, before.labels, "labels are frozen at the one acquire");
   assert.equal(afterPublish.labels.snapshotId, first.snapshotId);
@@ -250,6 +270,8 @@ test("publish-does-not-upgrade-held-view", { timeout: 180_000 }, async t => {
   assert.equal(afterPublish.preview[0]!.ranges.length, 0, "a live file that no longer matches the held snapshot is a gap");
   assert.equal(afterPublish.preview[0]!.sourceChanged, true);
   assert.ok(afterPublish.unchangedPreview[0]!.ranges.length > 0, "an unchanged file previews from the held snapshot");
+  assert.equal(deletedPreview[0]!.ranges.length, 0);
+  assert.equal(deletedPreview[0]!.sourceChanged, true, "a deleted captured file is an explicit sourceChanged gap");
 
   const next = await request(ctx, ctx.repo, 10_000, async view => ({ labels: view.labels, added: await view.query({ op: "search", args: { task: "addedLater", limit: 5, mode: "exact" } }),
     anchor: await view.query({ op: "anchor", args: { relativePath: serviceRel, line: 9, column: 7 } }),
@@ -311,7 +333,38 @@ test("a workspace without its own verified binding is NOT_READY, never a sibling
   assert.equal(ctx.owner.peek(third), undefined, "status-only never starts a workspace");
 });
 
-test("a snapshot with a broken file serves PARTIAL coverage, not a confident negative", { timeout: 180_000 }, async t => {
+test("requests during a failed round's retry backoff answer STALE without forcing extra rounds", { timeout: 180_000 }, async t => {
+  let fail = false;
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-request-view-failing-")));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const failing = path.join(base, "fail.mjs");
+  await writeFile(failing, "process.exit(3);");
+  const ctx = await setup(t, { startBuild: input => fail
+    ? { child: fork(failing, [], { execArgv: [], stdio: ownerChildStdio(["ignore", "ignore", "inherit", "ipc"]) }), result: Promise.reject(new Error("injected builder failure")) }
+    : startBuildProcess(input) });
+  const { workspace, binding } = await bound(ctx);
+  fail = true;
+  const failedRounds = () => ctx.events.filter(event => event.type === "round" && event.outcome === "failed").length;
+  await edit(ctx, ctx.repo, serviceRel, text => text.replace("class OrderService {", "class OrderService {\n  void retryBackoff() {}"));
+  await until(() => failedRounds() === 1 && !workspace.status().roundInFlight, "first failed round");
+  const roundsBefore = workspace.status().rounds;
+  const started = performance.now();
+  const states: string[] = [];
+  for (let index = 0; index < 5; index += 1) states.push(await request(ctx, ctx.repo, 3000, async view => view.labels.state).run);
+  const elapsedMs = performance.now() - started;
+  const roundsAfter = workspace.status().rounds;
+  evidence.push({ test: "retry-backoff", states, elapsedMs, roundsBefore, roundsAfter, failedRounds: failedRounds() });
+  assert.deepEqual(states, ["STALE", "STALE", "STALE", "STALE", "STALE"]);
+  // Before the fix every prepare cleared the 1 s retry timer and ran a new failing round at once.
+  assert.ok(elapsedMs < 800, `requests waited on the retry: ${elapsedMs.toFixed(0)} ms`);
+  assert.equal(roundsAfter, roundsBefore, "no prepare overrides the retry backoff");
+  assert.equal(ctx.owner.store.binding(workspace.workspaceId)?.snapshotId, binding.snapshotId, "the old binding keeps serving");
+  // The backoff still retries on its own and recovers once the builder works again.
+  fail = false;
+  await until(() => ctx.owner.store.binding(workspace.workspaceId)?.snapshotId !== binding.snapshotId, "retry publishes after recovery", 60_000);
+});
+
+test("a snapshot with a broken file reports non-COMPLETE coverage, not a confident negative", { timeout: 180_000 }, async t => {
   const ctx = await setup(t);
   await writeFile(path.join(ctx.repo, "src/main/java/demospring/Broken.java"), "package demospring;\nclass Broken {\n  void open( {\n");
   const { binding } = await bound(ctx);
@@ -320,11 +373,77 @@ test("a snapshot with a broken file serves PARTIAL coverage, not a confident neg
   evidence.push({ test: "partial", snapshotId: binding.snapshotId, coverage: outcome.status.coverage, missing: outcome.missing });
   assert.ok(outcome.status.coverage.some(entry => entry.failedFiles > 0 || entry.state !== "COMPLETE"), JSON.stringify(outcome.status.coverage));
   assert.equal(outcome.missing.state, "UNRESOLVED");
-  assert.notEqual(outcome.missing.state === "UNRESOLVED" && outcome.missing.coverage, "COMPLETE");
+  // A source root with a failed file maps to DEGRADED in the type-lookup vocabulary (COMPLETE | PARTIAL | DEGRADED).
+  assert.equal(outcome.missing.state === "UNRESOLVED" && outcome.missing.coverage, "DEGRADED");
+});
+
+test("a per-call budget or signal only narrows the request's own", { timeout: 180_000 }, async t => {
+  let block = false;
+  const ctx = await setup(t, { queryTestBlockMs: request => block && request.op === "type" ? 8_000 : undefined });
+  await bound(ctx);
+  block = true;
+  const longer = DeadlineBudget.fromTimeout(60_000);
+  const eventsBefore = ctx.events.length;
+  const call = request(ctx, ctx.repo, 2_000, async view => {
+    const started = performance.now();
+    const outcome = await view.query({ op: "type", args: { typeText: "demospring.OrderService" } }, { budget: longer })
+      .then(() => "served", error => (error as JavaIntelligenceError).code);
+    const viaClient = await clientFor(view, await view.snapshotStatus()).queryType("demospring.OrderService", undefined, { budget: longer })
+      .then(() => "served", error => (error as JavaIntelligenceError).code);
+    return { outcome, viaClient, elapsedMs: performance.now() - started };
+  });
+  const settled = await settledWithin(call, "per-call-budget-narrowed");
+  evidence.push({ test: "per-call-budget-narrowed", value: settled.ok ? settled.value : code(settled) });
+  if (settled.ok) {
+    assert.equal(settled.value.outcome, "DEADLINE_EXCEEDED", "a longer per-call budget cannot outlive the request's");
+    assert.notEqual(settled.value.viaClient, "served");
+  } else {
+    assert.equal(code(settled), "DEADLINE_EXCEEDED");
+  }
+  // The worker running the read with the longer budget is SIGKILLed at the request's deadline, not the per-call one.
+  type PoolClose = { type: string; pid?: number; signal?: NodeJS.Signals | null };
+  const killed = await until(() => ctx.events.slice(eventsBefore).map(event => event.type === "pool" ? event.event as PoolClose : undefined)
+    .find(event => event?.type === "worker-close" && event.signal === "SIGKILL"), "per-call worker killed at the request deadline",
+  Math.max(1, call.budget.deadlineAtMs + 2000 - performance.now()));
+  evidence.push({ test: "per-call-budget-worker-kill", pid: killed.pid, afterRequestDeadlineMs: performance.now() - call.budget.deadlineAtMs });
+  const controller = new AbortController();
+  const cancelled = request(ctx, ctx.repo, 20_000, view => view.query({ op: "type", args: { typeText: "demospring.OrderService" } }, { budget: longer, signal: new AbortController().signal }),
+    { signal: controller.signal });
+  setTimeout(() => controller.abort(), 300);
+  const aborted = await settledWithin(cancelled, "per-call-signal-narrowed");
+  assert.equal(code(aborted), "CANCELLED", "the request's cancel reaches a read that passed its own signal");
+});
+
+test("a handler that outlives its deadline loses its view and its snapshot lease", { timeout: 180_000 }, async t => {
+  const ctx = await setup(t);
+  const { workspace, binding: first } = await bound(ctx);
+  let held: RequestView | undefined;
+  let leasedWhileHeld = -1;
+  const call = request(ctx, ctx.repo, 1_500, async view => {
+    held = view;
+    await view.snapshotStatus();
+    // The request's own lease is one more than the workers' connection leases.
+    leasedWhileHeld = ctx.owner.store.leaseCount(first.snapshotId) - ctx.owner.pool.status().leases;
+    return new Promise<never>(() => {});
+  });
+  const outcome = await settledWithin(call, "never-settling-handler");
+  assert.equal(code(outcome), "DEADLINE_EXCEEDED");
+  assert.equal(leasedWhileHeld, 1, "the handler held exactly one request lease");
+  // No request lease remains by deadline + 2 s although the handler never settles.
+  await until(() => ctx.owner.store.leaseCount(first.snapshotId) === ctx.owner.pool.status().leases, "request lease released",
+    Math.max(1, call.budget.deadlineAtMs + 2000 - performance.now()));
+  assert.ok(held?.closed, "the view closes when the request returns at its deadline");
+  await assert.rejects(held!.query({ op: "status", args: {} }), /already released/);
+  await edit(ctx, ctx.repo, serviceRel, text => text.replace("class OrderService {", "class OrderService {\n  void afterAbandon() {}"));
+  await until(() => ctx.owner.store.binding(workspace.workspaceId)!.snapshotId !== first.snapshotId && !workspace.status().roundInFlight, "publish after abandon", 120_000);
+  // Query workers drop their connection to the superseded snapshot; the abandoned request holds nothing.
+  await until(() => ctx.owner.store.leaseCount(first.snapshotId) === 0 || undefined, "superseded snapshot unleased", 10_000);
+  await ctx.owner.reclaim();
+  assert.equal(existsSync(path.join(ctx.owner.store.layout.snapshots, first.snapshotId)), false, "the superseded snapshot is reclaimed although the handler never settled");
 });
 
 test("owner stop is not held by a workspace start whose change source never comes up", { timeout: 30_000 }, async t => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { startStopGraceMs: 300 });
   (ctx.owner.options as { trackerSource?: (root: string) => TrackerSourceFactory }).trackerSource = () => () => new Promise(() => {});
   const stalled = ctx.owner.workspace(ctx.repo);
   stalled.catch(() => undefined);
@@ -334,6 +453,30 @@ test("owner stop is not held by a workspace start whose change source never come
   const elapsed = performance.now() - started;
   evidence.push({ test: "stop-with-stalled-start", elapsedMs: elapsed });
   assert.ok(elapsed < 2000, `stop took ${elapsed.toFixed(0)} ms`);
+  assert.ok(elapsed >= 250, `stop waited ${elapsed.toFixed(0)} ms for the pending start, less than its grace`);
   assert.equal(ctx.owner.peek(ctx.repo), undefined);
   await assert.rejects(ctx.owner.workspace(ctx.repo), /index owner stopped/);
+});
+
+test("a start that lands after stop() stops its own source and is never adopted", { timeout: 30_000 }, async t => {
+  const ctx = await setup(t, { startStopGraceMs: 5_000 });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let sourceStops = 0;
+  (ctx.owner.options as { trackerSource?: (root: string) => TrackerSourceFactory }).trackerSource = () => async () => {
+    await gate;
+    return { epoch: randomBytes(16).toString("hex"), fence: async () => {}, stop: async () => { sourceStops += 1; }, closed: new Promise<void>(() => {}) };
+  };
+  const late = ctx.owner.workspace(ctx.repo);
+  late.catch(() => undefined);
+  await delay(50);
+  const stopping = ctx.owner.stop();
+  await delay(100);
+  release();
+  await stopping;
+  await assert.rejects(late, /index owner stopped/);
+  evidence.push({ test: "late-start-after-stop", sourceStops });
+  assert.equal(sourceStops, 1, "stop() waited for the landing start, which stopped its own source");
+  assert.equal(ctx.owner.peek(ctx.repo), undefined);
+  assert.ok(!ctx.events.some(event => event.type === "round" || event.type === "scheduler"), "no round or build ran for the unadopted start");
 });

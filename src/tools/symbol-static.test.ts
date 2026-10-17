@@ -18,6 +18,7 @@ import { openIndexDb, close } from "../java-index/sql/driver.js";
 import { ensureSchema } from "../java-index/sql/schema.js";
 import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
+import { LocalBuilder } from "../java-index/local-builder.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
 import { AgentRouter } from "../agent-router/index.js";
 import { RgRunner } from "../search/rg-runner.js";
@@ -143,7 +144,7 @@ async function buildFixture(): Promise<Fixture> {
   ensureSchema(db);
   await runSqlColdBuild({ repoRoot, db, generation: 1 });
   close(db);
-  const client = new SqlJavaIndexClient(repoRoot, dbPath) as unknown as JavaIndexClientApi;
+  const client = new SqlJavaIndexClient(repoRoot, dbPath, new LocalBuilder({ repoRoot, dbPath })) as unknown as JavaIndexClientApi;
   return {
     repoRoot,
     dbPath,

@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildSubmitAnswerTool, validateSubmission } from "./eval-answer-contract.mjs";
 import { serializeModelToolResult, MODEL_TOOL_MESSAGE_MAX_BYTES } from "./eval-tool-wire.mjs";
+import { startOwnerDaemon } from "./owner-daemon.mjs";
 import {
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   DEFAULT_MAX_COMPLETION_TOKENS,
@@ -1077,23 +1078,24 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
   for (const name of ["OPENAI_API_KEY", "JAVA_LSP_AGENT_API_KEY", "ANTHROPIC_API_KEY"]) {
     delete childEnv[name];
   }
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: [serverJs],
-    cwd: scriptRoot,
-    env: {
-      ...childEnv,
-      PATH: withHomebrewPathFirst(childEnv.PATH),
-      JAVA_LSP_REPO_ROOT: repoRoot,
-      JAVA_LSP_CACHE_ROOT: cacheRoot,
-      JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false",
-      JAVA_LSP_ISOLATED_VALIDATION: "1"
-    },
-    stderr: "inherit"
-  });
-  const client = new Client({ name: "v5r-live-agent-trace", version: "0.1.0" });
-  await client.connect(transport);
-  return impactSessionFromClient({ repoRoot, client });
+  // stdio only relays (MAC-08B): the session runs its own isolated owner for this cache.
+  const owner = await startOwnerDaemon({ serverJs, cacheRoot, ephemeralCache: true, env: {
+    ...childEnv,
+    PATH: withHomebrewPathFirst(childEnv.PATH),
+    JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false"
+  } });
+  let session;
+  try {
+    // The relay resolves selector-free calls against its cwd: the repository under test.
+    const transport = new StdioClientTransport({ command: process.execPath, args: [serverJs], cwd: repoRoot, env: owner.relayEnv, stderr: "inherit" });
+    const client = new Client({ name: "v5r-live-agent-trace", version: "0.1.0" });
+    await client.connect(transport);
+    session = impactSessionFromClient({ repoRoot, client });
+  } catch (error) {
+    await owner.stop();
+    throw error;
+  }
+  return { ...session, async close() { try { await session.close(); } finally { await owner.stop(); } } };
 }
 
 /** MCP mapping shared by the live session and capture-client contract tests. */

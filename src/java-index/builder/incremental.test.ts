@@ -13,7 +13,7 @@ import { encodeFacts, STATIC_EDGE_SELECT } from "../sql/rows.js";
 import { internSym } from "../sql/sym.js";
 import { probeLayout } from "../../layout-probe.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
-import { applyBuilderJob, runBuilderServe } from "../../index-builder/incremental.js";
+import { applyBuilderJob } from "../../index-builder/incremental.js";
 import { readMeta } from "../../index-builder/progress.js";
 import { discoverJavaFiles } from "../manifest.js";
 
@@ -325,31 +325,6 @@ test("refresh with more owned ids than SQLITE_MAX_VARIABLE_NUMBER still complete
     ).get(`${padPrefix}%`) as { n: number };
     assert.equal(Number(leftover.n), 0);
     assert.ok(cascadeCounts(built.db, serviceRel).files > 0);
-  } finally {
-    close(built.db);
-    await rm(repo, { recursive: true, force: true });
-  }
-});
-
-test("serve mode answers refresh JSON jobs then exits", async () => {
-  const repo = await copyFixtures();
-  const built = await cold(repo, 1);
-  try {
-    const service = path.join(repo, serviceRel);
-    const original = await readFile(service, "utf8");
-    await writeFile(service, original.replace("class OrderService", "class OrderService /* serve */"));
-    const chunks: string[] = [];
-    const lines = (async function* () {
-      yield JSON.stringify({ id: 7, kind: "refresh", generation: 2, changed: [service], deleted: [] });
-      yield JSON.stringify({ kind: "exit" });
-    })();
-    await runBuilderServe(repo, built.db, lines, { write: chunk => chunks.push(String(chunk)) });
-    assert.equal(chunks.length, 1);
-    const payload = JSON.parse(chunks[0]!) as { id: number; ok: boolean; indexedGeneration: number; files: number };
-    assert.equal(payload.id, 7);
-    assert.equal(payload.ok, true, JSON.stringify(payload));
-    assert.equal(payload.indexedGeneration, 2);
-    assert.ok(payload.files > 0);
   } finally {
     close(built.db);
     await rm(repo, { recursive: true, force: true });

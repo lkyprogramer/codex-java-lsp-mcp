@@ -3,7 +3,7 @@
 // pos: Transport-neutral owner of aliases, repo resolution, runtimes, drain, and shutdown.
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver, type RepoResolverOptions } from "./repo-resolver.js";
-import { RepoRuntimeManager } from "./repo-runtime-manager.js";
+import { RepoRuntimeManager, type IndexOwnerSource } from "./repo-runtime-manager.js";
 import { RepoOwnershipManager, type RepoOwnershipProvider, type RepoOwnerTransport } from "./repo-ownership-lease.js";
 import { canonicalPath, repoHash } from "./path-utils.js";
 import {
@@ -32,6 +32,8 @@ export type JavaLspApplicationOptions = {
   ownership?: RepoOwnershipProvider;
   cleanup?: (options: WorktreeCacheCleanupOptions) => WorktreeCacheCleanupResult;
   cacheJanitorIntervalMs?: number;
+  /** The index owner source for the default runtime manager (false: no index, for JDT-only tests). */
+  index?: IndexOwnerSource;
 };
 
 export class JavaLspApplication {
@@ -63,7 +65,8 @@ export class JavaLspApplication {
       this.resolver,
       {
         transportMode: this.transportMode,
-        isProtectedRepo: root => this.lspEnabledPinRoots().has(canonicalPath(root))
+        isProtectedRepo: root => this.lspEnabledPinRoots().has(canonicalPath(root)),
+        ...(options.index !== undefined ? { index: options.index } : {})
       },
       undefined,
       options.ownership ?? new RepoOwnershipManager({ transport: this.transportMode })

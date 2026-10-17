@@ -1,104 +1,97 @@
 // input: the compiled product and tiny temporary Java repositories.
 // output: public MCP/watcher acceptance; no fake index, watcher or transport.
-// pos: R12 K05/K12/K15/K17/K19/K25/K27.
+// pos: R12 K05/K12/K15/K17/K19/K25/K27. MAC-08B: stdio only relays, so each contract runs the
+//      stdio entry against one isolated owner daemon (real FSEvents tracker, sealed snapshots).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { isolatedValidationEnvironment } from "./run-isolated-validation.mjs";
+import { startOwner, stdioClient, withDaemonLog } from "./ilv2-mac-mcp-owner-fixture.mjs";
 
-const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const digest = value => createHash("sha256").update(value).digest("hex");
 const pom = name => `<project><modelVersion>4.0.0</modelVersion><groupId>contract</groupId><artifactId>${name}</artifactId><version>1</version></project>`;
 
-async function fixture(body) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "release-mcp-contract-"));
-  const repo = path.join(root, "repo");
-  const put = async (relative, text) => {
-    await mkdir(path.dirname(path.join(repo, relative)), { recursive: true });
-    await writeFile(path.join(repo, relative), text);
-    return text;
-  };
-  const env = isolatedValidationEnvironment(root);
-  for (const name of ["home", "tmp", "cache", "xdg-cache", "xdg-config", "xdg-data", "xdg-state"]) {
-    await mkdir(path.join(root, name), { recursive: true });
-  }
-  await put("pom.xml", pom("root"));
+async function fixture(t, body) {
+  let repo, put, launched, providerCalls;
   const a = "m1/src/main/java/demo/Shared.java";
   const b = "m2/src/main/java/demo/Shared.java";
-  await put("m1/pom.xml", pom("m1"));
-  await put("m2/pom.xml", pom("m2"));
-  await put(a, "package demo; public class Shared { public void alpha() { helper(); } private void helper() {} }\n");
-  const bText = await put(b, "package demo; public class Shared { public void beta() {} }\n");
   const wordFile = "m2/src/main/java/demo/WordService.java";
-  await put(wordFile, "package demo;\n/** 琥珀结算 */\npublic class WordService {}\n");
-  for (let i = 0; i < 25; i++) {
-    await put(`m1/src/main/java/noise/Refund${i}.java`, `package noise; /** refund ledger refund ledger */ public class Refund${i} {}\n`);
-  }
   const target = "m2/src/test/java/demo/ScopedRefund.java";
-  await put(target, "package demo; /** refund ledger */ public class ScopedRefund {}\n");
-  await put("m2/src/main/java/demo/OtherRefund.java", "package demo; /** refund ledger */ public class OtherRefund {}\n");
-  const launched = path.join(root, "jdt-launches");
-  const jdt = path.join(root, "jdt-forbidden.sh");
-  await writeFile(jdt, '#!/bin/sh\nprintf "launched\\n" >> "$RELEASE_JDT_LAUNCH_FILE"\nexit 97\n');
-  await chmod(jdt, 0o700);
-  await writeFile(env.JAVA_LSP_PROJECTS_JSON, JSON.stringify({ aliases: [{ id: "fixture", root: repo, lspEnabled: true }], defaults: {} }));
-  const noProvider = path.join(root, "no-provider.mjs");
-  const providerCalls = path.join(root, "provider-calls");
-  await writeFile(noProvider, 'import {appendFileSync} from "node:fs"; globalThis.fetch=async()=>{appendFileSync(process.env.RELEASE_PROVIDER_CALL_FILE,"fetch\\n");throw new Error("provider disabled");};\n');
-  const client = new Client({ name: "release-mcp-contracts", version: "1.0" });
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: ["--import", noProvider, path.join(product, "dist/server.js")],
-    cwd: product,
-    env: { ...env, JAVA_LSP_REPO_ROOT: repo, JDTLS_BIN: jdt, RELEASE_JDT_LAUNCH_FILE: launched, RELEASE_PROVIDER_CALL_FILE: providerCalls },
-    stderr: "pipe"
+  let bText;
+  const prepare = async root => {
+    repo = path.join(root, "repo");
+    put = async (relative, text) => {
+      await mkdir(path.dirname(path.join(repo, relative)), { recursive: true });
+      await writeFile(path.join(repo, relative), text);
+      return text;
+    };
+    await put("pom.xml", pom("root"));
+    await put("m1/pom.xml", pom("m1"));
+    await put("m2/pom.xml", pom("m2"));
+    await put(a, "package demo; public class Shared { public void alpha() { helper(); } private void helper() {} }\n");
+    bText = await put(b, "package demo; public class Shared { public void beta() {} }\n");
+    await put(wordFile, "package demo;\n/** 琥珀结算 */\npublic class WordService {}\n");
+    for (let i = 0; i < 25; i++) {
+      await put(`m1/src/main/java/noise/Refund${i}.java`, `package noise; /** refund ledger refund ledger */ public class Refund${i} {}\n`);
+    }
+    await put(target, "package demo; /** refund ledger */ public class ScopedRefund {}\n");
+    await put("m2/src/main/java/demo/OtherRefund.java", "package demo; /** refund ledger */ public class OtherRefund {}\n");
+    launched = path.join(root, "jdt-launches");
+    providerCalls = path.join(root, "provider-calls");
+    const jdt = path.join(root, "jdt-forbidden.sh");
+    await writeFile(jdt, '#!/bin/sh\nprintf "launched\\n" >> "$RELEASE_JDT_LAUNCH_FILE"\nexit 97\n');
+    await chmod(jdt, 0o700);
+    return [repo];
+  };
+  const owner = await startOwner(t, "release", {
+    prepare,
+    projects: repos => ({ aliases: [{ id: "fixture", root: repos[0], lspEnabled: true }], defaults: {} }),
+    env: root => ({ JDTLS_BIN: path.join(root, "jdt-forbidden.sh"), RELEASE_JDT_LAUNCH_FILE: path.join(root, "jdt-launches"), RELEASE_PROVIDER_CALL_FILE: path.join(root, "provider-calls") }),
+    // Any provider fetch in the owner is recorded and refused (K27).
+    preload: 'import {appendFileSync} from "node:fs"; globalThis.fetch=async()=>{appendFileSync(process.env.RELEASE_PROVIDER_CALL_FILE,"fetch\\n");throw new Error("provider disabled");};'
   });
-  let stderr = "";
-  transport.stderr?.on("data", data => { stderr = (stderr + data).slice(-8000); });
-  const raw = (name, args = {}) => client.callTool({ name, arguments: { repoRoot: repo, ...args } }, undefined, { timeout: 30000 });
-  const call = async (name, args = {}) => {
-    const result = await raw(name, args);
-    const text = result.content?.filter(item => item.type === "text").map(item => item.text).join("") ?? "";
-    assert.notEqual(result.isError, true, text + "\n" + stderr);
-    return JSON.parse(text);
-  };
-  const query = args => call("java_symbol", { preview: "none", ...args });
-  const wait = async (action, accepts, label) => {
-    const deadline = Date.now() + 15000;
-    let result;
-    do {
-      result = await action();
-      if (accepts(result)) return result;
-      await new Promise(resolve => setTimeout(resolve, 50));
-    } while (Date.now() < deadline);
-    assert.fail(label + ": " + JSON.stringify(result) + "\n" + stderr);
-  };
-  try {
-    await client.connect(transport);
+  return withDaemonLog(owner, async () => {
+    const { client } = await stdioClient(owner, repo);
+    const raw = (name, args = {}) => client.callTool({ name, arguments: { repoRoot: repo, ...args } }, undefined, { timeout: 30000 });
+    const call = async (name, args = {}) => {
+      const result = await raw(name, args);
+      const text = result.content?.filter(item => item.type === "text").map(item => item.text).join("") ?? "";
+      assert.notEqual(result.isError, true, text);
+      return JSON.parse(text);
+    };
+    const query = args => call("java_symbol", { preview: "none", ...args });
+    const wait = async (action, accepts, label) => {
+      const deadline = Date.now() + 15000;
+      let result;
+      do {
+        result = await action();
+        if (accepts(result)) return result;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } while (Date.now() < deadline);
+      assert.fail(label + ": " + JSON.stringify(result));
+    };
+    // The bound snapshot's sealed database: what a request at that snapshot read.
+    const snapshotDb = async () => {
+      const status = await call("java_status", {});
+      const snapshotId = status.indexView?.snapshotId;
+      assert.ok(snapshotId, JSON.stringify(status.indexView));
+      return new DatabaseSync(path.join(owner.cache, "mac1", "snapshots", snapshotId, "index.sqlite"), { readOnly: true });
+    };
     await query({ query: "Shared", searchMode: "exact" });
-    const status = await wait(() => call("java_status", { detail: "diagnostic", start: false }), value => value.watcher?.ready === true && value.javaIndex?.state === "READY", "watcher/index ready");
-    assert.equal(status.watcher.degraded, false, "native watcher must be usable; run isolated filesystem watcher acceptance outside restrictive sandboxing");
-    await body({ root, repo, put, a, b, bText, wordFile, target, raw, call, query, wait, status, launched, providerCalls });
-  } finally {
-    await client.close();
-    await rm(root, { recursive: true, force: true });
-  }
+    const status = await wait(() => call("java_status", { detail: "diagnostic", start: false }), value => value.indexView?.state === "FRESH", "tracked snapshot fresh");
+    await body({ root: owner.root, repo, put, a, b, bText, wordFile, target, raw, call, query, wait, status, launched, providerCalls, snapshotDb });
+  });
 }
 
-test("K05: the real watcher deletes one duplicate declaration without deleting its sibling", { timeout: 45000 }, async () => {
-  await fixture(async ({ root, repo, a, b, bText, query, wait }) => {
+test("K05: the real watcher deletes one duplicate declaration without deleting its sibling", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ repo, a, b, bText, query, wait, snapshotDb }) => {
     const before = await query({ query: "Shared", searchMode: "exact" });
     assert.equal(before.exact, "ambiguous");
     assert.equal(before.candidates.length, 2);
-    const beforeDb = new DatabaseSync(path.join(root, "cache", before.repoHash, "index.sqlite"), { readOnly: true });
+    const beforeDb = await snapshotDb();
     let removedFileId, removedSymbols;
     try {
       removedFileId = beforeDb.prepare("SELECT id FROM file WHERE path=?").get(a).id;
@@ -112,7 +105,7 @@ test("K05: the real watcher deletes one duplicate declaration without deleting i
     const after = await wait(() => query({ query: "Shared", searchMode: "exact" }), value => value.generation > before.generation && value.scopeState === "READY" && value.candidates.length === 1, "delete generation");
     assert.equal(after.candidates[0].declaration.relativePath, b);
     assert.equal(after.candidates[0].declaration.contentHash, digest(bText));
-    const db = new DatabaseSync(path.join(root, "cache", before.repoHash, "index.sqlite"), { readOnly: true });
+    const db = await snapshotDb();
     try {
       assert.equal(db.prepare("SELECT count(*) AS n FROM file WHERE path=?").get(a).n, 0);
       assert.equal(db.prepare("SELECT count(*) AS n FROM file WHERE path=?").get(b).n, 1);
@@ -124,8 +117,8 @@ test("K05: the real watcher deletes one duplicate declaration without deleting i
   });
 });
 
-test("K12: public MCP rejects a zero deadline explicitly and settles the request", { timeout: 45000 }, async () => {
-  await fixture(async ({ raw }) => {
+test("K12: public MCP rejects a zero deadline explicitly and settles the request", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ raw }) => {
     const began = performance.now();
     const result = await raw("java_impact", { file: "m2/src/main/java/demo/WordService.java", line: 3, column: 14, semanticPolicy: "fast", deadlineMs: 0 });
     assert.equal(result.isError, true);
@@ -134,8 +127,8 @@ test("K12: public MCP rejects a zero deadline explicitly and settles the request
   });
 });
 
-test("K15: a Chinese JavaDoc-only edit becomes visible through the real watcher at its new hash", { timeout: 45000 }, async () => {
-  await fixture(async ({ put, wordFile, query, wait }) => {
+test("K15: a Chinese JavaDoc-only edit becomes visible through the real watcher at its new hash", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ put, wordFile, query, wait }) => {
     const before = await query({ query: "琥珀结算", searchMode: "text" });
     assert.ok(before.candidates.some(item => item.declaration.relativePath === wordFile));
     const content = await put(wordFile, "package demo;\n/** 翡翠核销 */\npublic class WordService {}\n");
@@ -147,8 +140,8 @@ test("K15: a Chinese JavaDoc-only edit becomes visible through the real watcher 
   });
 });
 
-test("K17: public MCP applies module AND source-set before the candidate limit", { timeout: 45000 }, async () => {
-  await fixture(async ({ root, target, query }) => {
+test("K17: public MCP applies module AND source-set before the candidate limit", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ target, query, snapshotDb }) => {
     const result = await query({ query: "refund ledger", searchMode: "text", module: "m2", sourceSet: "test", limit: 1 });
     assert.equal(result.scopeState, "READY");
     assert.equal(result.candidates.length, 1);
@@ -166,7 +159,7 @@ test("K17: public MCP applies module AND source-set before the candidate limit",
     // Public MCP deliberately omits internal work counters. Read the same live
     // database through the production search layer for supplementary measurement.
     const { SqlEntitySearch } = await import("../dist/java-index/sql/entity-search.js");
-    const db = new DatabaseSync(path.join(root, "cache", broad.repoHash, "index.sqlite"), { readOnly: true });
+    const db = await snapshotDb();
     try {
       const search = new SqlEntitySearch(db);
       const options = { scope: { sourceRoots: ["m1/src/main/java"] }, budget: { maxPostings: 20_000, remainingMs: () => 10_000 } };
@@ -183,8 +176,8 @@ test("K17: public MCP applies module AND source-set before the candidate limit",
   });
 });
 
-test("K19: real watcher add rename and delete invalidate negative and positive lookups", { timeout: 45000 }, async () => {
-  await fixture(async ({ repo, put, query, wait }) => {
+test("K19: real watcher add rename and delete invalidate negative and positive lookups", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ repo, put, query, wait }) => {
     const initial = await query({ query: "demo.Later", searchMode: "exact" });
     assert.equal(initial.exact, "miss");
     const old = "m2/src/main/java/demo/Later.java";
@@ -202,8 +195,8 @@ test("K19: real watcher add rename and delete invalidate negative and positive l
   });
 });
 
-test("K25: static queries use the real MCP protocol with zero JDT launches", { timeout: 45000 }, async () => {
-  await fixture(async ({ call, query, launched }) => {
+test("K25: static queries use the real MCP protocol with zero JDT launches", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ call, query, launched }) => {
     assert.equal((await query({ query: "demo.WordService", searchMode: "exact" })).exact, "match");
     const status = await call("java_status", { detail: "diagnostic", start: false });
     assert.equal(status.started, false);
@@ -212,8 +205,8 @@ test("K25: static queries use the real MCP protocol with zero JDT launches", { t
   });
 });
 
-test("K27: the shipped disabled provider boundary keeps lexical MCP queries usable with zero fetches", { timeout: 45000 }, async () => {
-  await fixture(async ({ query, providerCalls }) => {
+test("K27: the shipped disabled provider boundary keeps lexical MCP queries usable with zero fetches", { timeout: 45000 }, async t => {
+  await fixture(t, async ({ query, providerCalls }) => {
     const known = await query({ query: "demo.WordService", searchMode: "exact" });
     assert.equal(known.scopeState, "READY");
     assert.equal(known.exact, "match");

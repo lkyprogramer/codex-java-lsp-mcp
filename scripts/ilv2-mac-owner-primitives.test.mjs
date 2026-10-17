@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createOwnerFixture, eventually, processAlive, processGroup } from "./ilv2-mac-owner-fixture.mjs";
+import { createOwnerFixture, eventually, processAlive } from "./ilv2-mac-owner-fixture.mjs";
 import { writeJson } from "./ilv2-mac-contracts.mjs";
 
 async function busy(fixture) {
@@ -33,14 +33,15 @@ test("native-child-survives-parent-and-retains-same-ofd", { timeout: 22000 }, as
   await busy(two); assert.equal((await two.records()).length, 0);
   await evidence(t.name, { ready, parent, child, inheritedOFD: true }); await two.close(); await one.close();
 });
-test("native-real-builder-parses-with-inherited-lock", { timeout: 24000 }, async t => {
+test("native-real-builder-parses-with-inherited-lock", { timeout: 34000 }, async t => {
   const one = await createOwnerFixture(t, { route: "direct", builder: true }); const ready = await one.ready();
-  const builder = await eventually(async () => (await one.records()).find(row => row.type === "builder-serving"));
-  assert.equal(builder.status.state, "idle"); assert.equal(await processGroup(builder.status.pid), ready.pgid);
+  const builder = await eventually(async () => (await one.records()).find(row => row.type === "builder-serving"), 15000);
+  assert.equal(builder.status.ok, true, builder.status.error); assert.ok(builder.status.files >= 1); assert.equal(builder.status.pgid, ready.pgid);
+  // The per-job builder holds the owner's fd4 (same inode) while it runs and leaks no holder once it exits.
+  assert.equal(builder.status.lockInherited, true, JSON.stringify(builder.status)); assert.deepEqual(builder.status.exit, { code: 0, signal: null });
   await one.command({ type: "close-lock" }); await eventually(async () => (await one.records()).some(row => row.type === "lock-closed"));
-  const two = await createOwnerFixture(t, { route: "direct", cacheRoot: one.cacheRoot });
-  await busy(two); assert.equal((await two.records()).length, 0);
-  await evidence(t.name, { ready, builder, parsedSyntheticJava: true, inheritedLock: true }); await two.close(); await one.close();
+  const two = await createOwnerFixture(t, { route: "direct", cacheRoot: one.cacheRoot }); const next = await two.ready(ready.pid);
+  await evidence(t.name, { ready, builder, next, parsedSyntheticJava: true, inheritedLock: true, noHolderAfterExit: true }); await two.close(); await one.close();
 });
 test("native-owner-rejects-closed-fd-and-erased-child-binding", { timeout: 15000 }, async t => {
   const fixture = await createOwnerFixture(t, { route: "direct" }); await fixture.ready();

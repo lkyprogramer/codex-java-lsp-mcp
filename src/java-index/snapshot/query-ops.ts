@@ -194,9 +194,10 @@ async function verifiedSource(repoRoot: string, relativePath: string, expectedHa
   if (!expectedHash) return { state: "missing" };
   const root = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
   const readable = await resolvedPathWithinRepo(path.resolve(repoRoot, relativePath), root).catch(() => undefined);
-  if (!readable) return { state: "missing" };
+  // The snapshot captured this file: a live copy that is gone or unreadable no longer matches it.
+  if (!readable) return { state: "changed" };
   let bytes: Buffer;
-  try { bytes = await readFile(readable); } catch { return { state: "missing" }; }
+  try { bytes = await readFile(readable); } catch { return { state: "changed" }; }
   return contentHashOf(bytes) === expectedHash ? { state: "ok", content: bytes.toString("utf8") } : { state: "changed" };
 }
 

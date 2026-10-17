@@ -38,9 +38,11 @@ test("withContext notes repoHash for telemetry without putting it on the wire", 
   assert.match(source, /noteTelemetryRepoHash\(context\.repoHash\)/);
 });
 
-test("repo-scoped java_status uses the 15s budget even when start is false", () => {
+test("repo-scoped java_status reads memory only without start and keeps the 15s budget with start", () => {
   const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
-  assert.match(source, /mayStartLsp: args\.start/);
+  // Contract §2.6 (MAC-08B): start=false never enters withContext; the behavior is covered by
+  // repo-runtime-manager statusOnly tests and the MCP status-only-does-not-bootstrap contract.
+  assert.match(source, /if \(!args\.start\) \{[\s\S]*?application\.runtimes\.statusOnly\(args,/);
   assert.match(source, /deadlineMs: 15000/);
   assert.equal(source.includes("requestOptions: args.start ?"), false);
 });
@@ -75,15 +77,6 @@ test("java_impact tools/list teaches auto-skip and the required/java_symbol retr
     await session.client.close();
     await application.close();
   }
-});
-
-test("idle-close deadline before status/create/request-context is a retryable evidence gap", () => {
-  const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
-  assert.match(source, /java-index\\.status/);
-  assert.match(source, /runtime\\.request-context/);
-  assert.match(source, /runtime\\.create/);
-  assert.match(source, /warming after idle close/);
-  assert.match(source, /rethrowUnlessIdleWarming/);
 });
 
 test("HTTP protocol factory refuses an application with cwd fallback", () => {

@@ -6,13 +6,11 @@ import { readFile } from "node:fs/promises";
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
-import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
+import { normalizeRepoFile } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { JavaIndexClientApi, JavaIndexOpenOptions, JavaIndexRequestOptions } from "../java-index/java-index-client-api.js";
-import { BuilderSupervisor } from "../java-index/builder-supervisor.js";
-import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "../java-index/entity-search.js";
 import type {
   AnchorFacts,
@@ -233,12 +231,6 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     this.foregroundImplementationRoots = layout.sourceRoots
       .filter(root => root.sourceSet === "main")
       .map(root => root.relativePath);
-  }
-
-  static create(repoRoot: string, cacheDir = repoCacheRoot(repoRoot), openOptions: JavaIndexOpenOptions = {}): RouterJavaIndex {
-    const dbPath = path.join(cacheDir, "index.sqlite");
-    const supervisor = new BuilderSupervisor({ repoRoot, dbPath });
-    return new RouterJavaIndex(repoRoot, new SqlJavaIndexClient(repoRoot, dbPath, supervisor), openOptions);
   }
 
   rawClient(): JavaIndexClientApi {
@@ -1098,7 +1090,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         return;
       }
     }
-    // Unit-test / benchmark path: open cold without sibling seed options.
+    // Unit-test / benchmark path: open the local index cold.
     try {
       const status = await this.client.open(generation, this.openOptions, this.currentRequestOptions());
       this.opened = true;

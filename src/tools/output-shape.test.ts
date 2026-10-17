@@ -11,7 +11,7 @@ import { javaSymbol } from "./symbol.js";
 import type { ToolContext } from "./context.js";
 import { AgentRouter } from "../agent-router/index.js";
 
-import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
+import { localRouterIndex } from "../java-index/local-index.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
@@ -267,7 +267,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
   const sourceDir = path.join(root, "src", "main", "java", "demo");
   const serviceFile = path.join(sourceDir, "DemoService.java");
   const repositoryFile = path.join(sourceDir, "DemoRepository.java");
-  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
+  const index = localRouterIndex(root, path.join(root, ".cache"));
   try {
     await mkdir(sourceDir, { recursive: true });
     await writeFile(path.join(root, "pom.xml"), "<project></project>\n");

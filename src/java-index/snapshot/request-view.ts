@@ -4,7 +4,8 @@
 // pos: MAC-08A request chain (contract §2.6): budget → resolve → create → prepare
 //      (≤ min(1000 ms, remaining)) → one acquire → query workers → hash-checked preview
 //      → release. A publish never changes a held view or its labels.
-import { probeLayout, type LayoutContext } from "../../layout-probe.js";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { LayoutContext } from "../../layout-probe.js";
 import type { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import type { DetailedEntitySearchResult, EntityHit, EntitySearchOptions } from "../entity-search.js";
@@ -31,6 +32,22 @@ import type { IndexOwner, ViewState, WorkspaceIndex } from "./index-owner.js";
 import type { QueryOpName, QueryOps, QueryRequest, SnapshotIndexStatus } from "./query-ops.js";
 import type { SnapshotLease } from "./snapshot-store.js";
 
+const requestDefaults = new AsyncLocalStorage<JavaIndexRequestOptions>();
+
+/** Snapshot reads made inside `action` without explicit options use this request's budget and signal. */
+export function withRequestDefaults<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T> {
+  return requestDefaults.run(options, action);
+}
+
+/** A per-call budget or signal can only narrow the request's: the earlier deadline, either abort. */
+function narrowed(request: JavaIndexRequestOptions | undefined, call: JavaIndexRequestOptions | undefined): JavaIndexRequestOptions {
+  const budgets = [request?.budget, call?.budget].filter((value): value is DeadlineBudget => value !== undefined);
+  const signals = [request?.signal, call?.signal].filter((value): value is AbortSignal => value !== undefined);
+  const budget = budgets.sort((left, right) => left.deadlineAtMs - right.deadlineAtMs)[0];
+  const signal = signals.length > 1 && signals[0] !== signals[1] ? AbortSignal.any(signals) : signals[0];
+  return { ...(budget ? { budget } : {}), ...(signal ? { signal } : {}) };
+}
+
 /** What a request froze at its one acquire. */
 export type ViewLabels = {
   state: ViewState;
@@ -43,6 +60,8 @@ export type ViewLabels = {
 
 export class RequestView {
   private released = false;
+  private leaseReleased = false;
+  private inFlight = 0;
   private statusPromise?: Promise<SnapshotIndexStatus>;
 
   private constructor(
@@ -83,7 +102,14 @@ export class RequestView {
     const snapshotId = this.labels.snapshotId;
     if (!snapshotId) return Promise.reject(new JavaIntelligenceError("INDEX_PARTIAL", `NOT_READY: no verified snapshot for ${this.canonicalRoot}`));
     if (this.released) return Promise.reject(new JavaIntelligenceError("INDEX_PARTIAL", "request view already released"));
-    return this.owner.query(snapshotId, request, options.budget ?? this.budget, options.signal ?? this.signal);
+    const { budget, signal } = narrowed({ budget: this.budget, signal: this.signal }, options);
+    this.inFlight += 1;
+    const read = this.owner.query(snapshotId, request, budget!, signal);
+    void read.finally(() => {
+      this.inFlight -= 1;
+      this.releaseLeaseWhenIdle();
+    }).catch(() => undefined);
+    return read;
   }
 
   /** The held snapshot's own status (immutable, read once per view). */
@@ -91,9 +117,15 @@ export class RequestView {
     return this.statusPromise ??= this.query({ op: "status", args: {} });
   }
 
+  /** No new reads; the snapshot lease goes once the reads already in the pool have settled. */
   close(): void {
-    if (this.released) return;
     this.released = true;
+    this.releaseLeaseWhenIdle();
+  }
+
+  private releaseLeaseWhenIdle(): void {
+    if (!this.released || this.inFlight > 0 || this.leaseReleased) return;
+    this.leaseReleased = true;
     this.lease?.release();
     void this.owner.reclaim();
   }
@@ -102,7 +134,8 @@ export class RequestView {
 /**
  * The whole request under one budget. Every stage is raced against the deadline; a stalled shared
  * stage (resolve, create, a round) keeps running for the next caller and is never cancelled by this one.
- * The view is released only after the handler settled, so an abandoned handler cannot lose its snapshot.
+ * The view closes when the handler settles or when the request returns at its deadline or cancel,
+ * whichever is first; its lease then goes as soon as no read of it is still in the pool.
  */
 export async function withRequestView<T>(input: {
   owner: IndexOwner;
@@ -116,6 +149,8 @@ export async function withRequestView<T>(input: {
 }): Promise<T> {
   const { owner, budget, signal } = input;
   const guard = <V>(stage: string, operation: Promise<V>): Promise<V> => {
+    // The stage may outlive this request (or be abandoned by an early return): its rejection is never unhandled.
+    operation.catch(() => undefined);
     if (signal?.aborted) return Promise.reject(new JavaIntelligenceError("CANCELLED", `Cancelled before ${stage}`));
     return budget.race(stage, signal ? abortable(operation, signal, stage) : operation);
   };
@@ -125,6 +160,9 @@ export async function withRequestView<T>(input: {
     const running = owner.peek(canonicalRoot);
     view = running ? RequestView.acquire(owner, running, budget, signal) : RequestView.notReady(owner, canonicalRoot, budget, signal);
   } else {
+    // An expired or cancelled request never starts a workspace it cannot use.
+    if (signal?.aborted) throw new JavaIntelligenceError("CANCELLED", "Cancelled before request.create");
+    budget.throwIfExpired("request.create");
     const workspace = await guard("request.create", owner.workspace(canonicalRoot));
     if (input.prepare !== false) await guard("request.prepare", workspace.prepare(budget, signal));
     budget.throwIfExpired("request.acquire");
@@ -134,7 +172,13 @@ export async function withRequestView<T>(input: {
   try { work = input.handler(view); }
   catch (error) { view.close(); throw error; }
   void work.finally(() => view.close()).catch(() => undefined);
-  return guard("request.handler", work);
+  try {
+    return await guard("request.handler", work);
+  } catch (error) {
+    // A handler that outlives its deadline or cancel keeps nothing: its reads now reject.
+    view.close();
+    throw error;
+  }
 }
 
 function abortable<V>(operation: Promise<V>, signal: AbortSignal, stage: string): Promise<V> {
@@ -175,21 +219,19 @@ export function snapshotIndexStatus(status: SnapshotIndexStatus, snapshotId: str
  * owner's (prepare before acquire). Each read uses the calling request's budget and signal.
  */
 export class SnapshotJavaIndexClient implements JavaIndexClientApi {
-  private readonly layout: LayoutContext;
-
+  /** The caller's layout (production passes the runtime's shared one): a per-request probe would re-read the tree on the request path. */
   constructor(
     private readonly owner: IndexOwner,
     readonly snapshotId: string,
     private readonly repoRoot: string,
     private readonly snapshot: JavaIndexStatus,
-    layout?: LayoutContext
-  ) {
-    this.layout = layout ?? probeLayout(repoRoot);
-  }
+    private readonly layout: LayoutContext
+  ) {}
 
   private run<K extends QueryOpName>(request: QueryRequest<K>, options?: JavaIndexRequestOptions): Promise<QueryOps[K]["result"]> {
-    if (!options?.budget) return Promise.reject(new JavaIntelligenceError("INVALID_INPUT", `${request.op} requires a request budget`));
-    return this.owner.query(this.snapshotId, request, options.budget, options.signal);
+    const { budget, signal } = narrowed(requestDefaults.getStore(), options);
+    if (!budget) return Promise.reject(new JavaIntelligenceError("INVALID_INPUT", `${request.op} requires a request budget`));
+    return this.owner.query(this.snapshotId, request, budget, signal);
   }
 
   private toRelative(inputPath: string): string | undefined {
@@ -264,8 +306,9 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
   async querySearch(task: string, search: EntitySearchOptions = {}, options?: JavaIndexRequestOptions): Promise<DetailedEntitySearchResult> {
     // A caller's own work budget may only shorten the request deadline, never extend it.
     const remaining = search.budget?.remainingMs?.();
-    if (options?.budget && remaining !== undefined && Number.isFinite(remaining)) {
-      options = { ...options, budget: options.budget.forStage(Math.max(1, remaining)) };
+    const budget = options?.budget ?? requestDefaults.getStore()?.budget;
+    if (budget && remaining !== undefined && Number.isFinite(remaining)) {
+      options = { ...options, budget: budget.forStage(Math.max(1, remaining)) };
     }
     return this.run({ op: "search", args: { task, limit: search.limit ?? ENTITY_SEARCH_DEFAULT_LIMIT, mode: search.mode ?? "auto",
       ...(search.scope ? { scope: search.scope } : {}), ...(search.budget?.maxPostings !== undefined ? { maxPostings: search.budget.maxPostings } : {}) } }, options);

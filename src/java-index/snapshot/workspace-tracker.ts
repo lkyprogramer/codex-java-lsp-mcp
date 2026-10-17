@@ -2,8 +2,8 @@
 // output: dispatch rounds frozen at a fenced local seq, content-verified views, and FRESH/STALE/INVALID_ROOT.
 // pos: MAC-03B (contract §2.4). The confirmation watermark is (workspaceGeneration, trackerEpoch, seq).
 //      Native cursors (eventId) never leave this process: nothing here is persisted, and a new stream
-//      is a new epoch whose first round hashes every file. The old fs.watch tracker (repo-fs-watch.ts)
-//      serves only the legacy runtime and leaves with it when MAC-08B replaces that call graph.
+//      is a new epoch whose first round hashes every file. This is the only change source (MAC-08B
+//      removed the fs.watch tracker).
 import { createHash, randomUUID } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
 import { lstat, opendir, realpath, stat } from "node:fs/promises";

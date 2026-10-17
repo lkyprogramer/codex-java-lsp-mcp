@@ -38,7 +38,7 @@ import { symId } from "../java-index/sql/sym.js";
 import { attachWorkspaceStat, deleteStats, observedStats, readStats, recordStats, statUnchanged, type StatRow } from "../java-index/sql/workspace-stat.js";
 import { COVERAGE_GAP, readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta } from "./progress.js";
 
-export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full" | "exit";
+export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
 export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; stages?: PipelineMetrics; error?: string;
   /** escalation "report": this delta needs a full; nothing was published. */
@@ -1092,7 +1092,6 @@ async function applyBuilderJobStages(options: {
   parallelism?: number;
 }): Promise<BuilderJobResult> {
   const id = typeof options.job.id === "number" ? options.job.id : -1;
-  if (options.job.kind === "exit") return statusResult(options.db, id, true);
   if(!["full","refresh","resources","reconcile"].includes(options.job.kind)) return statusResult(options.db,id,false,`unknown kind ${String(options.job.kind)}`);
   let repoRoot = path.resolve(options.repoRoot);
   attachWorkspaceStat(options.db);
@@ -1181,26 +1180,5 @@ export async function applyBuilderJob(options: Parameters<typeof applyBuilderJob
       options.db.prepare("UPDATE source_root_coverage SET state='DEGRADED'").run();
     });
     return {...statusResult(options.db,options.job.id ?? -1,false,error instanceof Error?error.message:String(error)),census:captureCensus(options.db),censusComplete:false};
-  }
-}
-
-export async function runBuilderServe(
-  repoRoot: string,
-  db: IndexDatabase,
-  lines: AsyncIterable<string>,
-  out: { write(chunk: string): unknown }
-): Promise<void> {
-  for await (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let job: BuilderJob;
-    try {
-      job = JSON.parse(trimmed) as BuilderJob;
-    } catch (err) {
-      out.write(`${JSON.stringify(statusResult(db, -1, false, err instanceof Error ? err.message : String(err)))}\n`);
-      continue;
-    }
-    if (job.kind === "exit") return;
-    out.write(`${JSON.stringify(await applyBuilderJob({ repoRoot, db, job }))}\n`);
   }
 }

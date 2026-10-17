@@ -382,6 +382,8 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
     projectsConfigPath,
     resolverOptions: { cwdFallback: "reject" },
     cacheJanitorIntervalMs: 0,
+    // JDT runtime sharing only: no FSEvents owner binding outside the owner launcher.
+    index: false,
     cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] })
   });
   const daemon = new JavaLspHttpServer({ application, port: 0, reportError: () => undefined });
@@ -398,7 +400,7 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
     firstClient.callTool({ name: "java_status", arguments: { repoRoot: firstRoot, start: true, detail: "diagnostic" } }),
     secondClient.callTool({ name: "java_status", arguments: { repoRoot: firstRoot, start: true, detail: "diagnostic" } })
   ]);
-  assert.equal(sameRootFirst.isError, undefined);
+  assert.equal(sameRootFirst.isError, undefined, JSON.stringify(sameRootFirst.content));
   assert.equal(sameRootSecond.isError, undefined);
   const firstStatus = toolJson(sameRootFirst);
   const secondStatus = toolJson(sameRootSecond);

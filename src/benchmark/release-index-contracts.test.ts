@@ -11,7 +11,7 @@ import test from "node:test";
 import { runStaticDiscovery } from "../discovery/query.js";
 import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { applyBuilderJob } from "../index-builder/incremental.js";
-import { BuilderSupervisor } from "../java-index/builder-supervisor.js";
+import { LocalBuilder } from "../java-index/local-builder.js";
 import { close, openIndexDb } from "../java-index/sql/driver.js";
 import { readMyBatisResource } from "../java-index/sql/rows.js";
 import { ensureSchema } from "../java-index/sql/schema.js";
@@ -113,7 +113,7 @@ test("K11: real builder refresh preserves call facts and relocates moved helper 
   const after = "package demo;\npublic class Shared {\n  void helper() {}\n  void caller() { helper(); }\n}\n";
   const f = await fixture({ [main]: before });
   await f.client.close();
-  const supervisor = new BuilderSupervisor({ repoRoot: f.root, dbPath: f.dbPath, idleMs: 500, env: { HOME: f.home, XDG_CONFIG_HOME: path.join(f.home, "config") } });
+  const supervisor = new LocalBuilder({ repoRoot: f.root, dbPath: f.dbPath, env: { ...process.env, HOME: f.home, XDG_CONFIG_HOME: path.join(f.home, "config") } });
   const client = new SqlJavaIndexClient(f.root, f.dbPath, supervisor);
   try {
     await client.open(1);
@@ -165,24 +165,27 @@ test("K20: real writer commit between query snapshot and preview cannot yield mi
   } finally { close(writer); await f.dispose(); }
 });
 
-test("K21: real sibling copy reconciles changed XML before READY without Java changes", { timeout: 30_000 }, async () => {
+// MAC-08B removed the sibling seed (D01): a workspace index is now always its own build. K21 keeps
+// the contract that matters — a reconcile with only an XML change replaces every XML document.
+test("K21: real reconcile replaces changed XML evidence without Java changes", { timeout: 30_000 }, async () => {
   const xmlPath = "src/main/resources/Mapper.xml";
   const javaPath = "src/main/java/demo/Mapper.java";
   const java = "package demo; public interface Mapper { int load(); }";
   const xml = '<mapper namespace="demo.Mapper">\n<select id="load">SELECT oldledger FROM oldledger</select>\n</mapper>\n';
   // The edit also moves the statement a line down: a stale document keeps the old lines.
   const changed = xml.replaceAll("oldledger", "newledger").replace("<select", "\n<select");
-  const w = await worktrees({ [javaPath]: java, [xmlPath]: xml });
-  const sibling = path.join(w.home, "sibling.sqlite"), dest = path.join(w.home, "dest.sqlite");
-  const supervisor = new BuilderSupervisor({ repoRoot: w.b, dbPath: dest, idleMs: 500, maxRestarts: 0, env: w.env });
-  const client = new SqlJavaIndexClient(w.b, dest, supervisor);
+  const f = await fixture({ [javaPath]: java, [xmlPath]: xml });
+  await f.client.close();
+  const dest = f.dbPath;
+  const supervisor = new LocalBuilder({ repoRoot: f.root, dbPath: dest, env: { ...process.env, HOME: f.home, XDG_CONFIG_HOME: path.join(f.home, "config") } });
+  const client = new SqlJavaIndexClient(f.root, dest, supervisor);
   try {
-    await cold(w.a, sibling);
-    await put(w.b, { [xmlPath]: changed });
-    const opened = await client.open(2, { siblingDbPath: sibling });
+    await put(f.root, { [xmlPath]: changed });
+    await client.open(1);
+    const opened = await client.reconcile(2);
     assert.equal(opened.state, "READY"); assert.equal(opened.indexedGeneration, 2);
     assert.equal((await client.queryFiles([javaPath]))[0]!.file.contentHash, sha(java));
-    const result = await runStaticDiscovery(client, { repoRoot: w.b, query: "mybatis", searchMode: "text", preview: "window" });
+    const result = await runStaticDiscovery(client, { repoRoot: f.root, query: "mybatis", searchMode: "text", preview: "window" });
     assert.equal(result.scopeState, "READY"); assert.ok(result.candidates.length);
     const evidence = result.candidates.find(c => c.evidenceRange?.relativePath === xmlPath)!;
     assert.ok(evidence, "real parsed resource search document is reachable");
@@ -194,11 +197,11 @@ test("K21: real sibling copy reconciles changed XML before READY without Java ch
       assert.equal(resource.contentHash, sha(changed));
       const docs = db.prepare("SELECT d.start_line AS startLine, d.end_line AS endLine FROM search_doc d JOIN sym s ON s.id=d.source_path_sym WHERE s.text=?").all(xmlPath) as { startLine: number; endLine: number }[];
       assert.deepEqual(docs.map(d => [d.startLine, d.endLine]), resource.statements.map(statement => [statement.range!.start.line, statement.range!.end.line]),
-        "all XML documents are reconciled; no stale sibling evidence survives");
+        "all XML documents are reconciled; no stale evidence survives");
       assert.deepEqual(docs.map(d => d.startLine), [3], "the moved statement's current line");
     } finally { close(db); }
     console.log(JSON.stringify({ contract: "K21", generation: result.generation, javaHash: sha(java), xmlHash: evidence.evidenceRange!.contentHash }));
-  } finally { await client.close(); await supervisor.stop(); await rm(w.home, { recursive: true, force: true }); }
+  } finally { await client.close(); await supervisor.stop(); await f.dispose(); }
 });
 
 test("K30: actual query readers release by idle TTL and checkpoint converges without deleting DB", { timeout: 30_000 }, async () => {

@@ -1,10 +1,10 @@
-import { appendFileSync, closeSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { assertOwnerLock, ownerChildStdio } from "../dist/mac-platform/owner-lock.js";
-import { BuilderSupervisor } from "../dist/java-index/builder-supervisor.js";
+import { startBuildProcess } from "../dist/index-builder/build-process.js";
 import { defaultJdtlsTransportFactory } from "../dist/jdtls-transport.js";
 import { buildJdtlsEnv } from "../dist/jdtls-lsp-io.js";
 import { GradleDomain } from "../dist/mac-platform/gradle-domain.js";
@@ -69,12 +69,38 @@ if (options.child) {
   children.add(child);
 }
 if (options.builder) {
-  writeFileSync(path.join(root, "repo", "Example.java"), "class Example { int value; int get() { return value; } }\n");
-  builder = new BuilderSupervisor({ repoRoot: path.join(root, "repo"), dbPath: path.join(options.cacheRoot, "index.sqlite"), idleMs: 60000 });
-  await builder.coldBuild();
-  record({ type: "builder-parsed", status: builder.status() });
-  await builder.submit({ kind: "reconcile", generation: 1 });
-  record({ type: "builder-serving", status: builder.status() });
+  // Under a conventional source root, so the build really parses it (files >= 1 is asserted).
+  mkdirSync(path.join(root, "repo", "src", "main", "java"), { recursive: true });
+  writeFileSync(path.join(root, "repo", "src", "main", "java", "Example.java"), "class Example { int value; int get() { return value; } }\n");
+  // The production builder is one process per job (MAC-08B removed the resident serve builder).
+  // It is frozen on spawn so its PGID and fd4 are read while the job is still running, then
+  // resumed: the job must finish with a parsed synthetic file and the builder must exit.
+  const attempt = startBuildProcess({ repoRoot: path.join(root, "repo"), dbPath: path.join(options.cacheRoot, "index.sqlite"),
+    job: { id: 1, kind: "full", generation: 1 }, grant: { parserTokens: 1, captures: [] } });
+  builder = attempt.child;
+  const closed = new Promise(resolve => attempt.child.once("close", (code, signal) => resolve({ code, signal })));
+  await new Promise((resolve, reject) => { attempt.child.once("spawn", resolve); attempt.child.once("error", reject); });
+  attempt.child.kill("SIGSTOP");
+  // Bounded probes: a stuck probe fails this record instead of leaving the builder stopped.
+  const probe = (file, args) => execFileSync(file, args, { encoding: "utf8", timeout: 3000, killSignal: "SIGKILL" });
+  const lockFd = pid => probe("/usr/sbin/lsof", ["-b", "-w", "-n", "-P", "-a", "-p", String(pid), "-d", "4", "-F", "in"])
+    .split("\n").filter(line => line.startsWith("i") || line.startsWith("n")).join("\n");
+  let childPgid, ownerLock = "", builderLock = "", probeError;
+  const probeStarted = performance.now();
+  try {
+    childPgid = Number(probe("/bin/ps", ["-o", "pgid=", "-p", String(attempt.child.pid)]).trim());
+    ownerLock = lockFd(process.pid); builderLock = lockFd(attempt.child.pid);
+  } catch (error) { probeError = String(error?.message ?? error).slice(0, 300); }
+  finally { attempt.child.kill("SIGCONT"); }
+  const probeMs = performance.now() - probeStarted;
+  // The result never settles if the builder dies first (startBuildProcess leaves that to the scheduler).
+  const outcome = await Promise.race([attempt.result.then(value => value, error => ({ kind: "failed", error: String(error) })),
+    closed.then(exit => ({ kind: "exited", error: `builder exited before its result: ${JSON.stringify(exit)}` }))]);
+  const exit = await closed;
+  builder = undefined;
+  record({ type: "builder-serving", status: { state: "idle", pid: attempt.child.pid, pgid: childPgid, ok: outcome.kind === "result" && outcome.result.ok,
+    files: outcome.kind === "result" ? outcome.result.files : 0, error: outcome.error ?? probeError, exit,
+    lockInherited: ownerLock.length > 0 && builderLock === ownerLock, ownerLock, builderLock, probeMs, probeError } });
 }
 if (options.jdtlsBin && !options.jdtImport) {
   const env = buildJdtlsEnv(options.javaHome);
@@ -116,7 +142,7 @@ for (;;) {
         catch (error) { record({ type: "native-call", ok: false, error: error.message }); }
       }
       if (command.type === "stop") {
-        await builder?.stop();
+        builder?.kill("SIGKILL");
         if (jdt) { jdt.connection.dispose(); jdt.child.kill("SIGTERM"); }
         for (const child of children) child.kill("SIGTERM");
         record({ type: "normal-exit" }); process.exit(0);

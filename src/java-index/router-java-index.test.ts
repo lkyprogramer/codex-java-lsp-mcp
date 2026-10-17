@@ -15,6 +15,7 @@ import type { JavaFileBundle, JavaIndexStatus, JavaParseState } from "./index-ty
 import { MAX_FRAMEWORK_FACT_FILES } from "./framework-index-view.js";
 import { MAX_FACTS_FOR_FILES } from "./router-facts.js";
 import { RouterJavaIndex } from "./router-java-index.js";
+import { localRouterIndex } from "./local-index.js";
 
 function write(root: string, relativePath: string, content: string): void {
   const absolutePath = path.join(root, relativePath);
@@ -33,7 +34,7 @@ async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: n
 
 async function readyRouter(repoRoot: string): Promise<RouterJavaIndex> {
   const cacheDir = mkdtempSync(path.join(tmpdir(), "framework-view-cache-"));
-  const router = RouterJavaIndex.create(repoRoot, cacheDir);
+  const router = localRouterIndex(repoRoot, cacheDir);
   await router.open(1);
   await router.reconcile(1);
   await waitFor(async () => (await router.status()).pendingBackground === 0, 15_000);
@@ -603,7 +604,7 @@ test("declarationsById foreground-refreshes a conventional cross-module type pat
   write(repoRoot, "modules/school/src/main/java/school/Mapper.java", "package school;\nimport common.IdConverter;\nclass Mapper {}\n");
   write(repoRoot, "modules/common/src/main/java/common/IdConverter.java", "package common;\npublic class IdConverter {}\n");
   const cacheDir = mkdtempSync(path.join(tmpdir(), "framework-view-cold-decl-cache-"));
-  const router = RouterJavaIndex.create(repoRoot, cacheDir);
+  const router = localRouterIndex(repoRoot, cacheDir);
   await router.open(1);
   try {
     // This is the production ordering: an anchor may be foreground-refreshed

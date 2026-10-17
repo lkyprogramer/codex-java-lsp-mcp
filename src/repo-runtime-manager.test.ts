@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { RepoRuntimeManager, type ManagedToolContext, type RuntimeCoordination } from "./repo-runtime-manager.js";
+import { changeBatchFor, RepoRuntimeManager, type IndexOwnerSource, type ManagedToolContext } from "./repo-runtime-manager.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
@@ -12,7 +12,6 @@ import { isJavaIndexPrewarmReady } from "./java-index/java-index-client-api.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.test.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
-import { probeLayout } from "./layout-probe.js";
 import {
   defaultLeaseClockDeps,
   FileCrossProcessLeaseStore,
@@ -20,16 +19,16 @@ import {
   type CrossProcessLeaseStore,
   type LeaseHandle
 } from "./cross-process-lease.js";
-import type { LayoutSource } from "./layout-manager.js";
+import type { PublishEvent } from "./java-index/snapshot/index-owner.js";
 
 test("RepoRuntimeManager evicts the oldest idle started runtime before starting another", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 100
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -45,143 +44,13 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
 
 test("prewarmRepo opens a pinned runtime without starting JDT", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
-  }, resolved => fakeContext(resolved, sessions), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  }, resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
   await manager.prewarmRepo({ repoRoot: "/repo-a" });
   assert.equal(manager.activeRepos().length, 1);
   assert.equal(manager.activeRepos()[0]?.started, false);
   assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
-});
-
-test("prewarmRepo does not return until that repo's index is ready", async () => {
-  const sessions = new Map<string, FakeSession>();
-  let release: () => void = () => undefined;
-  const gate = new Promise<void>(resolve => {
-    release = resolve;
-  });
-  const events: string[] = [];
-  const javaIndexClient = {
-    async open() {
-      return { indexedGeneration: 1, coverage: [], state: "BUILDING" as const };
-    },
-    async status() {
-      return {
-        state: "BUILDING" as const,
-        indexedGeneration: 1,
-        files: 0,
-        types: 0,
-        methods: 0,
-        edges: 0,
-        snapshotBytes: 0,
-        pendingForeground: 0,
-        pendingBackground: 0,
-        coverage: [],
-        resourceCoverage: []
-      };
-    },
-    async awaitPrewarmReady() {
-      events.push("wait");
-      await gate;
-      events.push("ready");
-      return {
-        state: "READY",
-        indexedGeneration: 1,
-        files: 3,
-        types: 1,
-        methods: 1,
-        edges: 0,
-        snapshotBytes: 10,
-        snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
-        pendingForeground: 0,
-        pendingBackground: 0,
-        coverage: [{ root: "src", generation: 1, state: "COMPLETE" as const, discoveredFiles: 3, indexedFiles: 3, failedFiles: 0, recoveredFiles: 0, extractorVersion: "test" }],
-        resourceCoverage: []
-      };
-    },
-    async flush() {
-      events.push("flush");
-      return {
-        state: "READY",
-        indexedGeneration: 1,
-        files: 3,
-        types: 1,
-        methods: 1,
-        edges: 0,
-        snapshotBytes: 10,
-        snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
-        pendingForeground: 0,
-        pendingBackground: 0,
-        coverage: [],
-        resourceCoverage: []
-      };
-    }
-  };
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndexClient as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  const done = manager.prewarmRepo({ repoRoot: "/repo-a" });
-  for (let attempt = 0; attempt < 200 && !events.includes("wait"); attempt += 1) {
-    await delay(5);
-  }
-  assert.deepEqual(events, ["wait"]);
-  release();
-  await done;
-  assert.deepEqual(events, ["wait", "ready"]);
-  assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
-});
-
-test("freemem pressure does not recycle a pin while prewarm is waiting", async () => {
-  const sessions = new Map<string, FakeSession>();
-  let release: () => void = () => undefined;
-  const gate = new Promise<void>(resolve => {
-    release = resolve;
-  });
-  const calls: string[] = [];
-  const javaIndexClient = {
-    async open() {
-      return { indexedGeneration: 1, coverage: [] };
-    },
-    async awaitPrewarmReady() {
-      await gate;
-      return {
-        state: "READY",
-        indexedGeneration: 1,
-        files: 3,
-        types: 1,
-        methods: 1,
-        edges: 0,
-        snapshotBytes: 10,
-        snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
-        pendingForeground: 0,
-        pendingBackground: 0,
-        coverage: [],
-        resourceCoverage: []
-      };
-    },
-    async recycle() {
-      calls.push("recycle");
-    },
-    async hibernate() {
-      calls.push("hibernate");
-    },
-    async close() {}
-  };
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000,
-    pressureIntervalMs: 15,
-    freememPressureBytes: 1,
-    freemem: () => 0,
-    requestTimeoutMs: 5000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndexClient as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  const done = manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: true });
-  await delay(80);
-  assert.equal(calls.includes("recycle"), false, "in-flight hot prewarm must not be a pressure victim");
-  release();
-  await done;
-  await manager.shutdownAll();
 });
 
 test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage without background work", () => {
@@ -221,193 +90,31 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
   assert.equal(isJavaIndexPrewarmReady(base), true);
 });
 
-test("index idle TTL 0 never registers a close timer", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
-  await delay(80);
-  assert.equal(javaIndex.calls.includes("close"), false);
-  await manager.shutdownAll();
-});
-
 test("prewarmRepo skips repos that are not LSP-enabled", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(false), {
+  const manager = new RepoRuntimeManager(fakeResolver(false), { index: false,
     idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
-  }, resolved => fakeContext(resolved, sessions), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  }, resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
   await manager.prewarmRepo({ repoRoot: "/repo-a" });
   assert.equal(manager.activeRepos().length, 0);
   assert.equal(sessions.has("/repo-a"), false);
 });
 
-test("RepoRuntimeManager binds the coordinator GenerationClock onto the session", async () => {
+test("RepoRuntimeManager binds its GenerationClock onto the session", async () => {
   const sessions = new Map<string, FakeSession>();
   const manager = managerWith({}, sessions);
   await manager.withContext({ repoRoot: "/repo-a" }, async () => {});
   assert.equal(sessions.get("/repo-a")?.boundClock instanceof GenerationClock, true);
 });
 
-test("RepoRuntimeManager starts and flushes the coordinator around Java index OPEN so a seed cannot miss its watcher window", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const coordinator = new FakeCoordinator();
-  const clock = new GenerationClock();
-  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
-  let emitted = false;
-  coordinator.flushHook = async () => {
-    if (emitted) return;
-    emitted = true;
-    const generation = clock.advance("changed while seed was validating");
-    await coordinator.emit({
-      generation,
-      observedAt: new Date().toISOString(),
-      changes: [{ kind: "JAVA_CHANGE", absolutePath: "/repo-a/src/main/java/demo/Changed.java" }],
-      storm: false,
-      affectedRoots: []
-    });
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    resolved => ({ generation: clock, coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  await manager.contextFor({ repoRoot: "/repo-a" });
-
-  assert.equal(javaIndex.coordinatorStartsAtOpen, 1, "the watcher must be started before sibling seed validation begins");
-  assert.ok(coordinator.flushes >= 1, "OPEN must flush any batches buffered while a sibling seed was being validated");
-  assert.ok(javaIndex.calls.includes("refresh:2:1:0"), "the flushed batch must refresh its changed Java path before the runtime is exposed");
-  assert.ok(javaIndex.calls.includes("reconcile:2"), "a generation change during seed validation receives a target reconcile");
-  assert.ok(javaIndex.boundedCalls.includes("reconcile:2"), "coordinator reconcile uses the manager hard-cap budget");
-
-  await manager.shutdownAll();
-});
-
-test("RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, separately from a JAVA_CHANGE batch's refresh", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const coordinator = new FakeCoordinator();
-  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  await manager.contextFor({ repoRoot: "/repo-a" });
-
-  await coordinator.emit({
-    generation: 2,
-    observedAt: new Date().toISOString(),
-    changes: [{ kind: "RESOURCE_CHANGE", absolutePath: "/repo-a/src/main/resources/mapper/OrderMapper.xml" }],
-    storm: false,
-    affectedRoots: []
-  });
-
-  assert.ok(javaIndex.calls.includes("refreshResources:2:1"), "a RESOURCE_CHANGE-only batch must reach refreshResources");
-  assert.ok(javaIndex.boundedCalls.includes("refreshResources:2:1"), "coordinator RPCs must have a manager hard-cap budget");
-  assert.ok(!javaIndex.calls.some(call => call.startsWith("refresh:")), "a RESOURCE_CHANGE-only batch must not also call refresh");
-
-  await coordinator.emit({
-    generation: 3,
-    observedAt: new Date().toISOString(),
-    changes: [
-      { kind: "JAVA_CHANGE", absolutePath: "/repo-a/src/main/java/demo/Changed.java" },
-      { kind: "RESOURCE_CHANGE", absolutePath: "/repo-a/src/main/resources/mapper/OrderMapper.xml" }
-    ],
-    storm: false,
-    affectedRoots: []
-  });
-
-  assert.ok(javaIndex.calls.includes("refresh:3:1:0"), "a mixed batch must still refresh its Java path");
-  assert.ok(javaIndex.calls.includes("refreshResources:3:1"), "a mixed batch must still refresh its resource path");
-  assert.ok(javaIndex.boundedCalls.includes("refresh:3:1:0"));
-  assert.ok(javaIndex.boundedCalls.includes("refreshResources:3:1"));
-
-  await manager.shutdownAll();
-});
-
-test("RepoRuntimeManager still applies JavaIndex work when session batch handling fails", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const coordinator = new FakeCoordinator();
-  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
-    new NoopCrossProcessLeaseStore()
-  );
-  await manager.contextFor({ repoRoot: "/repo-a" });
-  sessions.get("/repo-a")!.repoChangeError = new Error("session batch failed");
-
-  await assert.rejects(
-    () => coordinator.emit({
-      generation: 2,
-      observedAt: new Date().toISOString(),
-      changes: [{ kind: "JAVA_CHANGE", absolutePath: "/repo-a/src/main/java/demo/Changed.java" }],
-      storm: false,
-      affectedRoots: []
-    }),
-    /session batch failed/
-  );
-
-  assert.ok(javaIndex.calls.includes("refresh:2:1:0"), "a session failure must not prevent JavaIndex refresh");
-  assert.ok(javaIndex.boundedCalls.includes("refresh:2:1:0"));
-  await manager.shutdownAll();
-});
-
-test("RepoRuntimeManager replays batches buffered during OPEN with a per-batch hard-cap budget", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const coordinator = new FakeCoordinator();
-  const openGate = deferred<{
-    indexedGeneration: number;
-    coverage: Array<{ state: "COMPLETE"; generation: number; failedFiles: number; recoveredFiles: number }>;
-  }>();
-  let openStarted = false;
-  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
-  javaIndex.openGate = openGate;
-  javaIndex.onOpen = () => { openStarted = true; };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const creating = manager.contextFor({ repoRoot: "/repo-a" });
-  await waitFor(() => openStarted);
-  await coordinator.emit({
-    generation: 2,
-    observedAt: new Date().toISOString(),
-    changes: [{ kind: "RESOURCE_CHANGE", absolutePath: "/repo-a/src/main/resources/app.yml" }],
-    storm: false,
-    affectedRoots: []
-  });
-  assert.ok(!javaIndex.calls.includes("refreshResources:2:1"), "the batch stays buffered until OPEN completes");
-
-  openGate.resolve({ indexedGeneration: 1, coverage: [] });
-  await creating;
-  assert.ok(javaIndex.calls.includes("refreshResources:2:1"));
-  assert.ok(javaIndex.boundedCalls.includes("refreshResources:2:1"), "buffer replay uses the manager hard cap too");
-  await manager.shutdownAll();
-});
-
 test("RepoRuntimeManager fails fast when all active runtimes are in use", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 30
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
   const held = deferred<void>();
   const firstEntered = deferred<void>();
 
@@ -436,12 +143,12 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
 
 test("RepoRuntimeManager uses the request deadline, not the manager timeout, while waiting for a saturated LSP slot", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 160
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
   const held = deferred<void>();
   const entered = deferred<void>();
 
@@ -472,93 +179,16 @@ test("RepoRuntimeManager uses the request deadline, not the manager timeout, whi
   await first;
 });
 
-test("RepoRuntimeManager bounds shared runtime creation separately from the caller budget", async () => {
-  const sessions = new Map<string, FakeSession>();
-  let openBudget: DeadlineBudget | undefined;
-  let handlerBudget: DeadlineBudget | undefined;
-  const javaIndex = {
-    localStatus() {
-      return { files: 0 };
-    },
-    async open(
-      generation: number,
-      _options?: unknown,
-      controls?: { budget?: DeadlineBudget }
-    ) {
-      openBudget = controls?.budget;
-      return { indexedGeneration: generation, coverage: [] };
-    }
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  await manager.withContext(
-    { repoRoot: "/repo-a" },
-    async (_context, request) => { handlerBudget = request.budget; },
-    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
-  );
-
-  assert.ok(openBudget instanceof DeadlineBudget, "runtime creation must receive a bounded operation budget before JavaIndex OPEN");
-  assert.ok(handlerBudget instanceof DeadlineBudget, "the handler must receive its caller-specific absolute budget");
-  assert.notEqual(openBudget, handlerBudget, "shared creation must not be cancelled by the first caller's shorter budget");
-  assert.ok(openBudget!.remainingMs() > handlerBudget!.remainingMs(), "the shared operation uses the manager hard cap");
-});
-
-test("RepoRuntimeManager does not run a handler after its budget expires during the JavaIndex status probe", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = {
-    localStatus() {
-      return { files: 1 };
-    },
-    async open() {
-      return completeJavaIndexStatus(1);
-    },
-    async status(controls?: { budget?: DeadlineBudget }): Promise<JavaIndexStatus> {
-      return controls!.budget!.race(
-        "test.java-index-status",
-        new Promise<JavaIndexStatus>(() => undefined)
-      );
-    }
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      ...fakeContext(resolved, sessions),
-      javaIndexClient: javaIndex as never,
-      javaIndex: { routerStatus: async () => ({}) } as never
-    }),
-    fakeCoordination(),
-    new NoopCrossProcessLeaseStore()
-  );
-  let handlerRan = false;
-
-  await assert.rejects(
-    () => manager.withContext(
-      { repoRoot: "/repo-a" },
-      async () => { handlerRan = true; },
-      { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
-    ),
-    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
-  );
-  assert.equal(handlerRan, false);
-});
-
 test("STARTING sessions count against the active repo limit", async () => {
   const sessions = new Map<string, FakeSession>();
   const gateA = deferred<void>();
   const enteredB = deferred<void>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions, { "/repo-a": gateA }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -591,12 +221,12 @@ test("slot waiters are granted in FIFO order", async () => {
   const sessions = new Map<string, FakeSession>();
   const held = deferred<void>();
   const order: string[] = [];
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -630,12 +260,12 @@ test("slot waiters are granted in FIFO order", async () => {
 test("a waiter that misses its deadline is removed and never granted later", async () => {
   const sessions = new Map<string, FakeSession>();
   const held = deferred<void>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 40
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -666,12 +296,12 @@ test("a waiter that misses its deadline is removed and never granted later", asy
 
 test("a reservation taken but never used is released for the next caller", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   // mayStartLsp only means "the handler is allowed to start JDT", not that it will.
   await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined, { mayStartLsp: true });
@@ -688,12 +318,12 @@ test("a reservation taken but never used is released for the next caller", async
 test("a session that breaks releases its slot to a queued waiter", async () => {
   const sessions = new Map<string, FakeSession>();
   const held = deferred<void>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -723,9 +353,9 @@ test("a session that breaks releases its slot to a queued waiter", async () => {
 
 test("BROKEN keeps its machine slot until an abandoned child is reaped", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 1, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000
-  }, resolved => fakeContext(resolved, sessions), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  }, resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
   const broken = deferred<void>();
   const releaseHandler = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -753,12 +383,12 @@ test("BROKEN keeps its machine slot until an abandoned child is reaped", async (
 
 test("activeRepos exposes lifecycle state and reservation", async () => {
   const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(fakeResolver(), {
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
     maxActiveRepos: 2,
     idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
+    undefined, new NoopCrossProcessLeaseStore());
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -771,15 +401,14 @@ test("activeRepos exposes lifecycle state and reservation", async () => {
   assert.equal(entry.started, true);
 });
 
-test("two concurrent contextFor calls share one runtime and one coordinator", async () => {
+test("two concurrent contextFor calls share one runtime", async () => {
   const sessions = new Map<string, FakeSession>();
-  const coordinators = new Map<string, FakeCoordinator>();
   let contextCalls = 0;
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => { contextCalls += 1; return fakeContext(resolved, sessions); },
-    fakeCoordination(coordinators),
+    undefined,
     new NoopCrossProcessLeaseStore()
   );
 
@@ -790,8 +419,6 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
 
   assert.equal(a, b, "both callers receive the same context");
   assert.equal(contextCalls, 1, "the runtime is created once");
-  assert.equal(coordinators.size, 1, "one coordinator for the shared runtime");
-  assert.equal([...coordinators.values()][0].starts, 1, "the watcher is started once");
 });
 
 test("the first runtime creator honors its deadline without cancelling shared creation", async () => {
@@ -806,9 +433,9 @@ test("the first runtime creator honors its deadline without cancelling shared cr
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions),
-    fakeCoordination(),
+    undefined,
     new BlockingRuntimeLeaseStore()
   );
 
@@ -855,9 +482,9 @@ test("a runtime creation hard-cap retires a stuck lease singleflight so a later 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 30 },
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 30 },
     resolved => fakeContext(resolved, sessions),
-    fakeCoordination(),
+    undefined,
     new OneStuckRuntimeLeaseStore()
   );
 
@@ -908,9 +535,9 @@ test("initialize() singleflights lease store opening and a degraded store still 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    { index: false, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions),
-    fakeCoordination(),
+    undefined,
     degradedLeaseStore
   );
 
@@ -932,9 +559,9 @@ test("a live runtime holds a runtime lease so activeRuntimeCount reflects it, an
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    { index: false, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions),
-    fakeCoordination(),
+    undefined,
     leaseStore
   );
 
@@ -960,702 +587,213 @@ test("fully stopped idle runtimes are removed from the runtime map beyond the re
   assert.equal(manager.hasRuntime("/repo-c"), true);
 });
 
-test("a runtime reused after shutdown gets a freshly started coordinator, not the closed one", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const coordinators = new Map<string, FakeCoordinator>();
-  // A bound of 1 keeps the just-stopped repo retained (not evicted) so this
-  // test can prove getOrCreate does not hand back its closed coordinator.
-  const manager = managerWith({ maxRetainedStoppedRepos: 1 }, sessions, {}, coordinators);
+class FakeOwner {
+  opens = 0;
+  workspaceCalls = 0;
+  stops = 0;
+  readonly retired: string[] = [];
+  readonly workspaces = new Map<string, { workspaceId: string }>();
+  readonly bindings = new Map<string, unknown>();
+  private readonly listeners = new Set<(event: PublishEvent) => void>();
+  readonly store = { binding: (workspaceId: string) => this.bindings.get(workspaceId) };
 
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined);
-  await manager.shutdown("/repo-a");
-  assert.equal(manager.hasRuntime("/repo-a"), true, "retained within the bound");
-  const closedCoordinator = coordinators.get("/repo-a");
-  assert.equal(closedCoordinator?.closes, 1);
-
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined);
-
-  const recreatedCoordinator = coordinators.get("/repo-a");
-  assert.notEqual(recreatedCoordinator, closedCoordinator, "a fresh coordinator replaced the closed one");
-  assert.equal(recreatedCoordinator?.starts, 1, "the new coordinator was started");
-});
-
-test("reconcileIfDirty runs once under two concurrent requests and clears dirty via compare-and-set", async () => {
-  const clock = new GenerationClock();
-  clock.markDirty("test-forced-dirty");
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-
-  let reconcileCalls = 0;
-  let releaseReconcile!: () => void;
-  const reconcileGate = new Promise<void>(resolve => { releaseReconcile = resolve; });
-  const javaIndexClientStub = {
-    localStatus() {
-      return { files: 0 };
-    },
-    async open(generation: number) {
-      return { indexedGeneration: generation, coverage: [{ state: "COMPLETE", generation, failedFiles: 0, recoveredFiles: 0 }] };
-    },
-    async reconcile(): Promise<void> {
-      reconcileCalls += 1;
-      await reconcileGate;
-    }
-  };
-
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClientStub as never,
-      router: { clearRgCache() {}, async flushSemanticEdgeStore() {} } as never,
-      javaIndex: { routerStatus: async () => ({}) } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const first = manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
-  await waitFor(() => reconcileCalls === 1);
-  const second = manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
-
-  releaseReconcile();
-  await Promise.all([first, second]);
-
-  assert.equal(reconcileCalls, 1, "two concurrent dirty requests share one reconcile");
-  assert.equal(clock.snapshot().dirty, false, "clearDirty succeeds since no new change arrived during reconcile");
-});
-
-test("a reconcile singleflight joiner honors its own deadline without cancelling the shared reconcile", async () => {
-  const clock = new GenerationClock();
-  clock.markDirty("test-forced-dirty");
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-  const reconcileGate = deferred<void>();
-  let reconcileCalls = 0;
-  const javaIndexClientStub = {
-    localStatus() {
-      return { files: 0 };
-    },
-    async open(generation: number) {
-      return { indexedGeneration: generation, coverage: [{ state: "COMPLETE", generation, failedFiles: 0, recoveredFiles: 0 }] };
-    },
-    async reconcile(): Promise<void> {
-      reconcileCalls += 1;
-      await reconcileGate.promise;
-    },
-    async close() {}
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClientStub as never,
-      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never,
-      javaIndex: { routerStatus: async () => ({}) } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const long = manager.withContext(
-    { repoRoot: "/repo-a" },
-    async () => "long",
-    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
-  );
-  await waitFor(() => reconcileCalls === 1);
-  const short = manager.withContext(
-    { repoRoot: "/repo-a" },
-    async () => "short",
-    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
-  );
-  const releaseTimer = setTimeout(() => reconcileGate.resolve(), 80);
-
-  await assert.rejects(
-    () => short,
-    (error: unknown) => error instanceof JavaIntelligenceError
-      && error.code === "DEADLINE_EXCEEDED"
-      && /runtime\.reconcile/.test(error.message)
-  );
-  assert.equal(await long, "long", "the original reconcile caller still completes");
-  clearTimeout(releaseTimer);
-  assert.equal(reconcileCalls, 1, "the deadline race does not duplicate or cancel reconciliation");
-  assert.equal(clock.snapshot().dirty, false);
-
-  await manager.shutdownAll();
-});
-
-test("reconcileIfDirty leaves dirty set when reconcile fails, without failing the request", async () => {
-  const clock = new GenerationClock();
-  clock.markDirty("test-forced-dirty");
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-  const javaIndexClientStub = {
-    localStatus() {
-      return { files: 0 };
-    },
-    async open(generation: number) {
-      return { indexedGeneration: generation, coverage: [{ state: "COMPLETE", generation, failedFiles: 0, recoveredFiles: 0 }] };
-    },
-    async reconcile(): Promise<void> {
-      throw new Error("reconcile boom");
-    }
-  };
-
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClientStub as never,
-      router: { clearRgCache() {}, async flushSemanticEdgeStore() {} } as never,
-      javaIndex: { routerStatus: async () => ({}) } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  let handlerRan = false;
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => { handlerRan = true; }, {});
-
-  assert.equal(handlerRan, true, "a reconcile failure does not fail the request");
-  assert.equal(clock.snapshot().dirty, true, "dirty remains set so the next request retries reconcile");
-});
-
-test("a sibling-seeded OPEN does not block runtime.create on the post-seed reconcile", async () => {
-  const clock = new GenerationClock();
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-  let reconcileStarted = 0;
-  const reconcileGate = deferred<void>();
-  const javaIndexClient = {
-    localStatus() {
-      return { files: 9 };
-    },
-    async open(generation: number) {
-      return {
-        indexedGeneration: generation,
-        coverage: [{ state: "DEGRADED" as const, generation, failedFiles: 0, recoveredFiles: 0 }]
-      };
-    },
-    async reconcile() {
-      reconcileStarted += 1;
-      await reconcileGate.promise;
-    },
-    async close() {}
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClient as never,
-      javaIndex: { routerStatus: async () => ({ openSource: "sibling-seed" }) } as never,
-      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const served = await manager.withContext({ repoRoot: "/repo-a" }, async () => "served", {});
-  assert.equal(served, "served");
-  assert.equal(reconcileStarted, 1, "post-seed reconcile is kicked, but not awaited");
-  reconcileGate.resolve();
-  await manager.shutdownAll();
-});
-
-test("an unrestored OPEN does not block runtime.create on a cold-build reconcile", async () => {
-  const clock = new GenerationClock();
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-  let reconcileStarted = 0;
-  const reconcileGate = deferred<void>();
-  const javaIndexClient = {
-    localStatus() {
-      return { files: 0 };
-    },
-    async open(generation: number) {
-      return {
-        indexedGeneration: generation,
-        coverage: []
-      };
-    },
-    async reconcile() {
-      reconcileStarted += 1;
-      await reconcileGate.promise;
-    },
-    async close() {}
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClient as never,
-      javaIndex: { routerStatus: async () => ({ openSource: "cold" }) } as never,
-      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const served = await manager.withContext({ repoRoot: "/repo-a" }, async () => "served", {});
-  assert.equal(served, "served");
-  assert.equal(reconcileStarted, 1, "follow-up reconcile is kicked, but not awaited");
-  reconcileGate.resolve();
-  await manager.shutdownAll();
-});
-
-test("a request whose freshness barrier hits the public deadline still serves after OPEN", async () => {
-  const clock = new GenerationClock();
-  const coordinator = new FakeCoordinator();
-  coordinator.awaitReadyWithin = async () => {
-    await delay(40);
-    return false;
-  };
-  const layout = probeLayout("/repo-a");
-  const javaIndexClient = {
-    localStatus() {
-      return { files: 1 };
-    },
-    async open(generation: number) {
-      return {
-        indexedGeneration: generation,
-        coverage: [{ state: "COMPLETE" as const, generation, failedFiles: 0, recoveredFiles: 0 }]
-      };
-    },
-    async reconcile() {},
-    async close() {},
-    async status() {
-      return { files: 1 };
-    }
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClient as never,
-      javaIndex: { routerStatus: async () => ({ openSource: "sibling-seed" }) } as never,
-      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const served = await manager.withContext(
-    { repoRoot: "/repo-a" },
-    async () => "served",
-    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 15 } }
-  );
-  assert.equal(served, "served");
-  await manager.shutdownAll();
-});
-
-test("V2 runtime reconciles only JavaIndex and records its OPEN source on the request", async () => {
-  const clock = new GenerationClock();
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-  let reconcileCalls = 0;
-  let routerStatusBudget: DeadlineBudget | undefined;
-  const javaIndexClient = {
-    localStatus() {
-      return { files: 3 };
-    },
-    async open(generation: number) {
-      return { indexedGeneration: generation, coverage: [] };
-    },
-    async reconcile() {
-      reconcileCalls += 1;
-    },
-    async close() {}
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClient as never,
-      javaIndex: {
-        async withRequestOptions<T>(options: { budget?: DeadlineBudget }, action: () => Promise<T>): Promise<T> {
-          routerStatusBudget = options.budget;
-          return action();
-        },
-        async routerStatus() {
-          return { openSource: "sibling-seed" };
-        }
-      } as never,
-      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
-
-  const context = await manager.contextFor({ repoRoot: "/repo-a" });
-  reconcileCalls = 0;
-  clock.markDirty("test-v2-dirty");
-  let openSource: string | undefined;
-  let handlerBudget: DeadlineBudget | undefined;
-  await manager.withContext({ repoRoot: "/repo-a" }, async (_context, request) => {
-    openSource = request.indexOpenSource;
-    handlerBudget = request.budget;
-  });
-
-  assert.equal(context.javaIndexClient, javaIndexClient as never, "runtime must retain its JavaIndex worker client");
-  assert.equal(reconcileCalls, 1, "dirty V2 request must reconcile JavaIndex exactly once");
-  assert.equal(openSource, "sibling-seed");
-  assert.equal(routerStatusBudget, handlerBudget, "routerStatus must inherit the caller's immutable request budget");
-});
-
-test("a compatibility RouterIndex without withRequestOptions cannot outlive the caller deadline", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      ...fakeContext(resolved, sessions),
-      javaIndex: {
-        routerStatus: async () => new Promise<never>(() => undefined)
-      } as never
-    }),
-    fakeCoordination(),
-    new NoopCrossProcessLeaseStore()
-  );
-  let handlerRan = false;
-
-  await assert.rejects(
-    () => Promise.race([
-      manager.withContext(
-        { repoRoot: "/repo-a" },
-        async () => { handlerRan = true; },
-        { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
-      ),
-      delay(150).then(() => { throw new Error("test guard: routerStatus escaped the request deadline"); })
-    ]),
-    (error: unknown) => error instanceof JavaIntelligenceError
-      && error.code === "DEADLINE_EXCEEDED"
-      && /runtime\.router-status/.test(error.message)
-  );
-  assert.equal(handlerRan, false);
-  await manager.shutdownAll();
-});
-
-test("a bounded routerStatus failure degrades only indexOpenSource while budget remains", async () => {
-  const sessions = new Map<string, FakeSession>();
-  let receivedBudget: DeadlineBudget | undefined;
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      ...fakeContext(resolved, sessions),
-      javaIndex: {
-        async withRequestOptions<T>(options: { budget?: DeadlineBudget }, action: () => Promise<T>): Promise<T> {
-          receivedBudget = options.budget;
-          return action();
-        },
-        async routerStatus() {
-          throw new JavaIntelligenceError("DEADLINE_EXCEEDED", "bounded router status timed out");
-        }
-      } as never
-    }),
-    fakeCoordination(),
-    new NoopCrossProcessLeaseStore()
-  );
-  let openSource: string | undefined = "unexpected";
-
-  await manager.withContext(
-    { repoRoot: "/repo-a" },
-    async (_context, request) => { openSource = request.indexOpenSource; },
-    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
-  );
-
-  assert.ok(receivedBudget instanceof DeadlineBudget);
-  assert.equal(openSource, undefined);
-  await manager.shutdownAll();
-});
-
-test("RepoRuntimeManager permits negative lookup only for a settled, same-generation, fully complete index under a normal watcher", async () => {
-  const complete = completeJavaIndexStatus(1);
-  assert.equal(await negativeLookupAllowedFor(complete), true);
-
-  const cases: Array<{ name: string; status?: JavaIndexStatus; watcher?: Partial<Pick<FakeCoordinator, "degraded" | "pending" | "ready">> }> = [
-    {
-      name: "a watcher degradation",
-      watcher: { degraded: true }
-    },
-    {
-      name: "undrained watcher work",
-      watcher: { pending: 1 }
-    },
-    {
-      name: "a mismatched index generation",
-      status: { ...complete, indexedGeneration: 0 }
-    },
-    {
-      name: "incomplete source coverage",
-      status: { ...complete, coverage: [{ ...complete.coverage[0]!, state: "BUILDING" }] }
-    },
-    {
-      name: "a failed or recovered source file",
-      status: { ...complete, coverage: [{ ...complete.coverage[0]!, failedFiles: 1, recoveredFiles: 1 }] }
-    },
-    {
-      name: "incomplete resource coverage",
-      status: { ...complete, resourceCoverage: [{ ...complete.resourceCoverage[0]!, state: "DEGRADED" }] }
-    },
-    {
-      name: "a failed resource file",
-      status: { ...complete, resourceCoverage: [{ ...complete.resourceCoverage[0]!, failedFiles: 1 }] }
-    },
-    {
-      name: "foreground index work",
-      status: { ...complete, pendingForeground: 1 }
-    },
-    {
-      name: "background index work",
-      status: { ...complete, pendingBackground: 1 }
-    },
-    {
-      name: "snapshot verification",
-      status: { ...complete, snapshotVerificationPending: true }
-    }
-  ];
-
-  for (const scenario of cases) {
-    assert.equal(
-      await negativeLookupAllowedFor(scenario.status ?? complete, scenario.watcher),
-      false,
-      `negative lookup must remain disabled for ${scenario.name}`
-    );
+  source(): IndexOwnerSource {
+    return async () => { this.opens += 1; return this as never; };
   }
-});
+  onPublished(listener: (event: PublishEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  async workspace(canonicalRoot: string): Promise<{ workspaceId: string }> {
+    this.workspaceCalls += 1;
+    let workspace = this.workspaces.get(canonicalRoot);
+    if (!workspace) {
+      workspace = { workspaceId: `ws${canonicalRoot.replace(/\W/g, "")}` };
+      this.workspaces.set(canonicalRoot, workspace);
+    }
+    return workspace;
+  }
+  peek(canonicalRoot: string): { workspaceId: string } | undefined { return this.workspaces.get(canonicalRoot); }
+  async retire(canonicalRoot: string): Promise<void> {
+    this.retired.push(canonicalRoot);
+    this.workspaces.delete(canonicalRoot);
+  }
+  async stop(): Promise<void> { this.stops += 1; }
+  publish(event: PublishEvent): void {
+    for (const listener of [...this.listeners]) listener(event);
+  }
+}
 
-test("own snapshot verification stays worker-owned after OPEN instead of triggering a duplicate full reconcile", async () => {
-  const clock = new GenerationClock();
-  const coordinator = new FakeCoordinator();
-  const layout = probeLayout("/repo-a");
-  let reconcileCalls = 0;
-  const javaIndexClient = {
-    localStatus() {
-      return { files: 0 };
-    },
-    async open(generation: number) {
-      return {
-        indexedGeneration: generation,
-        coverage: [],
-        snapshotVerificationPending: true
-      };
-    },
-    async reconcile() {
-      reconcileCalls += 1;
-    },
-    async close() {}
+function publishEvent(canonicalRoot: string, overrides: Partial<PublishEvent> = {}): PublishEvent {
+  return {
+    workspaceId: `ws${canonicalRoot.replace(/\W/g, "")}`,
+    canonicalRoot,
+    snapshotId: "snap-2",
+    previousSnapshotId: "snap-1",
+    indexedGeneration: 7,
+    changed: [],
+    deleted: [],
+    buildKeyChanged: false,
+    ...overrides
   };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      repoRoot: resolved.repoRoot,
-      rootSource: resolved.rootSource,
-      repoHash: resolved.repoHash,
-      aliases: resolved.aliases,
-      layoutProfile: resolved.layoutProfile,
-      lsp: resolved.lsp,
-      session: new FakeSession() as never,
-      javaIndexClient: javaIndexClient as never,
-      javaIndex: { routerStatus: async () => ({ openSource: "own-snapshot" }) } as never,
-      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
-    }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
-    new NoopCrossProcessLeaseStore()
-  );
+}
 
-  await manager.contextFor({ repoRoot: "/repo-a" });
-
-  assert.equal(reconcileCalls, 0, "the worker verifies/queues the snapshot itself; manager must not race it with a full sweep");
+test("status without start on an unknown repo opens no owner, creates no runtime and starts nothing", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  const state = await manager.statusOnly({ repoRoot: "/repo-a" }, async value => value);
+  assert.equal(state.labels.state, "NOT_READY");
+  assert.equal(state.context, undefined);
+  assert.equal(manager.hasRuntime("/repo-a"), false, "status-only never creates a runtime entry");
+  assert.equal(sessions.size, 0, "no JDT session object exists");
+  assert.equal(owner.opens, 0, "the index owner is not opened by status-only");
+  assert.equal(owner.workspaceCalls, 0, "no workspace tracker or build is started");
+  await manager.shutdownAll();
 });
 
-test("hibernate TTL does not recycle a hot-set isolate", async () => {
+test("status without start on a known repo reads memory only and never starts its workspace", async () => {
   const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager({
-    async resolve(selector: { repoRoot?: string }) {
-      const repoRoot = selector.repoRoot || "/repo";
-      const repoHash = repoRoot.replace(/\W/g, "");
-      return {
-        repoRoot,
-        repoHash,
-        rootSource: "explicit" as const,
-        aliases: ["lishuedu"],
-        layoutProfile: "generic-java" as const,
-        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
-        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
-      };
-    }
-  }, {
-    idleTtlMs: 100000,
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 5000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: true });
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  owner.bindings.set("wsrepob", { snapshotId: "snap-1" });
+  await manager.prewarmRepo({ repoRoot: "/repo-b" });
+  assert.equal(owner.opens, 1);
+  owner.workspaces.delete("/repo-b");
+  const before = owner.workspaceCalls;
+  const state = await manager.statusOnly({ repoRoot: "/repo-b" }, async value => value);
+  assert.equal(state.labels.state, "NOT_READY", "a repo whose workspace is not running is NOT_READY");
+  assert.ok(state.context, "the existing runtime is reported");
+  assert.equal(owner.workspaceCalls, before, "status-only did not start the workspace");
+  assert.equal(sessions.get("/repo-b")?.ensureStartedCalls, 0);
+  await manager.shutdownAll();
+});
+
+test("prewarmRepo waits for the repo's own verified binding and does not start JDT", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  let returned = false;
+  const done = manager.prewarmRepo({ repoRoot: "/repo-a" }).then(() => { returned = true; });
+  await waitFor(() => owner.workspaceCalls === 1);
+  await delay(300);
+  assert.equal(returned, false, "no binding yet: prewarm is still waiting");
+  owner.bindings.set("wsrepoa", { snapshotId: "snap-1" });
+  await done;
+  assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
+  await manager.shutdownAll();
+});
+
+test("freemem pressure does not retire a pin while its prewarm is waiting", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const owner = new FakeOwner();
+  const manager = managerWith({ pressureIntervalMs: 15, freememPressureBytes: 1, freemem: () => 0 }, sessions, {}, owner.source());
+  const done = manager.prewarmRepo({ repoRoot: "/repo-a" });
+  await waitFor(() => owner.workspaceCalls === 1);
   await delay(80);
-  assert.equal(javaIndex.calls.includes("recycle"), false, "hot-set isolate stays resident through T_hibernate");
+  assert.equal(manager.retainedRepoRoots().has("/repo-a"), true, "an in-flight prewarm is not a pressure victim");
+  assert.deepEqual(owner.retired, []);
+  owner.bindings.set("wsrepoa", { snapshotId: "snap-1" });
+  await done;
   await manager.shutdownAll();
 });
 
-test("freemem pressure does not recycle a hydrated hot-set pin", async () => {
+test("a publish reaches the JDT session as one change batch at a newer generation", async () => {
   const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager({
-    async resolve(selector: { repoRoot?: string }) {
-      const repoRoot = selector.repoRoot || "/repo";
-      const repoHash = repoRoot.replace(/\W/g, "");
-      return {
-        repoRoot,
-        repoHash,
-        rootSource: "explicit" as const,
-        aliases: ["lishuedu"],
-        layoutProfile: "generic-java" as const,
-        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
-        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
-      };
-    }
-  }, {
-    idleTtlMs: 100000,
-    pressureIntervalMs: 15,
-    freememPressureBytes: 1,
-    freemem: () => 0,
-    requestTimeoutMs: 5000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: true });
-  await delay(80);
-  assert.equal(javaIndex.calls.includes("recycle"), false, "hot-set hydrate must survive macOS os.freemem pressure; D1 uses index-idle TTL");
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  owner.bindings.set("wsrepoa", { snapshotId: "snap-1" });
+  await manager.prewarmRepo({ repoRoot: "/repo-a" });
+  const session = sessions.get("/repo-a")!;
+  const before = session.boundClock!.snapshot().value;
+  owner.publish(publishEvent("/repo-a", { changed: ["src/main/java/demo/A.java", "src/main/resources/M.xml"], deleted: ["src/main/java/demo/B.java"] }));
+  await waitFor(() => session.repoChangeBatches.length === 1);
+  const batch = session.repoChangeBatches[0]!;
+  assert.ok(batch.generation > before && batch.generation >= 7, "the batch carries the publish's generation or later");
+  assert.deepEqual(batch.changes.map(change => [change.kind, change.absolutePath, change.event]), [
+    ["JAVA_CHANGE", "/repo-a/src/main/java/demo/A.java", "change"],
+    ["RESOURCE_CHANGE", "/repo-a/src/main/resources/M.xml", "change"],
+    ["JAVA_DELETE", "/repo-a/src/main/java/demo/B.java", "delete"]
+  ]);
+  const router = (await manager.contextFor({ repoRoot: "/repo-a" })).router as unknown as { invalidated: number[] };
+  assert.deepEqual(router.invalidated, [batch.generation], "the NOT_READY router drops results older than the publish");
+  owner.publish(publishEvent("/repo-other"));
+  await delay(20);
+  assert.equal(session.repoChangeBatches.length, 1, "another workspace's publish is not this session's batch");
   await manager.shutdownAll();
 });
 
-test("explicit recycle floor wins via max with the relative baseline", async () => {
+test("a failing JDT batch does not escape the publish listener", async () => {
   const sessions = new Map<string, FakeSession>();
-  const javaIndex = recordingHeapIndex(200);
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  owner.bindings.set("wsrepoa", { snapshotId: "snap-1" });
+  await manager.prewarmRepo({ repoRoot: "/repo-a" });
+  const session = sessions.get("/repo-a")!;
+  session.repoChangeError = new Error("jdt rejected batch");
+  owner.publish(publishEvent("/repo-a", { changed: ["src/main/java/demo/A.java"] }));
+  owner.publish(publishEvent("/repo-a", { indexedGeneration: 8, changed: ["src/main/java/demo/A.java"] }));
+  await waitFor(() => session.repoChangeBatches.length === 2);
+  assert.ok(session.repoChangeBatches[1]!.generation > session.repoChangeBatches[0]!.generation, "generations stay monotonic");
+  await manager.shutdownAll();
+});
+
+test("changeBatchFor maps build files and a build-key change to BUILD_CHANGE and a large publish to one storm", () => {
+  const pom = changeBatchFor(publishEvent("/r", { changed: ["module/pom.xml"] }), 3);
+  assert.deepEqual(pom.changes.map(change => change.kind), ["BUILD_CHANGE"]);
+  const keyOnly = changeBatchFor(publishEvent("/r", { changed: ["src/main/java/A.java"], buildKeyChanged: true }), 4);
+  assert.equal(keyOnly.changes.filter(change => change.kind === "BUILD_CHANGE").length > 0, true, "a build-key change always reaches JDT as BUILD_CHANGE");
+  const many = Array.from({ length: 500 }, (_, index) => `src/main/java/p/C${index}.java`);
+  const storm = changeBatchFor(publishEvent("/r", { changed: many }), 5);
+  assert.equal(storm.storm, true, "a 500-file publish is delivered as one storm batch");
+  assert.equal(storm.changes.length, 500);
+  assert.ok(storm.affectedRoots.length > 0 && storm.affectedRoots.length <= 16, "affectedRoots is bounded and non-empty");
+  assert.equal(changeBatchFor(publishEvent("/r", { changed: ["src/main/java/A.java"] }), 6).storm, false);
+});
+
+test("shutdown retires the repo's workspace in the owner and shutdownAll stops the owner last", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  owner.bindings.set("wsrepoa", { snapshotId: "snap-1" });
+  owner.bindings.set("wsrepob", { snapshotId: "snap-1" });
+  await manager.prewarmRepo({ repoRoot: "/repo-a" });
+  await manager.prewarmRepo({ repoRoot: "/repo-b" });
+  await manager.shutdown("/repo-a");
+  assert.deepEqual(owner.retired, ["/repo-a"]);
+  assert.equal(owner.stops, 0);
+  await manager.shutdownAll();
+  assert.equal(owner.stops, 1);
+  assert.equal(sessions.get("/repo-b")?.stops, 1, "sessions stop before the owner");
+});
+
+test("idle TTL retires an unprotected runtime and its workspace but keeps a protected pin", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const owner = new FakeOwner();
   const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000,
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 5000,
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
-  await delay(120);
-  assert.equal(javaIndex.calls.includes("recycle"), false, "200 < max(1200, 160) must not recycle");
-  await manager.shutdownAll();
-});
-
-test("workerHeapRecycleMb 0 disables idle heap recycle", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = recordingHeapIndex(1500);
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000,
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 5000,
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
-  await delay(120);
-  assert.equal(javaIndex.calls.includes("recycle"), false, "threshold 0 must not recycle even at 1500 MiB");
-  await manager.shutdownAll();
-});
-
-test("pendingForeground skips high-heap recycle", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = recordingHeapIndex(1400, { pendingForeground: 1 });
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000,
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 5000,
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
-  await delay(120);
-  assert.equal(javaIndex.calls.includes("recycle"), false);
-  await manager.shutdownAll();
-});
-
-test("idle TTL stops JDT without closing the Java index client", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 40,
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 1000,
-    isProtectedRepo: () => true
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.withContext({ repoRoot: "/repo-a" }, async context => {
-    await (context.session as unknown as FakeSession).ensureStarted();
-  }, { mayStartLsp: true });
-  await delay(120);
-  assert.equal(sessions.get("/repo-a")?.stops, 1);
-  assert.equal(javaIndex.calls.includes("close"), false);
-  await manager.shutdownAll();
-});
-
-test("idle TTL shuts down an unprotected worktree runtime and closes the index client", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 40,
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 1000,
-    isProtectedRepo: () => false
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.withContext({ repoRoot: "/repo-wt" }, async () => "ok");
-  await delay(120);
-  assert.equal(javaIndex.calls.includes("close"), true);
+    idleTtlMs: 40, pressureIntervalMs: 0, requestTimeoutMs: 1000, index: owner.source(),
+    isProtectedRepo: repoRoot => repoRoot === "/repo-pin"
+  }, resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
+  owner.bindings.set("wsrepowt", { snapshotId: "snap-1" });
+  owner.bindings.set("wsrepopin", { snapshotId: "snap-1" });
+  await manager.prewarmRepo({ repoRoot: "/repo-wt" });
+  await manager.prewarmRepo({ repoRoot: "/repo-pin" });
+  await delay(150);
   assert.equal(manager.retainedRepoRoots().has("/repo-wt"), false);
+  assert.deepEqual(owner.retired, ["/repo-wt"]);
+  assert.equal(manager.retainedRepoRoots().has("/repo-pin"), true, "a pin keeps its index runtime after idle");
+  await manager.shutdownAll();
+});
+
+test("an owner that fails to open leaves requests NOT_READY instead of failing them", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = managerWith({}, sessions, {}, async () => { throw new Error("owner lock missing"); });
+  const request = await manager.withContext({ repoRoot: "/repo-a" }, async (_context, value) => value);
+  assert.equal(request.freshnessMode, "WATCHER_NOT_READY");
+  assert.equal(request.negativeLookupAllowed, false);
+  assert.equal(request.cacheReadAllowed, false);
+  const status = await manager.indexStatus();
+  assert.ok(status && "unavailable" in status && /owner lock missing/.test(status.unavailable));
   await manager.shutdownAll();
 });
 
@@ -1747,116 +885,6 @@ function fakeResolver(enabled = true): { resolve(selector: { repoRoot?: string }
   };
 }
 
-class FakeCoordinator {
-  starts = 0;
-  flushes = 0;
-  flushHook?: () => void | Promise<void>;
-  closes = 0;
-  ready = true;
-  degraded = false;
-  pending = 0;
-  private readonly listeners = new Set<(batch: RepoChangeBatch) => void | Promise<void>>();
-  onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  async start(): Promise<void> { this.starts += 1; }
-  async flushNow(): Promise<void> {
-    this.flushes += 1;
-    await this.flushHook?.();
-  }
-  async emit(batch: RepoChangeBatch): Promise<void> {
-    for (const listener of this.listeners) await listener(batch);
-  }
-  async awaitReadyWithin(): Promise<boolean> { return true; }
-  async close(): Promise<void> { this.closes += 1; }
-  status(): { ready: boolean; degraded: boolean; pending: number } {
-    return { ready: this.ready, degraded: this.degraded, pending: this.pending };
-  }
-}
-
-function recordingHeapIndex(heapUsedMb: number, extra: Partial<JavaIndexStatus> = {}) {
-  const calls: string[] = [];
-  let heap = heapUsedMb;
-  return {
-    calls,
-    async status(): Promise<JavaIndexStatus> {
-      calls.push("status");
-      return {
-        ...completeJavaIndexStatus(1),
-        ...extra
-      };
-    },
-    async recycle(): Promise<void> {
-      calls.push("recycle");
-      heap = Math.min(heap, 200);
-    },
-    async open(): Promise<JavaIndexStatus> {
-      calls.push("open");
-      return completeJavaIndexStatus(1);
-    },
-    async close(): Promise<void> {
-      calls.push("close");
-    }
-  };
-}
-
-class RecordingJavaIndex {
-  readonly calls: string[] = [];
-  readonly boundedCalls: string[] = [];
-  coordinatorStartsAtOpen: number | undefined;
-  openGate?: Deferred<{
-    indexedGeneration: number;
-    coverage: Array<{ state: "COMPLETE"; generation: number; failedFiles: number; recoveredFiles: number }>;
-  }>;
-  onOpen?: () => void;
-
-  constructor(private readonly coordinatorStarts: () => number) {}
-
-  async open(generation: number): Promise<{
-    indexedGeneration: number;
-    coverage: Array<{ state: "COMPLETE" | "DEGRADED"; generation: number; failedFiles: number; recoveredFiles: number }>;
-  }> {
-    this.coordinatorStartsAtOpen = this.coordinatorStarts();
-    this.calls.push(`open:${generation}`);
-    this.onOpen?.();
-    if (this.openGate) return this.openGate.promise;
-    return { indexedGeneration: generation, coverage: [] };
-  }
-
-  async reconcile(generation: number, controls?: { budget?: DeadlineBudget }): Promise<void> {
-    const call = `reconcile:${generation}`;
-    this.calls.push(call);
-    if (controls?.budget) this.boundedCalls.push(call);
-  }
-  async refresh(generation: number, changed: string[], deleted: string[], controls?: { budget?: DeadlineBudget }): Promise<void> {
-    const call = `refresh:${generation}:${changed.length}:${deleted.length}`;
-    this.calls.push(call);
-    if (controls?.budget) this.boundedCalls.push(call);
-  }
-  async refreshResources(generation: number, paths: string[], controls?: { budget?: DeadlineBudget }): Promise<void> {
-    const call = `refreshResources:${generation}:${paths.length}`;
-    this.calls.push(call);
-    if (controls?.budget) this.boundedCalls.push(call);
-  }
-  async close(): Promise<void> { this.calls.push("close"); }
-  async hibernate(): Promise<void> { this.calls.push("hibernate"); }
-  async recycle(): Promise<void> { this.calls.push("recycle"); }
-}
-
-function fakeLayoutSource(repoRoot: string): LayoutSource {
-  const layout = probeLayout(repoRoot);
-  return { current: () => layout, refresh: () => ({ changed: false, layout }) };
-}
-
-function fakeCoordination(coordinators?: Map<string, FakeCoordinator>) {
-  return (resolved: ResolvedRepo): RuntimeCoordination => {
-    const coordinator = new FakeCoordinator();
-    coordinators?.set(resolved.repoRoot, coordinator);
-    return { generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) };
-  };
-}
-
 function fakeLeaseHandle(): LeaseHandle {
   return {
     kind: "RUNTIME",
@@ -1886,13 +914,13 @@ function managerWith(
   }>,
   sessions: Map<string, FakeSession>,
   gates: Record<string, Deferred<void>> = {},
-  coordinators?: Map<string, FakeCoordinator>
+  index: IndexOwnerSource = false
 ): RepoRuntimeManager {
   return new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000, ...options },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000, index, ...options },
     resolved => fakeContext(resolved, sessions, gates),
-    fakeCoordination(coordinators),
+    undefined,
     new NoopCrossProcessLeaseStore()
   );
 }
@@ -1905,6 +933,7 @@ function fakeContext(
   const session = new FakeSession();
   session.startGate = gates[resolved.repoRoot];
   sessions.set(resolved.repoRoot, session);
+  const invalidated: number[] = [];
   return {
     repoRoot: resolved.repoRoot,
     rootSource: resolved.rootSource,
@@ -1915,13 +944,14 @@ function fakeContext(
     worktree: resolved.worktree,
     session: session as never,
     router: {
+      invalidated,
       clearRgCache() {},
       onRepoChanged() {},
-      async flushSemanticEdgeStore() {}
+      invalidateGeneration(generation: number) { invalidated.push(generation); },
+      async flushSemanticEdgeStore() {},
+      dispose() {}
     } as never,
-    javaIndex: {
-      routerStatus: async () => ({ entries: 0 })
-    } as never
+    javaIndex: {} as never
   };
 }
 
@@ -1955,41 +985,4 @@ function completeJavaIndexStatus(generation: number): JavaIndexStatus {
       failedFiles: 0
     }]
   };
-}
-
-async function negativeLookupAllowedFor(
-  status: JavaIndexStatus,
-  watcher: Partial<Pick<FakeCoordinator, "degraded" | "pending" | "ready">> = {}
-): Promise<boolean> {
-  const sessions = new Map<string, FakeSession>();
-  const coordinator = new FakeCoordinator();
-  Object.assign(coordinator, watcher);
-  const javaIndexClient = {
-    localStatus() {
-      return { files: status.files };
-    },
-    async open() {
-      return status;
-    },
-    async status() {
-      return status;
-    },
-    async close() {}
-  };
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({
-      ...fakeContext(resolved, sessions),
-      javaIndexClient: javaIndexClient as never,
-      javaIndex: { routerStatus: async () => ({}) } as never
-    }),
-    () => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource("/repo-a") }),
-    new NoopCrossProcessLeaseStore()
-  );
-  let allowed = false;
-  await manager.withContext({ repoRoot: "/repo-a" }, async (_context, request) => {
-    allowed = request.negativeLookupAllowed;
-  });
-  return allowed;
 }

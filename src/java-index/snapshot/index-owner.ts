@@ -58,6 +58,8 @@ export type IndexOwnerOptions = {
   roundDelayMs?: number;
   /** Test seam: stall a query's worker this long (a stuck native step) before it answers. */
   queryTestBlockMs?: (request: QueryRequest) => number | undefined;
+  /** stop() waits this long for workspace starts still in flight (default START_STOP_GRACE_MS). */
+  startStopGraceMs?: number;
 };
 
 /** Freshness prepare never waits longer than this (contract §2.6). */
@@ -65,6 +67,12 @@ export const PREPARE_CAP_MS = 1_000;
 const ROUND_DELAY_MS = 25;
 const ROUND_RETRY_MS = 1_000;
 const RECLAIM_RETRY_MS = 5_000;
+/**
+ * A native change source that never reports ready is killed by its 5 s ready timer and settles only
+ * after the helper is reaped. stop() waits that long, so a pre-ready helper holding the owner lock fd
+ * is not left behind by an owner that exits right after stop() (contract §2.6: no release before reap).
+ */
+const START_STOP_GRACE_MS = 6_000;
 /** Internal reads (the verification base) are bounded too. */
 const INTERNAL_QUERY_MS = 60_000;
 
@@ -82,6 +90,7 @@ export class IndexOwner {
   private readonly starting = new Map<string, Promise<WorkspaceIndex>>();
   private readonly byId = new Map<string, WorkspaceIndex>();
   private readonly superseded = new Set<string>();
+  private readonly publishListeners = new Set<(event: PublishEvent) => void>();
   private reclaimTimer?: NodeJS.Timeout;
   private stopped = false;
 
@@ -113,6 +122,32 @@ export class IndexOwner {
 
   list(): WorkspaceIndex[] {
     return [...this.workspaces.values()];
+  }
+
+  /** Every publish of every workspace this owner runs, including ones started later. */
+  onPublished(listener: (event: PublishEvent) => void): () => void {
+    this.publishListeners.add(listener);
+    return () => this.publishListeners.delete(listener);
+  }
+
+  /** @internal WorkspaceIndex reports its publishes here. */
+  published(event: PublishEvent): void {
+    for (const listener of this.publishListeners) {
+      try { listener(event); } catch { /* a consumer failure never undoes a publish */ }
+    }
+  }
+
+  /**
+   * Stop one workspace's tracker and forget it. Its binding stays: a later workspace() starts a new
+   * tracker whose first round verifies that binding (a noop when nothing changed).
+   */
+  async retire(canonicalRoot: string): Promise<void> {
+    const workspace = this.workspaces.get(canonicalRoot);
+    if (!workspace) return;
+    this.workspaces.delete(canonicalRoot);
+    this.byId.delete(workspace.workspaceId);
+    await workspace.stop();
+    this.pool.trim();
   }
 
   /** The workspace index for this root, starting its tracker (and so its first round) once. */
@@ -193,10 +228,13 @@ export class IndexOwner {
     if (this.stopped) return;
     this.stopped = true;
     if (this.reclaimTimer) clearTimeout(this.reclaimTimer);
-    // Not awaited: a start whose change source never comes up must not hold stop (it stops itself when it lands).
-    for (const pending of this.starting.values()) pending.catch(() => undefined);
+    // Bounded: a start that lands stops its own tracker; one that never comes up cannot hold stop past the grace.
+    const starts = [...this.starting.values()].map(pending => pending.then(() => undefined, () => undefined));
+    let graceTimer: NodeJS.Timeout | undefined;
+    const grace = new Promise<void>(resolve => { graceTimer = setTimeout(resolve, this.options.startStopGraceMs ?? START_STOP_GRACE_MS); });
     // Together: a round waiting on a builder or a query ends when the scheduler and pool stop.
-    await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop()]);
+    await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop(),
+      Promise.race([Promise.all(starts), grace]).finally(() => clearTimeout(graceTimer))]);
   }
 }
 
@@ -264,7 +302,11 @@ export class WorkspaceIndex {
     // Half the remaining time at most: a short request still answers from its binding (STALE) instead of timing out in prepare.
     const cap = budget.forStage(Math.max(1, Math.min(PREPARE_CAP_MS, Math.floor(budget.remainingMs() / 2))));
     while (!this.stopped && !signal?.aborted && !cap.expired() && (this.round || this.tracker.status() === "STALE")) {
-      if (!this.round) this.kick(0);
+      if (!this.round) {
+        // A failed round's retry backoff stands: answer from the binding instead of forcing or awaiting the retry.
+        if (this.lastError && this.timer) return;
+        this.kick(0);
+      }
       await new Promise<void>(resolve => {
         const done = () => { clearTimeout(timer); this.settled.delete(done); signal?.removeEventListener("abort", done); resolve(); };
         const timer = setTimeout(done, cap.remainingMs());
@@ -346,6 +388,7 @@ export class WorkspaceIndex {
         for (const listener of this.listeners) {
           try { listener(event); } catch { /* a consumer failure never undoes a publish */ }
         }
+        this.owner.published(event);
         if (bound && bound.snapshotId !== binding.snapshotId) this.owner.supersede(bound.snapshotId);
       } finally {
         this.prepared = undefined;

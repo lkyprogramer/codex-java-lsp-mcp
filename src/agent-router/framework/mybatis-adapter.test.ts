@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ResolvedAnchor } from "../../agent-types.js";
 import { RouterJavaIndex } from "../../java-index/router-java-index.js";
+import { localRouterIndex } from "../../java-index/local-index.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapterContext } from "./adapter.js";
 import type { CandidateEvidence, EvidenceSignal } from "../evidence.js";
@@ -32,7 +33,7 @@ async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: n
 
 async function readyRouterAt(root: string): Promise<RouterJavaIndex> {
   const cacheDir = mkdtempSync(path.join(tmpdir(), "mybatis-fixture-cache-"));
-  const router = RouterJavaIndex.create(root, cacheDir);
+  const router = localRouterIndex(root, cacheDir);
   await router.open(1);
   await router.reconcile(1);
   await waitFor(async () => (await router.status()).pendingBackground === 0, 15_000);
