@@ -33,6 +33,7 @@ const domain = new GradleDomain(gradleHome, [{ version: "9.3.1", launcher: "/ilv
 const admission = new OwnerAdmission(() => assertOwnerLock(), domain);
 const roots = new Map(settings.roots.map(item => [item.id, item]));
 const status = () => ({ scheduler: scheduler.status(), pool: pool.status(), admission: admission.status() });
+const heldBuilders = new Set();
 const snapshot = reason => record({ type: "status", reason, ...status() });
 const scheduler = new BuildScheduler({
   admitted: admission.admitted,
@@ -44,6 +45,13 @@ const scheduler = new BuildScheduler({
     return { kind, baseId: target.id, start(grant) {
       const attempt = startBuildProcess({ repoRoot: target.repo, dbPath: target.db, job: builderJobFor(hint, kind), grant });
       record({ type: "fork", role: "builder", workspaceId: hint.workspaceId, kind, childPid: attempt.child.pid, parserTokens: grant.parserTokens });
+      // Test hook: a held full stays active (fd4 and PGID are inherited at fork) until release-builders, however fast the build would be.
+      if (kind === "full" && settings.holdFullBuilds?.includes(hint.workspaceId)) {
+        attempt.child.kill("SIGSTOP");
+        heldBuilders.add(attempt.child);
+        attempt.child.once("close", () => heldBuilders.delete(attempt.child));
+        record({ type: "builder-held", workspaceId: hint.workspaceId, childPid: attempt.child.pid });
+      }
       attempt.child.once("close", (code, signal) => { record({ type: "close", role: "builder", workspaceId: hint.workspaceId, childPid: attempt.child.pid, code, signal }); snapshot("builder-close"); });
       attempt.result.then(outcome => record({ type: "build-result", workspaceId: hint.workspaceId, kind, outcome: outcome.kind,
         ok: outcome.kind === "result" ? outcome.result.ok : undefined, reason: outcome.kind === "needs-full" ? outcome.reason : undefined }), () => undefined);
@@ -119,6 +127,11 @@ async function run(command) {
   }
   if (command.type === "query") query(command);
   if (command.type === "cancel-query") queries.get(command.name)?.abort();
+  if (command.type === "release-builders") {
+    for (const child of heldBuilders) child.kill("SIGCONT");
+    record({ type: "builders-released", pids: [...heldBuilders].map(child => child.pid) });
+    heldBuilders.clear();
+  }
   // Only this process's reference: its workers keep theirs (fd4), so the group still holds the lock.
   if (command.type === "close-lock") { closeSync(4); record({ type: "lock-closed" }); }
   if (command.type === "open-static") {

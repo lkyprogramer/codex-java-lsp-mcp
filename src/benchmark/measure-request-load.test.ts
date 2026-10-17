@@ -17,7 +17,14 @@ test("K29 request-path load passes every sample through the request view, the qu
   for (const step of [...steps, withUpdates]) {
     assert.equal(step.errors, 0, JSON.stringify(step.rawLatencies.filter(row => row.error)));
     assert.equal(step.settled, true);
-    assert.equal(step.scopeStates.READY, step.requests, JSON.stringify(step.scopeStates));
+    const detail = JSON.stringify({ step: step === withUpdates ? `${step.concurrency}+updates` : step.concurrency, scopeStates: step.scopeStates, stopReasons: step.stopReasons });
+    if (step === withUpdates) {
+      // Edits land while requests hold views: PARTIAL is correct only when the edits themselves caused it.
+      assert.equal((step.scopeStates.READY ?? 0) + (step.scopeStates.PARTIAL ?? 0), step.requests, detail);
+      assert.ok(Object.keys(step.stopReasons).every(reason => ["none", "source_changed", "changed_during_request"].includes(reason)), detail);
+    } else {
+      assert.equal(step.scopeStates.READY, step.requests, detail);
+    }
     assert.ok(step.worker.submits >= step.requests, "every public call reaches the query pool");
     assert.ok(step.worker.pids.length >= 1 && step.worker.pids.length <= MAX_QUERY_WORKERS, JSON.stringify(step.worker));
     assert.ok(step.worker.pids.every(pid => pid !== process.pid), "queries run in persistent worker processes");

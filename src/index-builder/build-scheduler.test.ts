@@ -582,7 +582,8 @@ test("owner-restart-admission-with-active-workers", { timeout: 240_000 }, async 
   const open = (rows: readonly Row[]) => rows.filter(row => row.type === "fork" && !rows.some(close => close.type === "close" && close.childPid === row.childPid));
 
   // 1. Owner A runs a real full and two stalled real queries; a third query waits for a worker slot.
-  const a = await fixtures.createOwnerFixture(t, { route: "direct", entry: HARNESS_ENTRY, scheduler: settings });
+  // The big full is held (stopped) until just before the fault: it is active there however fast the build is.
+  const a = await fixtures.createOwnerFixture(t, { route: "direct", entry: HARNESS_ENTRY, scheduler: { ...settings, holdFullBuilds: ["big"] } });
   owners.push(a);
   const readyA = await a.ready();
   await send(a, { type: "open-static" });
@@ -624,7 +625,10 @@ test("owner-restart-admission-with-active-workers", { timeout: 240_000 }, async 
   recordsA = await a.records();
   const oldWorkers = open(recordsA);
   const bigBaseBeforeFault = recordsA.some(row => row.type === "build-complete" && row.workspaceId === "big" && row.ok === true);
+  assert.equal(bigBaseBeforeFault, false, "the held big full cannot have completed before the fault");
   assert.ok(oldWorkers.some(row => row.role === "builder") && oldWorkers.filter(row => row.role === "query").length === 2, "active builder and queries at the fault");
+  await send(a, { type: "release-builders" });
+  assert.ok((await a.records()).some(row => row.type === "builders-released" && row.pids.length === 1), "the held big full runs again before the fault");
   const faultAt = epochNow();
   process.kill(readyA.pid, "SIGKILL");
   await fixtures.eventually(() => [readyA.pid, ...oldWorkers.map(row => row.childPid)].every(pid => !fixtures.processAlive(pid)), 10_000);
