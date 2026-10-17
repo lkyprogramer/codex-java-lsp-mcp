@@ -22,6 +22,8 @@ import {
   fingerprintTreatment,
   FORMAL_REQUEST_DEADLINE_MS,
   MATRIX_PROJECTS,
+  P95_CONTRACT_STRICT,
+  P95_STRICT_RATIO,
   parseEnvAssignment,
   VERIFIER_VERSION,
   verifyMatrix
@@ -234,7 +236,8 @@ async function main() {
         baselineRevision: runtimes.old.commit,
         goldenSchema: "java-intelligence-v32-range-holdout-v2",
         pReadTolerance: 0.02,
-        p95AbsoluteSlackMs: 50,
+        // MAC-08C: new runs are judged by the strict ratio only; the 50 ms slack is a historical contract.
+        p95ContractVersion: P95_CONTRACT_STRICT,
         taskBlockingBaseline: "attempt-or-derived-attribution",
         ...(envLock ? { envLock } : {})
       },
@@ -350,7 +353,8 @@ async function main() {
       manifestFile: manifest.file,
       expectedRuns: cli.runs,
       p95Limit: cli.p95Limit,
-      summaryFile: path.join(outputDir, "matrix-summary.json")
+      summaryFile: path.join(outputDir, "matrix-summary.json"),
+      requireP95Contract: P95_CONTRACT_STRICT
     });
     printResult(result);
     if (!result.passed) process.exitCode = 1;
@@ -927,6 +931,9 @@ export function parseCli(args) {
     && fingerprintTreatment(oldTreatment) === fingerprintTreatment(newTreatment)) {
     throw new Error("env-locked-same-tree requires different old/new treatments");
   }
+  const p95Limit = numberOption(options.get("--p95-limit"), P95_STRICT_RATIO, "--p95-limit");
+  // The strict p95 contract fixes the ratio: a looser --p95-limit cannot be run under it.
+  if (!flags.has("--help") && p95Limit !== P95_STRICT_RATIO) throw new Error(`--p95-limit must be ${P95_STRICT_RATIO} under ${P95_CONTRACT_STRICT}`);
   return {
     help: flags.has("--help"),
     keepWorktrees: flags.has("--keep-worktrees"),
@@ -935,7 +942,7 @@ export function parseCli(args) {
     baseline: required(options.get("--baseline") || process.env.THREE_REPO_BASELINE_SHA, "--baseline"),
     outputDir: required(options.get("--output-dir"), "--output-dir"),
     runs: numberOption(options.get("--runs"), 5, "--runs"),
-    p95Limit: numberOption(options.get("--p95-limit"), 1.25, "--p95-limit"),
+    p95Limit,
     comparisonPolicy,
     oldTreatment,
     newTreatment,
@@ -1007,9 +1014,12 @@ function printResult(result) {
     oldPRead: project.old.pRead.toFixed(4),
     newPRead: project.new.pRead.toFixed(4),
     newRReadMust: project.new.rReadMust.toFixed(4),
-    p95Ratio: project.delta.p95Ratio.toFixed(3),
+    p95Ratio: project.delta.p95Ratio === null ? "n/a" : project.delta.p95Ratio.toFixed(3),
+    p95Policy: project.p95Contract.contractVersion,
+    p95: project.p95Contract.status,
     gate: project.passed ? "PASS" : "FAIL"
   })));
+  console.log(`status: ${result.status}`);
   console.log(`summary: ${result.summaryFile}`);
   if (result.warnings.length > 0) console.warn(`warnings:\n${result.warnings.join("\n")}`);
 }

@@ -54,13 +54,36 @@ export function testEvidence(result, pattern) {
   return { status: passed ? "PASS" : "FAIL", selected, exitCode: result.exitCode, timedOut: result.timedOut };
 }
 
+/** MAC-08C: K29 is measured on the public request path only (measure-request-load.ts). */
+export const K29_REQUEST_PROTOCOL = "k29-request-path-v1";
+
 export function loadEvidenceGate(report) {
   const steps = report?.steps ?? [];
   const peak = steps.find(step => step.concurrency === 20);
   const all = [...steps, ...(report?.withUpdates ? [report.withUpdates] : [])];
   const complete = all.length >= 3 && peak?.requests >= 100 && all.every(step => step.settled && step.worker.queuePeak <= 32 && step.requests > 0);
+  // The load must pass the request view, the query pool (IPC workers) and previews; a report from the
+  // retired in-process SQL driver (protocol p3-capacity-v1) cannot stand in for it.
+  const requestPath = report?.protocol === K29_REQUEST_PROTOCOL && all.length > 0
+    && all.every(step => step.errors === 0 && step.worker.submits >= step.requests && step.worker.pids?.length >= 1 && step.previews > 0)
+    && report.withUpdates?.publishes >= 1;
   const slo = all.length > 0 && all.every(step => Number.isFinite(step.latencyMs?.p95) && step.latencyMs.p95 <= 150 && Number.isFinite(step.eventLoopDelayMs?.p95) && step.eventLoopDelayMs.p95 <= 20);
-  return { status: complete && slo ? "PASS" : "FAIL", mechanismPass: !!complete, performancePass: slo, warmStaticP95LimitMs: 150, eventLoopP95LimitMs: 20, steps: all };
+  return { status: complete && requestPath && slo ? "PASS" : "FAIL", protocol: report?.protocol ?? null, mechanismPass: !!complete, requestPathPass: !!requestPath, performancePass: slo, warmStaticP95LimitMs: 150, eventLoopP95LimitMs: 20, steps: all };
+}
+
+/**
+ * Exit status and summary for a run. With --cases, unselected contracts stay NOT_RUN: the run passes
+ * when every selected contract passed, but it never claims the full K set.
+ */
+export function contractOutcome(rows, selected, candidateDrift = false) {
+  const chosen = rows.filter(row => selected.includes(row.id));
+  const summary = Object.fromEntries(["PASS", "FAIL", "BLOCKED_ENV", "NOT_RUN"].map(state => [state, rows.filter(row => row.status === state).length]));
+  const selection = chosen.length === rows.length ? "all" : "selected";
+  const selectedPass = chosen.length > 0 && chosen.every(row => row.status === "PASS");
+  return {
+    exitCode: !candidateDrift && selectedPass ? 0 : 1,
+    summary: { ...summary, selection, selected: chosen.map(row => row.id), selectedPass, allContractsPass: selection === "all" && selectedPass && !candidateDrift }
+  };
 }
 
 export function acceptJdtEvidence(payload, identity, id) {
@@ -128,17 +151,17 @@ async function main(argv) {
       if (row.id === "K27") row.scope = "disabled production integration: lexical remains usable, zero fetches; no nonexistent automatic dense fallback is claimed";
     } else if (contract.id === "K29") {
       const out = path.join(output, "raw", "load");
-      const args = ["dist/benchmark/measure-query-load.js", "--files", "1000", "--samples", "100", "--steps", "1,5,20", "--output", out];
-      const result = await execute(args, 180000);
+      const args = ["dist/benchmark/measure-request-load.js", "--files", "1000", "--samples", "100", "--steps", "1,5,20", "--output", out];
+      const result = await execute(args, 600000);
       row.evidence.push(evidence("raw/K29.stdout.log", result.stdout), evidence("raw/K29.stderr.log", result.stderr));
-      const reportPath = path.join(out, "query-load-report.json");
+      const reportPath = path.join(out, "query-request-load-report.json");
       if (result.exitCode !== 0 || !existsSync(reportPath)) Object.assign(row, { status: "FAIL", exitCode: result.exitCode });
       else {
         Object.assign(row, loadEvidenceGate(JSON.parse(readFileSync(reportPath, "utf8"))));
-        row.evidence.push({ path: "raw/load/query-load-report.json", sha256: sha(readFileSync(reportPath)) });
+        row.evidence.push({ path: "raw/load/query-request-load-report.json", sha256: sha(readFileSync(reportPath)) });
       }
       row.command = [process.execPath, ...args];
-      row.scope = "fixed generated 1000-file corpus; measured here, not an all-repository capacity claim";
+      row.scope = "fixed generated 1000-file corpus through the public request path; measured here, not an all-repository capacity claim";
     } else if (contract.id === "K26" || contract.id === "K28") {
       const input = value("--jdt-evidence");
       if (!input) { row.status = "BLOCKED_ENV"; row.reason = "real JDT evidence not provided"; }
@@ -153,8 +176,9 @@ async function main(argv) {
   }
   const after = candidateIdentity();
   const candidateDrift = before.sourceDigest !== after.sourceDigest;
-  const result = { schema: "java-specialist-k-contract-results/v1", candidateIdentity: before, candidateDrift, generatedAt: new Date().toISOString(), contracts: rows, summary: Object.fromEntries(["PASS", "FAIL", "BLOCKED_ENV", "NOT_RUN"].map(state => [state, rows.filter(row => row.status === state).length])) };
+  const outcome = contractOutcome(rows, selected, candidateDrift);
+  const result = { schema: "java-specialist-k-contract-results/v1", candidateIdentity: before, candidateDrift, generatedAt: new Date().toISOString(), contracts: rows, summary: outcome.summary };
   writeFileSync(path.join(output, "k-contract-results.json"), JSON.stringify(result, null, 2) + "\n");
-  if (candidateDrift || rows.some(row => row.status !== "PASS")) process.exitCode = 1;
+  process.exitCode = outcome.exitCode;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main(process.argv.slice(2)).catch(error => { console.error(error.message); process.exitCode = 2; });
