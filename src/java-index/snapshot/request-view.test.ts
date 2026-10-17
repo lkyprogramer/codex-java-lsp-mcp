@@ -269,6 +269,13 @@ test("symbol-id-survives-unrelated-publish", { timeout: 180_000 }, async t => {
   const issued = await request(ctx, ctx.repo, 10_000, view => view.query({ op: "symbolIdAt", args: { workspaceId: workspace.workspaceId, relativePath: serviceRel, line: 18, column: 17 } })).run;
   assert.ok(issued?.startsWith("jsym:mac1:"), `symbolId ${issued}`);
   await edit(ctx, ctx.repo, orderRel, text => text.replace("class Order {", "class Order {\n  static final int UNRELATED = 1;"));
+  // Prepare runs before the one acquire: a request right after a hint either waits for the round (FRESH, new
+  // snapshot) or spends its whole prepare cap and then serves the old binding as STALE; never STALE at once.
+  const prepared = await settledWithin(request(ctx, ctx.repo, 10_000, async view => view.labels), "prepare-after-hint");
+  const preparedMs = evidence.at(-1)!.elapsedMs as number;
+  assert.ok(prepared.ok);
+  if (prepared.ok && prepared.value.state === "FRESH") assert.notEqual(prepared.value.snapshotId, first.snapshotId, "FRESH after a hint is the new publish");
+  else assert.ok(preparedMs >= 900, `served STALE after ${preparedMs.toFixed(0)} ms without waiting for the round`);
   await until(() => ctx.owner.store.binding(workspace.workspaceId)!.snapshotId !== first.snapshotId && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, "unrelated publish", 120_000);
   const later = await request(ctx, ctx.repo, 10_000, async view => ({ labels: view.labels,
     resolved: await view.query({ op: "resolveSymbol", args: { workspaceId: workspace.workspaceId, symbolId: issued! } }),
@@ -314,4 +321,19 @@ test("a snapshot with a broken file serves PARTIAL coverage, not a confident neg
   assert.ok(outcome.status.coverage.some(entry => entry.failedFiles > 0 || entry.state !== "COMPLETE"), JSON.stringify(outcome.status.coverage));
   assert.equal(outcome.missing.state, "UNRESOLVED");
   assert.notEqual(outcome.missing.state === "UNRESOLVED" && outcome.missing.coverage, "COMPLETE");
+});
+
+test("owner stop is not held by a workspace start whose change source never comes up", { timeout: 30_000 }, async t => {
+  const ctx = await setup(t);
+  (ctx.owner.options as { trackerSource?: (root: string) => TrackerSourceFactory }).trackerSource = () => () => new Promise(() => {});
+  const stalled = ctx.owner.workspace(ctx.repo);
+  stalled.catch(() => undefined);
+  await delay(50);
+  const started = performance.now();
+  await ctx.owner.stop();
+  const elapsed = performance.now() - started;
+  evidence.push({ test: "stop-with-stalled-start", elapsedMs: elapsed });
+  assert.ok(elapsed < 2000, `stop took ${elapsed.toFixed(0)} ms`);
+  assert.equal(ctx.owner.peek(ctx.repo), undefined);
+  await assert.rejects(ctx.owner.workspace(ctx.repo), /index owner stopped/);
 });

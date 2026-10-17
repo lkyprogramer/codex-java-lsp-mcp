@@ -122,7 +122,12 @@ export class IndexOwner {
     if (running) return Promise.resolve(running);
     const pending = this.starting.get(canonicalRoot);
     if (pending) return pending;
-    const started = WorkspaceIndex.start(this, canonicalRoot).then(workspace => {
+    const started = WorkspaceIndex.start(this, canonicalRoot).then(async workspace => {
+      // A start that outlived stop() is not adopted: its tracker is stopped here instead.
+      if (this.stopped) {
+        await workspace.stop();
+        throw new JavaIntelligenceError("INDEX_PARTIAL", "index owner stopped");
+      }
       this.workspaces.set(canonicalRoot, workspace);
       this.byId.set(workspace.workspaceId, workspace);
       return workspace;
@@ -188,9 +193,10 @@ export class IndexOwner {
     if (this.stopped) return;
     this.stopped = true;
     if (this.reclaimTimer) clearTimeout(this.reclaimTimer);
-    await Promise.allSettled([...this.starting.values()]);
-    await Promise.all(this.list().map(workspace => workspace.stop()));
-    await Promise.all([this.scheduler.stop(), this.pool.stop()]);
+    // Not awaited: a start whose change source never comes up must not hold stop (it stops itself when it lands).
+    for (const pending of this.starting.values()) pending.catch(() => undefined);
+    // Together: a round waiting on a builder or a query ends when the scheduler and pool stop.
+    await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop()]);
   }
 }
 
