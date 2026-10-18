@@ -452,6 +452,68 @@ test("a per-call budget or signal only narrows the request's own", { timeout: 18
   assert.equal(code(aborted), "CANCELLED", "the request's cancel reaches a read that passed its own signal");
 });
 
+test("a snapshot client reads each file bundle once and serves it frozen across requests", { timeout: 180_000 }, async t => {
+  const fetches: string[][] = [];
+  const ctx = await setup(t, { queryTestBlockMs: request => {
+    if (request.op === "files") fetches.push([...(request as QueryRequest<"files">).args.relativePaths]);
+    return undefined;
+  } });
+  await bound(ctx);
+  const absentRel = "src/main/java/demospring/Absent.java", userRel = "src/main/java/a/User.java";
+  const service = path.join(ctx.repo, serviceRel), order = path.join(ctx.repo, orderRel), absent = path.join(ctx.repo, absentRel), user = path.join(ctx.repo, userRel);
+  const client = await request(ctx, ctx.repo, 20_000, async view => clientFor(view, await view.snapshotStatus())).run;
+  const budget = () => ({ budget: DeadlineBudget.fromTimeout(10_000) });
+  const first = await request(ctx, ctx.repo, 20_000, async () => ({
+    both: await client.queryFiles([service, order], budget()),
+    again: await client.queryFiles([order, absent, service, order], budget()),
+    absentAgain: await client.queryFiles([absent], budget())
+  })).run;
+  assert.deepEqual(first.both.map(bundle => bundle.file.relativePath), [serviceRel, orderRel]);
+  // Request order and duplicates are kept; a path the snapshot does not hold is omitted, as an uncached read omits it.
+  assert.deepEqual(first.again.map(bundle => bundle.file.relativePath), [orderRel, serviceRel, orderRel]);
+  assert.equal(first.again[1], first.both[0], "the held bundle is reused, not fetched again");
+  assert.deepEqual(first.absentAgain, []);
+  assert.deepEqual(fetches, [[serviceRel, orderRel], [absentRel]], "only paths not yet held reach a query worker");
+  // Production keeps one client per snapshot across requests: a later request reuses the same bundle.
+  const later = await request(ctx, ctx.repo, 20_000, async () => client.queryFiles([service], budget())).run;
+  assert.equal(later[0], first.both[0]);
+  assert.equal(fetches.length, 2);
+  const shared = later[0]!;
+  assert.ok(Object.isFrozen(shared) && Object.isFrozen(shared.file) && Object.isFrozen(shared.methods) && Object.isFrozen(shared.methods[0]));
+  assert.throws(() => { (shared.methods as unknown[]).push({}); }, TypeError, "a caller cannot corrupt the bundle other requests share");
+  // A held bundle is still refused without a live budget or after a cancel, as an uncached read is.
+  await assert.rejects(client.queryFiles([service]), (error: JavaIntelligenceError) => error.code === "INVALID_INPUT");
+  const expired = DeadlineBudget.fromTimeout(1);
+  await delay(5);
+  await assert.rejects(client.queryFiles([service], { budget: expired }), (error: JavaIntelligenceError) => error.code === "DEADLINE_EXCEEDED");
+  await assert.rejects(client.queryFiles([service], { ...budget(), signal: AbortSignal.abort() }), (error: JavaIntelligenceError) => error.code === "CANCELLED");
+  // Bounded by facts: past the bound the least recently used bundle goes, and one larger than the bound is never held.
+  const facts = (bundle: typeof shared) => 1 + bundle.types.length + bundle.fields.length + bundle.methods.length + bundle.edges.length;
+  const sizes = first.both.map(facts);
+  const userFacts = facts((await request(ctx, ctx.repo, 20_000, async () => client.queryFiles([user], budget())).run)[0]!);
+  fetches.length = 0;
+  assert.ok(sizes[0]! > sizes[1]! && sizes[1]! >= userFacts, `OrderService outweighs Order, Order outweighs a.User: ${sizes} ${userFacts}`);
+  const bounded = await request(ctx, ctx.repo, 20_000, async view => {
+    const status = snapshotIndexStatus(await view.snapshotStatus(), view.snapshotId!);
+    const capped = (cap: number) => new SnapshotJavaIndexClient(view.owner, view.snapshotId!, view.canonicalRoot, status, probeLayout(view.canonicalRoot), cap);
+    const one = capped(Math.max(...sizes));
+    fetches.length = 0;
+    for (const file of [service, order, order, service]) await one.queryFiles([file], budget());
+    const oneFetches = fetches.splice(0);
+    // Room for OrderService and Order: a hit refreshes OrderService, so the third file evicts Order instead.
+    const recent = capped(sizes[0]! + sizes[1]!);
+    for (const file of [service, order, service, user, service]) await recent.queryFiles([file], budget());
+    const recentFetches = fetches.splice(0);
+    const small = capped(sizes[1]!);
+    for (const file of [order, service, service, order]) await small.queryFiles([file], budget());
+    return { oneFetches, recentFetches, smallFetches: fetches.splice(0) };
+  }).run;
+  assert.deepEqual(bounded.oneFetches, [[serviceRel], [orderRel], [serviceRel]], "holding one bundle at a time evicts the older one");
+  assert.deepEqual(bounded.recentFetches, [[serviceRel], [orderRel], [userRel]], "the least recently used bundle is the one evicted");
+  assert.deepEqual(bounded.smallFetches, [[orderRel], [serviceRel], [serviceRel]], "a bundle larger than the bound is fetched every time and never evicts what fits");
+  evidence.push({ test: "file-bundle-cache", sizes, fetches: bounded });
+});
+
 test("a handler that outlives its deadline loses its view and its snapshot lease", { timeout: 180_000 }, async t => {
   const ctx = await setup(t);
   const { workspace, binding: first } = await bound(ctx);

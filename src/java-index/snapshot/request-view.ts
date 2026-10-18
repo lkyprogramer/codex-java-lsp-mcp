@@ -34,6 +34,25 @@ import type { SnapshotLease } from "./snapshot-store.js";
 
 const requestDefaults = new AsyncLocalStorage<JavaIndexRequestOptions>();
 
+/**
+ * Facts (types, fields, methods, edges) one snapshot client keeps decoded across requests: an IPC copy
+ * of a large bundle costs more than its query. About 2.8 KiB of heap per fact, so roughly 45 MiB.
+ */
+export const FILE_BUNDLE_CACHE_FACTS = 16_384;
+
+function factCount(bundle: JavaFileBundle): number {
+  return 1 + bundle.types.length + bundle.fields.length + bundle.methods.length + bundle.edges.length;
+}
+
+/** A cached bundle is shared by every later caller, so a caller that mutated it fails loudly instead of corrupting the others. */
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
 /** Snapshot reads made inside `action` without explicit options use this request's budget and signal. */
 export function withRequestDefaults<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T> {
   return requestDefaults.run(options, action);
@@ -225,8 +244,13 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
     readonly snapshotId: string,
     private readonly repoRoot: string,
     private readonly snapshot: JavaIndexStatus,
-    private readonly layout: LayoutContext
+    private readonly layout: LayoutContext,
+    private readonly bundleCacheFacts = FILE_BUNDLE_CACHE_FACTS
   ) {}
+
+  /** Least recently used first; `null` is a path the snapshot does not hold. */
+  private readonly bundles = new Map<string, JavaFileBundle | null>();
+  private bundleFacts = 0;
 
   private run<K extends QueryOpName>(request: QueryRequest<K>, options?: JavaIndexRequestOptions): Promise<QueryOps[K]["result"]> {
     const { budget, signal } = narrowed(requestDefaults.getStore(), options);
@@ -283,9 +307,42 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
     if (typeIds.length === 0) return [];
     return this.run({ op: "methodsWithParameterTypes", args: { typeIds, limit } }, options);
   }
+  /** The snapshot is sealed, so a bundle read once is reused; only paths not yet held go to a query worker. */
   async queryFiles(files: string[], options?: JavaIndexRequestOptions): Promise<JavaFileBundle[]> {
     const relativePaths = files.map(file => this.toRelative(file)).filter((value): value is string => value !== undefined);
-    return this.run({ op: "files", args: { relativePaths } }, options);
+    const missing = [...new Set(relativePaths.filter(relativePath => !this.bundles.has(relativePath)))];
+    const fetched = new Map<string, JavaFileBundle | null>(missing.map(relativePath => [relativePath, null]));
+    // A request without a live budget is refused exactly as an uncached read would be.
+    const { budget, signal } = narrowed(requestDefaults.getStore(), options);
+    if (missing.length > 0 || !budget || budget.expired() || signal?.aborted) {
+      for (const bundle of await this.run({ op: "files", args: { relativePaths: missing } }, options)) fetched.set(bundle.file.relativePath, deepFreeze(bundle));
+    }
+    const result: JavaFileBundle[] = [];
+    for (const relativePath of relativePaths) {
+      const bundle = fetched.has(relativePath) ? fetched.get(relativePath)! : this.touchBundle(relativePath);
+      if (bundle) result.push(bundle);
+    }
+    for (const [relativePath, bundle] of fetched) this.keepBundle(relativePath, bundle);
+    return result;
+  }
+
+  private touchBundle(relativePath: string): JavaFileBundle | null {
+    const bundle = this.bundles.get(relativePath) ?? null;
+    this.bundles.delete(relativePath);
+    this.bundles.set(relativePath, bundle);
+    return bundle;
+  }
+
+  private keepBundle(relativePath: string, bundle: JavaFileBundle | null): void {
+    const facts = bundle ? factCount(bundle) : 1;
+    if (facts > this.bundleCacheFacts || this.bundles.has(relativePath)) return;
+    this.bundles.set(relativePath, bundle);
+    this.bundleFacts += facts;
+    for (const [oldest, evicted] of this.bundles) {
+      if (this.bundleFacts <= this.bundleCacheFacts) break;
+      this.bundles.delete(oldest);
+      this.bundleFacts -= evicted ? factCount(evicted) : 1;
+    }
   }
   /** Preview: live bytes are served only when their hash equals the held snapshot's; otherwise an explicit gap. */
   async queryReadRanges(requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>, options?: JavaIndexRequestOptions): Promise<IndexedReadRangeResult[]> {
