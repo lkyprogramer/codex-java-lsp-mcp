@@ -310,7 +310,10 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
   /** The snapshot is sealed, so a bundle read once is reused; only paths not yet held go to a query worker. */
   async queryFiles(files: string[], options?: JavaIndexRequestOptions): Promise<JavaFileBundle[]> {
     const relativePaths = files.map(file => this.toRelative(file)).filter((value): value is string => value !== undefined);
-    const missing = [...new Set(relativePaths.filter(relativePath => !this.bundles.has(relativePath)))];
+    // Hits are taken before the fetch: a concurrent call may evict them while this one waits.
+    const held = new Map<string, JavaFileBundle | null>();
+    for (const relativePath of relativePaths) if (!held.has(relativePath) && this.bundles.has(relativePath)) held.set(relativePath, this.touchBundle(relativePath));
+    const missing = [...new Set(relativePaths.filter(relativePath => !held.has(relativePath)))];
     const fetched = new Map<string, JavaFileBundle | null>(missing.map(relativePath => [relativePath, null]));
     // A request without a live budget is refused exactly as an uncached read would be.
     const { budget, signal } = narrowed(requestDefaults.getStore(), options);
@@ -319,15 +322,16 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
     }
     const result: JavaFileBundle[] = [];
     for (const relativePath of relativePaths) {
-      const bundle = fetched.has(relativePath) ? fetched.get(relativePath)! : this.touchBundle(relativePath);
+      const bundle = held.has(relativePath) ? held.get(relativePath)! : fetched.get(relativePath)!;
       if (bundle) result.push(bundle);
     }
     for (const [relativePath, bundle] of fetched) this.keepBundle(relativePath, bundle);
     return result;
   }
 
+  /** Only for a key the cache holds: moves it to most recently used. */
   private touchBundle(relativePath: string): JavaFileBundle | null {
-    const bundle = this.bundles.get(relativePath) ?? null;
+    const bundle = this.bundles.get(relativePath) as JavaFileBundle | null;
     this.bundles.delete(relativePath);
     this.bundles.set(relativePath, bundle);
     return bundle;

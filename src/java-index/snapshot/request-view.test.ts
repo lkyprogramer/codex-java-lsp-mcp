@@ -514,6 +514,48 @@ test("a snapshot client reads each file bundle once and serves it frozen across 
   evidence.push({ test: "file-bundle-cache", sizes, fetches: bounded });
 });
 
+test("a bundle held when a call starts survives a concurrent call that evicts it", { timeout: 180_000 }, async t => {
+  const userRel = "src/main/java/a/User.java";
+  let blockUser = false;
+  const ctx = await setup(t, { queryTestBlockMs: request =>
+    blockUser && request.op === "files" && (request as QueryRequest<"files">).args.relativePaths.includes(userRel) ? 1_500 : undefined });
+  await bound(ctx);
+  const [service, order, user] = [serviceRel, orderRel, userRel].map(relative => path.join(ctx.repo, relative));
+  const budget = () => ({ budget: DeadlineBudget.fromTimeout(20_000) });
+  type Cache = { bundles: Map<string, { types: unknown[]; fields: unknown[]; methods: unknown[]; edges: unknown[] } | null>; bundleFacts: number };
+  const outcome = await request(ctx, ctx.repo, 30_000, async view => {
+    const status = snapshotIndexStatus(await view.snapshotStatus(), view.snapshotId!);
+    const probe = new SnapshotJavaIndexClient(view.owner, view.snapshotId!, view.canonicalRoot, status, probeLayout(view.canonicalRoot));
+    const facts = (bundle: { types: unknown[]; fields: unknown[]; methods: unknown[]; edges: unknown[] }) => 1 + bundle.types.length + bundle.fields.length + bundle.methods.length + bundle.edges.length;
+    const sizes = Object.fromEntries((await probe.queryFiles([service, order, user], budget())).map(bundle => [bundle.file.relativePath, facts(bundle)]));
+    // Room for OrderService alone: caching it evicts Order, which call A took as a hit before its fetch of a.User.
+    const client = new SnapshotJavaIndexClient(view.owner, view.snapshotId!, view.canonicalRoot, status, probeLayout(view.canonicalRoot), sizes[serviceRel]!);
+    await client.queryFiles([order], budget());
+    blockUser = true;
+    const a = client.queryFiles([order, user], budget());
+    await delay(300);
+    const b = await client.queryFiles([service], budget());
+    const cache = client as unknown as Cache;
+    const evictedDuringA = !cache.bundles.has(orderRel);
+    const aResult = await a;
+    blockUser = false;
+    const later = await client.queryFiles([order], budget());
+    const held = [...cache.bundles.values()].reduce((sum, bundle) => sum + (bundle ? facts(bundle) : 1), 0);
+    return { sizes, evictedDuringA, b: b.map(bundle => bundle.file.relativePath), a: aResult.map(bundle => bundle.file.relativePath),
+      later: later.map(bundle => bundle.file.relativePath), nulls: [...cache.bundles.values()].filter(bundle => bundle === null).length,
+      accounted: cache.bundleFacts, held, cap: sizes[serviceRel] };
+  }).run;
+  evidence.push({ test: "file-bundle-cache-concurrent-eviction", ...outcome });
+  assert.ok(outcome.sizes[orderRel]! <= outcome.sizes[serviceRel]!, `Order fits the OrderService-sized bound: ${JSON.stringify(outcome.sizes)}`);
+  assert.equal(outcome.evictedDuringA, true, "call B evicted Order while call A was fetching a.User");
+  assert.deepEqual(outcome.b, [serviceRel]);
+  assert.deepEqual(outcome.a, [orderRel, userRel], "a hit taken at entry is returned even after a concurrent eviction");
+  assert.deepEqual(outcome.later, [orderRel], "the evicted path is fetched again, never cached as absent");
+  assert.equal(outcome.nulls, 0);
+  assert.equal(outcome.accounted, outcome.held, "the fact count matches what the cache holds");
+  assert.ok(outcome.accounted <= outcome.cap!);
+});
+
 test("a handler that outlives its deadline loses its view and its snapshot lease", { timeout: 180_000 }, async t => {
   const ctx = await setup(t);
   const { workspace, binding: first } = await bound(ctx);
