@@ -3,7 +3,7 @@
 // output: Validation executed in a detached patched local clone with isolated caches and JDT disabled.
 // pos: Mandatory safety boundary between development validation and the user's active LSP runtime.
 import { appendFile, mkdir, rm, symlink, writeFile, readFile, realpath, lstat } from "node:fs/promises";
-import { openSync, writeSync, closeSync, writeFileSync } from "node:fs";
+import { openSync, writeSync, closeSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -166,6 +166,13 @@ function evidenceEnvironment(env) {
   return Object.fromEntries(Object.entries(env).filter(([key]) => /^(?:HOME|TMPDIR|PATH|ILV2_(?:RUN_ROOT|RUNTIME_MANIFEST|NODE_BIN|TOOLCHAINS)|JAVA_LSP_(?:ISOLATED_VALIDATION|CACHE_ROOT|SERVICE_STATE_ROOT)|GRADLE_USER_HOME|MAVEN_USER_HOME|JDTLS_(?:BIN|DATA_DIR|LOG_DIR))$/.test(key)));
 }
 
+/** Readers poll the record while the command runs: replace it whole, never truncate it in place. */
+function writeCommandRecord(file, value) {
+  const temporary = `${file}.${process.pid}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  renameSync(temporary, file);
+}
+
 export async function recordValidationCommand(directory, command, args, { cwd, env }, index = 0) {
   const fixtureEvidence = path.join(directory, `${index}.evidence`);
   await mkdir(fixtureEvidence);
@@ -176,12 +183,12 @@ export async function recordValidationCommand(directory, command, args, { cwd, e
   const stdoutFd = openSync(outputFile, "wx"), stderrFd = openSync(errorFile, "wx");
   const running = { status: "IN_PROGRESS", argv: [command, ...args], cwd, fixtureEvidence, environment: evidenceEnvironment(env), startedAt,
     stdout: `${index}.stdout.txt`, stderr: `${index}.stderr.txt`, pid: null, exitCode: null };
-  await writeJson(path.join(directory, `${index}.command.json`), running);
+  writeCommandRecord(path.join(directory, `${index}.command.json`), running);
   let failure, pid;
   const outcome = await new Promise(resolve => {
     const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     pid = child.pid;
-    writeFileSync(path.join(directory, `${index}.command.json`), JSON.stringify({ ...running, pid: pid ?? null }) + "\n");
+    writeCommandRecord(path.join(directory, `${index}.command.json`), { ...running, pid: pid ?? null });
     child.stdout.on("data", chunk => { writeSync(stdoutFd, chunk); process.stdout.write(chunk); });
     child.stderr.on("data", chunk => { writeSync(stderrFd, chunk); process.stderr.write(chunk); });
     child.once("error", error => { failure = error.message; });
@@ -193,7 +200,7 @@ export async function recordValidationCommand(directory, command, args, { cwd, e
     endedAt: new Date().toISOString(), elapsedMs: performance.now() - started, ...outcome,
     error: failure ?? null, stdout: `${index}.stdout.txt`, stderr: `${index}.stderr.txt`,
     stdoutSha256: hash(output), stderrSha256: hash(errors) };
-  await writeJson(path.join(directory, `${index}.command.json`), record);
+  writeCommandRecord(path.join(directory, `${index}.command.json`), record);
   if (failure || outcome.exitCode !== 0) throw Object.assign(new Error(failure ?? `${command} exited with ${outcome.exitCode} (${outcome.signal ?? "no signal"})`), { commandRecord: record });
   return record;
 }
