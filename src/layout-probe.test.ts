@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -61,4 +61,32 @@ test("probeLayout never descends linked-worktree containers", async () => {
 
   assert.ok(layout.sourceRoots.some(item => item.relativePath === path.join("modules", "live", "src", "main", "java")));
   assert.equal(layout.sourceRoots.some(item => item.relativePath.startsWith(`${path.join(".worktrees")}${path.sep}`)), false);
+});
+
+test("probeLayout reports roots reached through a symlink instead of walking them", async () => {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "java-lsp-layout-symlink-")));
+  const root = path.join(base, "repo");
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await mkdir(path.join(root, "shared", "java", "demo"), { recursive: true });
+  await mkdir(path.join(base, "outside", "java"), { recursive: true });
+  await mkdir(path.join(base, "outside", "module", "src", "main", "resources"), { recursive: true });
+  for (const module of ["inrepo", "alias", "ext"]) await mkdir(path.join(root, module, "src", "main"), { recursive: true });
+  await symlink("../../../shared/java", path.join(root, "inrepo", "src", "main", "java"));
+  await symlink("../../../src/main/java", path.join(root, "alias", "src", "main", "java"));
+  await symlink(path.join(base, "outside", "java"), path.join(root, "ext", "src", "main", "java"));
+  // A symlinked ancestor hides the link from an lstat of the root itself.
+  await symlink(path.join(base, "outside", "module"), path.join(root, "linkedmod"));
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+
+  const layout = probeLayout(root, "generic-java");
+
+  assert.deepEqual(layout.sourceRoots.map(item => item.relativePath), [path.join("src", "main", "java")]);
+  assert.deepEqual(layout.resourceRoots, []);
+  assert.deepEqual(layout.symlinkedRoots, [
+    path.join("alias", "src", "main", "java"),
+    path.join("ext", "src", "main", "java"),
+    path.join("inrepo", "src", "main", "java"),
+    path.join("linkedmod", "src", "main", "resources")
+  ]);
+  assert.equal(probeLayout(path.join(base, "outside", "module")).symlinkedRoots, undefined, "a plain layout reports no symlinked root");
 });

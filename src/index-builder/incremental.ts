@@ -36,7 +36,7 @@ import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
 import { deleteResourceScan, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import { symId } from "../java-index/sql/sym.js";
 import { attachWorkspaceStat, deleteStats, observedStats, readStats, recordStats, statUnchanged, type StatRow } from "../java-index/sql/workspace-stat.js";
-import { COVERAGE_GAP, readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta } from "./progress.js";
+import { COVERAGE_GAP, coverageRoots, readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta, type CoverageRoots } from "./progress.js";
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
@@ -578,7 +578,7 @@ function listMyBatisResources(db: IndexDatabase): MyBatisMapperResourceFacts[] {
   return out;
 }
 
-function finishIndex(db: IndexDatabase, generation: number, roots: readonly string[]): void {
+function finishIndex(db: IndexDatabase, generation: number, roots: CoverageRoots): void {
   writeMeta(db,"pipelineComplete","1");
   publishIndexCoverage(db, generation, roots);
 }
@@ -644,7 +644,7 @@ async function applyParsedRefresh(
   db: IndexDatabase,
   repoRoot: string,
   generation: number,
-  roots: readonly string[],
+  roots: CoverageRoots,
   deleted: readonly string[],
   bundles: readonly JavaFileBundle[],
   discovered?: readonly { sourceRoot: string }[],
@@ -794,7 +794,7 @@ async function applyRefresh(
   stages?: PipelineMetrics
 ): Promise<void> {
   const layout = probeLayout(repoRoot);
-  const roots = layout.sourceRoots.map(root => root.relativePath);
+  const roots = coverageRoots(layout);
   const deleted: string[] = [];
   for (const input of deletedInputs) deleted.push((await resolveInput(repoRoot, input)).rel);
   const existing: string[] = [];
@@ -869,7 +869,7 @@ async function applyResources(
   const layout = probeLayout(repoRoot);
   if(changedInputs.length===0 && deletedInputs.length===0) {
     // Nothing to apply; a job that publishes still publishes its generation, as an empty refresh does.
-    if (options.publish !== false) sqlStage(db,options.stages,()=>finishIndex(db, generation, layout.sourceRoots.map(root => root.relativePath)));
+    if (options.publish !== false) sqlStage(db,options.stages,()=>finishIndex(db, generation, coverageRoots(layout)));
     return;
   }
   writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, changedInputs.length + deletedInputs.length) });
@@ -935,7 +935,7 @@ async function applyResources(
     for (const relativePath of deletePaths) replaceResourceDocuments(db, relativePath, undefined);
     for (const write of writes) replaceResourceDocuments(db, write.relativePath, write.facts);
     if (options.stages) {options.stages.graphSearch.files+=affected;options.stages.graphSearch.elapsedMs+=performance.now()-graphStarted;}
-    if (options.publish !== false) finishIndex(db, generation, layout.sourceRoots.map(root => root.relativePath));
+    if (options.publish !== false) finishIndex(db, generation, coverageRoots(layout));
   });
   await options.stages?.onStage?.("resource-graph-search");
 }
@@ -1000,7 +1000,7 @@ export async function changedResources(
 
 async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number, stages?: PipelineMetrics): Promise<void> {
   const layout = probeLayout(repoRoot);
-  const roots = layout.sourceRoots.map(root => root.relativePath);
+  const roots = coverageRoots(layout);
   writeBuildProgress(db, { phase: "declare", done: 0, total: 1 });
   // XML first, unpublished: the Java pass below is what publishes this
   // generation, so no reader sees generation N with the old XML evidence.
@@ -1060,7 +1060,7 @@ async function applyJavaReconcile(
   repoRoot: string,
   generation: number,
   layout: LayoutContext,
-  roots: readonly string[],
+  roots: CoverageRoots,
   stages?: PipelineMetrics,
   input?: JavaDeltaCapture
 ): Promise<void> {

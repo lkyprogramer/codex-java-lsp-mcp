@@ -1,6 +1,7 @@
 import { computeExtractorVersion } from "../java-index/build-fingerprint.js";
 import type { SourceRootCoverage } from "../java-index/index-types.js";
 import { prepareCached, type IndexDatabase } from "../java-index/sql/driver.js";
+import type { LayoutContext } from "../layout-probe.js";
 
 export type BuildPhase = "declare" | "resolve";
 
@@ -105,11 +106,18 @@ export function clearIndexData(db: IndexDatabase): void {
 /** Set when a job failed after its changes were lost; only a full traversal clears it. */
 export const COVERAGE_GAP = "coverageGap";
 
+/** The roots a publish reports: the indexed source roots and the symlinked (never walked) content roots. */
+export type CoverageRoots = { indexed: readonly string[]; symlinked: readonly string[] };
+
+export function coverageRoots(layout: Pick<LayoutContext, "sourceRoots" | "symlinkedRoots">): CoverageRoots {
+  return { indexed: layout.sourceRoots.map(root => root.relativePath), symlinked: layout.symlinkedRoots ?? [] };
+}
+
 /** A full source traversal, not a partial watcher update, establishes coverage. */
 export function publishIndexCoverage(
   db: IndexDatabase,
   generation: number,
-  roots: readonly string[],
+  { indexed: roots, symlinked }: CoverageRoots,
   discovered?: readonly { sourceRoot: string }[]
 ): IndexCounts {
   const previous = readSourceRootCounts(db);
@@ -137,6 +145,13 @@ export function publishIndexCoverage(
     const state = covered ? "COMPLETE" : "DEGRADED";
     upsert.run(root, state, generation);
     counts[root] = { discoveredFiles, indexedFiles, failedFiles, recoveredFiles: Number(row?.recoveredFiles ?? 0), extractorVersion: computeExtractorVersion() };
+  }
+  // Content behind a symlinked root is not indexed: a gap on every publish, full or partial.
+  for (const root of symlinked) {
+    if (counts[root]) continue;
+    complete = false;
+    upsert.run(root, "DEGRADED", generation);
+    counts[root] = { discoveredFiles: 0, indexedFiles: 0, failedFiles: 0, recoveredFiles: 0, extractorVersion: computeExtractorVersion() };
   }
   writeMeta(db, "sourceRootCounts", JSON.stringify(counts));
   writeMeta(db, "indexedGeneration", String(generation));

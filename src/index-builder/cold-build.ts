@@ -33,6 +33,7 @@ import { readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges
 import { attachWorkspaceStat, clearStats, observedStats, recordStats, type StatRow } from "../java-index/sql/workspace-stat.js";
 import {
   clearIndexData,
+  coverageRoots,
   publishIndexCoverage,
   readBuildProgress,
   readMeta,
@@ -303,7 +304,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   stages.graphSearch={files:discovered.length,javaFiles:discovered.length,elapsedMs:performance.now()-graphStart};
   await stages.onStage?.("graph-search");
 
-  const roots = layout.sourceRoots.map(root => root.relativePath);
+  const roots = coverageRoots(layout);
   const counts = sqlStage(db, stages, () => {
     const counts=publishIndexCoverage(db, generation, roots, discovered);
     writeMeta(db,"pipelineComplete","1");

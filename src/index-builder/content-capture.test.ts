@@ -15,6 +15,7 @@ import { RequestSourceReader, runStaticDiscovery } from "../discovery/query.js";
 import { close, openIndexDb } from "../java-index/sql/driver.js";
 import { ensureSchema, schemaVersionsMatch } from "../java-index/sql/schema.js";
 import { runSqlColdBuild } from "./cold-build.js";
+import { readMeta } from "./progress.js";
 import { readBundle } from "../java-index/sql/rows.js";
 const sha = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
 async function fixture() {
@@ -98,20 +99,27 @@ test("v11-facts-without-captured-signatures-are-invalidated", () => {
  });
 
 for (const kind of ["java", "resources"] as const) {
- test(`capture-rejects-${kind}-source-root-symlink-escape`, async () => {
+ // The tracker's census never follows a symlinked root, so capture must not either: the root is
+ // skipped and reported as a coverage gap. Failing instead would retry forever (NOT_READY, no label).
+ test(`capture-skips-${kind}-source-root-symlink-escape-as-a-coverage-gap`, async () => {
   const f = await fixture(); const outside = await mkdtemp(path.join(tmpdir(),"capture-outside-"));
   const db = openIndexDb(":memory:"); ensureSchema(db);
   try {
    await writeFile(f.file,"class A {}");
    await runSqlColdBuild({repoRoot:f.repo,db});
-   const source = path.join(f.repo,"src/main",kind);
+   const root = `src/main/${kind}`;
+   const source = path.join(f.repo,root);
    await rm(source,{recursive:true,force:true});
    await writeFile(path.join(outside,kind === "java" ? "A.java" : "Mapper.xml"),kind === "java" ? "class Escaped {}" : '<mapper namespace="Escaped"/>');
    await symlink(outside,source);
    const result = await applyBuilderJob({repoRoot:f.repo,db,job:{kind:"reconcile"}});
-   assert.equal(result.ok,false); assert.equal(result.censusComplete,false);
-   assert.match(result.error!,/outside repo root/);
-   assert.equal(readBundle(db,"src/main/java/A.java")?.types[0]?.simpleName,"A");
+   assert.equal(result.ok,true,result.error);
+   assert.equal(result.census?.some(row => row.relativePath.startsWith(`${root}/`) && row.state !== "deleted"),false,"nothing behind the link is captured");
+   assert.equal((db.prepare("SELECT count(*) AS n FROM type WHERE simple_name='Escaped'").get() as {n:number}).n,0,"escaped content is never indexed");
+   if (kind === "java") assert.equal(readBundle(db,"src/main/java/A.java"),undefined,"the replaced root's old facts are not claimed either");
+   else assert.equal(readBundle(db,"src/main/java/A.java")?.types[0]?.simpleName,"A","the untouched java root keeps its facts");
+   assert.equal((db.prepare("SELECT state FROM source_root_coverage WHERE root=?").get(root) as {state:string}|undefined)?.state,"DEGRADED");
+   assert.equal(readMeta(db,"buildState"),"DEGRADED");
   } finally {close(db);await rm(f.repo,{recursive:true,force:true});await rm(outside,{recursive:true,force:true});}
  });
 }

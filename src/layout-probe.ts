@@ -1,7 +1,7 @@
 // input: Java repository root plus coarse layout hint.
 // output: Detected source/resource roots for router and watcher reuse.
 // pos: Shared lightweight layout probe; falls back to current broad scan behavior.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 export type LayoutKind = "gradle-multi" | "maven-multi" | "single" | "flat-layers";
@@ -18,26 +18,55 @@ export type LayoutContext = {
   sourceRoots: SourceRootInfo[];
   resourceRoots: string[];
   broadRoots: string[];
+  /**
+   * Source/resource roots reached through a symlink: neither indexed nor tracked. The tracker's
+   * census never follows links, so discovery must not either; publishes report them as a
+   * coverage gap instead of claiming their content.
+   */
+  symlinkedRoots?: string[];
 };
 
 export function probeLayout(repoRoot: string, layoutProfile = "generic-java"): LayoutContext {
-  const sourceRoots = sourceRootInfos(repoRoot);
-  const resourceRoots = resourceRootInfos(repoRoot);
+  const linked = new Set<string>();
+  const contentRoot = (relativePath: string): boolean => {
+    if (!isDirectory(path.join(repoRoot, relativePath))) return false;
+    const symlinked = throughSymlink(repoRoot, relativePath);
+    if (symlinked) linked.add(relativePath);
+    return symlinked === false;
+  };
+  const sourceRoots = sourceRootInfos(repoRoot, contentRoot);
+  const resourceRoots = resourceRootInfos(repoRoot, contentRoot);
   return {
     layout: detectLayout(repoRoot, sourceRoots),
     layoutProfile,
     sourceRoots,
     resourceRoots,
-    broadRoots: broadRoots(repoRoot, sourceRoots)
+    broadRoots: broadRoots(repoRoot, sourceRoots),
+    ...(linked.size ? { symlinkedRoots: [...linked].sort() } : {})
   };
 }
 
-function sourceRootInfos(repoRoot: string): SourceRootInfo[] {
+/** Whether any component of `relativePath` below the repo root is a symlink; undefined if it vanished. */
+function throughSymlink(repoRoot: string, relativePath: string): boolean | undefined {
+  let current = repoRoot;
+  for (const part of relativePath.split(path.sep)) {
+    current = path.join(current, part);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return true;
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      return undefined;
+    }
+  }
+  return false;
+}
+
+function sourceRootInfos(repoRoot: string, contentRoot: (relativePath: string) => boolean): SourceRootInfo[] {
   const roots = new Map<string, SourceRootInfo>();
   const addJavaRoots = (baseRelative: string, moduleName: string) => {
     for (const sourceSet of ["main", "test"] as const) {
       const relativePath = path.join(baseRelative, "src", sourceSet, "java");
-      if (isDirectory(path.join(repoRoot, relativePath))) {
+      if (contentRoot(relativePath)) {
         roots.set(relativePath, { relativePath, module: moduleName, sourceSet });
       }
     }
@@ -49,11 +78,11 @@ function sourceRootInfos(repoRoot: string): SourceRootInfo[] {
   return [...roots.values()].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function resourceRootInfos(repoRoot: string): string[] {
+function resourceRootInfos(repoRoot: string, contentRoot: (relativePath: string) => boolean): string[] {
   const roots = new Set<string>();
   const addResourceRoot = (baseRelative: string) => {
     const relativePath = path.join(baseRelative, "src", "main", "resources");
-    if (isDirectory(path.join(repoRoot, relativePath))) {
+    if (contentRoot(relativePath)) {
       roots.add(relativePath);
     }
   };
@@ -61,7 +90,7 @@ function resourceRootInfos(repoRoot: string): string[] {
   for (const baseRelative of moduleBaseRelatives(repoRoot)) {
     addResourceRoot(baseRelative);
   }
-  if (isDirectory(path.join(repoRoot, "docs", "sql"))) {
+  if (contentRoot(path.join("docs", "sql"))) {
     roots.add(path.join("docs", "sql"));
   }
   return [...roots].sort();

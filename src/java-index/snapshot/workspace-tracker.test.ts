@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
-import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
+import { readMeta } from "../../index-builder/progress.js";
 import { close, openIndexDb } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
 import { contentManifestId } from "../sql/snapshot-manifest.js";
@@ -44,10 +45,11 @@ function fakeSource(root: () => string) {
 
 type Ctx = { base: string; repo: string; store: SnapshotStore; source: ReturnType<typeof fakeSource>; tracker: WorkspaceTracker; built: number };
 
-async function setup(options: Partial<WorkspaceTrackerOptions> = {}): Promise<Ctx> {
+async function setup(options: Partial<WorkspaceTrackerOptions> = {}, prepare?: (repo: string, base: string) => Promise<void>): Promise<Ctx> {
   const base = await realpath(await mkdtemp(path.join(tmpdir(), "workspace-tracker-")));
   const repo = path.join(base, "repo");
   await cp(fixturesRoot, repo, { recursive: true });
+  await prepare?.(repo, base);
   const { store } = await SnapshotStore.open(path.join(base, "cache"));
   const source = fakeSource(() => repo);
   const tracker = await WorkspaceTracker.start({ canonicalRoot: repo, source: source.factory, ...options });
@@ -105,6 +107,77 @@ async function cycle(ctx: Ctx, expect: { noop?: boolean; agree?: boolean } = {})
   }
   return { round, verification, binding, status: ctx.tracker.complete(round, binding) };
 }
+
+/** A cold build of the live tree into a scratch DB: the coverage and paths a publish of it claims. */
+async function builtClaims(ctx: Ctx): Promise<{ buildState?: string; coverage: Record<string, string>; paths: string[] }> {
+  const db = openIndexDb(path.join(ctx.base, `claims-${randomBytes(4).toString("hex")}.sqlite`));
+  try {
+    ensureSchema(db);
+    await runSqlColdBuild({ repoRoot: ctx.repo, db, generation: 1 });
+    const coverage = Object.fromEntries((db.prepare("SELECT root, state FROM source_root_coverage").all() as Array<{ root: string; state: string }>).map(row => [row.root, row.state]));
+    const paths = (db.prepare("SELECT path FROM file ORDER BY path").all() as Array<{ path: string }>).map(row => row.path);
+    return { buildState: readMeta(db, "buildState"), coverage, paths };
+  } finally { close(db); }
+}
+
+/**
+ * A content root reached through a symlink: the tracker census never follows links, so the
+ * builder must not either. Both skip it, agree on content, and the publish reports the gap.
+ */
+async function symlinkedRootCase(link: string, target: (repo: string, base: string) => Promise<string>): Promise<Ctx> {
+  const ctx = await setup({}, async (repo, base) => {
+    await mkdir(path.dirname(path.join(repo, link)), { recursive: true });
+    await symlink(await target(repo, base), path.join(repo, link));
+  });
+  try {
+    const first = await cycle(ctx, { noop: false });
+    assert.equal(first.status, "FRESH");
+    const claimed = [...(await readSnapshotContent(ctx.store.layout, first.binding.snapshotId)).entries.keys()];
+    assert.equal(claimed.length, MEMBERS, "only the fixture's own members are claimed");
+    const built = await builtClaims(ctx);
+    assert.equal(built.paths.some(file => file.startsWith(`${link.split("/")[0]}/`)), false, "nothing is indexed under the link");
+    assert.equal(built.coverage[link], "DEGRADED", "the symlinked root is a reported coverage gap");
+    assert.equal(built.buildState, "DEGRADED");
+    return ctx;
+  } catch (error) { await teardown(ctx); throw error; }
+}
+
+const extraJava = "package demospring;\npublic class Extra {}\n";
+
+test("symlinked-root-inside-repo-is-a-coverage-gap-not-a-false-fresh", async () => {
+  const ctx = await symlinkedRootCase("lib/src/main/java", async repo => {
+    await mkdir(path.join(repo, "shared", "java", "demospring"), { recursive: true });
+    await writeFile(path.join(repo, "shared", "java", "demospring", "Extra.java"), extraJava);
+    return "../../../shared/java";
+  });
+  try {
+    // FSEvents reports the real path, outside every content root: nothing claimed it, so FRESH stays true.
+    await writeFile(path.join(ctx.repo, "shared", "java", "demospring", "Extra.java"), extraJava.replace("{}", "{ int x; }"));
+    ctx.source.emit(FILE_MODIFIED, "shared/java/demospring/Extra.java");
+    assert.equal(ctx.tracker.status(), "FRESH");
+    assert.equal((await builtClaims(ctx)).paths.some(file => file.startsWith("shared/")), false);
+  } finally { await teardown(ctx); }
+});
+
+test("symlinked-root-aliasing-another-root-is-indexed-once", async () => {
+  const ctx = await symlinkedRootCase("alias/src/main/java", async () => "../../../src/main/java");
+  try {
+    // A java edit under the real root is a delta of that root only; the alias never appears or flaps.
+    await writeFile(path.join(ctx.repo, serviceRel), (await readFile(path.join(ctx.repo, serviceRel), "utf8")).replace("class OrderService", "class OrderService "));
+    ctx.source.emit(FILE_MODIFIED, serviceRel);
+    const next = await cycle(ctx, { noop: false });
+    assert.deepEqual([next.verification.changed, next.verification.deleted], [[serviceRel], []]);
+  } finally { await teardown(ctx); }
+});
+
+test("symlinked-root-outside-repo-builds-instead-of-failing", async () => {
+  const ctx = await symlinkedRootCase("ext/src/main/java", async (_repo, base) => {
+    await mkdir(path.join(base, "outside", "demospring"), { recursive: true });
+    await writeFile(path.join(base, "outside", "demospring", "Extra.java"), extraJava);
+    return path.join(base, "outside");
+  });
+  await teardown(ctx);
+});
 
 /** A whole-second mtime survives utimes exactly; pinned before the tracker caches the file's stat. */
 async function pinMtime(file: string): Promise<number> {
