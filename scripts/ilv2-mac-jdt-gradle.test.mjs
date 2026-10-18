@@ -14,7 +14,7 @@ async function toolchains() {
   for (const file of tools.files) assert.equal(sha256(await readFile(file.path)), file.sha256, `frozen toolchain drift: ${file.path}`);
   return tools;
 }
-async function evidence(name, data) { await writeJson(path.join(process.env.ILV2_RUN_ROOT, "raw", `${name}.json`), data); }
+async function evidence(name, data) { await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `${name}.json`), data); }
 async function busy(fixture) { return eventually(async () => (await readFile(path.join(fixture.root, "stdout.log"), "utf8").catch(() => "")).includes('"code":"OWNER_BUSY"'), 6500); }
 async function gradlePid(home) {
   return eventually(async () => {
@@ -114,7 +114,7 @@ public final class Ilv2TapiFixture {
   assert.equal(processAlive(control.pid), false);
   await control.fixture.close();
   for (const [name, item] of [["active", active], ["control", control]]) {
-    const target = path.join(process.env.ILV2_RUN_ROOT, "raw", `gradle-${name}-${path.basename(item.fixture.root)}`);
+    const target = path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `gradle-${name}-${path.basename(item.fixture.root)}`);
     await mkdir(target);
     await cp(path.join(item.home, "daemon/9.3.1"), path.join(target, "daemon-9.3.1"), { recursive: true });
     await writeJson(path.join(target, "commands.json"), item.commands);

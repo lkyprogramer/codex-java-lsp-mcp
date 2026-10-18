@@ -131,7 +131,7 @@ test("launchd-jdt-settings-import-and-fault-recovery", { timeout: 300000 }, asyn
           await eventually(() => rows.filter(row => row.type === "ready").every(row => !processAlive(-row.pgid)), 5000);
         });
         if (item.pid) assert.equal(processAlive(item.pid), false);
-        const target = path.join(process.env.ILV2_RUN_ROOT, "raw", `jdt-import-${item.name}-${path.basename(item.fixture.root)}`);
+        const target = path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `jdt-import-${item.name}-${path.basename(item.fixture.root)}`);
         await mkdir(target);
         for (const [from, to] of [["service-state/jdt-gradle-home/daemon/9.3.1", "daemon-9.3.1"], ["jdt-data/.metadata", "jdt-metadata"],
           ["jdt-stderr.log", "jdt-stderr.log"], ["repo", "synthetic-repo"]]) {
@@ -143,7 +143,7 @@ test("launchd-jdt-settings-import-and-fault-recovery", { timeout: 300000 }, asyn
       } catch (error) {
         failures.push(error);
         // A failed closeout preserves its lease and the minimal primary logs.
-        const target = path.join(process.env.ILV2_RUN_ROOT, "raw", `jdt-import-failure-${item.name}-${path.basename(item.fixture.root)}`);
+        const target = path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `jdt-import-failure-${item.name}-${path.basename(item.fixture.root)}`);
         try {
           await mkdir(target);
           for (const name of ["options.json", "fixture.plist", "timeline.jsonl", "stdout.log", "stderr.log", "jdt-stderr.log"])
@@ -155,7 +155,7 @@ test("launchd-jdt-settings-import-and-fault-recovery", { timeout: 300000 }, asyn
       }
     }
     evidence.closeoutFailures = failures.map(error => ({ message: String(error), stack: error.stack, code: error.code }));
-    await writeJson(path.join(process.env.ILV2_RUN_ROOT, "raw", `${t.name}.json`), evidence);
+    await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `${t.name}.json`), evidence);
     if (failures.length) throw new AggregateError(primaryError ? [primaryError, ...failures] : failures, "JDT import closeout failed; quota must remain held");
   }
 });

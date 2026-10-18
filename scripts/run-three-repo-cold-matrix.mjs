@@ -4,7 +4,7 @@
 // pos: Reusable real-repository acceptance runner; all code and Java inputs run from private local clones.
 import { createHash } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
-import { access, copyFile, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -360,10 +360,19 @@ async function main() {
     if (!result.passed) process.exitCode = 1;
   } finally {
     if (!cli.keepWorktrees) {
+      // Candidate tests leave sealed (read-only) snapshot directories under the workspace tmp.
+      await writableTree(workspaceRoot);
       await rm(workspaceRoot, { recursive: true, force: true });
     } else {
       console.log(`preserved isolated local clones/cache: ${workspaceRoot}`);
     }
+  }
+}
+
+async function writableTree(dir) {
+  try { await chmod(dir, 0o755); } catch { return; }
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (entry.isDirectory()) await writableTree(path.join(dir, entry.name));
   }
 }
 

@@ -121,7 +121,7 @@ for (const phase of ["reserved-before-bootstrap", "bootstrapped-before-pid-regis
       evidence.shutdownObservation = shutdownObservation;
       Object.assign(evidence, { controllerPid: controller.pid, checkpoint, slot, owner,
         primaryError: primaryError ? String(primaryError) : null, cleanupErrors: failures.map(String) });
-      await writeJson(path.join(process.env.ILV2_RUN_ROOT, "raw", `controller-window-${phase}.json`), evidence);
+      await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), `controller-window-${phase}.json`), evidence);
       if (failures.length) throw new AggregateError(primaryError ? [primaryError, ...failures] : failures, "Controller window closeout failed; evidence retained");
     }
   });
