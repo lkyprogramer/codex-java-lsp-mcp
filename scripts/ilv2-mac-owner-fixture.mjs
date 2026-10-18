@@ -1,7 +1,7 @@
 // Isolated launchd adapter. The job is the real native exec route, with no
 // supervising wrapper between launchd and the owner.
 import { mkdir, mkdtemp, readFile, realpath, rename, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -32,26 +32,55 @@ export function processAlive(pid) {
 }
 export async function processGroup(pid) { return Number((await execute("/bin/ps", ["-o", "pgid=", "-p", String(pid)])).stdout.trim()); }
 // Reads a `builder: true` owner's held builder from this test process, then releases the hold.
-// lsof spawned inside the native launcher's process tree can sit in an uninterruptible wait well
-// past its SIGKILL; here a stuck probe is raced out, so the release is sent on time and the stuck
-// process stays out of the fixture's process group.
+// fd4 is read with proc_pidfdinfo, not lsof: lsof sat in an uninterruptible wait well past its
+// SIGKILL against these fixtures' processes on this host, from the owner and from here. Each
+// attempt uses fresh processes, is raced out and abandoned, and all attempts fit inside the
+// owner's 4.5 s hold. An abandoned probe is unreferenced, so it keeps neither this process alive
+// nor the fixture's process group (its closeout) busy.
+const PROBE_ATTEMPTS = 3, PROBE_ATTEMPT_MS = 1200;
+// proc_pidfdinfo(PROC_PIDFDVNODEPATHINFO) for one fd: struct vnode_fdinfowithpath is proc_fileinfo
+// (24) + vnode_info (152, vst_dev u32 at 0, vst_ino u64 at 8) + MAXPATHLEN path (1024).
+const FD_IDENTITY_PY = `
+import ctypes, json, struct, sys
+pid, fd = int(sys.argv[1]), int(sys.argv[2])
+size = 1200
+buffer = ctypes.create_string_buffer(size)
+written = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True).proc_pidfdinfo(pid, fd, 2, buffer, size)
+if written != size:
+    print(json.dumps({"error": "proc_pidfdinfo", "written": written, "errno": ctypes.get_errno()}))
+    sys.exit(1)
+print(json.dumps({"dev": struct.unpack_from("<I", buffer, 24)[0], "ino": struct.unpack_from("<Q", buffer, 32)[0],
+    "path": buffer.raw[176:].split(b"\\0", 1)[0].decode()}))
+`;
 export async function probeHeldBuilder(fixture, timeoutMs = 15000) {
   const held = await eventually(async () => (await fixture.records()).find(row => row.type === "builder-held"), timeoutMs);
   const started = performance.now();
-  const probes = (async () => {
-    const pgid = await processGroup(held.builderPid);
-    const lines = (await execute("/usr/sbin/lsof", ["-b", "-w", "-n", "-P", "-a", "-p", String(held.builderPid), "-d", "4", "-F", "in"],
-      { encoding: "utf8", timeout: 2000, killSignal: "SIGKILL" })).stdout.split("\n");
-    return { pgid, builderLock: lines.find(line => line.startsWith("i")) ?? "", builderLockName: lines.find(line => line.startsWith("n"))?.slice(1) ?? "" };
-  })();
-  probes.catch(() => undefined);
+  const attempts = [];
   let result;
-  try { result = await Promise.race([probes, delay(2500).then(() => { throw new Error("builder probes exceeded 2500 ms"); })]); }
-  catch (error) { result = { error: String(error?.message ?? error).slice(0, 300) }; }
-  finally { await fixture.command({ type: "builder-probed" }); }
-  return { ...result, pid: held.builderPid, ownerLock: held.ownerLock, lockInherited: result.builderLock === held.ownerLock, probeMs: performance.now() - started };
+  try {
+    while (!result && attempts.length < PROBE_ATTEMPTS) {
+      const children = [];
+      const run = (file, args) => new Promise((resolve, reject) => {
+        children.push(execFile(file, args, { encoding: "utf8", timeout: PROBE_ATTEMPT_MS - 200, killSignal: "SIGKILL" }, (error, stdout) => error ? reject(error) : resolve(stdout)));
+      });
+      const probes = (async () => {
+        const pgid = Number((await run("/bin/ps", ["-o", "pgid=", "-p", String(held.builderPid)])).trim());
+        const fd4 = JSON.parse(await run("/usr/bin/python3", ["-I", "-c", FD_IDENTITY_PY, String(held.builderPid), "4"]));
+        // Device and inode, the same identity the owner took from fstat(4).
+        return { pgid, builderLock: `${fd4.dev}:${fd4.ino}`, builderLockName: fd4.path };
+      })();
+      probes.catch(() => undefined);
+      const attemptStarted = performance.now();
+      try { result = await Promise.race([probes, delay(PROBE_ATTEMPT_MS).then(() => { throw new Error(`builder probes exceeded ${PROBE_ATTEMPT_MS} ms`); })]); }
+      catch (error) {
+        for (const child of children) { child.stdout?.destroy(); child.stderr?.destroy(); child.unref(); }
+        attempts.push({ error: String(error?.stdout?.trim() || error?.message || error).slice(0, 300), ms: Math.round(performance.now() - attemptStarted) });
+      }
+    }
+  } finally { await fixture.command({ type: "builder-probed" }); }
+  return { ...result, failedAttempts: attempts, pid: held.builderPid, ownerLock: held.ownerLock,
+    lockInherited: result !== undefined && result.builderLock === held.ownerLock, probeMs: performance.now() - started };
 }
-
 export async function createOwnerFixture(t, options = {}) {
   const direct = options.route === "direct";
   if (options.route && !["direct", "launchd"].includes(options.route)) throw new Error("invalid fixture route");

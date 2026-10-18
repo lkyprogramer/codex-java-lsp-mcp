@@ -78,10 +78,9 @@ if (options.builder) {
   // and fd4 are read while the job is still running; then the job must finish with a parsed
   // synthetic file and the builder must exit. A SIGSTOP freeze is not used: on a busy host lsof
   // then sat in an uninterruptible wait that execFileSync's timeout could not end, so the builder
-  // was never resumed. The test process, not this owner, runs ps and lsof on the held builder:
-  // lsof spawned from the native launcher's process tree sat in an uninterruptible wait well past
-  // its SIGKILL on this host, and then pinned the fixture's process group at closeout, while the
-  // same probe from the test process returns in tens of milliseconds.
+  // was never resumed. The test process, not this owner, probes the held builder (ps and
+  // proc_pidfdinfo): an lsof spawned here sat in an uninterruptible wait well past its SIGKILL on
+  // this host and then pinned the fixture's process group at closeout.
   const dbPath = path.join(options.cacheRoot, "index.sqlite");
   const gate = openIndexDb(dbPath);
   gate.exec("BEGIN IMMEDIATE");
@@ -90,11 +89,13 @@ if (options.builder) {
   builder = attempt.child;
   const closed = new Promise(resolve => attempt.child.once("close", (code, signal) => resolve({ code, signal })));
   await new Promise((resolve, reject) => { attempt.child.once("spawn", resolve); attempt.child.once("error", reject); });
-  const ownerLock = `i${fstatSync(4, { bigint: true }).ino}`;
+  const lockStat = fstatSync(4, { bigint: true });
+  const ownerLock = `${lockStat.dev}:${lockStat.ino}`;
   record({ type: "builder-held", builderPid: attempt.child.pid, ownerLock });
-  // Released at a budget well inside the builder's busy timeout, so a missing probe fails this
-  // record instead of failing the held job.
-  const PROBE_BUDGET_MS = 3000;
+  // Released at a budget inside the builder's 5 s busy timeout (which starts later, at its first
+  // write) and above the test's three 1.2 s probe attempts, so a missing probe fails this record
+  // instead of failing the held job.
+  const PROBE_BUDGET_MS = 4500;
   const holdStarted = performance.now();
   let probed = false;
   try {

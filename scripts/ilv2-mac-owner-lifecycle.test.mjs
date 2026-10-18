@@ -90,7 +90,7 @@ test("real-builder-parses-and-preserves-lock-and-pgid", { timeout: 32000 }, asyn
   assert.equal(row.status.probed, true, row.status.error);
   assert.equal(probe.pgid, ready.pgid, JSON.stringify(probe));
   // The per-job builder holds the owner's fd4 (same inode) while it runs and leaks no holder once it exits.
-  assert.equal(probe.lockInherited, true, JSON.stringify(probe)); assert.deepEqual(row.status.exit, { code: 0, signal: null });
+  assert.equal(probe.lockInherited, true, JSON.stringify(probe)); assert.equal(probe.builderLockName, path.join(fixture.cacheRoot, ".owner.lock")); assert.deepEqual(row.status.exit, { code: 0, signal: null });
   await fixture.command({ type: "close-lock" });
   await eventually(async () => (await fixture.records()).some(item => item.type === "lock-closed"));
   const other = await createOwnerFixture(t, { cacheRoot: fixture.cacheRoot }); const next = await other.ready(ready.pid);

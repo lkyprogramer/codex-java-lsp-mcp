@@ -41,7 +41,7 @@ test("native-real-builder-parses-with-inherited-lock", { timeout: 34000 }, async
   assert.equal(builder.status.probed, true, builder.status.error);
   assert.equal(probe.pgid, ready.pgid, JSON.stringify(probe));
   // The per-job builder holds the owner's fd4 (same inode) while it runs and leaks no holder once it exits.
-  assert.equal(probe.lockInherited, true, JSON.stringify(probe)); assert.deepEqual(builder.status.exit, { code: 0, signal: null });
+  assert.equal(probe.lockInherited, true, JSON.stringify(probe)); assert.equal(probe.builderLockName, path.join(one.cacheRoot, ".owner.lock")); assert.deepEqual(builder.status.exit, { code: 0, signal: null });
   await one.command({ type: "close-lock" }); await eventually(async () => (await one.records()).some(row => row.type === "lock-closed"));
   const two = await createOwnerFixture(t, { route: "direct", cacheRoot: one.cacheRoot }); const next = await two.ready(ready.pid);
   await evidence(t.name, { ready, builder, probe, next, parsedSyntheticJava: true, inheritedLock: true, noHolderAfterExit: true }); await two.close(); await one.close();
