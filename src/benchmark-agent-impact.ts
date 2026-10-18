@@ -2,7 +2,8 @@
 // output: java_impact payload, latency, precision, recall, read-plan metrics, and run metadata.
 // pos: Repeatable benchmark entrypoint for the clean agent router.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
@@ -30,7 +31,6 @@ import {
   type ProductionRankingSnapshot
 } from "./benchmark/attribution-v3.js";
 import { buildImpactDeterminismSnapshot } from "./benchmark/determinism.js";
-import { isJavaIndexQuiescent } from "./benchmark/java-index-idle.js";
 import { jsonBytesForImpactTokens } from "./benchmark/identity-token-json.js";
 import { startBenchmarkProcessResourceObserverFromEnvironment } from "./benchmark/process-resource-observer.js";
 import {
@@ -46,9 +46,12 @@ import {
   type Scenario,
   type WarmState
 } from "./benchmark/golden-scenario.js";
-import { SqlJavaIndexClient } from "./java-index/sql/sql-client.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
+import { IndexOwner } from "./java-index/snapshot/index-owner.js";
+import { snapshotIndexStatus, SnapshotJavaIndexClient, withRequestDefaults, withRequestView } from "./java-index/snapshot/request-view.js";
+import type { TrackerSourceFactory } from "./java-index/snapshot/workspace-tracker.js";
+import { probeLayout } from "./layout-probe.js";
 import { repoCacheRoot } from "./repo-layout.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
@@ -121,7 +124,7 @@ const metadata = {
   payloadProjections: cli.payloadProjections,
   strategy: cli.strategy,
   engine: jinEngine ? "jin" : "default",
-  indexBackend: "v2",
+  indexBackend: "mac1-owner",
   // Recorded so a run is comparable only against runs with the same budget.
   deadlineMs: cli.deadlineMs,
   runs: cli.runs,
@@ -129,7 +132,7 @@ const metadata = {
   readPlanMaxBytes: cli.readPlanMaxBytes,
   scenarioFile: cli.scenarioFile,
   runtimeBuild,
-  // The V2 runtime reconciles its static index before serving requests.  This
+  // The index owner builds and publishes the first snapshot before serving requests.  This
   // records that one-time setup separately from request P50/P95 (Task 22
   // explicitly forbids folding the initial sweep into steady impact latency).
   prepareJavaIndexMs: 0,
@@ -164,27 +167,21 @@ const processResources = startBenchmarkProcessResourceObserverFromEnvironment(
 );
 
 const session = cli.strategy === "impact" && !jinEngine ? new JdtlsSession(cli.repoRoot) : undefined;
-// A benchmark has no runtime coordinator, so it must close the worker itself
-// after printing its results.
-const javaIndexClient = cli.strategy === "impact"
-  ? new SqlJavaIndexClient(cli.repoRoot, path.join(cli.indexCacheDir, "index.sqlite"))
+// A benchmark has no runtime coordinator: it runs its own in-process index owner (the production
+// store, scheduler, builder and query pool) and stops it after printing its results.
+const owner = cli.strategy === "impact"
+  ? await IndexOwner.open({ cacheRoot: path.join(cli.indexCacheDir, "owner"), trackerSource: () => staticTrackerSource() })
   : undefined;
-const routerJavaIndex = javaIndexClient
-  ? new RouterJavaIndex(cli.repoRoot, javaIndexClient)
-  : undefined;
-const javaIndex = routerJavaIndex;
 const frameworkAdapters = cli.excludeFrameworkAdapter
   ? FRAMEWORK_ADAPTERS.filter(adapter => adapter.id !== cli.excludeFrameworkAdapter)
   : FRAMEWORK_ADAPTERS;
-const router = session && javaIndex
-  ? new AgentRouter(cli.repoRoot, session, javaIndex, undefined, undefined, undefined, undefined, frameworkAdapters)
-  : undefined;
-if (routerJavaIndex && javaIndexClient) {
+let snapshot: SnapshotRuntime | undefined;
+if (owner) {
   const startedAt = performance.now();
-  const preparation = await prepareJavaIndex(cli, routerJavaIndex, javaIndexClient);
+  snapshot = await prepareSnapshot(cli, owner, session, frameworkAdapters);
   metadata.prepareJavaIndexMs = performance.now() - startedAt;
-  metadata.prepareJavaIndexReconciled = preparation.reconciled;
-  metadata.prepareJavaIndexStatus = preparation.status;
+  metadata.prepareJavaIndexReconciled = true;
+  metadata.prepareJavaIndexStatus = snapshot.status;
 }
 if (session && cli.warmState !== "cold-nolsp") {
   const startedAt = performance.now();
@@ -200,9 +197,9 @@ for (const scenario of scenarios) {
     attempts.push(
       cli.strategy === "no-lsp"
         ? noLspAttempt(cli.repoRoot, scenario)
-        : jinEngine
-          ? await jinAttempt(routerJavaIndex as RouterJavaIndex, cli, scenario)
-          : await impactAttempt(router as AgentRouter, session as JdtlsSession, cli, scenario)
+        : await inRequestView(owner as IndexOwner, snapshot as SnapshotRuntime, cli, budget => jinEngine
+          ? jinAttempt((snapshot as SnapshotRuntime).javaIndex, cli, scenario)
+          : impactAttempt((snapshot as SnapshotRuntime).router as AgentRouter, session as JdtlsSession, cli, scenario, budget))
     );
   }
   rows.push({
@@ -222,8 +219,9 @@ console.log(JSON.stringify({
 if (session) {
   await session.stop();
 }
-if (javaIndexClient) {
-  await javaIndexClient.close();
+snapshot?.router?.dispose();
+if (owner) {
+  await owner.stop();
 }
 await processResources?.stop();
 
@@ -349,7 +347,8 @@ async function jinAttempt(javaIndex: RouterJavaIndex, cli: Cli, scenario: Scenar
   };
 }
 
-async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
+async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario,
+  budget = DeadlineBudget.fromTimeout(cli.deadlineMs)): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   let coordinateRangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]> = new Map();
   let rankingSource: {
@@ -376,7 +375,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     negativeLookupAllowed: false,
     mode: cli.mode,
     semanticPolicy: effectiveSemanticPolicy(cli),
-    budget: DeadlineBudget.fromTimeout(cli.deadlineMs)
+    budget
   });
   const canonical = await router.impact(
     {
@@ -638,37 +637,49 @@ async function prepareWarmState(cli: Cli, session: JdtlsSession, items: Scenario
   }
 }
 
-/**
- * Mirrors RepoRuntimeManager's V2 OPEN/reconcile lifecycle without starting
- * JDTLS.  The static sweep is startup work, not an impact request, so the
- * benchmark reports it in metadata and only times the steady router calls.
- */
-async function prepareJavaIndex(
-  cli: Cli,
-  index: RouterJavaIndex,
-  client: SqlJavaIndexClient
-): Promise<{ reconciled: boolean; status: JavaIndexStatus }> {
-  await index.open(0);
-  let reconciled = false;
-  const opened = await index.routerStatus();
-  if (opened.coverage !== "complete" && !opened.javaIndex.snapshotVerificationPending) {
-    await index.reconcile(0);
-    reconciled = true;
-  }
-  return { reconciled, status: await waitForJavaIndexIdle(client, cli.indexPrepareTimeoutMs) };
+type SnapshotRuntime = { snapshotId: string; status: JavaIndexStatus; javaIndex: RouterJavaIndex; router?: AgentRouter };
+
+/** The benchmark tree does not change while it runs: no signal after the startup full hash. */
+function staticTrackerSource(): TrackerSourceFactory {
+  return async () => ({ epoch: randomBytes(16).toString("hex"), fence: async () => {}, stop: async () => {}, closed: new Promise<void>(() => {}) });
 }
 
-async function waitForJavaIndexIdle(client: SqlJavaIndexClient, timeoutMs: number): Promise<JavaIndexStatus> {
-  const deadline = Date.now() + timeoutMs;
-  let status = await client.status();
-  while (!isJavaIndexQuiescent(status)) {
+/**
+ * Mirrors RepoRuntimeManager's request path without starting JDTLS: the owner's first round
+ * publishes a verified snapshot, then one runtime (client, router) per snapshot is reused by
+ * every request, as RepoRuntimeManager caches it. The build is startup work, reported in metadata.
+ */
+async function prepareSnapshot(cli: Cli, owner: IndexOwner, session: JdtlsSession | undefined,
+  frameworkAdapters: typeof FRAMEWORK_ADAPTERS): Promise<SnapshotRuntime> {
+  const workspace = await owner.workspace(realpathSync(cli.repoRoot));
+  const deadline = Date.now() + cli.indexPrepareTimeoutMs;
+  while (!(owner.store.binding(workspace.workspaceId) && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight)) {
+    const { lastError } = workspace.status();
     if (Date.now() >= deadline) {
-      throw new Error(`JavaIndex did not finish startup reconciliation within ${timeoutMs}ms`);
+      throw new Error(`JavaIndex did not publish a FRESH snapshot within ${cli.indexPrepareTimeoutMs}ms${lastError ? `: ${lastError}` : ""}`);
     }
     await new Promise(resolve => setTimeout(resolve, 100));
-    status = await client.status();
   }
-  return status;
+  const layout = probeLayout(cli.repoRoot);
+  return withRequestView({ owner, budget: DeadlineBudget.fromTimeout(cli.deadlineMs), resolve: async () => workspace.canonicalRoot, handler: async view => {
+    if (view.labels.state !== "FRESH" || !view.snapshotId) throw new Error(`benchmark snapshot is ${view.labels.state}`);
+    const status = snapshotIndexStatus(await view.snapshotStatus(), view.snapshotId);
+    const javaIndex = new RouterJavaIndex(cli.repoRoot, new SnapshotJavaIndexClient(owner, view.snapshotId, cli.repoRoot, status, layout));
+    await javaIndex.open(status.indexedGeneration);
+    const router = session
+      ? new AgentRouter(cli.repoRoot, session, javaIndex, undefined, undefined, undefined, undefined, frameworkAdapters)
+      : undefined;
+    return { snapshotId: view.snapshotId, status, javaIndex, router };
+  } });
+}
+
+/** One request view per attempt (one acquire, a snapshot lease); its reads run under the attempt's budget. */
+function inRequestView<T>(owner: IndexOwner, snapshot: SnapshotRuntime, cli: Cli, attempt: (budget: DeadlineBudget) => Promise<T>): Promise<T> {
+  const budget = DeadlineBudget.fromTimeout(cli.deadlineMs);
+  return withRequestView({ owner, budget, resolve: async () => realpathSync(cli.repoRoot), handler: async view => {
+    if (view.snapshotId !== snapshot.snapshotId) throw new Error(`benchmark snapshot changed: ${snapshot.snapshotId} -> ${view.snapshotId ?? view.labels.state}`);
+    return withRequestDefaults({ budget }, () => snapshot.javaIndex.withRequestOptions({ budget }, () => attempt(budget)));
+  } });
 }
 
 async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Promise<void> {
