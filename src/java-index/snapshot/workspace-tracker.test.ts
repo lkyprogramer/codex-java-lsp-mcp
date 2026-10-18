@@ -350,6 +350,37 @@ test("stream-restart-requires-full-hash", async () => {
   } finally { await teardown(ctx); }
 });
 
+test("confirmed-through-follows-the-cut-and-the-epoch", async () => {
+  const ctx = await setup();
+  try {
+    assert.equal(ctx.tracker.confirmedThrough(ctx.tracker.trackerEpoch, 0), false, "nothing is confirmed before the startup hash");
+    await cycle(ctx);
+    const epoch = ctx.tracker.trackerEpoch;
+    ctx.source.emit(FILE_MODIFIED, serviceRel);
+    const entry = ctx.tracker.currentSeq;
+    assert.equal(ctx.tracker.confirmedThrough(epoch, entry), false);
+    const round = await dispatch(ctx);
+    // A later hint beyond the round's cut.
+    ctx.source.emit(FILE_MODIFIED, orderRel);
+    const verification = await verify(ctx, round);
+    assert.equal(verification.noop, true);
+    assert.equal(ctx.tracker.complete(round, await ctx.store.confirmNoop(ctx.tracker.planFor(verification))), "STALE");
+    assert.equal(ctx.tracker.confirmedThrough(epoch, entry), true, "the entry hint is covered while a later one is still owed");
+    assert.equal(ctx.tracker.confirmedThrough(epoch, ctx.tracker.currentSeq), false);
+    // A lost stream may have dropped hints of its own: no earlier confirmation stands for it.
+    ctx.source.streams.at(-1)!.lose(new Error("helper exited"));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(ctx.tracker.confirmedThrough(epoch, entry), false);
+    // A new epoch confirms nothing until its startup hash, which then covers every seq of the old one.
+    await ctx.tracker.restartStream();
+    ctx.store.track(ctx.tracker.workspaceId, ctx.tracker.trackedState());
+    assert.equal(ctx.tracker.confirmedThrough(epoch, entry), false);
+    await cycle(ctx);
+    assert.equal(ctx.tracker.confirmedThrough(epoch, Number.MAX_SAFE_INTEGER), true);
+    assert.equal(ctx.tracker.confirmedThrough(ctx.tracker.trackerEpoch, ctx.tracker.currentSeq), true);
+  } finally { await teardown(ctx); }
+});
+
 test("new-epoch-rejects-old-result-with-same-seq", async () => {
   const ctx = await setup();
   try {

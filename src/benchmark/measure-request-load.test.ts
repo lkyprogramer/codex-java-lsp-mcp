@@ -31,6 +31,10 @@ test("K29 request-path load passes every sample through the request view, the qu
     assert.ok(step.previews > 0, "head previews are served under load");
     assert.equal(step.rawLatencies.length, step.requests);
     assert.ok(step.latencyMs.p95 > 0 && step.eventLoopDelayMs.max >= step.eventLoopDelayMs.p95);
+    // Each sample saw exactly its own prepare: the split adds back up to the measured latency.
+    assert.equal(step.prepareUnattributed, 0, detail);
+    assert.ok(step.rawLatencies.every(row => row.prepares === 1 && row.prepareMs >= 0 && Math.abs(row.prepareMs + row.serviceMs - row.ms) < 1e-6), JSON.stringify(step.rawLatencies.slice(0, 3)));
+    if (step !== withUpdates) assert.deepEqual(step.prepareOutcomes, { none: step.requests }, "nothing is owed while nothing changes");
   }
   assert.equal(steps.reduce((sum, step) => sum + step.publishes, 0), 0, "the static steps publish nothing");
   assert.ok(withUpdates.edits >= 1 && withUpdates.publishes >= 1, `a publish lands while requests hold views: ${JSON.stringify({ edits: withUpdates.edits, publishes: withUpdates.publishes })}`);

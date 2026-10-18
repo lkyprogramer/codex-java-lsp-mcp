@@ -2,10 +2,13 @@
 // output: query-request-load-report.json - per step: request-path latency (public tool call in -> reply out),
 //         the owner process's event-loop delay, query-pool queue peak, workers and leases, previews served,
 //         and a with-updates step during which tracker publishes land while requests hold their views.
+//         Each sample also splits into its freshness-prepare wait (owner `prepare` event of that very request)
+//         and the service time after it.
 // pos: MAC-08C K29 driver. Every sample is one public java_symbol call through createMcpServer ->
 //      RepoRuntimeManager -> one request view (one acquire, a snapshot lease) -> persistent query workers
 //      over IPC -> head previews. It replaces the R09 driver (measure-query-load.ts), whose SQL ran on an
 //      in-process worker thread and never passed the request view or the query pool.
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, realpath } from "node:fs/promises";
@@ -24,7 +27,7 @@ import { IndexOwner, type PublishEvent } from "../java-index/snapshot/index-owne
 import { FSEVENT_FLAGS, type TrackerSourceFactory } from "../java-index/snapshot/workspace-tracker.js";
 import { generateRepo, type LoadQuery } from "./measure-query-load.js";
 
-export const REQUEST_LOAD_PROTOCOL = "k29-request-path-v1";
+export const REQUEST_LOAD_PROTOCOL = "k29-request-path-v2";
 const FILE_MODIFIED = 0x1000 | FSEVENT_FLAGS.ItemIsFile;
 
 type RequestLoadArgs = { files: number; samples: number; steps: number[]; updateIntervalMs: number; output: string; readyTimeoutMs: number };
@@ -60,15 +63,27 @@ function injectedSource(): { factory: TrackerSourceFactory; emit(file: string): 
   };
 }
 
+/** The prepare events of one public call: the owner emits them inside that call's async context. */
+type SampleScope = { prepares: number; prepareMs: number; outcome?: string };
+const sampleScope = new AsyncLocalStorage<SampleScope>();
+
 type PoolProbe = { submits: number; queuePeak: number; workersPeak: number; pids: Set<number>; taskMs: Map<string, number[]> };
 
 export type RequestStepReport = {
   concurrency: number;
   requests: number;
   latencyMs: { p50: number; p95: number; p99: number; max: number };
+  /** Freshness-prepare wait per request (bounded by min(1000 ms, remaining) in the owner). */
+  prepareMs: { p50: number; p95: number; p99: number; max: number };
+  /** Request latency minus its prepare wait: acquire, pool queue and query, previews, reply. */
+  serviceMs: { p50: number; p95: number; p99: number; max: number };
+  prepareOutcomes: Record<string, number>;
+  /** Samples that did not see exactly one prepare of their own: their split is unknown. */
+  prepareUnattributed: number;
   byKind: Record<string, { n: number; p50: number; p95: number; p99: number }>;
   eventLoopDelayMs: { p50: number; p95: number; p99: number; max: number };
-  rawLatencies: Array<{ sample: number; round: number; slot: number; kind: string; ms: number; scopeState: string; stopReason: string; previews: number; error?: string }>;
+  rawLatencies: Array<{ sample: number; round: number; slot: number; kind: string; ms: number; prepareMs: number; serviceMs: number; prepares: number; prepareOutcome: string;
+    scopeState: string; stopReason: string; previews: number; error?: string }>;
   errors: number;
   previews: number;
   scopeStates: Record<string, number>;
@@ -111,16 +126,22 @@ type Harness = {
   emit(file: string): void;
 };
 
-async function callSymbol(harness: Harness, query: LoadQuery): Promise<{ ms: number; scopeState: string; stopReason: string; previews: number; error?: string }> {
-  const started = performance.now();
-  const result = await harness.client.callTool({ name: "java_symbol", arguments: {
-    repoRoot: harness.repoRoot, operation: "query", query: query.query, searchMode: query.mode, limit: 8, preview: "head"
-  } }, undefined, { timeout: 30_000 });
-  const ms = performance.now() - started;
-  const text = (result.content as Array<{ type: string; text?: string }> | undefined)?.find(item => item.type === "text")?.text ?? "";
-  if (result.isError) return { ms, scopeState: "ERROR", stopReason: "error", previews: 0, error: text.slice(0, 300) };
-  const body = JSON.parse(text) as { scopeState: string; stopReason?: string; candidates: Array<{ preview?: string }> };
-  return { ms, scopeState: body.scopeState, stopReason: body.stopReason ?? "none", previews: body.candidates.filter(item => typeof item.preview === "string").length };
+type CallOutcome = { ms: number; prepareMs: number; serviceMs: number; prepares: number; prepareOutcome: string; scopeState: string; stopReason: string; previews: number; error?: string };
+
+async function callSymbol(harness: Harness, query: LoadQuery): Promise<CallOutcome> {
+  const scope: SampleScope = { prepares: 0, prepareMs: 0 };
+  return sampleScope.run(scope, async () => {
+    const started = performance.now();
+    const result = await harness.client.callTool({ name: "java_symbol", arguments: {
+      repoRoot: harness.repoRoot, operation: "query", query: query.query, searchMode: query.mode, limit: 8, preview: "head"
+    } }, undefined, { timeout: 30_000 });
+    const ms = performance.now() - started;
+    const split = { ms, prepareMs: scope.prepareMs, serviceMs: ms - scope.prepareMs, prepares: scope.prepares, prepareOutcome: scope.outcome ?? "missing" };
+    const text = (result.content as Array<{ type: string; text?: string }> | undefined)?.find(item => item.type === "text")?.text ?? "";
+    if (result.isError) return { ...split, scopeState: "ERROR", stopReason: "error", previews: 0, error: text.slice(0, 300) };
+    const body = JSON.parse(text) as { scopeState: string; stopReason?: string; candidates: Array<{ preview?: string }> };
+    return { ...split, scopeState: body.scopeState, stopReason: body.stopReason ?? "none", previews: body.candidates.filter(item => typeof item.preview === "string").length };
+  });
 }
 
 function poolSettled(harness: Harness): boolean {
@@ -166,7 +187,7 @@ export async function runRequestStep(harness: Harness, input: { concurrency: num
   }
   const wallMs = performance.now() - started;
   const publishes = harness.publishes.length - publishedBefore;
-  const count = (key: "scopeState" | "stopReason") => latencies.reduce<Record<string, number>>((acc, row) => { acc[row[key]] = (acc[row[key]] ?? 0) + 1; return acc; }, {});
+  const count = (key: "scopeState" | "stopReason" | "prepareOutcome") => latencies.reduce<Record<string, number>>((acc, row) => { acc[row[key]] = (acc[row[key]] ?? 0) + 1; return acc; }, {});
   const byKind: RequestStepReport["byKind"] = {};
   for (const kind of new Set(latencies.map(row => row.kind))) {
     const values = latencies.filter(row => row.kind === kind).map(row => row.ms);
@@ -179,6 +200,10 @@ export async function runRequestStep(harness: Harness, input: { concurrency: num
     concurrency: input.concurrency,
     requests: latencies.length,
     latencyMs: summary(latencies.map(row => row.ms)),
+    prepareMs: summary(latencies.map(row => row.prepareMs)),
+    serviceMs: summary(latencies.map(row => row.serviceMs)),
+    prepareOutcomes: count("prepareOutcome"),
+    prepareUnattributed: latencies.filter(row => row.prepares !== 1).length,
     byKind,
     eventLoopDelayMs: { p50: round3(delay.percentile(50) / 1e6), p95: round3(delay.percentile(95) / 1e6), p99: round3(delay.percentile(99) / 1e6), max: round3(delay.max / 1e6) },
     rawLatencies: latencies,
@@ -216,7 +241,14 @@ export async function startRequestHarness(scratch: string, files: number, readyT
   const runtimes = new RepoRuntimeManager(resolver, {
     transportMode: "streamable_http",
     index: async () => {
-      const owner = await IndexOwner.open({ cacheRoot: path.join(scratch, "owner-cache"), trackerSource: () => source.factory });
+      const owner = await IndexOwner.open({ cacheRoot: path.join(scratch, "owner-cache"), trackerSource: () => source.factory, onEvent: event => {
+        if (event.type !== "prepare") return;
+        const scope = sampleScope.getStore();
+        if (!scope) return;
+        scope.prepares += 1;
+        scope.prepareMs += event.waitedMs;
+        scope.outcome = event.outcome;
+      } });
       owner.onPublished(event => publishes.push(event));
       // Observation only: the pool is the production one; this records its queue depth at each admission.
       const pool = owner.pool as { submit: typeof owner.pool.submit };
@@ -281,14 +313,15 @@ export async function runRequestLoad(args: RequestLoadArgs): Promise<Record<stri
         protocol: REQUEST_LOAD_PROTOCOL,
         kind: "synthetic-request-load",
         path: "public java_symbol (in-memory MCP) -> RepoRuntimeManager -> withRequestView (one acquire, snapshot lease) -> QueryPool workers (IPC) -> head preview",
-        timing: "per sample: callTool issued -> reply parsed; event-loop delay of the owner process over the measured rounds",
+        timing: "per sample: callTool issued -> reply parsed, split into the request's own prepare wait and the service time after it; event-loop delay of the owner process over the measured rounds",
         files: args.files,
         readySeconds: round3(harness.readyMs / 1000),
         host: { platform: process.platform, arch: process.arch, cpus: os.cpus().length, node: process.version, loadavg: os.loadavg() },
         queries: QUERIES,
         steps,
         withUpdates,
-        gates: { warmStaticP95LimitMs: 150, eventLoopP95LimitMs: 20, note: "fixed generated corpus; not an all-repository capacity claim" }
+        gates: { warmStaticP95LimitMs: 150, withUpdatesServiceP95LimitMs: 150, withUpdatesPrepareP95LimitMs: 1000, eventLoopP95LimitMs: 20,
+          note: "fixed generated corpus; not an all-repository capacity claim" }
       };
       writeFileSync(path.join(args.output, "query-request-load-report.json"), `${JSON.stringify(report, null, 2)}\n`);
       return report;
@@ -318,7 +351,7 @@ function isMainModule(): boolean {
 if (isMainModule()) {
   runRequestLoad(parseRequestLoadArgs(process.argv.slice(2))).then(report => {
     const steps = [...(report.steps as RequestStepReport[]), report.withUpdates as RequestStepReport];
-    process.stdout.write(`${JSON.stringify({ ok: true, protocol: report.protocol, steps: steps.map(step => ({ c: step.concurrency, p95: step.latencyMs.p95, loopP95: step.eventLoopDelayMs.p95, queuePeak: step.worker.queuePeak, errors: step.errors, publishes: step.publishes })) })}\n`);
+    process.stdout.write(`${JSON.stringify({ ok: true, protocol: report.protocol, steps: steps.map(step => ({ c: step.concurrency, p95: step.latencyMs.p95, serviceP95: step.serviceMs.p95, prepareP95: step.prepareMs.p95, loopP95: step.eventLoopDelayMs.p95, queuePeak: step.worker.queuePeak, errors: step.errors, publishes: step.publishes })) })}\n`);
   }, error => {
     process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
     process.exit(1);

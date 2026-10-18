@@ -55,20 +55,32 @@ export function testEvidence(result, pattern) {
 }
 
 /** MAC-08C: K29 is measured on the public request path only (measure-request-load.ts). */
-export const K29_REQUEST_PROTOCOL = "k29-request-path-v1";
+export const K29_REQUEST_PROTOCOL = "k29-request-path-v2";
 
+/**
+ * Static steps: request latency p95 <= 150 ms. With updates (MAC-08C split, owner-approved): the
+ * service time after prepare p95 <= 150 ms, and the prepare wait itself is judged on its own contract
+ * (capped at 1000 ms, p95 <= 1000 ms) instead of inside the 150 ms. Event loop p95 <= 20 ms everywhere.
+ */
 export function loadEvidenceGate(report) {
   const steps = report?.steps ?? [];
   const peak = steps.find(step => step.concurrency === 20);
-  const all = [...steps, ...(report?.withUpdates ? [report.withUpdates] : [])];
+  const updates = report?.withUpdates;
+  const all = [...steps, ...(updates ? [updates] : [])];
   const complete = all.length >= 3 && peak?.requests >= 100 && all.every(step => step.settled && step.worker.queuePeak <= 32 && step.requests > 0);
   // The load must pass the request view, the query pool (IPC workers) and previews; a report from the
   // retired in-process SQL driver (protocol p3-capacity-v1) cannot stand in for it.
   const requestPath = report?.protocol === K29_REQUEST_PROTOCOL && all.length > 0
-    && all.every(step => step.errors === 0 && step.worker.submits >= step.requests && step.worker.pids?.length >= 1 && step.previews > 0)
-    && report.withUpdates?.publishes >= 1;
-  const slo = all.length > 0 && all.every(step => Number.isFinite(step.latencyMs?.p95) && step.latencyMs.p95 <= 150 && Number.isFinite(step.eventLoopDelayMs?.p95) && step.eventLoopDelayMs.p95 <= 20);
-  return { status: complete && requestPath && slo ? "PASS" : "FAIL", protocol: report?.protocol ?? null, mechanismPass: !!complete, requestPathPass: !!requestPath, performancePass: slo, warmStaticP95LimitMs: 150, eventLoopP95LimitMs: 20, steps: all };
+    && all.every(step => step.errors === 0 && step.worker.submits >= step.requests && step.worker.pids?.length >= 1 && step.previews > 0 && step.prepareUnattributed === 0)
+    && updates?.publishes >= 1;
+  const within = (value, limit) => Number.isFinite(value) && value <= limit;
+  const loop = all.length > 0 && all.every(step => within(step.eventLoopDelayMs?.p95, 20));
+  const staticSlo = steps.length > 0 && steps.every(step => within(step.latencyMs?.p95, 150));
+  const updatesSlo = within(updates?.serviceMs?.p95, 150) && within(updates?.prepareMs?.p95, 1000);
+  const slo = loop && staticSlo && updatesSlo;
+  return { status: complete && requestPath && slo ? "PASS" : "FAIL", protocol: report?.protocol ?? null, mechanismPass: !!complete, requestPathPass: !!requestPath, performancePass: slo,
+    warmStaticP95LimitMs: 150, withUpdatesServiceP95LimitMs: 150, withUpdatesPrepareP95LimitMs: 1000, eventLoopP95LimitMs: 20,
+    withUpdates: updates ? { latencyMs: updates.latencyMs, serviceMs: updates.serviceMs, prepareMs: updates.prepareMs, prepareOutcomes: updates.prepareOutcomes } : null, steps: all };
 }
 
 /**

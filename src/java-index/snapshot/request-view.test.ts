@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { fork, execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { chmod, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -309,6 +309,44 @@ test("symbol-id-survives-unrelated-publish", { timeout: 180_000 }, async t => {
   assert.equal(later.reissued, issued, "the same declaration keeps the same symbolId across publishes");
   const foreign = await request(ctx, ctx.repo, 10_000, view => view.query({ op: "resolveSymbol", args: { workspaceId: "w-0000000000000000000000000000000000000000", symbolId: issued! } })).run;
   assert.deepEqual(foreign, { status: "REJECTED", reason: "WORKSPACE_MISMATCH" });
+});
+
+test("a hint that lands during prepare does not extend the wait", { timeout: 180_000 }, async t => {
+  let hold = false;
+  let builds = 0;
+  let duringFirstBuild: (() => void) | undefined;
+  const stuck = await stuckBuilders(t);
+  const ctx = await setup(t, { startBuild: input => {
+    if (!hold) return startBuildProcess(input);
+    builds += 1;
+    if (builds > 1) return stuck.start();
+    duringFirstBuild?.();
+    return startBuildProcess(input);
+  } });
+  const { workspace, binding: first } = await bound(ctx);
+  hold = true;
+  // The second hint lands after the first round froze its cut; the round that would cover it never finishes.
+  duringFirstBuild = () => {
+    const file = path.join(ctx.repo, orderRel);
+    writeFileSync(file, readFileSync(file, "utf8").replace("class Order {", "class Order {\n  static final int LATE = 1;"));
+    ctx.sources.emit(ctx.repo, orderRel);
+  };
+  await edit(ctx, ctx.repo, serviceRel, text => text.replace("class OrderService {", "class OrderService {\n  void entryHint() {}"));
+  const eventsBefore = ctx.events.length;
+  const prepared = await settledWithin(request(ctx, ctx.repo, 10_000, async view => view.labels), "prepare-entry-watermark");
+  const preparedMs = evidence.at(-1)!.elapsedMs as number;
+  const event = ctx.events.slice(eventsBefore).find(entry => entry.type === "prepare");
+  evidence.push({ test: "prepare-entry-watermark", preparedMs, event, builds, labels: prepared.ok ? prepared.value : code(prepared) });
+  assert.equal(prepared.ok, true);
+  assert.equal(event?.type === "prepare" && event.outcome, "covered", `prepare ended on the entry hints: ${JSON.stringify(event)}`);
+  // The entry hint's round published; the late hint is still owed, so the view is STALE but newer.
+  const labels = prepared.ok ? prepared.value : undefined;
+  assert.notEqual(labels?.snapshotId, first.snapshotId);
+  assert.equal(labels?.snapshotId, ctx.owner.store.binding(workspace.workspaceId)!.snapshotId);
+  assert.equal(labels?.state, "STALE");
+  assert.ok(preparedMs < 1000, `waited ${preparedMs.toFixed(0)} ms: the late hint's round extended prepare to its cap`);
+  await until(() => builds === 2, "the late hint starts a round that never finishes", 10_000);
+  assert.equal(ctx.owner.store.binding(workspace.workspaceId)!.snapshotId, labels?.snapshotId);
 });
 
 test("a workspace without its own verified binding is NOT_READY, never a sibling", { timeout: 180_000 }, async t => {

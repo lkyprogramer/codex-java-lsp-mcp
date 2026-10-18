@@ -14,21 +14,30 @@ test("release runner requires a selected passing behavior, not exit zero or a fi
   assert.equal(testEvidence({ ...run(tap("ok")), exitCode: 1 }, "^K01:").status, "FAIL");
 });
 
-test("release load gate preserves the frozen SLO and all scheduled samples", () => {
-  const step = concurrency => ({ concurrency, requests: 100, settled: true, errors: 0, previews: 300, publishes: 0,
-    worker: { queuePeak: concurrency - 1, submits: 200, pids: [101, 102] }, latencyMs: { p95: 80 }, eventLoopDelayMs: { p95: 3 } });
+test("release load gate keeps the static SLO and judges the update step on service time and its prepare wait separately", () => {
+  const step = concurrency => ({ concurrency, requests: 100, settled: true, errors: 0, previews: 300, publishes: 0, prepareUnattributed: 0,
+    worker: { queuePeak: concurrency - 1, submits: 200, pids: [101, 102] }, latencyMs: { p95: 80 }, serviceMs: { p95: 80 }, prepareMs: { p95: 0 }, eventLoopDelayMs: { p95: 3 } });
   const report = { protocol: K29_REQUEST_PROTOCOL, steps: [step(1), step(5), step(20)], withUpdates: { ...step(20), publishes: 2 } };
   assert.equal(loadEvidenceGate(report).status, "PASS");
   assert.equal(loadEvidenceGate({ steps: [] }).status, "FAIL");
   assert.equal(loadEvidenceGate({ ...report, steps: [step(1)] }).status, "FAIL");
   for (const change of [{ requests: 0 }, { settled: false }, { latencyMs: { p95: 151 } }, { eventLoopDelayMs: { p95: 21 } }, { worker: { queuePeak: 33, submits: 200, pids: [1] } }]) {
-    assert.equal(loadEvidenceGate({ ...report, withUpdates: { ...report.withUpdates, ...change } }).status, "FAIL");
+    assert.equal(loadEvidenceGate({ ...report, steps: [step(1), step(5), { ...step(20), ...change }] }).status, "FAIL", `static ${JSON.stringify(change)}`);
   }
+  // Under updates the prepare wait leaves the 150 ms: a request that waited for its round passes on its service time alone.
+  const waited = { ...report.withUpdates, latencyMs: { p95: 1080 }, serviceMs: { p95: 150 }, prepareMs: { p95: 1000 } };
+  assert.equal(loadEvidenceGate({ ...report, withUpdates: waited }).status, "PASS");
+  for (const change of [{ serviceMs: { p95: 151 } }, { serviceMs: undefined }, { prepareMs: { p95: 1001 } }, { prepareMs: undefined }, { prepareUnattributed: 1 },
+    { requests: 0 }, { settled: false }, { eventLoopDelayMs: { p95: 21 } }, { worker: { queuePeak: 33, submits: 200, pids: [1] } }]) {
+    assert.equal(loadEvidenceGate({ ...report, withUpdates: { ...waited, ...change } }).status, "FAIL", `updates ${JSON.stringify(change)}`);
+  }
+  assert.deepEqual(loadEvidenceGate({ ...report, withUpdates: waited }).withUpdates, { latencyMs: { p95: 1080 }, serviceMs: { p95: 150 }, prepareMs: { p95: 1000 }, prepareOutcomes: undefined },
+    "the update step's whole latency stays in the gate row as reported");
 });
 
 test("release load gate accepts only the request-path driver with the pool, previews and a publish under load", () => {
-  const step = concurrency => ({ concurrency, requests: 100, settled: true, errors: 0, previews: 300, publishes: 0,
-    worker: { queuePeak: 3, submits: 200, pids: [101] }, latencyMs: { p95: 40 }, eventLoopDelayMs: { p95: 2 } });
+  const step = concurrency => ({ concurrency, requests: 100, settled: true, errors: 0, previews: 300, publishes: 0, prepareUnattributed: 0,
+    worker: { queuePeak: 3, submits: 200, pids: [101] }, latencyMs: { p95: 40 }, serviceMs: { p95: 40 }, prepareMs: { p95: 0 }, eventLoopDelayMs: { p95: 2 } });
   const report = { protocol: K29_REQUEST_PROTOCOL, steps: [step(1), step(5), step(20)], withUpdates: { ...step(20), publishes: 1 } };
   assert.equal(K29_REQUEST_PROTOCOL, REQUEST_LOAD_PROTOCOL, "runner and driver share one protocol");
   assert.equal(loadEvidenceGate(report).requestPathPass, true);

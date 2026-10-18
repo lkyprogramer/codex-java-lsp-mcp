@@ -189,6 +189,12 @@ export class WorkspaceTracker {
     return "FRESH";
   }
 
+  /** A committed round covers every signal up to `seq` of `epoch`; a later epoch's confirmed startup hash covers all of an earlier one. */
+  confirmedThrough(epoch: string, seq: number): boolean {
+    if (!this.confirmed || this.streamLost) return false;
+    return this.epoch !== epoch || this.confirmed.seq >= seq;
+  }
+
   /** Something is owed: pending paths, a rescan, unconfirmed startup, or the periodic full hash. */
   hasWork(): boolean {
     return !this.invalid && (this.status() !== "FRESH" || this.now() - this.lastFullHashAt >= FULL_HASH_INTERVAL_MS);

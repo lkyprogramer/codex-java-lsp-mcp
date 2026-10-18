@@ -464,11 +464,14 @@ async function runCandidateTests(candidateRoot, env, evidenceRoot) {
   return { dist, scripts };
 }
 
-function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
+async function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
+  // Fixture evidence (owner-fixture closeouts, request-view rows) lands next to the suite's TAP, never in a raw/ the matrix root lacks.
+  const fixtureEvidence = path.join(evidenceRoot, `${label}.evidence`);
+  await mkdir(fixtureEvidence);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env: isolatedChildEnvironment(env),
+      env: isolatedChildEnvironment({ ...env, ILV2_EVIDENCE_ROOT: fixtureEvidence }),
       stdio: ["ignore", "pipe", "pipe"]
     });
     const stdout = [];

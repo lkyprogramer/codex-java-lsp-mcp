@@ -37,6 +37,8 @@ export type PublishEvent = {
 
 export type OwnerEvent =
   | { type: "round"; workspaceId: string; mode: string; outcome: "noop" | "published" | "failed"; elapsedMs: number; error?: string }
+  /** One request's freshness prepare: `none` when nothing was owed at entry; `covered` once the entry-time hints are committed. */
+  | { type: "prepare"; workspaceId: string; waitedMs: number; outcome: "none" | "covered" | "capped" | "backoff" | "aborted" | "stopped" }
   | { type: "reclaimed"; snapshotId: string }
   | { type: "pool"; event: unknown }
   | { type: "scheduler"; event: unknown };
@@ -296,15 +298,31 @@ export class WorkspaceIndex {
 
   /**
    * Bounded freshness prepare (before the request's one acquire): wait for rounds that cover the
-   * known hints for at most min(1000 ms, remaining). It never cancels the shared round.
+   * hints known at entry for at most min(1000 ms, remaining). It never cancels the shared round.
    */
   async prepare(budget: DeadlineBudget, signal?: AbortSignal): Promise<void> {
+    const started = performance.now();
     // Half the remaining time at most: a short request still answers from its binding (STALE) instead of timing out in prepare.
     const cap = budget.forStage(Math.max(1, Math.min(PREPARE_CAP_MS, Math.floor(budget.remainingMs() / 2))));
-    while (!this.stopped && !signal?.aborted && !cap.expired() && (this.round || this.tracker.status() === "STALE")) {
+    // Only the hints known at entry: one that lands while this request waits never extends its wait,
+    // and a round that owes no known hint (the periodic full hash) is not waited for.
+    const epoch = this.tracker.trackerEpoch;
+    const known = this.tracker.currentSeq;
+    const owedAtEntry = this.tracker.status() === "STALE";
+    const owed = () => this.tracker.status() === "STALE" && !this.tracker.confirmedThrough(epoch, known);
+    const outcome = owedAtEntry ? await this.waitFor(owed, cap, signal) : "none";
+    this.owner.options.onEvent?.({ type: "prepare", workspaceId: this.workspaceId, waitedMs: performance.now() - started, outcome });
+  }
+
+  private async waitFor(owed: () => boolean, cap: DeadlineBudget, signal?: AbortSignal): Promise<"covered" | "capped" | "backoff" | "aborted" | "stopped"> {
+    for (;;) {
+      if (this.stopped) return "stopped";
+      if (signal?.aborted) return "aborted";
+      if (!owed()) return "covered";
+      if (cap.expired()) return "capped";
       if (!this.round) {
         // A failed round's retry backoff stands: answer from the binding instead of forcing or awaiting the retry.
-        if (this.lastError && this.timer) return;
+        if (this.lastError && this.timer) return "backoff";
         this.kick(0);
       }
       await new Promise<void>(resolve => {
