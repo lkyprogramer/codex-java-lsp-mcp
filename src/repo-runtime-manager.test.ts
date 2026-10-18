@@ -614,12 +614,14 @@ test("fully stopped idle runtimes are removed from the runtime map beyond the re
   assert.equal(manager.hasRuntime("/repo-c"), true);
 });
 
+type FakeWorkspace = { workspaceId: string; canonicalRoot: string; viewState: () => "STALE" };
+
 class FakeOwner {
   opens = 0;
   workspaceCalls = 0;
   stops = 0;
   readonly retired: string[] = [];
-  readonly workspaces = new Map<string, { workspaceId: string }>();
+  readonly workspaces = new Map<string, FakeWorkspace>();
   readonly bindings = new Map<string, unknown>();
   private readonly listeners = new Set<(event: PublishEvent) => void>();
   readonly store = { binding: (workspaceId: string) => this.bindings.get(workspaceId) };
@@ -631,16 +633,17 @@ class FakeOwner {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
-  async workspace(canonicalRoot: string): Promise<{ workspaceId: string }> {
+  async workspace(canonicalRoot: string): Promise<FakeWorkspace> {
     this.workspaceCalls += 1;
     let workspace = this.workspaces.get(canonicalRoot);
     if (!workspace) {
-      workspace = { workspaceId: `ws${canonicalRoot.replace(/\W/g, "")}` };
+      workspace = { workspaceId: `ws${canonicalRoot.replace(/\W/g, "")}`, canonicalRoot, viewState: () => "STALE" as const };
       this.workspaces.set(canonicalRoot, workspace);
     }
     return workspace;
   }
-  peek(canonicalRoot: string): { workspaceId: string } | undefined { return this.workspaces.get(canonicalRoot); }
+  peek(canonicalRoot: string): FakeWorkspace | undefined { return this.workspaces.get(canonicalRoot); }
+  acquireBound(): undefined { return undefined; }
   async retire(canonicalRoot: string): Promise<void> {
     this.retired.push(canonicalRoot);
     this.workspaces.delete(canonicalRoot);
@@ -693,6 +696,35 @@ test("status without start on a known repo reads memory only and never starts it
   assert.ok(state.context, "the existing runtime is reported");
   assert.equal(owner.workspaceCalls, before, "status-only did not start the workspace");
   assert.equal(sessions.get("/repo-b")?.ensureStartedCalls, 0);
+  await manager.shutdownAll();
+});
+
+test("status without start on a running repo stamps no cache: no meta I/O and no git spawn", async t => {
+  const base = mkdtempSync(path.join(tmpdir(), "runtime-status-"));
+  const repoRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-status-repo-")));
+  const previousBase = process.env.JAVA_LSP_CACHE_BASE;
+  process.env.JAVA_LSP_CACHE_BASE = base;
+  t.after(() => {
+    if (previousBase === undefined) delete process.env.JAVA_LSP_CACHE_BASE; else process.env.JAVA_LSP_CACHE_BASE = previousBase;
+    rmSync(base, { recursive: true, force: true });
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const sessions = new Map<string, FakeSession>();
+  const owner = new FakeOwner();
+  const manager = managerWith({}, sessions, {}, owner.source());
+  owner.bindings.set(`ws${repoRoot.replace(/\W/g, "")}`, { snapshotId: "snap-1" });
+  await manager.prewarmRepo({ repoRoot });
+  const meta = path.join(repoCacheRoot(repoRoot), "repo-meta.json");
+  assert.equal(existsSync(meta), true, "the prewarm request stamped the cache");
+  rmSync(meta);
+  // Past the stamp interval: a request would stamp again, status must not.
+  t.mock.timers.tick(61_000);
+  const state = await manager.statusOnly({ repoRoot }, async value => value);
+  assert.equal(state.labels.state, "STALE", "status read the running workspace's labels");
+  assert.equal(existsSync(meta), false, "status-only wrote no cache meta (and ran no git for it)");
+  await manager.contextFor({ repoRoot });
+  assert.equal(existsSync(meta), true, "a request after the interval stamps, so the clock did move");
   await manager.shutdownAll();
 });
 

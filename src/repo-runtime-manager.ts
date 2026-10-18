@@ -338,7 +338,8 @@ export class RepoRuntimeManager {
     if (!entry || entry.stoppedAt !== undefined || !owner?.peek(resolved.repoRoot)) {
       return handler({ resolved, context: entry?.stoppedAt === undefined ? entry?.context : undefined, labels: { state: "NOT_READY" } });
     }
-    this.refreshResource(entry);
+    // Memory only: no cache stamp (meta file I/O, git spawns); status is not use for the janitor.
+    entry.context.resource = this.resourceStatus();
     return withRequestView({
       owner, budget, signal: options.signal, start: false, resolve: async () => resolved.repoRoot,
       handler: async view => {
