@@ -673,12 +673,19 @@ async function prepareSnapshot(cli: Cli, owner: IndexOwner, session: JdtlsSessio
   } });
 }
 
-/** One request view per attempt (one acquire, a snapshot lease); its reads run under the attempt's budget. */
-function inRequestView<T>(owner: IndexOwner, snapshot: SnapshotRuntime, cli: Cli, attempt: (budget: DeadlineBudget) => Promise<T>): Promise<T> {
+/**
+ * One request view per attempt (one acquire, a snapshot lease); its reads run under the attempt's budget.
+ * Only a FRESH view of the prepared snapshot is timed, and each attempt records the labels it held.
+ */
+function inRequestView(owner: IndexOwner, snapshot: SnapshotRuntime, cli: Cli,
+  attempt: (budget: DeadlineBudget) => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
   const budget = DeadlineBudget.fromTimeout(cli.deadlineMs);
   return withRequestView({ owner, budget, resolve: async () => realpathSync(cli.repoRoot), handler: async view => {
-    if (view.snapshotId !== snapshot.snapshotId) throw new Error(`benchmark snapshot changed: ${snapshot.snapshotId} -> ${view.snapshotId ?? view.labels.state}`);
-    return withRequestDefaults({ budget }, () => snapshot.javaIndex.withRequestOptions({ budget }, () => attempt(budget)));
+    if (view.labels.state !== "FRESH" || view.snapshotId !== snapshot.snapshotId) {
+      throw new Error(`benchmark view is ${view.labels.state} on ${view.snapshotId ?? "no snapshot"}, prepared ${snapshot.snapshotId}`);
+    }
+    const result = await withRequestDefaults({ budget }, () => snapshot.javaIndex.withRequestOptions({ budget }, () => attempt(budget)));
+    return { ...result, indexView: { state: view.labels.state, snapshotId: view.snapshotId, bindingVersion: view.labels.bindingVersion } };
   } });
 }
 

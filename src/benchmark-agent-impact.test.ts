@@ -280,6 +280,10 @@ test("benchmark impact strategy serves every attempt from a published owner snap
   for (const attempt of attempts) {
     assert.equal(attempt.strategy, "impact");
     assert.ok(attempt.elapsedMs > 0);
+    // Every timed attempt held a FRESH view of the one prepared snapshot.
+    assert.equal(attempt.indexView.state, "FRESH");
+    assert.equal(attempt.indexView.snapshotId, attempts[0].indexView.snapshotId);
+    assert.match(attempt.indexView.snapshotId, /^s-/);
   }
   assert.ok(payload.metadata.prepareJavaIndexStatus.indexedGeneration >= 1);
   // Each answer comes from the published snapshot's index, not a fallback without one.
