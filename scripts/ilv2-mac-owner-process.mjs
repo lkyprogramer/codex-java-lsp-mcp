@@ -1,8 +1,8 @@
-import { appendFileSync, closeSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, fstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { assertOwnerLock, ownerChildStdio } from "../dist/mac-platform/owner-lock.js";
 import { startBuildProcess } from "../dist/index-builder/build-process.js";
 import { defaultJdtlsTransportFactory } from "../dist/jdtls-transport.js";
@@ -78,7 +78,10 @@ if (options.builder) {
   // and fd4 are read while the job is still running; then the job must finish with a parsed
   // synthetic file and the builder must exit. A SIGSTOP freeze is not used: on a busy host lsof
   // then sat in an uninterruptible wait that execFileSync's timeout could not end, so the builder
-  // was never resumed.
+  // was never resumed. The test process, not this owner, runs ps and lsof on the held builder:
+  // lsof spawned from the native launcher's process tree sat in an uninterruptible wait well past
+  // its SIGKILL on this host, and then pinned the fixture's process group at closeout, while the
+  // same probe from the test process returns in tens of milliseconds.
   const dbPath = path.join(options.cacheRoot, "index.sqlite");
   const gate = openIndexDb(dbPath);
   gate.exec("BEGIN IMMEDIATE");
@@ -87,34 +90,33 @@ if (options.builder) {
   builder = attempt.child;
   const closed = new Promise(resolve => attempt.child.once("close", (code, signal) => resolve({ code, signal })));
   await new Promise((resolve, reject) => { attempt.child.once("spawn", resolve); attempt.child.once("error", reject); });
-  // Async and abandoned at a budget well inside the builder's busy timeout: a stuck probe fails
-  // this record instead of failing the held job.
+  const ownerLock = `i${fstatSync(4, { bigint: true }).ino}`;
+  record({ type: "builder-held", builderPid: attempt.child.pid, ownerLock });
+  // Released at a budget well inside the builder's busy timeout, so a missing probe fails this
+  // record instead of failing the held job.
   const PROBE_BUDGET_MS = 3000;
-  const probe = (file, args) => new Promise((resolve, reject) => {
-    execFile(file, args, { encoding: "utf8", timeout: PROBE_BUDGET_MS, killSignal: "SIGKILL" }, (error, stdout) => error ? reject(error) : resolve(stdout));
-  });
-  const lockFd = async pid => (await probe("/usr/sbin/lsof", ["-b", "-w", "-n", "-P", "-a", "-p", String(pid), "-d", "4", "-F", "in"]))
-    .split("\n").filter(line => line.startsWith("i") || line.startsWith("n")).join("\n");
-  let childPgid, ownerLock = "", builderLock = "", probeError;
-  const probeStarted = performance.now();
-  const probes = (async () => ({ childPgid: Number((await probe("/bin/ps", ["-o", "pgid=", "-p", String(attempt.child.pid)])).trim()),
-    ownerLock: await lockFd(process.pid), builderLock: await lockFd(attempt.child.pid) }))();
-  probes.catch(() => undefined);
+  const holdStarted = performance.now();
+  let probed = false;
   try {
-    ({ childPgid, ownerLock, builderLock } = await Promise.race([probes,
-      delay(PROBE_BUDGET_MS).then(() => { throw new Error(`fd probes exceeded ${PROBE_BUDGET_MS} ms`); })]));
-  } catch (error) { probeError = String(error?.message ?? error).slice(0, 300); }
+    while (!probed && performance.now() - holdStarted < PROBE_BUDGET_MS) {
+      try {
+        const command = JSON.parse(readFileSync(path.join(root, "command.json"), "utf8"));
+        if (command.id !== lastCommand && command.type === "builder-probed") { lastCommand = command.id; probed = true; }
+      } catch (error) { if (error.code !== "ENOENT") throw error; }
+      if (!probed) await delay(25);
+    }
+  }
   // A rollback leaves the WAL snapshot unchanged, so the waiting builder takes the lock, not BUSY_SNAPSHOT.
   finally { gate.exec("ROLLBACK"); close(gate); }
-  const probeMs = performance.now() - probeStarted;
+  const holdMs = performance.now() - holdStarted;
   // The result never settles if the builder dies first (startBuildProcess leaves that to the scheduler).
   const outcome = await Promise.race([attempt.result.then(value => value, error => ({ kind: "failed", error: String(error) })),
     closed.then(exit => ({ kind: "exited", error: `builder exited before its result: ${JSON.stringify(exit)}` }))]);
   const exit = await closed;
   builder = undefined;
-  record({ type: "builder-serving", status: { state: "idle", pid: attempt.child.pid, pgid: childPgid, ok: outcome.kind === "result" && outcome.result.ok,
-    files: outcome.kind === "result" ? outcome.result.files : 0, error: outcome.error ?? probeError, exit,
-    lockInherited: ownerLock.length > 0 && builderLock === ownerLock, ownerLock, builderLock, probeMs, probeError } });
+  record({ type: "builder-serving", status: { state: "idle", pid: attempt.child.pid, ok: outcome.kind === "result" && outcome.result.ok,
+    files: outcome.kind === "result" ? outcome.result.files : 0,
+    error: outcome.error ?? (probed ? undefined : `no builder probe within ${PROBE_BUDGET_MS} ms`), exit, ownerLock, probed, holdMs } });
 }
 if (options.jdtlsBin && !options.jdtImport) {
   const env = buildJdtlsEnv(options.javaHome);

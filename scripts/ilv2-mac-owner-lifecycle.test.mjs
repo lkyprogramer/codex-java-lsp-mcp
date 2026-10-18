@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { createOwnerFixture, eventually, processAlive } from "./ilv2-mac-owner-fixture.mjs";
+import { createOwnerFixture, eventually, probeHeldBuilder, processAlive } from "./ilv2-mac-owner-fixture.mjs";
 import { execute, writeJson } from "./ilv2-mac-contracts.mjs";
 
 async function evidence(name, result) {
@@ -83,14 +83,17 @@ test("child-alive-after-parent-sigkill", { timeout: 22000 }, async t => {
 
 test("real-builder-parses-and-preserves-lock-and-pgid", { timeout: 32000 }, async t => {
   const fixture = await createOwnerFixture(t, { builder: true }); const ready = await fixture.ready();
+  const probe = await probeHeldBuilder(fixture);
   const row = await eventually(async () => (await fixture.records()).find(row => row.type === "builder-serving"), 15000);
-  assert.equal(row.status.ok, true, row.status.error); assert.ok(row.status.files >= 1); assert.ok(row.status.pid > 0);
-  assert.equal(row.status.pgid, ready.pgid);
+  assert.equal(row.status.ok, true, row.status.error); assert.ok(row.status.files >= 1); assert.equal(row.status.pid, probe.pid);
+  // Probed inside the hold, so the builder was provably still in its job.
+  assert.equal(row.status.probed, true, row.status.error);
+  assert.equal(probe.pgid, ready.pgid, JSON.stringify(probe));
   // The per-job builder holds the owner's fd4 (same inode) while it runs and leaks no holder once it exits.
-  assert.equal(row.status.lockInherited, true, JSON.stringify(row.status)); assert.deepEqual(row.status.exit, { code: 0, signal: null });
+  assert.equal(probe.lockInherited, true, JSON.stringify(probe)); assert.deepEqual(row.status.exit, { code: 0, signal: null });
   await fixture.command({ type: "close-lock" });
   await eventually(async () => (await fixture.records()).some(item => item.type === "lock-closed"));
   const other = await createOwnerFixture(t, { cacheRoot: fixture.cacheRoot }); const next = await other.ready(ready.pid);
-  await evidence(t.name, { ready, builder: row, next, sharedPgid: true, parsedSyntheticJava: true, lockRetainedDuringJob: true, noHolderAfterExit: true });
+  await evidence(t.name, { ready, builder: row, probe, next, sharedPgid: true, parsedSyntheticJava: true, lockRetainedDuringJob: true, noHolderAfterExit: true });
   await other.close(); await fixture.close();
 });

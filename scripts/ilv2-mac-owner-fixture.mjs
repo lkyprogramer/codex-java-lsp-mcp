@@ -31,6 +31,26 @@ export function processAlive(pid) {
   }
 }
 export async function processGroup(pid) { return Number((await execute("/bin/ps", ["-o", "pgid=", "-p", String(pid)])).stdout.trim()); }
+// Reads a `builder: true` owner's held builder from this test process, then releases the hold.
+// lsof spawned inside the native launcher's process tree can sit in an uninterruptible wait well
+// past its SIGKILL; here a stuck probe is raced out, so the release is sent on time and the stuck
+// process stays out of the fixture's process group.
+export async function probeHeldBuilder(fixture, timeoutMs = 15000) {
+  const held = await eventually(async () => (await fixture.records()).find(row => row.type === "builder-held"), timeoutMs);
+  const started = performance.now();
+  const probes = (async () => {
+    const pgid = await processGroup(held.builderPid);
+    const lines = (await execute("/usr/sbin/lsof", ["-b", "-w", "-n", "-P", "-a", "-p", String(held.builderPid), "-d", "4", "-F", "in"],
+      { encoding: "utf8", timeout: 2000, killSignal: "SIGKILL" })).stdout.split("\n");
+    return { pgid, builderLock: lines.find(line => line.startsWith("i")) ?? "", builderLockName: lines.find(line => line.startsWith("n"))?.slice(1) ?? "" };
+  })();
+  probes.catch(() => undefined);
+  let result;
+  try { result = await Promise.race([probes, delay(2500).then(() => { throw new Error("builder probes exceeded 2500 ms"); })]); }
+  catch (error) { result = { error: String(error?.message ?? error).slice(0, 300) }; }
+  finally { await fixture.command({ type: "builder-probed" }); }
+  return { ...result, pid: held.builderPid, ownerLock: held.ownerLock, lockInherited: result.builderLock === held.ownerLock, probeMs: performance.now() - started };
+}
 
 export async function createOwnerFixture(t, options = {}) {
   const direct = options.route === "direct";
