@@ -71,6 +71,8 @@ export type RequestOptionsInput = {
 /** Per pinned repo: cover one cold full build (lishuedu ~106s) plus sealing. */
 const PREWARM_INDEX_MS = 300_000;
 const PREWARM_POLL_MS = 250;
+/** The janitor's lastRequestAt resolution: its idle TTL is minutes, so one stamp per interval is enough. */
+const CACHE_TOUCH_INTERVAL_MS = 60_000;
 /** Held views pin their own runtime; beyond those only the newest snapshots keep router caches. */
 const RETAINED_SNAPSHOT_RUNTIMES = 2;
 
@@ -128,6 +130,8 @@ type RuntimeEntry = {
   runtimeLease?: LeaseHandle;
   gate: RuntimeLifecycleGate;
   ownership?: RepoOwnershipLease;
+  /** Last cache-meta stamp (refreshResource): it does synchronous file I/O and git spawns. */
+  cacheTouch?: { at: number; ownerToken?: string };
 };
 
 type SlotWaiter = {
@@ -736,6 +740,12 @@ export class RepoRuntimeManager {
 
   private refreshResource(entry: RuntimeEntry): void {
     entry.context.resource = this.resourceStatus();
+    // The stamp runs synchronously on the owner's event loop (meta read/write,
+    // two git spawns): once per interval per runtime, not once per request.
+    const ownerToken = entry.runtimeLease?.owner.ownerToken;
+    const now = Date.now();
+    if (entry.cacheTouch && entry.cacheTouch.ownerToken === ownerToken && now - entry.cacheTouch.at < CACHE_TOUCH_INTERVAL_MS) return;
+    entry.cacheTouch = { at: now, ownerToken };
     // The multi-process janitor's authoritative signal (Task 12c) is the
     // runtime lease itself. lastRequestAt is stamped only on MCP use, never
     // on JDT pid changes — otherwise log writes and lifecycle touches keep
@@ -744,7 +754,7 @@ export class RepoRuntimeManager {
       repoHash: entry.context.repoHash,
       familyHash: entry.context.worktree?.familyHash,
       ownerPid: process.pid,
-      ownerToken: entry.runtimeLease?.owner.ownerToken,
+      ownerToken,
       touchLastRequest: true
     });
   }

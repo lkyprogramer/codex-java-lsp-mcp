@@ -60,7 +60,7 @@ function injectedSource(): { factory: TrackerSourceFactory; emit(file: string): 
   };
 }
 
-type PoolProbe = { submits: number; queuePeak: number; workersPeak: number; pids: Set<number> };
+type PoolProbe = { submits: number; queuePeak: number; workersPeak: number; pids: Set<number>; taskMs: Map<string, number[]> };
 
 export type RequestStepReport = {
   concurrency: number;
@@ -74,7 +74,9 @@ export type RequestStepReport = {
   scopeStates: Record<string, number>;
   stopReasons: Record<string, number>;
   /** Query-pool counters for this step: every request reaches the pool at least once. */
-  worker: { queuePeak: number; submits: number; workersPeak: number; pids: number[]; leasesAfter: number };
+  worker: { queuePeak: number; submits: number; workersPeak: number; pids: number[]; leasesAfter: number;
+    /** Pool task time per op, submit -> settle (queue wait included; at concurrency 1 it is the worker service time). */
+    taskMs: Record<string, { n: number; p50: number; p95: number }> };
   /** Tracker publishes that landed while this step's requests were running. */
   publishes: number;
   edits: number;
@@ -128,7 +130,7 @@ function poolSettled(harness: Harness): boolean {
 
 /** `concurrency` public calls in flight at once, `rounds` times; with `updateIntervalMs`, a file edit is published that often. */
 export async function runRequestStep(harness: Harness, input: { concurrency: number; rounds: number; updateIntervalMs?: number }): Promise<RequestStepReport> {
-  harness.probe.submits = 0; harness.probe.queuePeak = 0; harness.probe.workersPeak = 0; harness.probe.pids.clear();
+  harness.probe.submits = 0; harness.probe.queuePeak = 0; harness.probe.workersPeak = 0; harness.probe.pids.clear(); harness.probe.taskMs.clear();
   const publishedBefore = harness.publishes.length;
   let edits = 0;
   const edit = () => {
@@ -184,7 +186,8 @@ export async function runRequestStep(harness: Harness, input: { concurrency: num
     previews: latencies.reduce((sum, row) => sum + row.previews, 0),
     scopeStates: count("scopeState"),
     stopReasons: count("stopReason"),
-    worker: { queuePeak: harness.probe.queuePeak, submits: harness.probe.submits, workersPeak: harness.probe.workersPeak, pids: [...harness.probe.pids].sort((a, b) => a - b), leasesAfter: harness.owner.pool.status().leases },
+    worker: { queuePeak: harness.probe.queuePeak, submits: harness.probe.submits, workersPeak: harness.probe.workersPeak, pids: [...harness.probe.pids].sort((a, b) => a - b), leasesAfter: harness.owner.pool.status().leases,
+      taskMs: Object.fromEntries([...harness.probe.taskMs].map(([op, values]) => [op, { n: values.length, p50: round3(percentile(values, 50)), p95: round3(percentile(values, 95)) }])) },
     publishes,
     edits,
     settled: poolSettled(harness),
@@ -206,7 +209,7 @@ export async function startRequestHarness(scratch: string, files: number, readyT
   writeFileSync(projectsConfigPath, '{"aliases":[],"defaults":{}}\n');
   const source = injectedSource();
   const publishes: PublishEvent[] = [];
-  const probe: PoolProbe = { submits: 0, queuePeak: 0, workersPeak: 0, pids: new Set() };
+  const probe: PoolProbe = { submits: 0, queuePeak: 0, workersPeak: 0, pids: new Set(), taskMs: new Map() };
   let opened: IndexOwner | undefined;
   const registry = new AliasRegistry(projectsConfigPath);
   const resolver = new RepoResolver(registry, { cwdFallback: "reject" });
@@ -219,7 +222,11 @@ export async function startRequestHarness(scratch: string, files: number, readyT
       const pool = owner.pool as { submit: typeof owner.pool.submit };
       const submit = owner.pool.submit.bind(owner.pool);
       pool.submit = task => {
+        const submittedAt = performance.now();
         const pending = submit(task);
+        const op = (task.payload as (lease: unknown) => { request?: { op?: string } })(undefined)?.request?.op ?? "unknown";
+        const record = () => { const values = probe.taskMs.get(op) ?? []; values.push(performance.now() - submittedAt); probe.taskMs.set(op, values); };
+        void pending.then(record, record);
         const status = owner.pool.status();
         probe.submits += 1;
         probe.queuePeak = Math.max(probe.queuePeak, status.queued);

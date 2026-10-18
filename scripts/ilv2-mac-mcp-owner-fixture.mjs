@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -91,6 +91,13 @@ export async function startOwner(t, name, { repos = 1, prepare, projects = { ali
   t.after(async () => {
     for (const client of clients) await client.close().catch(() => {});
     try { await owner.kill(); } finally { await lease.release(); }
+    // Sealed snapshots are read-only by mode: restore write access, then remove the fixture root.
+    const writable = async dir => {
+      await chmod(dir, 0o755).catch(() => {});
+      for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) if (entry.isDirectory()) await writable(path.join(dir, entry.name));
+    };
+    await writable(root);
+    await rm(root, { recursive: true, force: true });
   });
   await lease.registerChild(daemon.pid, daemon.pid);
   await eventually(() => existsSync(path.join(cache, "owner-endpoint.json")) || (daemon.exitCode !== null && Promise.reject(new Error(`daemon exited: ${stderr}`))), 20000);

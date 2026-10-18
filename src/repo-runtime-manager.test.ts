@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { changeBatchFor, RepoRuntimeManager, type IndexOwnerSource, type ManagedToolContext } from "./repo-runtime-manager.js";
@@ -9,6 +9,7 @@ import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { isJavaIndexPrewarmReady } from "./java-index/java-index-client-api.js";
+import { repoCacheRoot } from "./repo-layout.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.test.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
@@ -419,6 +420,32 @@ test("two concurrent contextFor calls share one runtime", async () => {
 
   assert.equal(a, b, "both callers receive the same context");
   assert.equal(contextCalls, 1, "the runtime is created once");
+});
+
+test("request-path cache stamps (sync meta I/O and git spawns) run once per interval, not per request", async t => {
+  const base = mkdtempSync(path.join(tmpdir(), "runtime-touch-"));
+  const repoRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-touch-repo-")));
+  const previousBase = process.env.JAVA_LSP_CACHE_BASE;
+  process.env.JAVA_LSP_CACHE_BASE = base;
+  t.after(() => {
+    if (previousBase === undefined) delete process.env.JAVA_LSP_CACHE_BASE; else process.env.JAVA_LSP_CACHE_BASE = previousBase;
+    rmSync(base, { recursive: true, force: true });
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => fakeContext(resolved, sessions),
+    undefined,
+    new NoopCrossProcessLeaseStore()
+  );
+  const meta = path.join(repoCacheRoot(repoRoot), "repo-meta.json");
+  await manager.contextFor({ repoRoot });
+  assert.equal(typeof JSON.parse(readFileSync(meta, "utf8")).lastRequestAt, "string", "the first request stamps the cache");
+  rmSync(meta);
+  for (let index = 0; index < 5; index += 1) await manager.contextFor({ repoRoot });
+  assert.equal(existsSync(meta), false, "later requests within the interval do not rewrite the stamp");
 });
 
 test("the first runtime creator honors its deadline without cancelling shared creation", async () => {
