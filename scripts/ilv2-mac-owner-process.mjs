@@ -2,7 +2,7 @@ import { appendFileSync, closeSync, mkdirSync, readFileSync, writeFileSync } fro
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { assertOwnerLock, ownerChildStdio } from "../dist/mac-platform/owner-lock.js";
 import { startBuildProcess } from "../dist/index-builder/build-process.js";
 import { defaultJdtlsTransportFactory } from "../dist/jdtls-transport.js";
@@ -10,6 +10,7 @@ import { buildJdtlsEnv } from "../dist/jdtls-lsp-io.js";
 import { GradleDomain } from "../dist/mac-platform/gradle-domain.js";
 import { buildJavaSettings, buildInitializeParams, pickJavaConfigurationSection } from "../dist/jdtls-semantic-backend.js";
 import { callMacNative } from "../dist/mac-platform/clonefile.js";
+import { close, openIndexDb } from "../dist/java-index/sql/driver.js";
 
 const root = process.argv[2];
 const options = JSON.parse(readFileSync(path.join(root, "options.json"), "utf8"));
@@ -73,25 +74,38 @@ if (options.builder) {
   mkdirSync(path.join(root, "repo", "src", "main", "java"), { recursive: true });
   writeFileSync(path.join(root, "repo", "src", "main", "java", "Example.java"), "class Example { int value; int get() { return value; } }\n");
   // The production builder is one process per job (MAC-08B removed the resident serve builder).
-  // It is frozen on spawn so its PGID and fd4 are read while the job is still running, then
-  // resumed: the job must finish with a parsed synthetic file and the builder must exit.
-  const attempt = startBuildProcess({ repoRoot: path.join(root, "repo"), dbPath: path.join(options.cacheRoot, "index.sqlite"),
+  // It is held at its first write by this fixture's write transaction on the job DB, so its PGID
+  // and fd4 are read while the job is still running; then the job must finish with a parsed
+  // synthetic file and the builder must exit. A SIGSTOP freeze is not used: on a busy host lsof
+  // then sat in an uninterruptible wait that execFileSync's timeout could not end, so the builder
+  // was never resumed.
+  const dbPath = path.join(options.cacheRoot, "index.sqlite");
+  const gate = openIndexDb(dbPath);
+  gate.exec("BEGIN IMMEDIATE");
+  const attempt = startBuildProcess({ repoRoot: path.join(root, "repo"), dbPath,
     job: { id: 1, kind: "full", generation: 1 }, grant: { parserTokens: 1, captures: [] } });
   builder = attempt.child;
   const closed = new Promise(resolve => attempt.child.once("close", (code, signal) => resolve({ code, signal })));
   await new Promise((resolve, reject) => { attempt.child.once("spawn", resolve); attempt.child.once("error", reject); });
-  attempt.child.kill("SIGSTOP");
-  // Bounded probes: a stuck probe fails this record instead of leaving the builder stopped.
-  const probe = (file, args) => execFileSync(file, args, { encoding: "utf8", timeout: 3000, killSignal: "SIGKILL" });
-  const lockFd = pid => probe("/usr/sbin/lsof", ["-b", "-w", "-n", "-P", "-a", "-p", String(pid), "-d", "4", "-F", "in"])
+  // Async and abandoned at a budget well inside the builder's busy timeout: a stuck probe fails
+  // this record instead of failing the held job.
+  const PROBE_BUDGET_MS = 3000;
+  const probe = (file, args) => new Promise((resolve, reject) => {
+    execFile(file, args, { encoding: "utf8", timeout: PROBE_BUDGET_MS, killSignal: "SIGKILL" }, (error, stdout) => error ? reject(error) : resolve(stdout));
+  });
+  const lockFd = async pid => (await probe("/usr/sbin/lsof", ["-b", "-w", "-n", "-P", "-a", "-p", String(pid), "-d", "4", "-F", "in"]))
     .split("\n").filter(line => line.startsWith("i") || line.startsWith("n")).join("\n");
   let childPgid, ownerLock = "", builderLock = "", probeError;
   const probeStarted = performance.now();
+  const probes = (async () => ({ childPgid: Number((await probe("/bin/ps", ["-o", "pgid=", "-p", String(attempt.child.pid)])).trim()),
+    ownerLock: await lockFd(process.pid), builderLock: await lockFd(attempt.child.pid) }))();
+  probes.catch(() => undefined);
   try {
-    childPgid = Number(probe("/bin/ps", ["-o", "pgid=", "-p", String(attempt.child.pid)]).trim());
-    ownerLock = lockFd(process.pid); builderLock = lockFd(attempt.child.pid);
+    ({ childPgid, ownerLock, builderLock } = await Promise.race([probes,
+      delay(PROBE_BUDGET_MS).then(() => { throw new Error(`fd probes exceeded ${PROBE_BUDGET_MS} ms`); })]));
   } catch (error) { probeError = String(error?.message ?? error).slice(0, 300); }
-  finally { attempt.child.kill("SIGCONT"); }
+  // A rollback leaves the WAL snapshot unchanged, so the waiting builder takes the lock, not BUSY_SNAPSHOT.
+  finally { gate.exec("ROLLBACK"); close(gate); }
   const probeMs = performance.now() - probeStarted;
   // The result never settles if the builder dies first (startBuildProcess leaves that to the scheduler).
   const outcome = await Promise.race([attempt.result.then(value => value, error => ({ kind: "failed", error: String(error) })),
