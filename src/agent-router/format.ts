@@ -147,6 +147,9 @@ function shortEvidenceGap(gap: string): string {
   if (gap === "Use rg/runtime evidence for Spring wiring, SQL/XML/YAML, logs, Nacos, and DB state.") {
     return "Check rg/runtime evidence for wiring and DB/config.";
   }
+  if (gap === "LSP semantic enrichment is not available (JDT_NOT_READY; java_status reports semantic admission); results are JavaIndex plus rg evidence only.") {
+    return "Semantic unavailable (JDT_NOT_READY); JavaIndex plus rg only.";
+  }
   if (gap === "LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.") {
     return "Semantic skipped; raise semanticPolicy for exact binding.";
   }

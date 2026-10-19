@@ -147,6 +147,8 @@ export async function javaSymbol(
     throw new Error("java_symbol requires either query, or file/line/column, or operation=references with file/line/column.");
   }
   const file = normalizeRepoFile(context.repoRoot, args.file);
+  // symbolContext() degrades every failure to an absent field: a closed semantic domain is reported, not hidden.
+  context.session.assertSemanticAdmission?.();
   const result = await context.session.symbolContext(file, args.line, args.column, request?.budget ?? args.semanticTimeoutMs);
   throwIfJdtImporting(context);
   return {

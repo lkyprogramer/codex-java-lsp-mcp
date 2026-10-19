@@ -9,7 +9,8 @@ import type { LspLocation } from "../jdtls-session.js";
 import { toFileUri } from "../repo-layout.js";
 import { resolveRoutingPolicy } from "../routing-policy.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
-import { semanticVerify } from "./semantic.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import { collectSemanticSeed, semanticVerify } from "./semantic.js";
 
 const repoRoot = "/repo";
 
@@ -221,4 +222,26 @@ test("semanticVerify dual-writes resolvable reference edges into edgeStoreV2, re
     1,
     "the shared source anchor position is resolved exactly once across all three edges, not once per edge"
   );
+});
+
+test("collectSemanticSeed fails each anchor while semantic admission is closed instead of reporting an empty COMPLETE seed", async () => {
+  let located = 0;
+  const semantic = { used: false, skipped: false, timeout: false, externalLocationsSuppressed: 0 } as { used: boolean; skipped: boolean; timeout: boolean; errorCode?: string; externalLocationsSuppressed: number };
+  const result = await collectSemanticSeed({
+    candidates: new Map(),
+    anchors: [anchor()],
+    options: options({ semanticPolicy: "auto" }),
+    semantic,
+    phaseMs: {},
+    repoRoot,
+    session: {
+      assertSemanticAdmission: () => { throw new JavaIntelligenceError("JDT_NOT_READY", "semanticState=RECOVERY_BLOCKED: injected"); },
+      semanticLocations: async () => { located += 1; return { definitions: [], implementations: [] }; }
+    } as never,
+    routingPolicy: resolveRoutingPolicy(repoRoot),
+    budget: DeadlineBudget.fromTimeout(5_000)
+  });
+  assert.deepEqual(result.failedAnchors, ["A1"]);
+  assert.equal(semantic.errorCode, "JDT_NOT_READY");
+  assert.equal(located, 0, "no JDT request is made through a closed admission");
 });

@@ -3,7 +3,9 @@
 // pos: Runtime manager (MAC-08B): one context per canonical repoRoot with small LRU/idle control
 //      for JDT; the index is the daemon's single IndexOwner (tracker, scheduler, snapshots, query
 //      pool). A request prepares for at most min(1000 ms, remaining), acquires once, and keeps
-//      that snapshot's labels; it never builds, reconciles or seeds from a sibling.
+//      that snapshot's labels; it never builds, reconciles or seeds from a sibling. MAC-09: under the
+//      owner launcher, static admission opens once the owner restored its bindings, and JDT waits for
+//      the private Gradle domain's cleanup (at start, and again at a normal stop).
 import os from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
@@ -28,6 +30,9 @@ import {
   type ViewLabels
 } from "./java-index/snapshot/request-view.js";
 import { probeLayout, type LayoutContext } from "./layout-probe.js";
+import { OwnerAdmission, type OwnerAdmissionStatus } from "./index-builder/owner-admission.js";
+import { faultBarrier } from "./mac-platform/fault-barrier.js";
+import { serviceGradleDomain, type GradleDomain } from "./mac-platform/gradle-domain.js";
 import { assertOwnerLock, ownerCacheRoot } from "./mac-platform/owner-lock.js";
 import { GenerationClock, isStormBatch, type RepoChange, type RepoChangeBatch } from "./repo-generation.js";
 import { repoCacheBase } from "./repo-layout.js";
@@ -156,11 +161,23 @@ type RuntimeManagerOptions = {
   /** Pin roots keep their index runtime after JDT idle-stop. */
   isProtectedRepo?: (repoRoot: string) => boolean;
   index?: IndexOwnerSource;
+  /** The private Gradle domain gating JDT (default: the service domain under the owner launcher, else none). */
+  gradleDomain?: GradleDomain | false;
+  /** Test seam: the retry floor after a blocked cleanup (default SEMANTIC_RETRY_MS). */
+  semanticRetryMs?: number;
 };
+
+/** A blocked Gradle cleanup is retried only on semantic demand, and not sooner than this (no busy retry). */
+const SEMANTIC_RETRY_MS = 30_000;
 
 /** The daemon's one owner over `<owner cache root>/mac1`; the launcher's lock is checked before every binding write. */
 export function defaultIndexOwner(overrides: Partial<IndexOwnerOptions> = {}): () => Promise<IndexOwner> {
-  return () => IndexOwner.open({ cacheRoot: ownerCacheRoot() ?? repoCacheBase(), assertOwner: () => assertOwnerLock(), ...overrides });
+  const faultAt = faultBarrier();
+  // Isolated validation only: a short GC cycle, so convergence within two cycles is observable.
+  const gcCycleMs = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.JAVA_LSP_GC_CYCLE_MS
+    ? positiveInteger(process.env.JAVA_LSP_GC_CYCLE_MS, 0) || undefined : undefined;
+  return () => IndexOwner.open({ cacheRoot: ownerCacheRoot() ?? repoCacheBase(), assertOwner: () => assertOwnerLock(),
+    ...(faultAt ? { faultAt } : {}), ...(gcCycleMs ? { gcCycleMs } : {}), ...overrides });
 }
 
 export class RepoRuntimeManager {
@@ -178,6 +195,9 @@ export class RepoRuntimeManager {
   private ownerPromise?: Promise<IndexOwner | undefined>;
   private ownerError?: string;
   private unsubscribePublish?: () => void;
+  private readonly gradleDomain?: GradleDomain;
+  private readonly admission?: OwnerAdmission;
+  private semanticFailedAt?: number;
 
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
@@ -203,8 +223,14 @@ export class RepoRuntimeManager {
       transportMode: "stdio",
       ...options
     };
+    this.gradleDomain = this.options.gradleDomain === false ? undefined
+      : this.options.gradleDomain ?? (ownerCacheRoot() ? serviceGradleDomain() : undefined);
+    if (ownerCacheRoot() || this.gradleDomain) {
+      this.admission = new OwnerAdmission(ownerCacheRoot() ? () => assertOwnerLock() : () => {}, this.gradleDomain);
+    }
     this.startPressureWatch();
-    this.runtimeFactory = runtimeFactory ?? ((resolved, leases, shared) => createRuntime(resolved, leases, shared, this.options.transportMode));
+    this.runtimeFactory = runtimeFactory ?? ((resolved, leases, shared) =>
+      createRuntime(resolved, leases, shared, this.options.transportMode, undefined, this.gradleDomain));
     if (typeof leasesOrTouch === "function" && !isLeaseStore(leasesOrTouch)) {
       this.leases = createDefaultLeaseStore();
     } else {
@@ -223,6 +249,7 @@ export class RepoRuntimeManager {
    * `assertOpen()` guard), so no separate gate is needed here.
    */
   initialize(): Promise<void> {
+    if (!this.leaseReady) this.recoverSemantic();
     return this.leaseReady ??= this.leases
       .open({
         jdtSlots: this.options.maxActiveRepos,
@@ -239,10 +266,36 @@ export class RepoRuntimeManager {
     return { ...status, initError: this.leaseInitError };
   }
 
+  /**
+   * The private Gradle domain's cleanup, in the background: semantic admission stays closed until it
+   * proved this domain's daemons gone. No JDT session can exist yet: admission was never READY before
+   * this cleanup, or the previous one failed.
+   */
+  private recoverSemantic(): void {
+    this.gradleDomain?.recover(async () => {}).catch(error => {
+      this.semanticFailedAt = Date.now();
+      console.error(`[codex-java-lsp] Gradle domain cleanup blocked semantic admission: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  /** A semantic request after a failed cleanup starts one more (single-flight, at most once per SEMANTIC_RETRY_MS). */
+  private retrySemanticRecovery(): void {
+    if (this.gradleDomain?.status().semanticState !== "RECOVERY_BLOCKED") return;
+    if (this.semanticFailedAt !== undefined && Date.now() - this.semanticFailedAt < (this.options.semanticRetryMs ?? SEMANTIC_RETRY_MS)) return;
+    this.recoverSemantic();
+  }
+
+  /** Static and semantic admission (contract §2.1); undefined outside the owner launcher without a Gradle domain. */
+  semanticStatus(): OwnerAdmissionStatus | undefined {
+    return this.admission?.status();
+  }
+
   /** The index owner, opened once. A failed open leaves the index NOT_READY with the reason on status. */
   private indexOwner(): Promise<IndexOwner | undefined> {
     if (this.options.index === false) return Promise.resolve(undefined);
-    return this.ownerPromise ??= (this.options.index ?? defaultIndexOwner())().then(owner => {
+    const admission = this.admission;
+    const source = this.options.index ?? defaultIndexOwner(admission ? { admitted: admission.admitted, restored: () => admission.openStatic() } : {});
+    return this.ownerPromise ??= source().then(owner => {
       this.unsubscribePublish = owner.onPublished(event => this.onPublished(event));
       return owner;
     }, error => {
@@ -308,6 +361,7 @@ export class RepoRuntimeManager {
       return await this.withView(entry, owner, budget, options.signal, true, async (context, view) => {
         const request = this.requestContextFor(entry, view, requestOptions, budget);
         if (options.mayStartLsp) {
+          this.retrySemanticRecovery();
           idlePrewarmTracker.recordFirstSemanticRequest(resolved.repoRoot);
           await this.reserveLspSlot(entry, request.budget);
         }
@@ -632,7 +686,14 @@ export class RepoRuntimeManager {
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
     }
-    await Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
+    let closing: Promise<unknown> | undefined;
+    const closeSessions = () => closing ??= Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
+    // Normal stop (contract §2.1): recover() closes semantic admission before any session starts
+    // closing, waits for them, then stops and confirms every Gradle version this domain used.
+    const semantic = options.terminal ? this.gradleDomain?.recover(async () => { await closeSessions(); }).catch(error => {
+      console.error(`[codex-java-lsp] Gradle domain stop failed: ${error instanceof Error ? error.message : String(error)}`);
+    }) : undefined;
+    await closeSessions();
     await Promise.all([...this.runtimes.values()].map(async entry => {
       for (const runtime of entry.snapshots.values()) runtime.router.dispose();
       entry.snapshots.clear();
@@ -656,7 +717,7 @@ export class RepoRuntimeManager {
     // The owner stops last: its builders, query workers and trackers are this process's children.
     this.unsubscribePublish?.();
     const owner = await this.openedOwner();
-    await owner?.stop();
+    await Promise.all([owner?.stop(), semantic]);
   }
 
   /** Singleflight so two concurrent requests share one runtime entry. */
@@ -1018,9 +1079,11 @@ function createRuntime(
   leases: CrossProcessLeaseStore,
   shared: SharedRouterState,
   transportMode: RepoOwnerTransport = "stdio",
-  ownershipLifecycle?: RepoOwnershipLease
+  ownershipLifecycle?: RepoOwnershipLease,
+  gradleDomain?: GradleDomain
 ): ManagedToolContext {
   const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, {
+    gradleDomain,
     transportMode,
     ownershipLifecycle,
     leaseStore: leases,

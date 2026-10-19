@@ -21,6 +21,7 @@ import {
   type LeaseHandle
 } from "./cross-process-lease.js";
 import type { PublishEvent } from "./java-index/snapshot/index-owner.js";
+import { GradleDomain, type GradleCleanupIO } from "./mac-platform/gradle-domain.js";
 
 test("RepoRuntimeManager evicts the oldest idle started runtime before starting another", async () => {
   const sessions = new Map<string, FakeSession>();
@@ -533,6 +534,75 @@ test("a runtime creation hard-cap retires a stuck lease singleflight so a later 
   assert.equal(recovered, "recovered");
   assert.equal(acquireCalls, 2, "the expired shared creation is removed before the retry");
 
+  await manager.shutdownAll();
+});
+
+test("under a Gradle domain, start runs its cleanup before any semantic admission and a normal stop closes JDT before stopping Gradle", async t => {
+  const home = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-gradle-")));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const order: string[] = [];
+  const firstStatus = deferred<void>();
+  let commands = 0;
+  const io: GradleCleanupIO = { alive: () => false, async execute(_dist, args) {
+    order.push(`gradle${args[0]}`);
+    if (++commands === 1) await firstStatus.promise;
+    return "No Gradle daemons are running.\n";
+  } };
+  const domain = new GradleDomain(home, [{ version: "9.3.1", launcher: "/private/gradle/bin/gradle", launcherSha256: "a".repeat(64), javaHome: "/private/jdk" }], io);
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false, gradleDomain: domain, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
+  await manager.initialize();
+  assert.deepEqual(manager.semanticStatus(), { staticAdmission: "CLOSED", semanticState: "RECOVERING" });
+  assert.throws(() => domain.assertSemanticAdmission(), /semanticState=RECOVERING/);
+  firstStatus.resolve();
+  while (domain.status().semanticState === "RECOVERING") await delay(5);
+  assert.equal(manager.semanticStatus()?.semanticState, "READY");
+  assert.deepEqual(order.splice(0), ["gradle--status", "gradle--stop", "gradle--status"]);
+
+  await manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    const session = context.session as unknown as FakeSession;
+    await session.ensureStarted();
+    const stop = session.stop.bind(session);
+    session.stop = async () => {
+      // Semantic admission is already closed while the session is still closing.
+      order.push(`session-stop:${domain.status().semanticState}`);
+      await delay(20);
+      await stop();
+    };
+  }, { mayStartLsp: true });
+  await manager.shutdownAll({ terminal: true });
+  assert.deepEqual(order, ["session-stop:RECOVERING", "gradle--status", "gradle--stop", "gradle--status"]);
+});
+
+test("a blocked Gradle cleanup is retried only on semantic demand and not sooner than the retry floor", async t => {
+  const home = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-gradle-")));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  let statusCalls = 0;
+  const io: GradleCleanupIO = { alive: () => false, async execute(_dist, args) {
+    if (args[0] === "--status") statusCalls += 1;
+    if (args[0] === "--stop") throw new Error("injected stop failure");
+    return "No Gradle daemons are running.\n";
+  } };
+  const domain = new GradleDomain(home, [{ version: "9.3.1", launcher: "/private/gradle/bin/gradle", launcherSha256: "a".repeat(64), javaHome: "/private/jdk" }], io);
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: false, gradleDomain: domain, semanticRetryMs: 300, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
+  await manager.initialize();
+  while (domain.status().semanticState === "RECOVERING") await delay(5);
+  assert.deepEqual(manager.semanticStatus(), { staticAdmission: "CLOSED", semanticState: "RECOVERY_BLOCKED", failure: "injected stop failure" });
+  await delay(5);
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, { mayStartLsp: true });
+  await delay(20);
+  assert.equal(statusCalls, 1, "neither a static request nor a semantic one inside the floor retries");
+  assert.equal(domain.status().semanticState, "RECOVERY_BLOCKED");
+  await delay(300);
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
+  assert.equal(statusCalls, 1, "a static request never retries");
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, { mayStartLsp: true });
+  while (domain.status().semanticState === "RECOVERING") await delay(5);
+  assert.equal(statusCalls, 2, "the first semantic request after the floor retried once");
   await manager.shutdownAll();
 });
 

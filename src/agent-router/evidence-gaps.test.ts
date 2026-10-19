@@ -24,3 +24,9 @@ test("adds a Lombok gap only when lombokIncomplete is true", () => {
   const gaps = evidenceGaps([anchor()], baseOptions, { ...baseSemantic, lombokIncomplete: true });
   assert.ok(gaps.some(gap => gap.includes("Lombok") && gap.includes("javaagent")));
 });
+
+test("names the static-only fallback when semantic admission refused JDT", () => {
+  const gaps = evidenceGaps([anchor()], baseOptions, { ...baseSemantic, errorCode: "JDT_NOT_READY" });
+  assert.ok(gaps.slice(0, 3).some(gap => gap.includes("JDT_NOT_READY") && gap.includes("JavaIndex plus rg")), "within the compact output's first three gaps");
+  assert.ok(!evidenceGaps([anchor()], baseOptions, { ...baseSemantic, errorCode: "JDT_BACKOFF" }).some(gap => gap.includes("JDT_NOT_READY")));
+});

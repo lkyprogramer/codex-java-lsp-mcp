@@ -4,6 +4,7 @@ type EvidenceGapState = {
   readonly skipped: boolean;
   readonly timeout: boolean;
   readonly lombokIncomplete?: boolean;
+  readonly errorCode?: string;
 };
 
 export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: ImpactOptions, semantic: EvidenceGapState): string[] {
@@ -11,6 +12,9 @@ export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: Impact
     "Run Gradle compile/test before claiming behavior.",
     "Framework wiring (e.g. Spring injection/call paths) is covered by JavaIndex facts where resolvable; use rg/runtime evidence for SQL/XML/YAML, logs, Nacos, and DB state."
   ];
+  if (semantic.errorCode === "JDT_NOT_READY") {
+    gaps.push("LSP semantic enrichment is not available (JDT_NOT_READY; java_status reports semantic admission); results are JavaIndex plus rg evidence only.");
+  }
   if (semantic.skipped) {
     gaps.push("LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.");
   }

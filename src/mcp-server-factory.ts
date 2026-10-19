@@ -151,11 +151,13 @@ export function createMcpServer(
     if (!args.start) {
       // Contract §2.6: status without start reads memory only. It creates no runtime entry, starts no
       // workspace tracker, scans nothing and starts neither JDT nor a build.
-      return application.runtimes.statusOnly(args, async state => ({ ...javaStatusFromMemory(state, args), resource: resourceView }), { signal });
+      return application.runtimes.statusOnly(args, async state => ({ ...javaStatusFromMemory(state, args), resource: resourceView,
+        ...semanticAdmission(application) }), { signal });
     }
     return withContext(args, async (context, request) => ({
       ...await javaStatus(context, args, request),
-      resource: resourceView
+      resource: resourceView,
+      ...semanticAdmission(application)
     }), {
       mayStartLsp: true,
       requestOptions: {
@@ -258,6 +260,12 @@ function raceRequestAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promi
   });
 }
 
+/** Static/semantic admission (contract §2.1), kept apart from index freshness and coverage. */
+function semanticAdmission(application: JavaLspApplication): { semantic?: ReturnType<JavaLspApplication["runtimes"]["semanticStatus"]> } {
+  const semantic = application.runtimes.semanticStatus?.();
+  return semantic ? { semantic } : {};
+}
+
 function daemonStatus(application: JavaLspApplication, index: Awaited<ReturnType<JavaLspApplication["runtimes"]["indexStatus"]>>): Record<string, unknown> {
   const state = application.state();
   const resource = application.runtimes.resourceStatus();
@@ -279,6 +287,7 @@ function daemonStatus(application: JavaLspApplication, index: Awaited<ReturnType
       importConcurrency: resource.importConcurrency,
       workspaceRetainedOnShutdown: resource.workspaceRetainedOnShutdown
     },
+    ...semanticAdmission(application),
     index: index && ("unavailable" in index ? index : {
       workspaces: index.workspaces.map(workspace => ({ canonicalRoot: workspace.canonicalRoot, view: workspace.view, snapshotId: workspace.snapshotId,
         rounds: workspace.rounds, roundInFlight: workspace.roundInFlight })),

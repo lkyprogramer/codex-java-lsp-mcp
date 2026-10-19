@@ -167,7 +167,7 @@ type CacheEntry<T> = {
 const DEFAULT_CACHE_TTL_MS = positiveInteger(process.env.JDTLS_CACHE_TTL_MS, 300000);
 
 export type JdtlsSessionOptions = {
-  gradleDomain?: Pick<GradleDomain, "home" | "assertSemanticAdmission">;
+  gradleDomain?: Pick<GradleDomain, "home" | "assertSemanticAdmission"> & Partial<Pick<GradleDomain, "gradleImport">>;
   transportMode?: RepoOwnerTransport;
   ownershipLifecycle?: Pick<RepoOwnershipLease, "markJdtlsStarting" | "markJdtlsRunning" | "clearJdtlsState">;
   transportFactory?: JdtlsTransportFactory;
@@ -377,6 +377,11 @@ export class JdtlsSession extends JdtlsLspClient {
         return recorder.snapshot();
       }
     };
+  }
+
+  /** Semantic admission (contract §2.1): JDT_NOT_READY with the domain state until the private Gradle domain is READY. */
+  assertSemanticAdmission(): void {
+    this.gradleDomain?.assertSemanticAdmission();
   }
 
   /**
@@ -1174,7 +1179,8 @@ export class JdtlsSession extends JdtlsLspClient {
       buildSystem: this.buildSystem,
       projectJdk: this.projectJdk,
       generatedCode: this.generatedCode,
-      gradleHome: this.gradleDomain?.home
+      gradleHome: this.gradleDomain?.home,
+      gradleImport: this.gradleDomain?.gradleImport
     });
   }
 
