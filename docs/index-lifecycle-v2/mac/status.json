@@ -149,7 +149,8 @@
     {
       "gateId": "G09",
       "taskId": "MAC-09",
-      "status": "PLAN"
+      "status": "PASS",
+      "result": "mac-09/task-result.json"
     },
     {
       "gateId": "G10",
@@ -277,7 +278,7 @@
     }
   ],
   "next": [
-    "MAC-09",
-    "MAC-10"
+    "MAC-10",
+    "MAC-11"
   ]
 }
