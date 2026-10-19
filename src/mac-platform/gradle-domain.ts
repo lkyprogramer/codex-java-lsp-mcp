@@ -1,7 +1,7 @@
 import path from "node:path";
 import os from "node:os";
 import { readFileSync } from "node:fs";
-import { access, mkdir, readdir, readFile, realpath } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -29,6 +29,8 @@ export type GradleDomainState = "RECOVERING" | "READY" | "RECOVERY_BLOCKED";
 export type GradleCleanupIO = {
   execute(distribution: GradleDistribution, args: string[], home: string, timeoutMs: number): Promise<string>;
   alive(pid: number): boolean;
+  /** The command line of a live pid (observed only, never a kill target); undefined when unknown. */
+  command?(pid: number): Promise<string | undefined>;
 };
 const execute = promisify(execFile);
 export const defaultGradleCleanupIO: GradleCleanupIO = {
@@ -46,8 +48,15 @@ export const defaultGradleCleanupIO: GradleCleanupIO = {
   },
   alive(pid) {
     try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; }
+  },
+  async command(pid) {
+    try { return (await execute("/bin/ps", ["-o", "command=", "-p", String(pid)], { timeout: 2000, maxBuffer: 64 * 1024 })).stdout.trim() || undefined; }
+    catch { return undefined; }
   }
 };
+
+/** A daemon log newer than this may belong to a daemon still registering; older ones belong to registered or dead daemons. */
+const STARTING_DAEMON_LOG_MS = 5 * 60_000;
 
 /** Service-domain cleanup. Session stop never stops another repo's Gradle. */
 export class GradleDomain {
@@ -120,8 +129,31 @@ export class GradleDomain {
       const after = await command(["--status"]);
       if (/^\s*\d+\s+(IDLE|BUSY|CANCELED)\b/m.test(after)) throw new Error("Gradle daemon remains after stop");
       if (!/No Gradle daemons are running|\bPID\s+STATUS\b/.test(after)) throw new Error("unrecognized Gradle status response");
+      // A daemon whose client died before it registered (an owner killed during a first import) is
+      // invisible to --status and --stop, but its fresh log names it: --stop again once it registered.
+      while ((await this.bounded(() => this.startingDaemons(distribution.version), deadline, "Gradle daemon log scan")).length) {
+        remaining(); await delay(250);
+        await command(["--stop"]);
+      }
     }
     if (unavailable.length) throw new Error(`Gradle ${unavailable.join(", ")} ran in this domain but has no verified local distribution`);
+  }
+  /** Live pids of this home's recent daemon logs for one version that still run that version's daemon. */
+  private async startingDaemons(version: string): Promise<number[]> {
+    const command = this.io.command;
+    if (!command) return [];
+    const dir = path.join(this.home, "daemon", version);
+    const names = await readdir(dir).catch(error => { if ((error as NodeJS.ErrnoException).code === "ENOENT") return [] as string[]; throw error; });
+    const daemon = new RegExp(`org\\.gradle\\.launcher\\.daemon\\.bootstrap\\.GradleDaemon ${version.replaceAll(".", "\\.")}(\\s|$)`);
+    const pids: number[] = [];
+    for (const name of names) {
+      const pid = Number(/^daemon-(\d+)\.out\.log$/.exec(name)?.[1]);
+      if (!pid || !this.io.alive(pid)) continue;
+      const info = await stat(path.join(dir, name)).catch(() => undefined);
+      if (!info || Date.now() - info.birthtimeMs > STARTING_DAEMON_LOG_MS) continue;
+      if (daemon.test((await command.call(this.io, pid)) ?? "")) pids.push(pid);
+    }
+    return pids;
   }
   private async bounded<T>(operation: () => Promise<T>, deadline: number, stage: string): Promise<T> {
     const remainingMs = Math.ceil(deadline - performance.now());

@@ -379,6 +379,27 @@ test("the janitor never deletes the telemetry/ directory even when it has no rep
   }
 });
 
+test("the janitor never touches the owner snapshot store (mac1/) even when it has no repo-meta and is old", async () => {
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-worktree-mac1-"));
+  const now = Date.parse("2026-06-21T00:00:00.000Z");
+  try {
+    const store = path.join(cacheBase, "mac1");
+    const binding = path.join(store, "workspaces", "w-0123456789abcdef", "binding.json");
+    await mkdir(path.dirname(binding), { recursive: true });
+    await mkdir(path.join(store, "jobs", "j-0123456789abcdef"), { recursive: true });
+    await writeFile(binding, "{}\n");
+    const old = new Date(now - 7 * 3600000);
+    await utimes(store, old, old);
+    const result = cleanupStaleWorktreeCaches({ cacheBase, now, noMetaGraceMs: 3600000 });
+    assert.equal(existsSync(binding), true, "mac1/ must survive L1 no-meta reclaim");
+    assert.equal(existsSync(path.join(store, "jobs", "j-0123456789abcdef")), true);
+    assert.equal(result.removedDirs.includes(store), false);
+    assert.equal(result.scanned, 0, "mac1/ is not scanned as a repo cache");
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
 type JanitorFixture = {
   cacheBase: string;
   leaseBase: string;

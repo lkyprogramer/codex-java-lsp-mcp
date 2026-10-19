@@ -71,6 +71,30 @@ test("stop exit zero cannot stand in for actual daemon exit", async t => {
   assert.equal(domain.status().semanticState, "RECOVERY_BLOCKED"); assert.equal(domain.status().staticAdmission, true);
 });
 
+test("a daemon still registering when its client died is stopped once it registers; one that never does blocks semantic", async t => {
+  const DAEMON = "/jdk/bin/java -cp gradle-daemon-main-9.3.1.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 9.3.1";
+  const scenario = async (registersAfterStops: number, budgetMs = 10000) => {
+    const selectedHome = await home(t);
+    await mkdir(path.join(selectedHome, "daemon", "9.3.1"), { recursive: true });
+    // Fresh logs: 4242 is still registering; 4343 is a live non-Gradle process that reused an old pid.
+    for (const pid of [4242, 4343]) await writeFile(path.join(selectedHome, "daemon", "9.3.1", `daemon-${pid}.out.log`), "");
+    let stops = 0;
+    const io: GradleCleanupIO = {
+      alive: pid => pid === 4343 || (pid === 4242 && stops < registersAfterStops),
+      async command(pid) { return pid === 4242 ? DAEMON : "/usr/bin/vim notes.txt"; },
+      async execute(_dist, args) { if (args[0] === "--stop") stops += 1; return "No Gradle daemons are running.\n"; }
+    };
+    const domain = new GradleDomain(selectedHome, [distribution("9.3.1")], io);
+    const outcome = await domain.recover(async () => {}, performance.now(), budgetMs).then(() => "READY", (error: Error) => error.message);
+    return { outcome, stops, state: domain.status().semanticState };
+  };
+  assert.deepEqual(await scenario(2), { outcome: "READY", stops: 2, state: "READY" });
+  const never = await scenario(Infinity, 700);
+  assert.match(never.outcome, /deadline exceeded/);
+  assert.equal(never.state, "RECOVERY_BLOCKED");
+  assert.ok(never.stops >= 2, "--stop was retried while the daemon was registering");
+});
+
 test("unrecognized status cannot silently clear semantic recovery", async t => {
   const io: GradleCleanupIO = { alive: () => false, async execute() { return "unknown registry status"; } };
   const domain = new GradleDomain(await home(t), [distribution("9.3.1")], io);

@@ -9,6 +9,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { compatibleDeltaBase } from "../../index-builder/execution-plan.js";
+import { OWNER_STORE_DIR } from "../../repo-layout.js";
 import { buildSnapshotManifest, parseSnapshotManifest, type ContentEntry, type SnapshotManifest } from "../sql/snapshot-manifest.js";
 
 export const DB_FILE = "index.sqlite";
@@ -17,7 +18,7 @@ const SIDECARS = ["-wal", "-shm", "-journal"];
 
 /** The mac1 cache tree (contract §2.7). */
 export function mac1Layout(cacheRoot: string) {
-  const root = path.join(cacheRoot, "mac1");
+  const root = path.join(cacheRoot, OWNER_STORE_DIR);
   return { root, owner: path.join(root, "owner"), snapshots: path.join(root, "snapshots"),
     workspaces: path.join(root, "workspaces"), jobs: path.join(root, "jobs") };
 }

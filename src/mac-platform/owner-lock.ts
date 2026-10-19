@@ -15,7 +15,8 @@ export function ownerCacheRoot(env: NodeJS.ProcessEnv = process.env): string | u
 /** Check the existing OFD, not a newly acquired substitute. */
 export function assertOwnerLock(env: NodeJS.ProcessEnv = process.env): void {
   const root = ownerCacheRoot(env);
-  if (!root) return; // Legacy transports are migrated in MAC-09.
+  // No owner launcher (tests, dev, the legacy LaunchAgent until MAC-17): no lock to check, and no GC cycle runs.
+  if (!root) return;
   if (!fstatSync(4).isFile()) throw new Error("owner fd4 missing");
   const response = JSON.parse(execFileSync(nativeBinary, ["verify-owner-lock", root], {
     encoding: "utf8", timeout: 2000, maxBuffer: 64 * 1024,

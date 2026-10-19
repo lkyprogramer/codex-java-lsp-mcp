@@ -72,6 +72,13 @@ export type IndexOwnerOptions = {
   startStopGraceMs?: number;
   /** One GC cycle (default GC_CYCLE_MS); unreferenced objects converge within two cycles. */
   gcCycleMs?: number;
+  /**
+   * false: no GC cycle, neither at open nor periodic. Without the owner lock nothing proves that the
+   * store's other jobs and unbound snapshots belong to a dead incarnation rather than to a live
+   * process (contract §2.1 opens snapshot GC only under the lock); this owner's own superseded
+   * snapshots still go once nothing binds or leases them.
+   */
+  gc?: boolean;
   /** Test seam: the trackers' periodic full-hash interval (default FULL_HASH_INTERVAL_MS). */
   fullHashIntervalMs?: number;
 };
@@ -131,7 +138,7 @@ export class IndexOwner {
     options.restored?.();
     const owner = new IndexOwner(store, options);
     // Recovery: what a dead incarnation left (jobs, unbound snapshots, tmp) goes in the first cycle.
-    void owner.sweep();
+    if (options.gc !== false) void owner.sweep();
     return owner;
   }
 
@@ -234,6 +241,7 @@ export class IndexOwner {
    * admission opens or after stop(). Every deletion is the store's own tryReclaim decision.
    */
   sweep(): Promise<SweepReport | undefined> {
+    if (this.options.gc === false) return Promise.resolve(undefined);
     if (this.sweeping) return this.sweeping;
     if (this.sweepTimer) clearTimeout(this.sweepTimer);
     this.sweepTimer = undefined;

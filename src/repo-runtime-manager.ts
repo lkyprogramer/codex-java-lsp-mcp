@@ -170,13 +170,17 @@ type RuntimeManagerOptions = {
 /** A blocked Gradle cleanup is retried only on semantic demand, and not sooner than this (no busy retry). */
 const SEMANTIC_RETRY_MS = 30_000;
 
-/** The daemon's one owner over `<owner cache root>/mac1`; the launcher's lock is checked before every binding write. */
+/**
+ * The daemon's one owner over `<owner cache root>/mac1`; the launcher's lock is checked before every
+ * binding write. Without the launcher there is no lock, so there is no GC cycle either.
+ */
 export function defaultIndexOwner(overrides: Partial<IndexOwnerOptions> = {}): () => Promise<IndexOwner> {
   const faultAt = faultBarrier();
   // Isolated validation only: a short GC cycle, so convergence within two cycles is observable.
   const gcCycleMs = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.JAVA_LSP_GC_CYCLE_MS
     ? positiveInteger(process.env.JAVA_LSP_GC_CYCLE_MS, 0) || undefined : undefined;
-  return () => IndexOwner.open({ cacheRoot: ownerCacheRoot() ?? repoCacheBase(), assertOwner: () => assertOwnerLock(),
+  const owned = ownerCacheRoot() !== undefined;
+  return () => IndexOwner.open({ cacheRoot: ownerCacheRoot() ?? repoCacheBase(), assertOwner: () => assertOwnerLock(), gc: owned,
     ...(faultAt ? { faultAt } : {}), ...(gcCycleMs ? { gcCycleMs } : {}), ...overrides });
 }
 

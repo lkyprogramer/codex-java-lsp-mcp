@@ -17,7 +17,7 @@ import path from "node:path";
 import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
 import { killOwnedProcessTree, listProcesses } from "./jdt-process-tree.js";
 import { canonicalPath } from "./path-utils.js";
-import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
+import { OWNER_STORE_DIR, repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import {
   processStartIdentityForPid,
   repoOwnershipBase,
@@ -263,6 +263,8 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
       || entry.name === "leases"
       || entry.name === "ownership"
       || entry.name === "telemetry"
+      // The owner store has no repo-meta and its mtime stays at creation: it is the owner GC's, not ours.
+      || entry.name === OWNER_STORE_DIR
     ) {
       continue;
     }

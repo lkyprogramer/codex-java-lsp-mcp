@@ -103,6 +103,27 @@ test("the owner's first sweep removes what a dead incarnation left, before any w
   for (const file of [service, legacy, path.join(cacheRoot, "mac1", "owner", "owner.lock")]) assert.equal(await readFile(file, "utf8"), "keep", file);
 });
 
+test("without the owner lock (gc: false) no cycle ever runs: a live process's jobs and unbound candidates stay", async t => {
+  const dir = await base(t);
+  const cacheRoot = path.join(dir, "cache");
+  const root = await repo(dir, "repo");
+  const live = await openOwner(t, cacheRoot);
+  const { binding } = await bound(live, root);
+  const job = await live.owner.store.createJob({ workspaceId: binding.workspaceId, captureId: "cap-live-00001" });
+  const lease = live.owner.store.acquire(binding.snapshotId, "base");
+  await live.owner.store.cloneBase(lease, job);
+  lease.release();
+  const candidate = await live.owner.store.seal(job);
+  const openJob = await live.owner.store.createJob({ workspaceId: binding.workspaceId, captureId: "cap-live-00002" });
+
+  const unlocked = await openOwner(t, cacheRoot, { gc: false, gcCycleMs: 20 });
+  assert.equal(await unlocked.owner.sweep(), undefined, "an explicit cycle is refused too");
+  await delay(200);
+  assert.deepEqual(unlocked.sweeps(), []);
+  assert.deepEqual((await readdir(unlocked.owner.store.layout.snapshots)).sort(), [binding.snapshotId, candidate.snapshotId].sort());
+  assert.deepEqual((await readdir(unlocked.owner.store.layout.jobs)).sort(), [job.jobId, openJob.jobId].sort());
+});
+
 test("a superseded snapshot under a held lease survives every cycle and goes within two cycles of the release", async t => {
   const dir = await base(t);
   const root = await repo(dir, "repo");

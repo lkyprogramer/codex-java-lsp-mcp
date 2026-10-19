@@ -113,6 +113,68 @@ test("a complete persisted reference emits high-confidence exact-semantic weight
   );
 });
 
+
+test("persisted JDT edges are not reused while semantic admission is closed", async () => {
+  const anchor: ResolvedAnchor = {
+    id: "A1",
+    absolutePath: "/repo/src/main/java/demo/OrderRepository.java",
+    path: "src/main/java/demo/OrderRepository.java",
+    sourceSet: "main",
+    line: 1,
+    column: 1,
+    profile: "repository",
+    symbolName: "OrderRepository",
+    className: "OrderRepository",
+    kind: "interface"
+  };
+  const target = "/repo/src/main/java/demo/OrderCommandService.java";
+  const anchorSymbolId = "sym:OrderRepository";
+  const open = {
+    repoRoot: "/repo",
+    anchors: [anchor],
+    options,
+    javaIndex: {
+      queryAnchor: async (file: string, line: number, column: number) =>
+        file === anchor.absolutePath && line === anchor.line && column === anchor.column
+          ? { symbolId: anchorSymbolId }
+          : undefined
+    },
+    routingPolicy: resolveRoutingPolicy("/repo"),
+    existingCandidatePaths: [],
+    generation: 0,
+    phaseMs: {},
+    edgeStoreV2: {
+      findFrom: (sourceSymbolId: string) => sourceSymbolId === anchorSymbolId
+        ? [{
+            edgeId: "e1",
+            sourceSymbolId: anchorSymbolId,
+            targetSymbolId: "sym:OrderCommandService",
+            sourceFile: anchor.absolutePath,
+            targetFile: target,
+            relation: "JDT_REFERENCE",
+            targetRanges: [{ start: { line: 4, column: 7 }, end: { line: 4, column: 7 } }],
+            provenance: "PERSISTED_JDT",
+            confidence: 1,
+            completion: "COMPLETE",
+            dependencies: [],
+            buildFingerprint: "bf",
+            validatedGeneration: 0,
+            createdAt: "2026-07-30T00:00:00.000Z"
+          }]
+        : []
+    },
+    metrics: { persistedSemantic: { edgesSeen: 0, addedCandidates: 0, elapsedMs: 0 } }
+  } as unknown as ProviderInput;
+
+  const result = await collectPersistedSemanticEvidence(open);
+  assert.equal(result.evidence.length, 1, "control: the edge is delivered while admission is open");
+  const closed = { ...open, session: { assertSemanticAdmission: () => { throw new JavaIntelligenceError("JDT_NOT_READY", "semanticState=RECOVERY_BLOCKED: injected"); } } } as unknown as ProviderInput;
+  const blocked = await collectPersistedSemanticEvidence(closed);
+  assert.deepEqual(blocked.evidence, []);
+  assert.equal(blocked.completion, "FAILED");
+  assert.match(blocked.degradation ?? "", /semanticState=RECOVERY_BLOCKED/);
+});
+
 test("an anchor position that does not resolve to any symbol yields no persisted candidates and does not throw", async () => {
   const anchor: ResolvedAnchor = {
     id: "A1",

@@ -61,6 +61,9 @@ function findBuildRoot(startDir: string): string | undefined {
   }
 }
 
+/** The owner's snapshot store under the cache base (contract §2.7): never a per-repo cache, never the janitor's. */
+export const OWNER_STORE_DIR = "mac1";
+
 export function repoCacheRoot(repoRoot: string, cacheBase = repoCacheBase()): string {
   return path.join(cacheBase, repoHash(repoRoot));
 }
