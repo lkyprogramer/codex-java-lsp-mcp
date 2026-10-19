@@ -8,10 +8,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { writeFileSync, readFileSync } from "node:fs";
+import { existsSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { convertDataset } from "./ilv2-mac-eval-dataset.mjs";
+import { evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
 import {
   assemblePack,
   backendDeficit,
@@ -274,7 +276,7 @@ test("backendDeficit lists exactly the missing authorizations", () => {
   assert.deepEqual(backendDeficit({}, { hasCodexCli: () => true }), [], "codex CLI alone satisfies the deficit");
 });
 
-test("BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0", async () => {
+test("BLOCKED_AUTH pack: every task UNMEASURED, no success rate, null usage, exit 2", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "eval-blocked-"));
   try {
     await mkdir(path.join(dir, "tasks"), { recursive: true });
@@ -291,15 +293,17 @@ test("BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0
       "--arms", "product,control",
       "--repeats", "3"
     ], env);
-    assert.equal(code, 0);
+    assert.equal(code, 2, "a missing backend measured nothing: never exit 0");
     const pack = JSON.parse(await readFileSync(path.join(output, "results-pack.json"), "utf8"));
     assert.equal(pack.schemaVersion, EVAL_PACK_SCHEMA_VERSION);
     assert.equal(pack.status, "BLOCKED_AUTH");
+    assert.match(pack.identity.tasksSha256, /^[0-9a-f]{64}$/);
+    assert.equal(pack.identity.scheduleSha256, createHash("sha256").update(readFileSync(path.join(output, "schedule.jsonl"))).digest("hex"));
     assert.ok(pack.blockedReasons.length > 0);
     // 2 tasks x 2 arms x 3 repeats = 12 denominator entries, all UNMEASURED
     assert.equal(pack.denominator, 12);
-    // Gate metric is successes / scheduled: zero successes over 12 scheduled.
-    assert.equal(pack.taskSuccessRate, 0);
+    // Nothing was measured: no rate at all (0 would read as a measured failure).
+    assert.equal(pack.taskSuccessRate, null);
     assert.equal(pack.conditionalAccuracy, null, "nothing measured: no conditional rate");
     for (const runPack of pack.packs) {
       assert.equal(runPack.taskOutcome, "UNMEASURED");
@@ -309,6 +313,31 @@ test("BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("--dataset: a MAC-10 split is scheduled under its dataset identity; tasks or gold outside the dataset are refused", async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), "eval-dataset-"));
+  t.after(() => removeTree(dir));
+  const fixture = await evalFixture(dir);
+  const datasetDir = path.join(dir, "dataset");
+  const manifest = await convertDataset({ curationFile: fixture.curationFile, inputsFile: fixture.inputsFile, candidateFiles: [fixture.candidatesFile], out: datasetDir });
+  const tasksFile = path.join(datasetDir, "tasks-dev.jsonl");
+  const goldFile = path.join(datasetDir, "private/gold-dev.jsonl");
+  const output = path.join(dir, "out");
+  const args = ["--dataset", path.join(datasetDir, "dataset-manifest.json"), "--tasks", tasksFile, "--gold", goldFile, "--arms", "product,control", "--repeats", "1", "--dry-run"];
+  assert.equal(await main([...args, "--output", output], {}), 0, "a dry run froze the schedule");
+  const pack = JSON.parse(readFileSync(path.join(output, "results-pack.json"), "utf8"));
+  assert.equal(pack.status, "DRY_RUN");
+  assert.equal(pack.taskSuccessRate, null);
+  assert.deepEqual(pack.identity.dataset, { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest });
+  assert.equal(pack.identity.goldSha256, createHash("sha256").update(readFileSync(goldFile)).digest("hex"));
+  const scheduled = readFileSync(path.join(output, "schedule.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line).taskId);
+  assert.deepEqual([...new Set(scheduled)].sort(), readFileSync(tasksFile, "utf8").trim().split("\n").map(line => JSON.parse(line).taskId).sort());
+  // A task file that is not a part of the named dataset is refused before anything is scheduled.
+  const foreign = path.join(dir, "foreign.jsonl");
+  writeFileSync(foreign, readFileSync(tasksFile, "utf8").trim().split("\n").slice(1).join("\n") + "\n");
+  assert.equal(await main([...args.map(item => item === tasksFile ? foreign : item), "--output", path.join(dir, "out-foreign")], {}), 2);
+  assert.equal(existsSync(path.join(dir, "out-foreign/schedule.jsonl")), false);
 });
 
 test("SOURCE_FETCHED: java_symbol preview becomes a raw tool_response event with sha256 + range", () => {

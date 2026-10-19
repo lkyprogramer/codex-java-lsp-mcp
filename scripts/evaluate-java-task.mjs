@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// input: Frozen dev task set (dataset/prompts/dev.jsonl), gold (dataset/gold),
+// input: An explicit task file (--tasks), its gold (--gold), the optional MAC-10 dataset manifest
+//         (--dataset) both must belong to,
 //         a model backend (OpenAI-compatible API or codex CLI), and the local
 //         product MCP server for java_symbol. No backend credentials means the
 //         run reports BLOCKED_AUTH and nothing is measured.
@@ -519,7 +520,7 @@ export function createRecorder() {
  * outcome was never externally measured stays UNMEASURED - the pack never
  * promotes a proxy into a task success.
  */
-export function assemblePack({ status, backend, datasetHash, arms, repeats, runs, blockedReasons, planned, productProfile = "broad", publicAnswerContract = null }) {
+export function assemblePack({ status, backend, datasetHash, arms, repeats, runs, blockedReasons, planned, productProfile = "broad", publicAnswerContract = null, identity = null }) {
   const byKey = new Map();
   for (const run of runs) {
     const key = `${run.taskId}\u0000${run.arm}\u0000${run.repeat}`;
@@ -601,23 +602,27 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     ...(blockedReasons?.length ? { blockedReasons } : {}),
     backend: backend ?? null,
     datasetHash: datasetHash ?? null,
+    identity,
     arms,
     repeats,
     denominator: packs.length,
     ...(missing.length > 0 ? { missingResults: missing.map(m => m.taskId) } : {}),
     packs,
-    // End-to-end rate: successes / scheduled. Never successes / measured.
-    taskSuccessRate: packs.length > 0 ? successes / packs.length : null,
+    // End-to-end rate: successes / scheduled. Never successes / measured. A pack that measured
+    // nothing (no backend, dry run) has no rate at all: 0 would read as a measured failure.
+    taskSuccessRate: status === "MEASURED" && packs.length > 0 ? successes / packs.length : null,
     conditionalAccuracy: measured.length > 0 ? successes / measured.length : null,
     measuredAttempts: measured.length
   };
 }
 
 export function loadTaskFile(file) {
+  // A MAC-10 dataset row names its task `taskId`; kit rows use `id`.
   return readFileSync(file, "utf8")
     .split("\n")
     .filter(line => line.trim().length > 0)
-    .map(line => JSON.parse(line));
+    .map(line => JSON.parse(line))
+    .map(row => row.id === undefined && typeof row.taskId === "string" ? { ...row, id: row.taskId } : row);
 }
 
 export function loadGoldFile(file) {
@@ -1092,19 +1097,36 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const dryRun = argv.includes("--dry-run");
   const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--product-profile broad|evidence|exact-evidence] [--dry-run]");
+    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--product-profile broad|evidence|exact-evidence] [--dry-run]");
     return 2;
   }
   const datasetHash = goldFile
     ? createHash("sha256").update(readFileSync(goldFile)).digest("hex")
     : null;
+  const tasksSha256 = createHash("sha256").update(readFileSync(tasksFile)).digest("hex");
+  // MAC-10: the dataset is named, never implied; its tasks and gold must be parts of it.
+  let dataset = null;
+  if (flag("--dataset")) {
+    const { verifyDataset } = await import("./ilv2-mac-eval-dataset.mjs");
+    const { manifest } = await verifyDataset(path.resolve(flag("--dataset")));
+    const parts = Object.values(manifest.parts).map(part => part.sha256);
+    if (!parts.includes(tasksSha256) || (datasetHash && !parts.includes(datasetHash))) {
+      console.error("--tasks/--gold are not parts of --dataset");
+      return 2;
+    }
+    dataset = { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest };
+  }
   const allTasks = loadTaskFile(tasksFile);
   const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
   // The full schedule is frozen before anything runs; every row stays in the
   // denominator whatever happens to it.
   const planned = buildPlannedAttempts(tasks, arms, repeats);
   mkdirSync(output, { recursive: true });
-  writeFileSync(path.join(output, "schedule.jsonl"), planned.map(row => JSON.stringify(row)).join("\n") + (planned.length ? "\n" : ""), "utf8");
+  const scheduleText = planned.map(row => JSON.stringify(row)).join("\n") + (planned.length ? "\n" : "");
+  writeFileSync(path.join(output, "schedule.jsonl"), scheduleText, "utf8");
+  const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
+  const identity = { dataset, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
+    filter, seed, arms, repeats, productProfile, driver: { serverJs: path.resolve(serverJs), serverJsSha256: existsSync(serverJs) ? createHash("sha256").update(readFileSync(serverJs)).digest("hex") : null } };
   const backend = detectBackend(env);
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
@@ -1118,11 +1140,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       repeats,
       runs,
       planned,
+      identity,
       blockedReasons: dryRun ? undefined : backendDeficit(env)
     });
     writeFileSync(path.join(output, "results-pack.json"), `${JSON.stringify(pack, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ status: pack.status, denominator: pack.denominator, taskSuccessRate: pack.taskSuccessRate, output: path.join(output, "results-pack.json") }, null, 2));
-    return 0;
+    // A dry run did what it was asked (froze the schedule); a missing backend measured nothing.
+    return dryRun ? 0 : 2;
   }
   const repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
     .filter(Boolean)
@@ -1134,7 +1158,6 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     console.error("live run requires --gold <gold.jsonl> (frozen evaluator-side labels)");
     return 2;
   }
-  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const live = await runLiveEvalRun({
     tasks,
     gold: loadGoldFile(goldFile),
@@ -1148,7 +1171,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     maxRounds,
     productProfile,
     publicAnswerContract,
-    serverJs: flag("--server-js") ?? path.join(scriptDir, "..", "dist", "server.js")
+    serverJs
   });
   const scorer = kitRoot
     ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null, productProfile })
@@ -1162,7 +1185,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     arms,
     repeats,
     runs: live.runs,
-    planned
+    planned,
+    identity
   });
   pack.scorer = scorer;
   pack.seed = seed;

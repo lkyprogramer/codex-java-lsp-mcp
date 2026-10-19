@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // input:  A finished agent results pack (scripts/evaluate-java-task.mjs) whose
-//         QA was scored by the frozen kit, two arm names and the
-//         pre-registered pilot task ids (configs/experiment.json).
+//         QA was scored by the frozen kit, two arm names, and every identity
+//         it is compared under, given explicitly (MAC-10): the kit root, the
+//         task file the pack ran, its gold, and the pre-registered pilot ids.
 // output: <out>/<name>-compare.json (kit `compare` on the pilot rows only) and
 //         <out>/<name>-evidence.json: per-arm success (every scheduled attempt
 //         in the denominator), the QA delta with its cluster bootstrap CI and
@@ -9,15 +10,27 @@
 // pos:    The native-vs-A2 primary control is reproducible from committed
 //         code (moved here from the removed dense experiment package).
 //
-// node scripts/eval-pilot-compare.mjs --pack <results-pack.json> \
+// node scripts/eval-pilot-compare.mjs --pack <results-pack.json> --kit-root <kit> \
+//   --tasks <tasks.jsonl> --gold <gold.jsonl> --pilot-ids <experiment.json> \
 //   --baseline control --candidate product --name native-vs-a2 [--out <dir>]
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const KIT = path.join(REPO_ROOT, "docs/java-specialist-release-audit-v1.1/baseline-kit");
+const digest = file => createHash("sha256").update(readFileSync(file)).digest("hex");
+
+/** Refusals before any score is read; an empty list means the pack is comparable under these identities. */
+export function packIdentityErrors(pack, { tasksSha256, goldSha256 }) {
+  const errors = [];
+  if (pack.status !== "MEASURED") errors.push(`pack status ${pack.status}: nothing was measured`);
+  if (pack.scorer?.kind !== "frozen-kit") errors.push(`QA was not scored by the frozen kit (${pack.scorer?.kind})`);
+  if (pack.datasetHash !== goldSha256) errors.push("pack was not scored against this gold");
+  if (pack.identity && pack.identity.tasksSha256 !== tasksSha256) errors.push("pack did not run this task file");
+  if (!pack.identity) errors.push("pack carries no task/schedule identity");
+  return errors;
+}
 
 /** successRate = successes / every scheduled attempt of the arm (R02 denominator rule). */
 export function summarizeArm(runs, arm) {
@@ -60,7 +73,7 @@ export function pilotReport(report, pilotIds) {
 }
 
 /** `harness compare` (paired, cluster bootstrap) of the two arms' kit reports on the pilot rows. */
-export function comparePilotReports({ kitRoot = KIT, baselineReportPath, candidateReportPath, pilotIds, outputDir, name, python = process.env.JSB_PYTHON ?? "python3" }) {
+export function comparePilotReports({ kitRoot, baselineReportPath, candidateReportPath, pilotIds, outputDir, name, python = process.env.JSB_PYTHON ?? "python3" }) {
   const filtered = (reportPath, label) => {
     const target = path.join(outputDir, `${name}-${label}-pilot-report.json`);
     writeFileSync(target, `${JSON.stringify(pilotReport(JSON.parse(readFileSync(reportPath, "utf8")), pilotIds), null, 1)}\n`);
@@ -85,33 +98,43 @@ function main() {
     return index >= 0 ? process.argv[index + 1] : undefined;
   };
   const packPath = arg("--pack");
+  const kitRoot = arg("--kit-root");
+  const tasksFile = arg("--tasks");
+  const goldFile = arg("--gold");
+  const pilotFile = arg("--pilot-ids");
   const baseline = arg("--baseline");
   const candidate = arg("--candidate");
   const name = arg("--name");
-  if (!packPath || !baseline || !candidate || !name) {
-    process.stderr.write("usage: eval-pilot-compare.mjs --pack <results-pack.json> --baseline <arm> --candidate <arm> --name <label> [--out <dir>]\n");
+  if (!packPath || !kitRoot || !tasksFile || !goldFile || !pilotFile || !baseline || !candidate || !name) {
+    process.stderr.write("usage: eval-pilot-compare.mjs --pack <results-pack.json> --kit-root <kit> --tasks <tasks.jsonl> --gold <gold.jsonl> --pilot-ids <experiment.json> --baseline <arm> --candidate <arm> --name <label> [--out <dir>]\n");
     process.exit(2);
   }
   const pack = JSON.parse(readFileSync(packPath, "utf8"));
-  if (pack.scorer?.kind !== "frozen-kit") throw new Error(`${packPath}: QA was not scored by the frozen kit (${pack.scorer?.kind})`);
+  const errors = packIdentityErrors(pack, { tasksSha256: digest(tasksFile), goldSha256: digest(goldFile) });
+  if (errors.length) {
+    process.stderr.write(`${packPath}: refused: ${errors.join("; ")}\n`);
+    process.exit(2);
+  }
   const runs = pack.runs ?? pack.packs;
   if (!Array.isArray(runs)) throw new Error(`${packPath}: no attempt rows`);
-  const pilotIds = JSON.parse(readFileSync(path.join(REPO_ROOT, "docs/java-specialist-devkit-v1/configs/experiment.json"), "utf8")).pilot.task_ids;
+  const pilotIds = JSON.parse(readFileSync(pilotFile, "utf8")).pilot.task_ids;
   const outputDir = path.resolve(arg("--out") ?? path.join(path.dirname(packPath), "frozen-score"));
   mkdirSync(outputDir, { recursive: true });
   const comparison = comparePilotReports({
+    kitRoot,
     baselineReportPath: pack.scorer.reports[baseline].reportPath,
     candidateReportPath: pack.scorer.reports[candidate].reportPath,
     pilotIds,
     outputDir,
     name
   });
-  const kinds = new Map(readFileSync(path.join(KIT, "dataset/prompts/dev.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line)).map(task => [task.id, task.kind]));
+  const kinds = new Map(readFileSync(tasksFile, "utf8").trim().split("\n").map(line => JSON.parse(line)).map(task => [task.id, task.kind]));
   const medians = Object.fromEntries([baseline, candidate].map(arm => [arm, medianPromptTokens(runs.filter(run => run.arm === arm))]));
   const qa = comparison.metrics?.qa_contract_pass ?? null;
   const evidence = {
     pack: path.resolve(packPath),
     evalProtocol: pack.evalProtocol ?? null,
+    identity: { kitRoot: path.resolve(kitRoot), tasksSha256: digest(tasksFile), goldSha256: digest(goldFile), pilotIdsSha256: digest(pilotFile), scheduleSha256: pack.identity.scheduleSha256 },
     baseline,
     candidate,
     pilotIds,

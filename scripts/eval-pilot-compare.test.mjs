@@ -2,7 +2,7 @@
 // row filter used by the native-vs-A2 primary control.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { medianPromptTokens, pilotReport, summarizeArm } from "./eval-pilot-compare.mjs";
+import { medianPromptTokens, packIdentityErrors, pilotReport, summarizeArm } from "./eval-pilot-compare.mjs";
 
 test("summarizeArm: success rate is over every scheduled attempt", () => {
   const runs = [
@@ -30,4 +30,13 @@ test("medianPromptTokens: exact median; missing usage is not a median", () => {
 test("pilotReport keeps only pilot rows and drops the whole-split summary", () => {
   const report = { schema: "r", summary: { overall: {} }, rows: [{ task_id: "a" }, { task_id: "b" }, { task_id: "a", repeat: 1 }] };
   assert.deepEqual(pilotReport(report, ["a"]), { schema: "r", rows: [{ task_id: "a" }, { task_id: "a", repeat: 1 }] });
+});
+
+test("packIdentityErrors: an unmeasured, unscored or foreign pack is refused", () => {
+  const pack = { status: "MEASURED", scorer: { kind: "frozen-kit" }, datasetHash: "g", identity: { tasksSha256: "t", scheduleSha256: "s" } };
+  assert.deepEqual(packIdentityErrors(pack, { tasksSha256: "t", goldSha256: "g" }), []);
+  assert.match(packIdentityErrors({ ...pack, status: "BLOCKED_AUTH" }, { tasksSha256: "t", goldSha256: "g" }).join(), /nothing was measured/);
+  assert.match(packIdentityErrors(pack, { tasksSha256: "t", goldSha256: "other" }).join(), /not scored against this gold/);
+  assert.match(packIdentityErrors(pack, { tasksSha256: "other", goldSha256: "g" }).join(), /did not run this task file/);
+  assert.match(packIdentityErrors({ ...pack, identity: undefined }, { tasksSha256: "t", goldSha256: "g" }).join(), /no task\/schedule identity/);
 });
