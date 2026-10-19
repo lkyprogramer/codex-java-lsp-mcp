@@ -537,6 +537,15 @@ test("a runtime creation hard-cap retires a stuck lease singleflight so a later 
   await manager.shutdownAll();
 });
 
+/** A Gradle cleanup that never starts (or never ends) fails the test instead of hanging it. */
+async function cleanupSettled(domain: GradleDomain, timeoutMs = 5000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (domain.status().semanticState === "RECOVERING") {
+    if (Date.now() > deadline) throw new Error(`Gradle cleanup still RECOVERING after ${timeoutMs} ms`);
+    await delay(5);
+  }
+}
+
 test("under a Gradle domain, start runs its cleanup before any semantic admission and a normal stop closes JDT before stopping Gradle", async t => {
   const home = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-gradle-")));
   t.after(() => rmSync(home, { recursive: true, force: true }));
@@ -556,7 +565,7 @@ test("under a Gradle domain, start runs its cleanup before any semantic admissio
   assert.deepEqual(manager.semanticStatus(), { staticAdmission: "CLOSED", semanticState: "RECOVERING" });
   assert.throws(() => domain.assertSemanticAdmission(), /semanticState=RECOVERING/);
   firstStatus.resolve();
-  while (domain.status().semanticState === "RECOVERING") await delay(5);
+  await cleanupSettled(domain);
   assert.equal(manager.semanticStatus()?.semanticState, "READY");
   assert.deepEqual(order.splice(0), ["gradle--status", "gradle--stop", "gradle--status"]);
 
@@ -569,10 +578,11 @@ test("under a Gradle domain, start runs its cleanup before any semantic admissio
       order.push(`session-stop:${domain.status().semanticState}`);
       await delay(20);
       await stop();
+      order.push("session-stopped");
     };
   }, { mayStartLsp: true });
   await manager.shutdownAll({ terminal: true });
-  assert.deepEqual(order, ["session-stop:RECOVERING", "gradle--status", "gradle--stop", "gradle--status"]);
+  assert.deepEqual(order, ["session-stop:RECOVERING", "session-stopped", "gradle--status", "gradle--stop", "gradle--status"]);
 });
 
 test("a blocked Gradle cleanup is retried only on semantic demand and not sooner than the retry floor", async t => {
@@ -589,7 +599,7 @@ test("a blocked Gradle cleanup is retried only on semantic demand and not sooner
   const manager = new RepoRuntimeManager(fakeResolver(), { index: false, gradleDomain: domain, semanticRetryMs: 300, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions), undefined, new NoopCrossProcessLeaseStore());
   await manager.initialize();
-  while (domain.status().semanticState === "RECOVERING") await delay(5);
+  await cleanupSettled(domain);
   assert.deepEqual(manager.semanticStatus(), { staticAdmission: "CLOSED", semanticState: "RECOVERY_BLOCKED", failure: "injected stop failure" });
   await delay(5);
   await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
@@ -601,7 +611,7 @@ test("a blocked Gradle cleanup is retried only on semantic demand and not sooner
   await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
   assert.equal(statusCalls, 1, "a static request never retries");
   await manager.withContext({ repoRoot: "/repo-a" }, async () => {}, { mayStartLsp: true });
-  while (domain.status().semanticState === "RECOVERING") await delay(5);
+  await cleanupSettled(domain);
   assert.equal(statusCalls, 2, "the first semantic request after the floor retried once");
   await manager.shutdownAll();
 });
