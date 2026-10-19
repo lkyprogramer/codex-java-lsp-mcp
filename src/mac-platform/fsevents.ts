@@ -7,7 +7,9 @@ import { MAC_NATIVE_PROTOCOL } from "./native-protocol.js";
 
 export const FSEVENT_LINE_BYTES = 64 * 1024;
 export type MacFsEvent = { volumeIdentity: string; epoch: string; seq: string; eventId: string; flags: number; path: string };
-export type MacFsReady = { volumeIdentity: string; epoch: string; seq: string; pid: number; pgid: number; fd: 4; inode: string };
+export type MacFsReady = { volumeIdentity: string; epoch: string; seq: string; pid: number; pgid: number; fd: 4; inode: string; power: "registered"; testHooks: boolean };
+/** A raw system wake (IOKit kIOMessageSystemHasPoweredOn), or its test-hook replay; never inferred in Node. */
+export type MacFsResume = { volumeIdentity: string; epoch: string; seq: string; source: "system-has-powered-on" | "test-hook" };
 export type MacFsFence = { volumeIdentity: string; epoch: string; seq: string; requestId: string };
 type Message = Record<string, unknown> & { epoch: string; seq: string; kind: string };
 const uint64 = (value: unknown): value is string => typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= 18446744073709551615n;
@@ -47,11 +49,14 @@ export class FSEventDecoder {
       } else if (row.epoch !== this.epoch || row.kind === "ready") throw new Error("FSEvents epoch changed within stream");
       if (row.kind === "ready") {
         if (!Number.isSafeInteger(row.pid) || (row.pid as number) <= 1 || !Number.isSafeInteger(row.pgid) || (row.pgid as number) <= 1 || row.fd !== 4 || !uint64(row.inode) || !uint64(row.volumeIdentity)) throw new Error("invalid FSEvents owner/volume metadata");
+        if (row.power !== "registered" || typeof row.testHooks !== "boolean") throw new Error("invalid FSEvents power registration");
         this.volumeIdentity = row.volumeIdentity as string;
       } else if (row.kind === "event") {
         if (!uint64(row.eventId) || !Number.isInteger(row.flags) || (row.flags as number) < 0 || (row.flags as number) > 0xffffffff || typeof row.path !== "string" || row.path.includes("\0")) throw new Error("invalid FSEvents event");
       } else if (row.kind === "fence") {
         if (!uint64(row.requestId)) throw new Error("invalid FSEvents fence");
+      } else if (row.kind === "resume") {
+        if (row.source !== "system-has-powered-on" && row.source !== "test-hook") throw new Error("invalid FSEvents resume");
       } else if (row.kind === "stopped") this.stopped = true;
       else if (row.kind === "error") { if (typeof row.code !== "string") throw new Error("invalid FSEvents error"); }
       else throw new Error("unknown FSEvents message");
@@ -86,7 +91,7 @@ export class MacFSEvents {
   private exited = false;
   private nextRequest = 0n;
   private stderrBytes = 0;
-  private constructor(private readonly child: ChildProcessWithoutNullStreams, onEvent: (event: MacFsEvent) => void) {
+  private constructor(private readonly child: ChildProcessWithoutNullStreams, onEvent: (event: MacFsEvent) => void, onResume: (resume: MacFsResume) => void) {
     this.ready = new Promise((resolve, reject) => { this.readyResolve = resolve; this.readyReject = reject; });
     this.closed = new Promise((resolve, reject) => { this.closeResolve = resolve; this.closeReject = reject; });
     // Failure remains observable through ready/fence/stop/closed, without an
@@ -99,6 +104,7 @@ export class MacFSEvents {
         for (const row of this.decoder.push(bytes)) {
           if (row.kind === "ready") { clearTimeout(this.readyTimer); this.readyResolve(row as unknown as MacFsReady); }
           else if (row.kind === "event") onEvent(row as unknown as MacFsEvent);
+          else if (row.kind === "resume") onResume(row as unknown as MacFsResume);
           else if (row.kind === "fence") {
             const pending = this.pending.get(row.requestId as string);
             if (!pending) throw new Error("unsolicited FSEvents fence");
@@ -123,14 +129,14 @@ export class MacFSEvents {
     });
   }
   private fail(error: Error): void { this.failure ??= error; if (!this.exited) this.child.kill("SIGKILL"); }
-  static async start(root: string, onEvent: (event: MacFsEvent) => void): Promise<MacFSEvents> {
+  static async start(root: string, onEvent: (event: MacFsEvent) => void, onResume: (resume: MacFsResume) => void = () => {}): Promise<MacFSEvents> {
     const cache = ownerCacheRoot();
     if (!cache) throw new Error("FSEvents requires an owner binding");
     if (!root.startsWith("/") || await realpath(root) !== root) throw new Error("canonical FSEvents root required");
     await readMacNativeIdentity();
     const binary = fileURLToPath(new URL("../native/ilv2-mac", import.meta.url));
     const child = spawn(binary, ["watch", cache, root], { stdio: ownerChildStdio(["pipe", "pipe", "pipe"]), env: process.env });
-    return new MacFSEvents(child as ChildProcessWithoutNullStreams, onEvent);
+    return new MacFSEvents(child as ChildProcessWithoutNullStreams, onEvent, onResume);
   }
   /** Covers the flushed prefix only. Events may arrive after this acknowledgement. */
   async fence(timeoutMs: number): Promise<MacFsFence> {

@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execute, isMain, runCli, sha256, verifyRuntime } from "./ilv2-mac-contracts.mjs";
 
-export const NATIVE_PROTOCOL = "ilv2-mac-native/v1";
+export const NATIVE_PROTOCOL = "ilv2-mac-native/v2";
 export const DEPLOYMENT_TARGET = "14.0";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -63,7 +63,7 @@ export async function buildMacNative(repoRoot = root) {
   const args = ["-std=c17", "-O2", "-Wall", "-Wextra", "-Werror", "-arch", runtime.arch === "arm64" ? "arm64" : "x86_64", "-isysroot", sdk,
     `-mmacosx-version-min=${DEPLOYMENT_TARGET}`, `-DILV2_NATIVE_PROTOCOL=\"${NATIVE_PROTOCOL}\"`,
     `-DILV2_NODE_BIN=${JSON.stringify(runtime.execPath)}`,
-    path.join(repoRoot, "native/macos/ilv2-mac.c"), "-fblocks", "-pthread", "-framework", "CoreServices", "-framework", "CoreFoundation", "-o", binary];
+    path.join(repoRoot, "native/macos/ilv2-mac.c"), "-fblocks", "-pthread", "-framework", "CoreServices", "-framework", "CoreFoundation", "-framework", "IOKit", "-o", binary];
   try {
     await execute(compiler, args);
     const signing = await signLauncher(binary);

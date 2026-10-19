@@ -42,6 +42,8 @@ test("real-fsevents-ready-fence-root-restart-and-owner-inheritance", { timeout: 
     first = await command("start");
     assert.equal(first.volumeIdentity, (await stat(watched, { bigint: true })).dev.toString());
     assert.equal(first.pgid, child.pid); assert.equal(first.fd, 4); assert.notEqual(first.pid, child.pid);
+    // MAC-09: the helper is a registered system power client; no test hook outside tests.
+    assert.deepEqual([first.power, first.testHooks], ["registered", false]);
     await writeFile(path.join(watched, "after-ready.java"), "class AfterReady {}\n");
     const mutation = await eventually(async () => {
       const row = await command("fence");

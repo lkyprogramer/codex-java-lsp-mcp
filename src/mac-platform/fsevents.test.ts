@@ -5,7 +5,8 @@ import { FSEventDecoder, FSEVENT_LINE_BYTES, MacFSEvents } from "./fsevents.js";
 import { MAC_NATIVE_PROTOCOL } from "./native-protocol.js";
 const epoch = "0123456789abcdef0123456789abcdef";
 const wire = (seq: number, kind: string, fields = {}, stream = epoch) => Buffer.from(JSON.stringify({ protocol: MAC_NATIVE_PROTOCOL, epoch: stream, seq: String(seq), kind, ...fields }) + "\n");
-const ready = (decoder: FSEventDecoder, stream = epoch) => decoder.push(wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9007199254740993", volumeIdentity: "16777234" }, stream));
+const POWER = { power: "registered", testHooks: false };
+const ready = (decoder: FSEventDecoder, stream = epoch) => decoder.push(wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9007199254740993", volumeIdentity: "16777234", ...POWER }, stream));
 
 test("raw-flags-and-fence-order", () => {
   const decoder = new FSEventDecoder(); ready(decoder);
@@ -46,10 +47,19 @@ test("protocol-failures-are-explicit", () => {
 
 test("volume-identity-is-required-and-is-not-owner-inode", () => {
   for (const value of [undefined, "-1", 123, "18446744073709551616", "01"]) {
-    assert.throws(() => new FSEventDecoder().push(wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9", volumeIdentity: value })), /volume/);
+    assert.throws(() => new FSEventDecoder().push(wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9", volumeIdentity: value, ...POWER })), /volume/);
   }
   const rows = ready(new FSEventDecoder());
   assert.equal(rows[0].volumeIdentity, "16777234"); assert.notEqual(rows[0].volumeIdentity, rows[0].inode);
+});
+test("a resume is a sequenced native signal; ready proves the power registration", () => {
+  const decoder = new FSEventDecoder(); ready(decoder);
+  const rows = decoder.push(Buffer.concat([wire(2, "resume", { source: "system-has-powered-on" }), wire(3, "event", { path: "/a", flags: 0, eventId: "9" }), wire(4, "resume", { source: "test-hook" })]));
+  assert.deepEqual(rows.map(row => [row.kind, row.seq, row.source]), [["resume", "2", "system-has-powered-on"], ["event", "3", undefined], ["resume", "4", "test-hook"]]);
+  assert.throws(() => decoder.push(wire(5, "resume", { source: "node-guess" })), /resume/);
+  for (const power of [{}, { power: "registered" }, { power: "none", testHooks: false }, { power: "registered", testHooks: "0" }]) {
+    assert.throws(() => new FSEventDecoder().push(wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9", volumeIdentity: "7", ...power })), /power/);
+  }
 });
 test("startup-errors-preserve-native-code-and-errno", () => {
   for (const code of ["INVALID_ROOT", "STREAM_START_FAILED"]) {
@@ -70,7 +80,7 @@ for (const scenario of [
   test(scenario.name, { timeout: 5000 }, async t => {
     // A real short-lived Node child exercises pipe close and SIGKILL. This is
     // a protocol/lifecycle seam, not a native macOS FSEvents acceptance test.
-    const readyLine = wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9", volumeIdentity: "7" }).toString();
+    const readyLine = wire(1, "ready", { pid: 123, pgid: 122, fd: 4, inode: "9", volumeIdentity: "7", ...POWER }).toString();
     const program = `process.stderr.write('boot\\n'); process.stdin.once('data', () => {
       process.stdin.on('data', bytes => { const match = /^fence ([0-9]+)\\n$/.exec(bytes.toString());
         if (match) setTimeout(() => process.stdout.write(JSON.stringify({protocol:${JSON.stringify(MAC_NATIVE_PROTOCOL)},epoch:${JSON.stringify(epoch)},seq:'2',kind:'fence',requestId:match[1]})+'\\n'), ${scenario.ackDelay}); });
