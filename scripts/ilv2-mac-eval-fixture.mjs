@@ -45,9 +45,12 @@ const FILES = {
   "src/testFixtures/java/demo/CalcFixtures.java": "package demo;\n\nfinal class CalcFixtures {\n    static final Class<?> TYPE = Calc.class;\n}\n"
 };
 // The fix commit's own tests (hidden by the commit): a test of the repaired class and a test resource.
+export const MOVED_FIX_TEST = "src/test/resources/demo/bounds/clamp-cases.txt";
 export const FIX_TESTS = {
   "src/test/java/demo/CalcTest.java": "package demo;\n\nfinal class CalcTest {\n    boolean upperBound() {\n        return Calc.clamp(20, 0, 10) == 10;\n    }\n}\n",
-  "src/test/resources/demo/clamp-cases.txt": "20 0 10 -> 10\n"
+  "src/test/resources/demo/clamp-cases.txt": "20 0 10 -> 10\n",
+  // Deleted again before the frozen head: not in the corpus, so nothing to hide.
+  "src/test/resources/demo/clamp-notes.txt": "upper bound pending\n"
 };
 export const CLAMP_ORACLE = `package demo;
 
@@ -73,7 +76,7 @@ public final class ClampOracle {
 const verification = { by: "fixture-curator", at: "2026-10-19T00:00:00Z", method: "read the fixture source", notes: "fixture task, verified against the two fixture commits" };
 
 /** Builds the fixture under `root`; returns every path the dataset converter and runners need. */
-export async function evalFixture(root, { tasks } = {}) {
+export async function evalFixture(root, { tasks, moveFixTestTo = MOVED_FIX_TEST } = {}) {
   const repoRoot = path.join(root, "repo");
   await mkdir(repoRoot, { recursive: true });
   await git(repoRoot, "init", "-q", "-b", "main");
@@ -92,6 +95,12 @@ export async function evalFixture(root, { tasks } = {}) {
   }
   await git(repoRoot, "add", "-A");
   await git(repoRoot, "commit", "-q", "-m", "fix clamp above the upper bound and lower the order cap");
+  const fix = (await git(repoRoot, "rev-parse", "HEAD")).stdout.trim();
+  // A later commit moves the fix's test resource: it is hidden under its name at the frozen head.
+  await mkdir(path.join(repoRoot, path.dirname(moveFixTestTo)), { recursive: true });
+  await git(repoRoot, "mv", "src/test/resources/demo/clamp-cases.txt", moveFixTestTo);
+  await git(repoRoot, "rm", "-q", "src/test/resources/demo/clamp-notes.txt");
+  await git(repoRoot, "commit", "-q", "-m", "move the clamp cases, drop the notes");
   const head = (await git(repoRoot, "rev-parse", "HEAD")).stdout.trim();
   const inputManifest = path.join(root, "fixture-input.json");
   const manifestText = `${JSON.stringify({ schema: "ilv2-mac-input/v1", repoRoot, head, files: [] })}\n`;
@@ -99,14 +108,14 @@ export async function evalFixture(root, { tasks } = {}) {
   const inputsFile = path.join(root, "inputs.json");
   await writeFile(inputsFile, `${JSON.stringify([{ name: "fixture", repoRoot, head, manifest: inputManifest, manifestSha256: sha256(manifestText), inputFiles: 11 }])}\n`);
   const candidatesFile = path.join(root, "jin-commit-tasks-fixture.json");
-  await writeFile(candidatesFile, `${JSON.stringify({ schemaVersion: "jin-commit-tasks/v1", project: "fixture", repo: repoRoot, head, train: [{ commit: head, parent, timestamp: 1, task: "fix clamp above the upper bound and lower the order cap",
+  await writeFile(candidatesFile, `${JSON.stringify({ schemaVersion: "jin-commit-tasks/v1", project: "fixture", repo: repoRoot, head, train: [{ commit: fix, parent, timestamp: 1, task: "fix clamp above the upper bound and lower the order cap",
     files: [{ path: "src/main/java/demo/Calc.java", status: "modify", methods: [] }, { path: "src/main/java/demo/OrderService.java", status: "modify", methods: [] },
     ...Object.keys(FIX_TESTS).map(file => ({ path: file, status: "add", methods: [] }))] }], holdout: [] })}\n`);
   const curationDir = path.join(root, "curation");
   await mkdir(path.join(curationDir, "oracles"), { recursive: true });
   await writeFile(path.join(curationDir, "oracles/ClampOracle.java"), CLAMP_ORACLE);
   await writeFile(path.join(curationDir, "oracles/clamp-pre-state.java"), BROKEN_CLAMP);
-  const source = { type: "jin-commit-tasks/v1", commit: head, parent };
+  const source = { type: "jin-commit-tasks/v1", commit: fix, parent };
   const defaults = [
     { id: "FX-CALLERS", repo: "fixture", kind: "qa", category: "callers", pinnedDev: true, source,
       prompt: "Which classes call the static method `Calc.clamp`? List their fully qualified names.", anchors: ["Calc", "Calc.clamp"],
@@ -125,7 +134,7 @@ export async function evalFixture(root, { tasks } = {}) {
   ];
   const curationFile = path.join(curationDir, "curation.json");
   await writeFile(curationFile, `${JSON.stringify({ schema: "ilv2-mac10-curation/v1", datasetId: "fixture-v1", holdout: { ratio: 0.3, seed: "fixture" }, tasks: tasks ?? defaults }, null, 2)}\n`);
-  return { root, repoRoot, head, parent, inputsFile, candidatesFile, curationFile, curationDir, defaults };
+  return { root, repoRoot, head, fix, parent, inputsFile, candidatesFile, curationFile, curationDir, defaults };
 }
 
 /** The frozen JDK of the toolchain manifest every broker run exports. */

@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { sha256 } from "./ilv2-mac-contracts.mjs";
 import { buildSchedule, convertDataset, readJsonl } from "./ilv2-mac-eval-dataset.mjs";
-import { FIX_TESTS, evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
+import { FIX_TESTS, MOVED_FIX_TEST, evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
 import { DRIVER_KINDS, SLOT_STATUS, aggregate, materializeCorpus, nearestRank, planQueries, runRetrieval, scoreSlot } from "./ilv2-mac-retrieval-eval.mjs";
 
 const RG = process.env.ILV2_RG_BIN ?? "/opt/homebrew/bin/rg";
@@ -91,7 +91,7 @@ test("native-rg end to end: receipts are real reads of the corpus clone with the
   const corpusCalc = await readFile(path.join(out, "corpora/fixture/src/main/java/demo/Calc.java"), "utf8");
   assert.doesNotMatch(corpusCalc, /value > high/);
   // The tests that would reveal the fix are not in the corpus a driver searches; an unrelated test is.
-  for (const file of Object.keys(FIX_TESTS).concat("src/testFixtures/java/demo/CalcFixtures.java")) assert.equal(existsSync(path.join(out, "corpora/fixture", file)), false, file);
+  for (const file of Object.keys(FIX_TESTS).concat(MOVED_FIX_TEST, "src/testFixtures/java/demo/CalcFixtures.java")) assert.equal(existsSync(path.join(out, "corpora/fixture", file)), false, file);
   assert.ok(existsSync(path.join(out, "corpora/fixture/src/test/java/demo/OrderControllerTest.java")));
   assert.equal(existsSync(path.join(out, "corpora/fixture/.git")), false, "the history that holds the fix is not cloned");
   const calls = await readJsonl(path.join(out, "calls.jsonl"));

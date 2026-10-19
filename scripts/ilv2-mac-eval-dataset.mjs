@@ -134,15 +134,31 @@ async function gitChanged(repoRoot, parent, commit) {
 }
 /** Any source set but src/main (test, integrationTest, testFixtures, ...). */
 export const TEST_SOURCE = /(?:^|\/)src\/(?!main\/)[^/]+\//;
-/** Test-source files at the frozen head that a repair's own commit touched, and test-source Java files naming the repaired class. */
-async function gitTestFiles(repoRoot, head, { changed, className }) {
+/**
+ * Test-source files at the frozen head that a repair's own commit touched (followed through later renames), and
+ * test-source Java files naming the repaired class.
+ */
+async function gitTestFiles(repoRoot, head, { commit, changed, className }) {
   const list = async args => {
-    try { return (await execute("git", ["--no-optional-locks", "-C", repoRoot, ...args], { maxBuffer: 16 * 1024 * 1024, encoding: "utf8" })).stdout.split("\n").filter(Boolean); }
+    try { return (await execute("git", ["--no-optional-locks", "-C", repoRoot, ...args], { maxBuffer: 64 * 1024 * 1024, encoding: "utf8" })).stdout.split("\n").filter(Boolean); }
     catch (error) { if (error.code === 1) return []; throw error; }
   };
   const touched = changed.filter(file => TEST_SOURCE.test(file));
+  const atCommit = touched.length ? await list(["ls-tree", "-r", "--name-only", commit, "--", ...touched]) : [];
+  // commit..head over the whole tree, with exhaustive rename detection (-l0) and a low similarity bar: pairing a test with
+  // the wrong successor hides one test too many, missing a successor would leave a revealing test visible. A test that
+  // is deleted after the fix is not in the corpus; one moved out of the test sources is refused by the caller.
+  const moved = new Map();
+  const deleted = new Set();
+  if (atCommit.length) {
+    for (const line of await list(["diff", "--name-status", "-M30%", "-l0", commit, head])) {
+      const [status, from, to] = line.split("\t");
+      if (status.startsWith("R")) moved.set(from, to);
+      else if (status === "D") deleted.add(from);
+    }
+  }
   return {
-    changed: touched.length ? await list(["ls-tree", "-r", "--name-only", head, "--", ...touched]) : [],
+    changed: atCommit.filter(file => !deleted.has(file)).map(file => moved.get(file) ?? file),
     referencing: (await list(["grep", "-l", "-w", "-F", "-e", className, head, "--", "*.java"])).map(line => line.slice(head.length + 1)).filter(file => TEST_SOURCE.test(file))
   };
 }
@@ -188,7 +204,7 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
   const hidden = new Map();
   for (const task of curation.tasks.filter(item => item.kind === "repair")) {
     const record = corpora.get(task.repo);
-    const found = await listTestFiles(record.repoRoot, record.head, { changed: changedBy.get(task.id), className: path.basename(task.repair.file).replace(/\.java$/, "") });
+    const found = await listTestFiles(record.repoRoot, record.head, { commit: task.source.commit, changed: changedBy.get(task.id), className: path.basename(task.repair.file).replace(/\.java$/, "") });
     for (const file of [...found.changed, ...found.referencing]) {
       requireValue(TEST_SOURCE.test(file), `task ${task.id}: ${file} is not a test source`);
       const row = hidden.get(`${task.repo}:${file}`) ?? { corpusId: task.repo, path: file, taskIds: [] };
