@@ -11,6 +11,7 @@ import { chmod, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile }
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -64,6 +65,17 @@ export function command(pid) {
 export async function liveDaemons(home, version = "9.3.1") {
   const entries = await readdir(path.join(home, "daemon", version)).catch(() => []);
   return entries.flatMap(name => /^daemon-(\d+)\.out\.log$/.exec(name)?.slice(1).map(Number) ?? []).filter(processAlive).sort((a, b) => a - b);
+}
+
+/** Ms from an incarnation's `ready` (epoch ms) until none of `jobs` is left in the store, or Infinity once `boundMs` passed. */
+export async function jobsGoneSinceReady(owner, jobs, readyAt, boundMs) {
+  for (;;) {
+    const left = (await owner.storeObjects()).jobs.filter(job => jobs.includes(job));
+    const elapsed = Date.now() - readyAt;
+    if (!left.length) return elapsed;
+    if (elapsed > boundMs) return Infinity;
+    await delay(10);
+  }
 }
 
 export async function call(client, name, args) {

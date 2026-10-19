@@ -4,7 +4,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { call, childPids, closeRecoveryOwner, command, copyEvidence, eventually, evidence, gradleRepo, processAlive, startRecoveryOwner } from "./ilv2-mac-recovery-fixture.mjs";
+import { call, childPids, closeRecoveryOwner, command, copyEvidence, eventually, evidence, gradleRepo, jobsGoneSinceReady, processAlive, startRecoveryOwner } from "./ilv2-mac-recovery-fixture.mjs";
 
 // MAC-09 fault matrix: one isolated launchd owner (the real HTTP daemon under the owner launcher) is
 // SIGKILLed from outside while held at each store boundary, and launchd restarts it. Every cell checks
@@ -62,7 +62,10 @@ test("fault-matrix-sigkill-at-each-store-boundary-and-wake", { timeout: 1200000 
         return true;
       }, faultAt);
       assert.ok(cell.faultToOwnerGroupExitMs <= 10000, `${phase}: group exit ${cell.faultToOwnerGroupExitMs} ms`);
-      if (pending) cell.pendingSettledMs = await pending.then(value => { cell.pending = value.error?.slice(0, 200) ?? "answered"; return performance.now() - faultAt; });
+      if (pending) {
+        cell.pendingSettledMs = await pending.then(value => { cell.pending = value.error?.slice(0, 200) ?? "answered"; return performance.now() - faultAt; });
+        assert.ok(cell.pendingSettledMs <= 10000, `${phase}: pending settled ${cell.pendingSettledMs} ms`);
+      }
       // The binding on disk is complete: the old one, or (once renamed) the new one.
       assert.ok(atExit, `${phase}: a binding exists`);
       cell.bindingAtExit = atExit.snapshotId === before.snapshotId ? "old" : "new";
@@ -75,6 +78,11 @@ test("fault-matrix-sigkill-at-each-store-boundary-and-wake", { timeout: 1200000 
       assert.deepEqual(next.previousGroupsAlive, [], `${phase}: the new owner started after the old group exited`);
       current = next;
       http = await owner.http();
+      // The dead incarnation's jobs: gone within two GC cycles of the new owner's start (its store opens on the first request).
+      const firstRequest = call(http, "java_symbol", query(repo, "demo.Greeter"));
+      cell.deadJobsGoneAfterReadyMs = await jobsGoneSinceReady(owner, cell.atFault.objects.jobs, next.at, 2 * GC_CYCLE_MS);
+      await firstRequest;
+      assert.ok(cell.deadJobsGoneAfterReadyMs <= 2 * GC_CYCLE_MS, `${phase}: dead jobs not gone within two cycles of ready`);
       const restarted = performance.now();
       const result = await served(http, repo, phase === "query-leased" ? "demo.Greeter" : symbol);
       cell.servedAfterRestartMs = performance.now() - restarted;

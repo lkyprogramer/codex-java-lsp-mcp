@@ -4,7 +4,7 @@ import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { call, childPids, closeRecoveryOwner, command, copyEvidence, eventually, evidence, frozenToolchains, gradleRepo, greetCall, liveDaemons,
+import { call, childPids, closeRecoveryOwner, command, copyEvidence, eventually, evidence, frozenToolchains, gradleRepo, greetCall, jobsGoneSinceReady, liveDaemons,
   processAlive, startRecoveryOwner, writeGradleConfig } from "./ilv2-mac-recovery-fixture.mjs";
 
 // MAC-09 formal recovery (contract §2.1, G09): the real HTTP daemon under the owner launcher as an
@@ -118,7 +118,10 @@ test("owner-kill-during-builder-query-base-lease-full-recovery", { timeout: 9000
     const atFault = await owner.storeObjects();
     assert.ok(atFault.snapshots.includes(bindingBefore.snapshotId), "leased snapshot present while held");
     assert.ok(atFault.jobs.length >= 2, `builder and base-clone jobs at fault: ${atFault.jobs}`);
-    Object.assign(record, { sideStart: sideStart.error ?? sideStart.exact, held: { builder, queryHeld, baseHeld }, bindingBefore, atFault });
+    // Every daemon of this domain alive at the fault is timed, not only the first one found.
+    const daemonsAtFault = await liveDaemons(owner.home);
+    assert.ok(daemonsAtFault.includes(daemon), `daemons at fault: ${daemonsAtFault}`);
+    Object.assign(record, { sideStart: sideStart.error ?? sideStart.exact, held: { builder, queryHeld, baseHeld }, bindingBefore, atFault, daemonsAtFault });
 
     const faultAt = owner.kill(first);
     let bindingAtExit;
@@ -128,24 +131,29 @@ test("owner-kill-during-builder-query-base-lease-full-recovery", { timeout: 9000
         bindingAtExit = (await owner.bindings())[main];
         return true;
       }, faultAt),
-      until(() => !processAlive(daemon), faultAt),
+      until(() => daemonsAtFault.every(pid => !processAlive(pid)), faultAt),
       pending.then(value => { record.pending = value; return performance.now() - faultAt; })
     ]);
     Object.assign(record, { faultToOwnerGroupExitMs: ownerGoneMs, faultToGradleDaemonExitMs: daemonGoneMs, faultToPendingSettledMs: pendingMs, bindingAtExit });
     assert.ok(ownerGoneMs <= 10000, `OWNER_PROCESS group exit ${ownerGoneMs} ms`);
     assert.ok(daemonGoneMs <= 10000, `EXTERNAL_BUILD_DAEMON exit ${daemonGoneMs} ms`);
     assert.ok(pendingMs <= 10000, "the held request settled");
+    assert.ok(record.pending.rpcError || record.pending.error, `a request held by the dead owner fails rather than answering: ${JSON.stringify(record.pending).slice(0, 300)}`);
     assert.deepEqual(bindingAtExit, bindingBefore, "the fault came before seal/bind: the old complete binding stands");
     for (const pid of [builder.pid, ...jdt]) assert.equal(processAlive(pid), false, `owner child ${pid} gone`);
 
     const second = await owner.incarnation(first.pid);
     assert.deepEqual(second.previousGroupsAlive, [], "the new owner started only after the old group was gone");
+    // The dead incarnation's jobs are unreferenced from the new owner's start: gone within two GC cycles of it.
+    record.deadJobsGoneAfterReadyMs = await jobsGoneSinceReady(owner, atFault.jobs, second.at, 2 * gcCycleMs);
+    assert.ok(record.deadJobsGoneAfterReadyMs <= 2 * gcCycleMs, `dead jobs ${atFault.jobs} not gone within two cycles of ready`);
     const http2 = await owner.http();
     const semantic = await eventually(async () => {
       const status = await call(http2, "java_status", {});
       return status.semantic?.semanticState === "READY" ? status.semantic : false;
     }, 30000);
     record.semanticReadyAfterFaultMs = performance.now() - faultAt;
+    assert.ok(record.semanticReadyAfterFaultMs <= 10000, `semantic READY ${record.semanticReadyAfterFaultMs} ms after the fault`);
     assert.equal(semantic.staticAdmission, "OPEN");
 
     // Static: binding restored, the edit made before the fault is published by the first round.
@@ -167,7 +175,7 @@ test("owner-kill-during-builder-query-base-lease-full-recovery", { timeout: 9000
 
     // Semantic: a new JDT and import in the cleaned domain.
     record.after = { semantic: await semanticDefinition(http2, main) };
-    record.after.daemons = await eventually(async () => { const pids = await liveDaemons(owner.home); return pids.length && !pids.includes(daemon) && pids; }, 120000);
+    record.after.daemons = await eventually(async () => { const pids = await liveDaemons(owner.home); return pids.length && !pids.some(pid => daemonsAtFault.includes(pid)) && pids; }, 120000);
   } catch (error) {
     primary = error;
     record.primaryError = { message: String(error), stack: error.stack };
