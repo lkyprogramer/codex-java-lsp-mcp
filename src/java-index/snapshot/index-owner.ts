@@ -3,7 +3,8 @@
 //         QueryPool, and one tracker-driven WorkspaceIndex per workspace.
 // pos: MAC-08 production index lifecycle (contract §2.4-§2.7). A round is dispatch →
 //      verify → noop-confirm or build → publish → complete; requests never build,
-//      they prepare for at most min(1000 ms, remaining) and then hold one snapshot.
+//      they prepare for at most min(1000 ms, remaining) and then hold one snapshot. MAC-09: the
+//      owner's GC runs one sweep at open (recovery of a dead incarnation) and then every cycle.
 import type { ChildProcess } from "node:child_process";
 import path from "node:path";
 import { builderJobFor, startBuildProcess } from "../../index-builder/build-process.js";
@@ -16,7 +17,8 @@ import type { WorkspaceBinding } from "./binding.js";
 import type { QueryOpName, QueryOps, QueryRequest, SnapshotIndexStatus } from "./query-ops.js";
 import { QueryPool, type QueryCompletion } from "./query-pool.js";
 import { queryOpTask, spawnQueryWorker } from "./query-process.js";
-import { SnapshotStore, type BuildJob, type LeasePurpose, type SnapshotLease } from "./snapshot-store.js";
+import type { FaultHook } from "./seal.js";
+import { SnapshotStore, type BuildJob, type LeasePurpose, type SnapshotLease, type SweepReport } from "./snapshot-store.js";
 import { nativeTrackerSource, WorkspaceTracker, type TrackerSourceFactory, type TrackerStatus } from "./workspace-tracker.js";
 
 /** The freshness label a request view freezes at its one acquire. */
@@ -40,6 +42,8 @@ export type OwnerEvent =
   /** One request's freshness prepare: `none` when nothing was owed at entry; `covered` once the entry-time hints are committed. */
   | { type: "prepare"; workspaceId: string; waitedMs: number; outcome: "none" | "covered" | "capped" | "backoff" | "aborted" | "stopped" }
   | { type: "reclaimed"; snapshotId: string }
+  /** One GC cycle; `error` when the cycle stopped early (its deletions so far stand). */
+  | { type: "sweep"; report?: SweepReport; elapsedMs: number; error?: string }
   | { type: "pool"; event: unknown }
   | { type: "scheduler"; event: unknown };
 
@@ -48,8 +52,12 @@ export type IndexOwnerOptions = {
   cacheRoot: string;
   /** Before every binding write or deletion (assertOwnerLock). */
   assertOwner?: () => void;
+  /** Fault seam at every store boundary (clone, checkpoint, seal, binding, reclaim). */
+  faultAt?: FaultHook;
   /** Static admission for builder and query slots. */
   admitted?: () => boolean;
+  /** Called once the store restored its bindings, before any cycle, build or query (opens static admission); throwing fails the open. */
+  restored?: () => void;
   spawnQueryWorker?: () => ChildProcess;
   /** Test seam: the builder process for an admitted job. */
   startBuild?: (input: { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant }) => BuildAttempt;
@@ -62,13 +70,18 @@ export type IndexOwnerOptions = {
   queryTestBlockMs?: (request: QueryRequest) => number | undefined;
   /** stop() waits this long for workspace starts still in flight (default START_STOP_GRACE_MS). */
   startStopGraceMs?: number;
+  /** One GC cycle (default GC_CYCLE_MS); unreferenced objects converge within two cycles. */
+  gcCycleMs?: number;
+  /** Test seam: the trackers' periodic full-hash interval (default FULL_HASH_INTERVAL_MS). */
+  fullHashIntervalMs?: number;
 };
 
 /** Freshness prepare never waits longer than this (contract §2.6). */
 export const PREPARE_CAP_MS = 1_000;
 const ROUND_DELAY_MS = 25;
 const ROUND_RETRY_MS = 1_000;
-const RECLAIM_RETRY_MS = 5_000;
+/** The initial GC cycle (contract §2.7). */
+export const GC_CYCLE_MS = 30_000;
 /**
  * A native change source that never reports ready is killed by its 5 s ready timer and settles only
  * after the helper is reaped. stop() waits that long, so a pre-ready helper holding the owner lock fd
@@ -93,7 +106,8 @@ export class IndexOwner {
   private readonly byId = new Map<string, WorkspaceIndex>();
   private readonly superseded = new Set<string>();
   private readonly publishListeners = new Set<(event: PublishEvent) => void>();
-  private reclaimTimer?: NodeJS.Timeout;
+  private sweepTimer?: NodeJS.Timeout;
+  private sweeping?: Promise<SweepReport | undefined>;
   private stopped = false;
 
   private constructor(store: SnapshotStore, readonly options: IndexOwnerOptions) {
@@ -113,8 +127,12 @@ export class IndexOwner {
   }
 
   static async open(options: IndexOwnerOptions): Promise<IndexOwner> {
-    const { store } = await SnapshotStore.open(options.cacheRoot, { assertOwner: options.assertOwner });
-    return new IndexOwner(store, options);
+    const { store } = await SnapshotStore.open(options.cacheRoot, { assertOwner: options.assertOwner, faultAt: options.faultAt });
+    options.restored?.();
+    const owner = new IndexOwner(store, options);
+    // Recovery: what a dead incarnation left (jobs, unbound snapshots, tmp) goes in the first cycle.
+    void owner.sweep();
+    return owner;
   }
 
   /** The workspace index if one runs for this root. Pure: never starts a tracker or a build. */
@@ -149,6 +167,7 @@ export class IndexOwner {
     this.workspaces.delete(canonicalRoot);
     this.byId.delete(workspace.workspaceId);
     await workspace.stop();
+    this.store.untrack(workspace.workspaceId);
     this.pool.trim();
   }
 
@@ -178,7 +197,11 @@ export class IndexOwner {
     const testBlockMs = this.options.queryTestBlockMs?.(request);
     const completion = await this.pool.submit(queryOpTask({
       request, budget, signal, ...(testBlockMs ? { allowTestHooks: true, testBlockMs } : {}),
-      acquire: () => this.store.acquire(snapshotId, "query-worker")
+      acquire: async () => {
+        const lease = this.store.acquire(snapshotId, "query-worker");
+        try { await this.options.faultAt?.("query-leased"); } catch (error) { lease.release(); throw error; }
+        return lease;
+      }
     }) as never) as QueryCompletion<QueryOps[K]["result"]>;
     if (completion.status !== "ok") throw queryError(completion, request.op);
     return completion.value;
@@ -188,13 +211,14 @@ export class IndexOwner {
     return this.store.acquireBound(workspaceId, purpose);
   }
 
-  /** A superseded snapshot is deleted once nothing binds or leases it. */
+  /** A superseded snapshot is deleted once nothing binds or leases it: now if it can be, else by the sweep. */
   supersede(snapshotId: string): void {
     this.superseded.add(snapshotId);
     this.pool.trim();
     void this.reclaim();
   }
 
+  /** Fast path for superseded snapshots (a lease just went); the periodic sweep covers every other object. */
   async reclaim(): Promise<void> {
     for (const snapshotId of [...this.superseded]) {
       const result = await this.store.tryReclaim({ snapshotId }).catch(() => ({ reclaimed: false as const, reason: "leased" as const }));
@@ -203,12 +227,36 @@ export class IndexOwner {
         if (result.reclaimed) this.options.onEvent?.({ type: "reclaimed", snapshotId });
       }
     }
-    if (this.reclaimTimer) clearTimeout(this.reclaimTimer);
-    this.reclaimTimer = undefined;
-    if (this.superseded.size > 0 && !this.stopped) {
-      this.reclaimTimer = setTimeout(() => void this.reclaim(), RECLAIM_RETRY_MS);
-      this.reclaimTimer.unref();
-    }
+  }
+
+  /**
+   * One GC cycle, then the next one is armed. Cycles never overlap; none runs before static
+   * admission opens or after stop(). Every deletion is the store's own tryReclaim decision.
+   */
+  sweep(): Promise<SweepReport | undefined> {
+    if (this.sweeping) return this.sweeping;
+    if (this.sweepTimer) clearTimeout(this.sweepTimer);
+    this.sweepTimer = undefined;
+    const started = performance.now();
+    const run = (async () => {
+      if (this.stopped || (this.options.admitted && !this.options.admitted())) return undefined;
+      try {
+        const report = await this.store.sweep();
+        for (const snapshotId of report.snapshots) this.superseded.delete(snapshotId);
+        this.options.onEvent?.({ type: "sweep", report, elapsedMs: performance.now() - started });
+        return report;
+      } catch (error) {
+        this.options.onEvent?.({ type: "sweep", elapsedMs: performance.now() - started, error: error instanceof Error ? error.message : String(error) });
+        return undefined;
+      }
+    })().finally(() => {
+      this.sweeping = undefined;
+      if (this.stopped) return;
+      this.sweepTimer = setTimeout(() => void this.sweep(), this.options.gcCycleMs ?? GC_CYCLE_MS);
+      this.sweepTimer.unref();
+    });
+    this.sweeping = run;
+    return run;
   }
 
   private selectBuild(hint: Readonly<BuildHint>): BuildSelection {
@@ -223,20 +271,20 @@ export class IndexOwner {
 
   status() {
     return { workspaces: this.list().map(workspace => workspace.status()), scheduler: this.scheduler.status(), pool: this.pool.status(),
-      superseded: this.superseded.size };
+      superseded: this.superseded.size, gcCycleMs: this.options.gcCycleMs ?? GC_CYCLE_MS };
   }
 
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
-    if (this.reclaimTimer) clearTimeout(this.reclaimTimer);
+    if (this.sweepTimer) clearTimeout(this.sweepTimer);
     // Bounded: a start that lands stops its own tracker; one that never comes up cannot hold stop past the grace.
     const starts = [...this.starting.values()].map(pending => pending.then(() => undefined, () => undefined));
     let graceTimer: NodeJS.Timeout | undefined;
     const grace = new Promise<void>(resolve => { graceTimer = setTimeout(resolve, this.options.startStopGraceMs ?? START_STOP_GRACE_MS); });
     // Together: a round waiting on a builder or a query ends when the scheduler and pool stop.
     await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop(),
-      Promise.race([Promise.all(starts), grace]).finally(() => clearTimeout(graceTimer))]);
+      Promise.race([Promise.all(starts), grace]).finally(() => clearTimeout(graceTimer)), this.sweeping]);
   }
 }
 
@@ -246,6 +294,8 @@ export class WorkspaceIndex {
   readonly workspaceId: string;
   private round?: Promise<void>;
   private timer?: NodeJS.Timeout;
+  /** Fires when the periodic full hash falls due; re-armed after every round. */
+  private hashTimer?: NodeJS.Timeout;
   private stopped = false;
   private prepared?: PreparedJob;
   private base?: { snapshotId: string; entries: Map<string, ContentEntry>; status: SnapshotIndexStatus };
@@ -265,12 +315,14 @@ export class WorkspaceIndex {
     const tracker = await WorkspaceTracker.start({
       canonicalRoot,
       // A signal is only a hint: it schedules the next round.
-      source: onSignal => source((flags, file) => { onSignal(flags, file); index?.kick(); }),
-      onInvalidRoot: () => { if (index) owner.store.track(index.workspaceId, tracker.trackedState()); }
+      source: (onSignal, onResume) => source((flags, file) => { onSignal(flags, file); index?.kick(); }, () => { onResume(); index?.kick(); }),
+      onInvalidRoot: () => { if (index) owner.store.track(index.workspaceId, tracker.trackedState()); },
+      ...(owner.options.fullHashIntervalMs ? { fullHashIntervalMs: owner.options.fullHashIntervalMs } : {})
     });
     index = new WorkspaceIndex(owner, canonicalRoot, tracker);
     owner.store.track(index.workspaceId, tracker.trackedState());
     index.kick(0);
+    index.armFullHash();
     return index;
   }
 
@@ -334,6 +386,23 @@ export class WorkspaceIndex {
     }
   }
 
+  /** The periodic full hash: owed when due, so the next round hashes every file and the view is STALE meanwhile. */
+  private armFullHash(): void {
+    if (this.hashTimer) clearTimeout(this.hashTimer);
+    this.hashTimer = undefined;
+    if (this.stopped) return;
+    const dueAt = this.tracker.fullHashDueAt();
+    // Until the startup hash confirms there is no due time: the round after it re-arms this.
+    if (!Number.isFinite(dueAt)) return;
+    this.hashTimer = setTimeout(() => {
+      this.hashTimer = undefined;
+      if (this.tracker.requireDueFullHash()) this.kick(0);
+      // Already owed (or the root is invalid): the round that settles it re-arms this; only an early fire waits again.
+      else if (Date.now() < this.tracker.fullHashDueAt()) this.armFullHash();
+    }, Math.max(0, dueAt - Date.now()));
+    this.hashTimer.unref?.();
+  }
+
   /** Schedule a round soon; rounds never overlap. */
   kick(delayMs = this.owner.options.roundDelayMs ?? ROUND_DELAY_MS): void {
     if (this.stopped || this.round) return;
@@ -348,6 +417,7 @@ export class WorkspaceIndex {
         this.round = undefined;
         for (const done of [...this.settled]) done();
         if (this.stopped) return;
+        this.armFullHash();
         if (this.lastError) this.kick(ROUND_RETRY_MS);
         else if (this.tracker.hasWork()) this.kick();
       });
@@ -371,6 +441,8 @@ export class WorkspaceIndex {
     mode = round.mode;
     store.track(this.workspaceId, this.tracker.trackedState());
     try {
+      // Fault seam: a dispatched round of a known mode, not yet confirmed (the workspace is not FRESH).
+      await this.owner.options.faultAt?.(`round-${mode}`);
       const bound = store.binding(this.workspaceId);
       const base = bound ? await this.baseOf(bound.snapshotId) : undefined;
       const verification = await this.tracker.verify(round, base && { entries: base.entries, buildKey: bound!.buildKey });
@@ -461,6 +533,7 @@ export class WorkspaceIndex {
   async stop(): Promise<void> {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
+    if (this.hashTimer) clearTimeout(this.hashTimer);
     for (const done of [...this.settled]) done();
     await this.round?.catch(() => undefined);
     await this.tracker.stop(5000).catch(() => undefined);

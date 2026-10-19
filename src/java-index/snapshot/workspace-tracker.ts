@@ -28,12 +28,13 @@ export const FULL_HASH_INTERVAL_MS = 10 * 60 * 1000;
 
 /** One event stream: its random epoch, a fence over the flushed prefix, and stop. */
 export type TrackerSource = { readonly epoch: string; fence(timeoutMs: number): Promise<void>; stop(timeoutMs: number): Promise<void>; readonly closed: Promise<void> };
-export type TrackerSourceFactory = (onSignal: (flags: number, path: string) => void) => Promise<TrackerSource>;
+/** `onResume`: the native helper saw the system wake; content may have changed without events. */
+export type TrackerSourceFactory = (onSignal: (flags: number, path: string) => void, onResume: () => void) => Promise<TrackerSource>;
 
-/** The production source: the native helper's raw flags and paths, its epoch as trackerEpoch. */
+/** The production source: the native helper's raw flags, paths and wake signals, its epoch as trackerEpoch. */
 export function nativeTrackerSource(canonicalRoot: string): TrackerSourceFactory {
-  return async onSignal => {
-    const events = await MacFSEvents.start(canonicalRoot, event => onSignal(event.flags, event.path));
+  return async (onSignal, onResume) => {
+    const events = await MacFSEvents.start(canonicalRoot, event => onSignal(event.flags, event.path), () => onResume());
     const ready = await events.ready;
     return { epoch: ready.epoch, fence: async timeoutMs => { await events.fence(timeoutMs); }, stop: timeoutMs => events.stop(timeoutMs), closed: events.closed };
   };
@@ -101,6 +102,8 @@ export type WorkspaceTrackerOptions = {
   onInvalidRoot?: (error: TrackerRootInvalid) => void;
   /** Test seam: awaited after each file of a verification is read. */
   afterRead?: (relativePath: string) => void | Promise<void>;
+  /** Test seam: the periodic full-hash interval (default FULL_HASH_INTERVAL_MS). */
+  fullHashIntervalMs?: number;
 };
 
 export class WorkspaceTracker {
@@ -130,12 +133,14 @@ export class WorkspaceTracker {
   private invalid?: TrackerRootInvalid;
   private streamLost?: Error;
   private readonly now: () => number;
+  private readonly fullHashIntervalMs: number;
   private readonly signalled = { ignored: 0, wrapped: 0 };
 
   private constructor(readonly root: RootIdentity, private readonly options: WorkspaceTrackerOptions) {
     this.workspaceId = workspaceIdFor(root);
     this.generation = options.workspaceGeneration ?? 1;
     this.now = options.now ?? Date.now;
+    this.fullHashIntervalMs = options.fullHashIntervalMs ?? FULL_HASH_INTERVAL_MS;
   }
 
   /** The watcher starts first; the startup full hash is then owed at seq 1 (§2.4). */
@@ -146,7 +151,7 @@ export class WorkspaceTracker {
   }
 
   private async openStream(): Promise<void> {
-    const source = await this.options.source((flags, file) => this.onNativeSignal(flags, file));
+    const source = await this.options.source((flags, file) => this.onNativeSignal(flags, file), () => { this.resume(); });
     this.source = source;
     this.epoch = source.epoch;
     this.seq = 0;
@@ -197,7 +202,19 @@ export class WorkspaceTracker {
 
   /** Something is owed: pending paths, a rescan, unconfirmed startup, or the periodic full hash. */
   hasWork(): boolean {
-    return !this.invalid && (this.status() !== "FRESH" || this.now() - this.lastFullHashAt >= FULL_HASH_INTERVAL_MS);
+    return !this.invalid && (this.status() !== "FRESH" || this.now() - this.lastFullHashAt >= this.fullHashIntervalMs);
+  }
+
+  /** When the periodic full hash falls due (§2.4: every active workspace at least every 10 minutes). */
+  fullHashDueAt(): number {
+    return this.lastFullHashAt + this.fullHashIntervalMs;
+  }
+
+  /** The periodic full hash is due: it is owed like a resume, so the workspace is STALE until a full-hash round confirms. */
+  requireDueFullHash(): boolean {
+    if (this.invalid || this.fullHashThrough || this.now() < this.fullHashDueAt()) return false;
+    this.fullHashThrough = this.bump();
+    return true;
   }
 
   diagnostics() {
@@ -287,7 +304,7 @@ export class WorkspaceTracker {
     this.layout = layout;
     this.layoutKey = layoutKey;
     this.fingerprint = fingerprint;
-    const mode: RoundMode = owedFullHash || !this.view || dispatchedAt - this.lastFullHashAt >= FULL_HASH_INTERVAL_MS ? "full-hash"
+    const mode: RoundMode = owedFullHash || !this.view || dispatchedAt - this.lastFullHashAt >= this.fullHashIntervalMs ? "full-hash"
       : owedFullStat || layoutMoved ? "full-stat" : "paths";
     const round: TrackerRound = { epoch, cut, workspaceGeneration: this.generation, root: { ...this.root }, layout, buildKey: currentBuildKey(fingerprint),
       bindingVersion: input.bindingVersion, captureId: `c-${randomUUID().replaceAll("-", "")}`, mode, dispatchedAt, pending, subtrees };

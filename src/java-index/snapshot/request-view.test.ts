@@ -155,7 +155,7 @@ test("nonzero-deadline-bounds-all-stages", { timeout: 240_000 }, async t => {
   // The second root's change source never comes up until released: workspace create stalls.
   const sources = ctx.sources;
   (ctx.owner.options as { trackerSource?: (root: string) => TrackerSourceFactory }).trackerSource = root => root !== stalledRoot ? sources.factory(root)
-    : async onSignal => { await createGate; return sources.factory(root)(onSignal); };
+    : async (onSignal, onResume) => { await createGate; return sources.factory(root)(onSignal, onResume); };
   const { workspace, binding } = await bound(ctx);
 
   // 1. resolve stalls.

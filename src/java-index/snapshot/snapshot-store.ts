@@ -2,15 +2,16 @@
 // output: atomic workspace bindings, leases on sealed snapshots, and real deletion of unreferenced ones.
 // pos: MAC-07 SnapshotStore (contract §2.7). One store per owner: publish, noop, zero-diff bind and
 //      reclaim decisions are serialized here; requests, query workers, candidate scans, builder bases
-//      and publishing candidates all hold the same kind of lease. The periodic sweeper is MAC-09.
+//      and publishing candidates all hold the same kind of lease. MAC-09: sweep() is one GC cycle over
+//      the store's own objects (snapshots/, jobs/, workspaces/), each through the same tryReclaim decision.
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readdir, rm } from "node:fs/promises";
+import { chmod, mkdir, readdir, rm, stat } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 import { cloneSealedDatabase } from "../../mac-platform/clonefile.js";
 import type { SnapshotManifest } from "../sql/snapshot-manifest.js";
-import { BINDING_FORMAT, readBinding, removeStaleBindingTmp, sameRoot, workspaceDir, writeBinding, type RootIdentity, type WorkspaceBinding } from "./binding.js";
+import { BINDING_FILE, BINDING_FORMAT, readBinding, removeStaleBindingTmp, sameRoot, workspaceDir, writeBinding, type RootIdentity, type WorkspaceBinding } from "./binding.js";
 import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, sealJobDatabase, syncDir, type FaultHook, type Mac1Layout } from "./seal.js";
 
 export type LeasePurpose = "request" | "query-worker" | "candidate-scan" | "base" | "publish";
@@ -52,8 +53,13 @@ export type BuildJob = {
   manifest?: SnapshotManifest;
 };
 
-export type ReclaimTarget = { snapshotId: string } | { jobId: string };
-export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: "bound" | "leased" | "in-flight" | "missing" };
+export type ReclaimTarget = { snapshotId: string } | { jobId: string } | { workspaceId: string };
+/** `tracked`: a running tracker serves the binding's root; `root-live` / `root-unconfirmed`: the root still is, or may be, that workspace. */
+export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "tracked" | "root-live" | "root-unconfirmed";
+export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: ReclaimReason };
+
+/** One GC cycle: what was deleted, and how many store objects each refusal kept. */
+export type SweepReport = { snapshots: string[]; jobs: string[]; workspaces: string[]; kept: Partial<Record<ReclaimReason, number>> };
 
 export type RecoveryReport = {
   bindings: Array<{ workspaceId: string; snapshotId: string; bindingVersion: number }>;
@@ -77,7 +83,7 @@ export class SnapshotStore {
   readonly layout: Mac1Layout;
   private readonly bindings = new Map<string, WorkspaceBinding>();
   /** Bindings that failed verification: not served; their snapshot is not reclaimed and their version not reused until rebound. */
-  private readonly quarantined = new Map<string, { snapshotId: string; bindingVersion: number }>();
+  private readonly quarantined = new Map<string, { snapshotId: string; bindingVersion: number; root: RootIdentity }>();
   private readonly tracked = new Map<string, TrackedWorkspace>();
   private readonly leases = new Map<string, Set<SnapshotLease>>();
   private readonly reclaiming = new Set<string>();
@@ -104,12 +110,12 @@ export class SnapshotStore {
       return ids.sort();
     };
     for (const workspaceId of await objects(layout.workspaces)) {
-      let named: { snapshotId: string; bindingVersion: number } | undefined;
+      let named: { snapshotId: string; bindingVersion: number; root: RootIdentity } | undefined;
       try {
         recovery.removedBindingTmp.push(...(await removeStaleBindingTmp(layout, workspaceId)).map(name => `${workspaceId}/${name}`));
         const binding = await readBinding(layout, workspaceId);
         if (!binding) continue;
-        named = { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion };
+        named = { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, root: binding.root };
         const manifest = await readSealedManifest(layout, binding.snapshotId);
         if (manifest.contentManifestId !== binding.contentManifestId || manifest.buildKey !== binding.buildKey) throw new Error("binding does not match its snapshot manifest");
         store.bindings.set(workspaceId, binding);
@@ -133,6 +139,11 @@ export class SnapshotStore {
   track(workspaceId: string, state: TrackedWorkspace): void {
     assertId("workspaceId", workspaceId);
     this.tracked.set(workspaceId, { root: { ...state.root }, workspaceGeneration: state.workspaceGeneration, trackerEpoch: state.trackerEpoch });
+  }
+
+  /** The tracker stopped (retired workspace): its binding stays, judged by its root alone from now on. */
+  untrack(workspaceId: string): void {
+    this.tracked.delete(workspaceId);
   }
 
   binding(workspaceId: string): WorkspaceBinding | undefined {
@@ -191,9 +202,11 @@ export class SnapshotStore {
     const jobId = input.jobId ?? `j-${randomUUID().replaceAll("-", "")}`;
     assertId("jobId", jobId);
     const dir = path.join(this.layout.jobs, jobId);
-    await mkdir(dir);
+    if (this.jobs.has(jobId)) throw new Error(`job ${jobId} exists`);
     const job: BuildJob = { jobId, workspaceId: input.workspaceId, captureId: input.captureId, dir, dbPath: path.join(dir, DB_FILE), state: "OPEN" };
+    // Registered before the directory exists: a sweep never sees an unknown, reclaimable job dir of this owner.
     this.jobs.set(jobId, job);
+    try { await mkdir(dir); } catch (error) { this.jobs.delete(jobId); throw error; }
     return job;
   }
 
@@ -203,6 +216,7 @@ export class SnapshotStore {
     if (!this.leases.get(base.snapshotId)?.has(base)) throw new Error("base lease is not held");
     await readSealedManifest(this.layout, base.snapshotId);
     await cloneSealedDatabase(base.dbPath, job.dbPath, this.cacheRoot);
+    await this.options.faultAt?.("base-cloned");
     // The clone keeps the sealed mode; the private copy is the job's to write.
     await chmod(job.dbPath, 0o644);
   }
@@ -319,10 +333,12 @@ export class SnapshotStore {
 
   /**
    * The one deletion decision (contract §2.7): only an unbound snapshot with no lease and no
-   * in-flight publish, or a job that is not open/sealed, is deleted, for real, right here.
+   * in-flight publish, a job that is not open/sealed, or the binding of a workspace whose root is
+   * gone with no running tracker, job or lease, is deleted, for real, right here.
    */
   async tryReclaim(target: ReclaimTarget): Promise<ReclaimResult> {
     return this.serial(async () => {
+      if ("workspaceId" in target) return this.reclaimWorkspace(target.workspaceId);
       if ("jobId" in target) {
         assertId("jobId", target.jobId);
         const job = this.jobs.get(target.jobId);
@@ -354,10 +370,80 @@ export class SnapshotStore {
     });
   }
 
+  /**
+   * One GC cycle over the store's own objects. Workspaces go first, so a binding dropped here frees
+   * its snapshot in the same cycle. Foreign names (`.DS_Store`) and anything outside snapshots/,
+   * jobs/ and workspaces/ (the owner lock, legacy caches, the Gradle home) are never visited.
+   */
+  async sweep(): Promise<SweepReport> {
+    const report: SweepReport = { snapshots: [], jobs: [], workspaces: [], kept: {} };
+    const visit = async (directory: string, list: string[], target: (id: string) => ReclaimTarget) => {
+      for (const id of await storeObjects(directory)) {
+        const result = await this.tryReclaim(target(id));
+        if (result.reclaimed) list.push(id);
+        else if (result.reason !== "missing") report.kept[result.reason] = (report.kept[result.reason] ?? 0) + 1;
+      }
+    };
+    await visit(this.layout.workspaces, report.workspaces, workspaceId => ({ workspaceId }));
+    await visit(this.layout.jobs, report.jobs, jobId => ({ jobId }));
+    await visit(this.layout.snapshots, report.snapshots, snapshotId => ({ snapshotId }));
+    return report;
+  }
+
+  private async reclaimWorkspace(workspaceId: string): Promise<ReclaimResult> {
+    const dir = workspaceDir(this.layout, workspaceId);
+    if (!existsSync(dir)) return { reclaimed: false, reason: "missing" };
+    const binding = this.bindings.get(workspaceId) ?? this.quarantined.get(workspaceId);
+    const tracked = this.tracked.get(workspaceId);
+    // A binding the running tracker still serves, or a first publish under way, is the tracker's.
+    if (tracked && (!binding || sameRoot(tracked.root, binding.root))) return { reclaimed: false, reason: "tracked" };
+    if ([...this.jobs.values()].some(job => job.workspaceId === workspaceId && job.state !== "FINISHED")) return { reclaimed: false, reason: "in-flight" };
+    if (binding && this.leaseCount(binding.snapshotId) > 0) return { reclaimed: false, reason: "leased" };
+    if (binding) {
+      const state = await rootState(binding.root);
+      if (state !== "gone") return { reclaimed: false, reason: state === "live" ? "root-live" : "root-unconfirmed" };
+    } else if (existsSync(path.join(dir, BINDING_FILE))) {
+      // A binding file recovery could not read names no root to judge: kept, never guessed.
+      return { reclaimed: false, reason: "root-unconfirmed" };
+    }
+    this.options.assertOwner?.();
+    // The commit point goes first: a crash mid-removal leaves no binding, never half of one.
+    await rm(path.join(dir, BINDING_FILE), { force: true });
+    await syncDir(dir);
+    this.bindings.delete(workspaceId);
+    this.quarantined.delete(workspaceId);
+    await removeTree(dir);
+    await syncDir(this.layout.workspaces);
+    return { reclaimed: true };
+  }
+
   private serial<T>(work: () => Promise<T>): Promise<T> {
     const run = this.queue.then(work, work);
     this.queue = run.catch(() => undefined);
     return run;
+  }
+}
+
+/** Store object names in one mac1 directory; foreign entries are not objects. */
+async function storeObjects(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  return entries.filter(entry => entry.isDirectory() && /^[A-Za-z0-9_-]{8,128}$/.test(entry.name)).map(entry => entry.name).sort();
+}
+
+const isMissing = (error: unknown) => ["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? "");
+
+/**
+ * `gone` only when the root is replaced, or missing while the volume that held it is still mounted
+ * at its parent. An unmounted volume may come back, and an unreadable path proves nothing.
+ */
+async function rootState(root: RootIdentity): Promise<"live" | "gone" | "unconfirmed"> {
+  try {
+    const info = await stat(root.canonicalRoot, { bigint: true });
+    return info.isDirectory() && info.dev === BigInt(root.dev) && info.ino === BigInt(root.ino) ? "live" : "gone";
+  } catch (error) { if (!isMissing(error)) return "unconfirmed"; }
+  for (let dir = path.dirname(root.canonicalRoot); ; dir = path.dirname(dir)) {
+    try { return (await stat(dir, { bigint: true })).dev === BigInt(root.dev) ? "gone" : "unconfirmed"; }
+    catch (error) { if (!isMissing(error) || dir === path.dirname(dir)) return "unconfirmed"; }
   }
 }
 

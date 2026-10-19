@@ -7,7 +7,7 @@ import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { acquireFixtureSlot } from "./ilv2-mac-fixture-quota.mjs";
-import { MAC_WORK_ROOT, verifyRuntime, writeJson } from "./ilv2-mac-contracts.mjs";
+import { MAC_WORK_ROOT, execute, verifyRuntime, writeJson } from "./ilv2-mac-contracts.mjs";
 import { eventually, processAlive } from "./ilv2-mac-owner-fixture.mjs";
 import { ownerLaunchArguments } from "../dist/mac-platform/owner-lock.js";
 
@@ -26,7 +26,8 @@ test("real-fsevents-drive-tracker-rounds-noop-restart-and-root-replacement", { t
   await cp(fixture, repo, { recursive: true });
   const launch = await ownerLaunchArguments(cache, path.join(sourceRoot, "scripts/ilv2-mac-tracker-entry.mjs"), [repo, cache]);
   const lease = await acquireFixtureSlot(MAC_WORK_ROOT);
-  const env = { ...process.env, HOME: path.join(root, "home"), TMPDIR: path.join(root, "tmp") };
+  // The helper's resume test hook (SIGUSR1 replays its IOKit wake path); the service never sets it.
+  const env = { ...process.env, HOME: path.join(root, "home"), TMPDIR: path.join(root, "tmp"), ILV2_NATIVE_TEST_HOOKS: "1" };
   for (const key of ["NODE_OPTIONS", "NODE_PATH", "NODE_REPL_HISTORY", "NODE_V8_COVERAGE", "NODE_COMPILE_CACHE", "NODE_REDIRECT_WARNINGS", "NODE_TEST_CONTEXT"]) delete env[key];
   const child = spawn(launch.binary, launch.args, { env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
   let stdout = "", stderr = "", requestId = 0, failure;
@@ -94,6 +95,18 @@ test("real-fsevents-drive-tracker-rounds-noop-restart-and-root-replacement", { t
     assert.deepEqual([steps.afterRestart.mode, steps.afterRestart.hashed, steps.afterRestart.noop, steps.afterRestart.coveredThroughSeq, steps.afterRestart.status],
       ["full-hash", 29, true, steps.afterRestart.cut, "FRESH"]);
 
+    // MAC-09: a wake from the native helper owes a full hash; the workspace is STALE until it confirms.
+    const helpers = (await execute("/usr/bin/pgrep", ["-P", String(child.pid)])).stdout.trim().split("\n").filter(Boolean).map(Number);
+    assert.equal(helpers.length, 1, "one native watch helper");
+    steps.resumeBefore = await command("status");
+    process.kill(helpers[0], "SIGUSR1");
+    steps.resumeSeen = await observed("STALE");
+    assert.equal(steps.resumeSeen.diagnostics.epoch, steps.resumeBefore.diagnostics.epoch, "a wake is a signal in the same stream, not a restart");
+    assert.ok(steps.resumeSeen.diagnostics.fullHashThrough > steps.afterRestart.cut);
+    steps.resume = await settle();
+    assert.deepEqual([steps.resume.mode, steps.resume.hashed, steps.resume.noop, steps.resume.status], ["full-hash", 29, true, "FRESH"]);
+    assert.ok(processAlive(helpers[0]), "the helper survives its wake");
+
     await rename(repo, `${repo}.old`);
     await cp(fixture, repo, { recursive: true });
     steps.rootSeen = await observed("INVALID_ROOT");
@@ -112,7 +125,7 @@ test("real-fsevents-drive-tracker-rounds-noop-restart-and-root-replacement", { t
     }
     catch (error) { closeoutError = error; }
     await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), "tracker-native-acceptance.json"), {
-      route: "G01-direct-owned-fixture", launchd: "NOT_RUN", steps, actualOsDrop: "NOT_INDUCED", fakeDropTests: "PROTOCOL_ONLY", resumeSignal: "NOT_EMITTED_BY_NATIVE",
+      route: "G01-direct-owned-fixture", launchd: "NOT_RUN", steps, actualOsDrop: "NOT_INDUCED", fakeDropTests: "PROTOCOL_ONLY", resumeSignal: "NATIVE_TEST_HOOK_REPLAY (IOKit registration real; the host was not slept)",
       stdout, stderr, failure: failure && String(failure), closeoutError: closeoutError && String(closeoutError), quotaReleased: !closeoutError
     });
     for (const waiting of pending.values()) { clearTimeout(waiting.timer); waiting.reject(new Error("fixture closed")); } pending.clear();

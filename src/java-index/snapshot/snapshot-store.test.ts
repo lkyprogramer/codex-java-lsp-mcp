@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants, existsSync, readFileSync } from "node:fs";
-import { access, appendFile, chmod, copyFile, cp, mkdtemp, open, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { access, appendFile, chmod, copyFile, cp, mkdir, mkdtemp, open, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -424,4 +424,111 @@ test("recovery refuses a binding that does not match its snapshot manifest", asy
     await jobFrom(reopened.store, fixture.b, "cap-00000002"));
   assert.equal(rebound.bindingVersion, 2);
   assert.deepEqual(await reopened.store.tryReclaim({ snapshotId: first.snapshotId }), { reclaimed: true });
+});
+
+test("one sweep removes a dead incarnation's jobs, unbound snapshots and empty workspace dirs, and nothing it does not own", async () => {
+  const root = await cacheRoot();
+  const first = await openStore(root);
+  const published = await jobFrom(first.store, fixture.a);
+  const bound = await first.store.publish(plan(fixture.a), published);
+  // Left by the dead incarnation: an open job, a sealed but unbound candidate, an empty workspace dir.
+  const open = await jobFrom(first.store, fixture.b, "cap-00000002");
+  const sealed = await jobFrom(first.store, fixture.b, "cap-00000003");
+  const candidate = await first.store.seal(sealed);
+  await mkdir(path.join(root, "mac1", "workspaces", "ws-crashed-before-binding"));
+  // Not store objects: the owner lock directory, a legacy cache, Finder files, an odd name.
+  const foreign = [path.join(root, "mac1", "owner", "keep.lock"), path.join(root, "legacy-v9", "index.sqlite"),
+    path.join(root, "mac1", "snapshots", ".DS_Store"), path.join(root, "mac1", "jobs", "short")];
+  for (const file of foreign) { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, "keep"); }
+  const second = await openStore(root);
+  const report = await second.store.sweep();
+  assert.deepEqual(report.snapshots, [candidate.snapshotId]);
+  // Every job dir of a dead incarnation is stale, including the finished one of the bound snapshot.
+  assert.deepEqual(report.jobs.sort(), [published.jobId, open.jobId, sealed.jobId].sort());
+  assert.deepEqual(report.workspaces, ["ws-crashed-before-binding"]);
+  assert.equal(report.kept.bound, 1);
+  assert.equal(report.kept.tracked, 1);
+  assert.deepEqual(await snapshotsOf(root), [".DS_Store", bound.snapshotId]);
+  assert.deepEqual(await jobsOf(root), ["short"]);
+  for (const file of foreign) assert.equal(readFileSync(file, "utf8"), "keep", file);
+  await readSealedManifest(second.store.layout, bound.snapshotId, { verifyFile: true });
+  // Converged: a second cycle finds nothing more to delete.
+  const again = await second.store.sweep();
+  assert.deepEqual([again.snapshots, again.jobs, again.workspaces], [[], [], []]);
+});
+
+test("no lease of any purpose loses its snapshot to a sweep; the last release makes it reclaimable", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const first = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  await store.publish(plan(fixture.b, { bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-00000002" }), await jobFrom(store, fixture.b, "cap-00000002"));
+  for (const purpose of ["request", "query-worker", "candidate-scan", "base", "publish"] as const) {
+    const lease = store.acquire(first.snapshotId, purpose);
+    const report = await store.sweep();
+    assert.deepEqual(report.snapshots, [], purpose);
+    assert.equal(report.kept.leased, 1, purpose);
+    assert.ok(existsSync(lease.dbPath), purpose);
+    lease.release();
+  }
+  assert.deepEqual((await store.sweep()).snapshots, [first.snapshotId]);
+});
+
+test("a workspace binding goes only when its root is gone and no tracker, job or lease still serves it", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const parent = await realpath(await mkdtemp(path.join(fixture.base, "roots-")));
+  const identity = async (dir: string): Promise<RootIdentity> => { const info = await stat(dir); return { canonicalRoot: dir, dev: info.dev, ino: info.ino, volume: String(info.dev) }; };
+  const bindAt = async (workspaceId: string, rootIdentity: RootIdentity, captureId: string) => {
+    store.track(workspaceId, { root: rootIdentity, workspaceGeneration: 1, trackerEpoch: EPOCH });
+    return store.publish(plan(fixture.a, { workspaceId, root: rootIdentity, captureId }), await jobFrom(store, fixture.a, captureId, workspaceId));
+  };
+  await mkdir(path.join(parent, "live"));
+  const live = await identity(path.join(parent, "live"));
+  const replacedDir = path.join(parent, "replaced");
+  await mkdir(replacedDir);
+  const replaced = await identity(replacedDir);
+  const removedDir = path.join(parent, "removed");
+  await mkdir(removedDir);
+  const removed = await identity(removedDir);
+  // A root on a volume that is not mounted now: its parent is on another device, so it may come back.
+  const unmounted: RootIdentity = { canonicalRoot: path.join(parent, "volume-gone", "repo"), dev: live.dev + 7, ino: 42, volume: String(live.dev + 7) };
+  const bindings = {
+    live: await bindAt("ws-live-0000001", live, "cap-live-0001"),
+    replaced: await bindAt("ws-replaced-001", replaced, "cap-repl-0001"),
+    removed: await bindAt("ws-removed-0001", removed, "cap-remv-0001"),
+    unmounted: await bindAt("ws-unmounted-01", unmounted, "cap-unmt-0001")
+  };
+  await rm(replacedDir, { recursive: true });
+  await mkdir(replacedDir);
+  await rm(removedDir, { recursive: true });
+  // Still tracked with the bound root: the tracker judges it, not the sweep.
+  assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-replaced-001" }), { reclaimed: false, reason: "tracked" });
+  for (const id of ["ws-live-0000001", "ws-replaced-001", "ws-removed-0001", "ws-unmounted-01"]) store.untrack(id);
+  const job = await store.createJob({ workspaceId: "ws-removed-0001", captureId: "cap-remv-0002" });
+  const lease = store.acquire(bindings.replaced.snapshotId, "request");
+  assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-removed-0001" }), { reclaimed: false, reason: "in-flight" });
+  assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-replaced-001" }), { reclaimed: false, reason: "leased" });
+  assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-live-0000001" }), { reclaimed: false, reason: "root-live" });
+  assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-unmounted-01" }), { reclaimed: false, reason: "root-unconfirmed" });
+  store.finishJob(job);
+  lease.release();
+  const report = await store.sweep();
+  assert.deepEqual(report.workspaces, ["ws-removed-0001", "ws-replaced-001"]);
+  // The freed snapshots go in the same cycle; zero-diff siblings share none here.
+  assert.deepEqual(report.snapshots.sort(), [bindings.removed.snapshotId, bindings.replaced.snapshotId].sort());
+  assert.equal(store.binding("ws-replaced-001"), undefined);
+  assert.equal(existsSync(path.join(root, "mac1", "workspaces", "ws-replaced-001")), false);
+  assert.ok(store.binding("ws-live-0000001") && store.binding("ws-unmounted-01"));
+  const reopened = await openStore(root);
+  assert.deepEqual(reopened.recovery.bindings.map(entry => entry.workspaceId).sort(), ["ws-live-0000001", "ws-unmounted-01"]);
+});
+
+test("a job is registered before its directory exists, so a concurrent sweep never deletes it", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  for (let index = 0; index < 20; index += 1) {
+    const [job] = await Promise.all([store.createJob({ workspaceId: WS, captureId: `cap-race-${String(index).padStart(4, "0")}` }), store.sweep(), store.sweep()]);
+    assert.ok(existsSync(job.dir), `job ${index}`);
+    assert.deepEqual(await store.tryReclaim({ jobId: job.jobId }), { reclaimed: false, reason: "in-flight" });
+  }
 });
