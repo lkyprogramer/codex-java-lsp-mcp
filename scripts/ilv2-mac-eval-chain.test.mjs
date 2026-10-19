@@ -3,6 +3,7 @@
 // paired comparison. Only aggregates and digests reach ILV2_EVIDENCE_ROOT; tasks, gold and receipts stay private.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -78,6 +79,11 @@ test("MAC-10 chain: frozen dataset, stable oracles, six pinned dev tasks through
   assert.equal(report.identity.goldSha256, sha256(goldBytes));
   assert.equal(report.identity.tasksSha256, sha256(tasksBytes));
   assert.equal(report.slots.length, 12);
+  // The tests that assert a repair's fix are not in the corpora the drivers searched.
+  const corpusManifest = JSON.parse(await readFile(path.join(root, manifest.parts.corpus.file), "utf8"));
+  for (const corpus of corpusManifest.corpora) for (const file of corpus.hidden) {
+    assert.equal(existsSync(path.join(work, "retrieval/corpora", corpus.corpusId, file.path)), false, `${corpus.corpusId} still holds a hidden test`);
+  }
   assert.equal(report.status, "MEASURED", `every slot completes: ${report.slots.filter(slot => slot.score.status !== "COMPLETE").map(slot => `${slot.slotId}=${slot.score.status}`).join(", ")}`);
 
   const compare = pairedCompare({ manifest, goldBytes, scheduleBytes, pack: report, baseline: "native", candidate: "product" });
@@ -88,7 +94,7 @@ test("MAC-10 chain: frozen dataset, stable oracles, six pinned dev tasks through
   assert.equal(refused.status, "REFUSED");
 
   const evidence = { schema: "ilv2-mac10-chain-evidence/v1", datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest, counts: manifest.counts,
-    split: manifest.split, chainTasks: chainTasks.map(task => ({ taskId: task.taskId, corpusId: task.corpusId, kind: task.kind, category: task.category })),
+    split: manifest.split, hiddenTests: Object.fromEntries(corpusManifest.corpora.map(corpus => [corpus.corpusId, corpus.hidden.length])), chainTasks: chainTasks.map(task => ({ taskId: task.taskId, corpusId: task.corpusId, kind: task.kind, category: task.category })),
     oracles: { status: oracleReport.status, repeats: oracleReport.repeats, java: { javaSha256: oracleReport.java.javaSha256, version: oracleReport.java.version },
       tasks: oracleReport.tasks.map(task => ({ taskId: task.taskId, split: task.split, broken: task.broken, fixed: task.fixed, stable: task.stable, maxCompileMs: task.maxCompileMs, maxRunMs: task.maxRunMs, timeoutMs: task.timeoutMs })) },
     retrieval: { status: report.status, identity: { ...report.identity, driverIdentities: Object.fromEntries(Object.entries(report.identity.driverIdentities).map(([id, value]) => [id, { kind: value.kind, gitSha: value.gitSha ?? null, rgSha256: value.rgSha256 ?? null, dist: value.dist ?? null }])) },

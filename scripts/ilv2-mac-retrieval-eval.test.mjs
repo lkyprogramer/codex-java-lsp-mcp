@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sha256 } from "./ilv2-mac-contracts.mjs";
 import { buildSchedule, convertDataset, readJsonl } from "./ilv2-mac-eval-dataset.mjs";
-import { evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
+import { FIX_TESTS, evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
 import { DRIVER_KINDS, SLOT_STATUS, aggregate, materializeCorpus, nearestRank, planQueries, runRetrieval, scoreSlot } from "./ilv2-mac-retrieval-eval.mjs";
 
 const RG = process.env.ILV2_RG_BIN ?? "/opt/homebrew/bin/rg";
@@ -89,6 +90,10 @@ test("native-rg end to end: receipts are real reads of the corpus clone with the
   assert.equal(report.byDriver.native.emptyPlanSlots, 1);
   const corpusCalc = await readFile(path.join(out, "corpora/fixture/src/main/java/demo/Calc.java"), "utf8");
   assert.doesNotMatch(corpusCalc, /value > high/);
+  // The tests that would reveal the fix are not in the corpus a driver searches; an unrelated test is.
+  for (const file of Object.keys(FIX_TESTS).concat("src/testFixtures/java/demo/CalcFixtures.java")) assert.equal(existsSync(path.join(out, "corpora/fixture", file)), false, file);
+  assert.ok(existsSync(path.join(out, "corpora/fixture/src/test/java/demo/OrderControllerTest.java")));
+  assert.equal(existsSync(path.join(out, "corpora/fixture/.git")), false, "the history that holds the fix is not cloned");
   const calls = await readJsonl(path.join(out, "calls.jsonl"));
   assert.ok(calls.every(call => call.receipts.every(item => item.sha256 === sha256(item.text))));
   const identity = JSON.parse(await readFile(path.join(out, "identity.json"), "utf8"));
@@ -141,6 +146,8 @@ test("materializeCorpus refuses an overlay or an evidence file that is not the f
     corpus: { ...corpus, overlays: corpus.overlays.map(row => ({ ...row, preStateSha256: "0".repeat(64) })) } }), /overlay FX-REPAIR changed/);
   await assert.rejects(materializeCorpus({ record, oraclesRoot, target: path.join(root, "m-2"),
     corpus: { ...corpus, evidenceFiles: corpus.evidenceFiles.map(row => row.path === corpus.overlays[0].path ? row : { ...row, sha256: "0".repeat(64) }) } }), /differs from the frozen input/);
+  await assert.rejects(materializeCorpus({ record, oraclesRoot, target: path.join(root, "m-3"),
+    corpus: { ...corpus, hidden: corpus.hidden.map((row, index) => index === 0 ? { ...row, sha256: "0".repeat(64) } : row) } }), /hidden test .* differs from the frozen input/);
 });
 
 test("product-mcp: the candidate's static query locates the evidence through its own isolated owner", { timeout: 300000 }, async t => {

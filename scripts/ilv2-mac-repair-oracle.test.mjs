@@ -48,6 +48,20 @@ test("a pre-state that already passes is not a stable oracle: the check fails", 
   assert.deepEqual(report.tasks.map(task => [task.broken, task.fixed, task.stable]), [[["PASS", "PASS"], ["PASS", "PASS"], false]]);
 });
 
+test("an oracle that the known fix does not pass is not stable either", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "mac10-oracle-"));
+  t.after(() => removeTree(root));
+  const fixture = await evalFixture(root);
+  // Both states fail at a check the fix does not satisfy: only the fixed-must-pass rule tells this apart from a good oracle.
+  await writeFile(path.join(fixture.curationDir, "oracles/ClampOracle.java"), CLAMP_ORACLE.replace('== 5, "inside"', '== 6, "inside"'));
+  const out = path.join(root, "dataset");
+  await convertDataset({ curationFile: fixture.curationFile, inputsFile: fixture.inputsFile, candidateFiles: [fixture.candidatesFile], out });
+  const report = await checkOracles({ datasetFile: path.join(out, "dataset-manifest.json"), inputsFile: fixture.inputsFile, split: "dev", repeats: 1,
+    javaHome: await frozenJavaHome(), out: path.join(root, "check") });
+  assert.equal(report.status, "FAIL");
+  assert.deepEqual(report.tasks.map(task => [task.broken, task.fixed, task.stable]), [[["TEST_FAILED"], ["TEST_FAILED"], false]]);
+});
+
 test("oracle states: compile failure, timeout, output flood and a missing file are never a pass", async t => {
   const { root, oracle, fixed } = await dataset(t);
   const javaHome = await frozenJavaHome();

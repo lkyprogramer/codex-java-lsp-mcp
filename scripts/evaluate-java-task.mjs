@@ -1104,17 +1104,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     ? createHash("sha256").update(readFileSync(goldFile)).digest("hex")
     : null;
   const tasksSha256 = createHash("sha256").update(readFileSync(tasksFile)).digest("hex");
-  // MAC-10: the dataset is named, never implied; its tasks and gold must be parts of it.
+  // MAC-10: the dataset is named, never implied. --tasks is one split's tasks part and --gold that same split's gold.
   let dataset = null;
   if (flag("--dataset")) {
     const { verifyDataset } = await import("./ilv2-mac-eval-dataset.mjs");
     const { manifest } = await verifyDataset(path.resolve(flag("--dataset")));
-    const parts = Object.values(manifest.parts).map(part => part.sha256);
-    if (!parts.includes(tasksSha256) || (datasetHash && !parts.includes(datasetHash))) {
-      console.error("--tasks/--gold are not parts of --dataset");
+    const split = ["dev", "holdout"].find(name => manifest.parts[`tasks-${name}`]?.sha256 === tasksSha256);
+    if (!split || (datasetHash && manifest.parts[`gold-${split}`]?.sha256 !== datasetHash)) {
+      console.error("--tasks is not a tasks part of --dataset, or --gold is not the gold of the same split");
       return 2;
     }
-    dataset = { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest };
+    dataset = { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest, split };
   }
   const allTasks = loadTaskFile(tasksFile);
   const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
@@ -1125,7 +1125,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const scheduleText = planned.map(row => JSON.stringify(row)).join("\n") + (planned.length ? "\n" : "");
   writeFileSync(path.join(output, "schedule.jsonl"), scheduleText, "utf8");
   const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
-  const identity = { dataset, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
+  const identity = { datasetId: dataset?.datasetId ?? null, datasetDigest: dataset?.datasetDigest ?? null, split: dataset?.split ?? null, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
     filter, seed, arms, repeats, productProfile, driver: { serverJs: path.resolve(serverJs), serverJsSha256: existsSync(serverJs) ? createHash("sha256").update(readFileSync(serverJs)).digest("hex") : null } };
   const backend = detectBackend(env);
   if (!backend || dryRun) {

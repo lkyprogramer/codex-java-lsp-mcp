@@ -7,7 +7,7 @@
 // Exit 0: every slot ran to completion and was scored; 1: a slot timed out, failed or is missing;
 // 2: identity, precondition or environment error.
 import { execFile, spawn } from "node:child_process";
-import { mkdir, readFile, readdir, realpath, writeFile, appendFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rm, writeFile, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { cliOptions, contains, isMain, readJson, requireValue, runCli, sha256, writeJson } from "./ilv2-mac-contracts.mjs";
@@ -285,7 +285,7 @@ export async function runSlot({ slot, plan, session, signal }) {
   return { slotId: slot.slotId, status, error, elapsedMs: performance.now() - started, payloadBytes, receipts };
 }
 
-/** Materialize a corpus: an APFS clone of the frozen tree (no .git) plus the repair pre-state overlays, each checked by hash. */
+/** Materialize a corpus: an APFS clone of the frozen tree (no .git) plus the repair pre-state overlays, minus the hidden tests, each checked by hash. */
 export async function materializeCorpus({ record, corpus, oraclesRoot, target, signal }) {
   await mkdir(path.dirname(target), { recursive: true });
   const entries = (await readdir(record.repoRoot)).filter(name => name !== ".git");
@@ -297,6 +297,12 @@ export async function materializeCorpus({ record, corpus, oraclesRoot, target, s
     requireValue(sha256(text) === overlay.preStateSha256, `overlay ${overlay.taskId} changed`);
     await writeFile(path.join(target, overlay.path), text);
     overlaid.add(overlay.path);
+  }
+  // Tests that assert a repair's fixed behaviour are not part of any corpus an agent or driver sees.
+  for (const file of corpus.hidden ?? []) {
+    requireValue(!overlaid.has(file.path), `hidden test ${file.path} is also an overlay`);
+    requireValue(sha256(await readFile(path.join(target, file.path))) === file.sha256, `hidden test ${file.path} differs from the frozen input`);
+    await rm(path.join(target, file.path));
   }
   for (const file of corpus.evidenceFiles) {
     if (overlaid.has(file.path)) continue;

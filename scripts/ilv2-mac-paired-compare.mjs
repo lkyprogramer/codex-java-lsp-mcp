@@ -42,6 +42,9 @@ export function clusterBootstrap(deltas, { resamples = 2000, seed = "mac10" } = 
   return [means[Math.floor(0.025 * resamples)], means[Math.ceil(0.975 * resamples) - 1]];
 }
 
+/** A retrieval schedule row names its slot and driver; an evaluator row is {taskId, arm, repeat}: both get one slot id. */
+const scheduleSlot = row => ({ ...row, slotId: row.slotId ?? `${row.taskId}/${row.arm}/${row.repeat}`, driverId: row.driverId ?? row.arm });
+
 /** Retrieval slots keep their recall; agent attempts their 0/1 success (null = UNMEASURED). */
 function outcomes(pack) {
   if (pack.schema === REPORT_SCHEMA) {
@@ -56,7 +59,7 @@ function outcomes(pack) {
 
 export function pairedCompare({ manifest, goldBytes, scheduleBytes, pack, baseline, candidate }) {
   const { errors, split } = identityErrors({ manifest, goldBytes, scheduleBytes, pack });
-  const schedule = parseJsonl(scheduleBytes);
+  const schedule = parseJsonl(scheduleBytes).map(scheduleSlot);
   const rows = errors.length ? [] : outcomes(pack);
   const bySlot = new Map(rows.map(row => [row.slotId, row]));
   if (!errors.length) {
@@ -72,7 +75,7 @@ export function pairedCompare({ manifest, goldBytes, scheduleBytes, pack, baseli
   const gold = new Map(parseJsonl(goldBytes).map(row => [row.taskId, row]));
   const tasks = new Map();
   for (const slot of schedule.filter(item => item.driverId === baseline || item.driverId === candidate)) {
-    const task = tasks.get(slot.taskId) ?? { taskId: slot.taskId, corpusId: slot.corpusId, category: gold.get(slot.taskId)?.category ?? null, baseline: [], candidate: [] };
+    const task = tasks.get(slot.taskId) ?? { taskId: slot.taskId, corpusId: slot.corpusId ?? gold.get(slot.taskId)?.corpusId ?? null, category: gold.get(slot.taskId)?.category ?? null, baseline: [], candidate: [] };
     task[slot.driverId === baseline ? "baseline" : "candidate"].push(bySlot.get(slot.slotId));
     tasks.set(slot.taskId, task);
   }

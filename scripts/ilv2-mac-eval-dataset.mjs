@@ -132,9 +132,23 @@ async function gitChanged(repoRoot, parent, commit) {
   const { stdout } = await execute("git", ["--no-optional-locks", "-C", repoRoot, "diff", "--name-only", "--no-renames", parent, commit], { maxBuffer: 16 * 1024 * 1024, encoding: "utf8" });
   return stdout.split("\n").filter(Boolean);
 }
+/** Any source set but src/main (test, integrationTest, testFixtures, ...). */
+export const TEST_SOURCE = /(?:^|\/)src\/(?!main\/)[^/]+\//;
+/** Test-source files at the frozen head that a repair's own commit touched, and test-source Java files naming the repaired class. */
+async function gitTestFiles(repoRoot, head, { changed, className }) {
+  const list = async args => {
+    try { return (await execute("git", ["--no-optional-locks", "-C", repoRoot, ...args], { maxBuffer: 16 * 1024 * 1024, encoding: "utf8" })).stdout.split("\n").filter(Boolean); }
+    catch (error) { if (error.code === 1) return []; throw error; }
+  };
+  const touched = changed.filter(file => TEST_SOURCE.test(file));
+  return {
+    changed: touched.length ? await list(["ls-tree", "-r", "--name-only", head, "--", ...touched]) : [],
+    referencing: (await list(["grep", "-l", "-w", "-F", "-e", className, head, "--", "*.java"])).map(line => line.slice(head.length + 1)).filter(file => TEST_SOURCE.test(file))
+  };
+}
 
 /** Build every dataset part in memory; `convertDataset` writes them. */
-export async function buildDataset({ curation, curationDir, inputs, candidateSets, readSource = gitShow, listChanged = gitChanged }) {
+export async function buildDataset({ curation, curationDir, inputs, candidateSets, readSource = gitShow, listChanged = gitChanged, listTestFiles = gitTestFiles }) {
   requireValue(curation.schema === CURATION_SCHEMA && /^[a-z0-9][a-z0-9.-]{1,63}$/.test(curation.datasetId ?? ""), "curation schema and datasetId required");
   requireValue(Array.isArray(curation.tasks) && curation.tasks.length > 0, "curation lists no tasks");
   requireValue(new Set(curation.tasks.map(task => task.id)).size === curation.tasks.length, "duplicate task ids");
@@ -144,6 +158,7 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
     for (const row of [...set.train, ...set.holdout]) candidates.set(`${repo}:${row.commit}`, row);
   }
   const corpora = new Map(inputs.map(record => [record.name, record]));
+  const changedBy = new Map();
   for (const task of curation.tasks) {
     requireValue(corpora.has(task.repo), `task ${task.id}: ${task.repo} is not a frozen input`);
     // The commit's own diff, not the curation's word for it, decides which files need fromCommitFiles.
@@ -155,6 +170,7 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
       catch { throw new Error(`task ${task.id}: source commit ${task.source.commit} is not in ${task.repo}`); }
     }
     validateTask(task, candidates, new Set(changed));
+    changedBy.set(task.id, changed);
   }
   // Repair pre-states overlay the frozen tree; QA evidence and other repairs must not depend on those files.
   const overlays = new Map();
@@ -166,6 +182,22 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
   for (const task of curation.tasks) for (const item of task.evidence) {
     const owner = overlays.get(`${task.repo}:${item.path}`);
     requireValue(!owner || owner === task.id, `task ${task.id}: evidence ${item.path} is overlaid by repair ${owner}`);
+  }
+  // The frozen head holds the tests that the repair's own fix brought or that exercise the repaired class: they assert the
+  // fixed behaviour the private oracle judges, so they are removed from every materialized corpus of that repository.
+  const hidden = new Map();
+  for (const task of curation.tasks.filter(item => item.kind === "repair")) {
+    const record = corpora.get(task.repo);
+    const found = await listTestFiles(record.repoRoot, record.head, { changed: changedBy.get(task.id), className: path.basename(task.repair.file).replace(/\.java$/, "") });
+    for (const file of [...found.changed, ...found.referencing]) {
+      requireValue(TEST_SOURCE.test(file), `task ${task.id}: ${file} is not a test source`);
+      const row = hidden.get(`${task.repo}:${file}`) ?? { corpusId: task.repo, path: file, taskIds: [] };
+      if (!row.taskIds.includes(task.id)) row.taskIds.push(task.id);
+      hidden.set(`${task.repo}:${file}`, row);
+    }
+  }
+  for (const task of curation.tasks) for (const item of task.evidence) {
+    requireValue(!hidden.has(`${task.repo}:${item.path}`), `task ${task.id}: evidence ${item.path} is a test hidden from the repair corpus`);
   }
   const split = assignSplits(curation.tasks, curation.holdout ?? {});
   const sources = new Map();
@@ -217,12 +249,17 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
   }
   const order = (a, b) => a.taskId.localeCompare(b.taskId);
   tasks.sort(order); gold.sort(order);
+  const hiddenRows = [];
+  for (const row of [...hidden.values()].sort((a, b) => a.corpusId.localeCompare(b.corpusId) || a.path.localeCompare(b.path))) {
+    hiddenRows.push({ ...row, taskIds: row.taskIds.sort(), sha256: sha256(await source(row.corpusId, row.path)) });
+  }
   const corpus = { schema: CORPUS_SCHEMA, datasetId: curation.datasetId,
     corpora: [...new Set(curation.tasks.map(task => task.repo))].sort().map(repo => {
       const record = corpora.get(repo);
       return { corpusId: repo, head: record.head, inputManifest: record.manifest, inputManifestSha256: record.manifestSha256, inputFiles: record.inputFiles,
         evidenceFiles: [...evidenceFiles.values()].filter(row => row.corpusId === repo).map(({ path: file, sha256: hash }) => ({ path: file, sha256: hash })).sort((a, b) => a.path.localeCompare(b.path)),
-        overlays: oracles.filter(item => item.oracle.corpusId === repo).map(item => ({ taskId: item.taskId, path: item.oracle.file, preStateSha256: item.oracle.preStateSha256 })) };
+        overlays: oracles.filter(item => item.oracle.corpusId === repo).map(item => ({ taskId: item.taskId, path: item.oracle.file, preStateSha256: item.oracle.preStateSha256 })),
+        hidden: hiddenRows.filter(row => row.corpusId === repo).map(({ path: file, sha256: hash, taskIds }) => ({ path: file, sha256: hash, taskIds })) };
     }) };
   return { datasetId: curation.datasetId, tasks, gold, contract, corpus, oracles, holdout: curation.holdout };
 }

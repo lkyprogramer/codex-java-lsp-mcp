@@ -38,6 +38,11 @@ test("convert: agent-visible parts carry no gold, private parts are owner-only, 
     assert.equal(repair.requiredEvidence[0].sha256, rangeHash(preState, 7, 12));
     assert.match(preState, /return value;\n    }\n}/);
     assert.doesNotMatch(preState, /value > high/);
+    // The fix commit's tests and the tests naming the repaired class leave the corpus; an unrelated test stays.
+    const [corpus] = JSON.parse(await readFile(path.join(out, "corpus-manifest.json"), "utf8")).corpora;
+    assert.deepEqual(corpus.hidden.map(row => [row.path, row.taskIds]), [["src/test/java/demo/CalcTest.java", ["FX-REPAIR"]],
+      ["src/test/resources/demo/clamp-cases.txt", ["FX-REPAIR"]], ["src/testFixtures/java/demo/CalcFixtures.java", ["FX-REPAIR"]]]);
+    assert.equal(corpus.hidden[0].sha256, sha256(await readFile(path.join(repoRoot, "src/test/java/demo/CalcTest.java"))));
     const verified = await verifyDataset(path.join(out, "dataset-manifest.json"));
     assert.equal(verified.manifest.datasetDigest, manifest.datasetDigest);
     // Any changed byte in any part breaks the identity.

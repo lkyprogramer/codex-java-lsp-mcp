@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { convertDataset } from "./ilv2-mac-eval-dataset.mjs";
+import { pairedCompare } from "./ilv2-mac-paired-compare.mjs";
 import { evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
 import {
   assemblePack,
@@ -329,7 +330,7 @@ test("--dataset: a MAC-10 split is scheduled under its dataset identity; tasks o
   const pack = JSON.parse(readFileSync(path.join(output, "results-pack.json"), "utf8"));
   assert.equal(pack.status, "DRY_RUN");
   assert.equal(pack.taskSuccessRate, null);
-  assert.deepEqual(pack.identity.dataset, { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest });
+  assert.deepEqual([pack.identity.datasetId, pack.identity.datasetDigest, pack.identity.split], [manifest.datasetId, manifest.datasetDigest, "dev"]);
   assert.equal(pack.identity.goldSha256, createHash("sha256").update(readFileSync(goldFile)).digest("hex"));
   const scheduled = readFileSync(path.join(output, "schedule.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line).taskId);
   assert.deepEqual([...new Set(scheduled)].sort(), readFileSync(tasksFile, "utf8").trim().split("\n").map(line => JSON.parse(line).taskId).sort());
@@ -338,6 +339,22 @@ test("--dataset: a MAC-10 split is scheduled under its dataset identity; tasks o
   writeFileSync(foreign, readFileSync(tasksFile, "utf8").trim().split("\n").slice(1).join("\n") + "\n");
   assert.equal(await main([...args.map(item => item === tasksFile ? foreign : item), "--output", path.join(dir, "out-foreign")], {}), 2);
   assert.equal(existsSync(path.join(dir, "out-foreign/schedule.jsonl")), false);
+  // Parts of the dataset in the wrong role: the other split's gold, or a gold file given as the tasks.
+  assert.equal(await main([...args.map(item => item === goldFile ? path.join(datasetDir, "private/gold-holdout.jsonl") : item), "--output", path.join(dir, "out-split")], {}), 2);
+  assert.equal(await main([...args.map(item => item === tasksFile ? goldFile : item), "--output", path.join(dir, "out-role")], {}), 2);
+  assert.equal(existsSync(path.join(dir, "out-split")) || existsSync(path.join(dir, "out-role")), false);
+
+  // The comparator takes the evaluator's own pack and schedule: unmeasured stays UNMEASURED, measured is compared.
+  const goldBytes = readFileSync(goldFile);
+  const scheduleBytes = readFileSync(path.join(output, "schedule.jsonl"));
+  const unmeasured = pairedCompare({ manifest, goldBytes, scheduleBytes, pack, baseline: "control", candidate: "product" });
+  assert.equal(unmeasured.status, "UNMEASURED", JSON.stringify(unmeasured.errors));
+  const measured = { ...pack, status: "MEASURED", packs: pack.packs.map(row => ({ ...row, taskOutcome: "MEASURED", taskSuccess: row.arm === "product" })) };
+  const compared = pairedCompare({ manifest, goldBytes, scheduleBytes, pack: measured, baseline: "control", candidate: "product" });
+  assert.equal(compared.status, "COMPARED", JSON.stringify(compared.errors));
+  assert.deepEqual([compared.tasks, compared.meanDelta, compared.metric], [3, 1, "task success"]);
+  assert.deepEqual(Object.keys(compared.byCorpus), ["fixture"]);
+  assert.equal(pairedCompare({ manifest, goldBytes, scheduleBytes: Buffer.from(scheduleBytes.toString().split("\n").slice(1).join("\n")), pack: measured, baseline: "control", candidate: "product" }).status, "REFUSED");
 });
 
 test("SOURCE_FETCHED: java_symbol preview becomes a raw tool_response event with sha256 + range", () => {

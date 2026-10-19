@@ -60,6 +60,8 @@ test("an unmeasured agent pack stays UNMEASURED; incomplete slots make the compa
     packs: schedule.map(slot => ({ slotId: slot.slotId, taskId: slot.taskId, arm: slot.driverId, repeat: slot.repeat, taskOutcome: "UNMEASURED", taskSuccess: null })) };
   const unmeasured = compare({ pack: agent });
   assert.equal(unmeasured.status, "UNMEASURED");
+  // A pack that claims MEASURED while holding an unmeasured outcome is still not compared.
+  assert.equal(compare({ pack: { ...agent, status: "MEASURED" } }).status, "UNMEASURED");
   assert.equal(unmeasured.meanDelta, undefined, "no number is produced from unmeasured outcomes");
   const timedOut = { ...pack, slots: pack.slots.map((slot, index) => index === 0 ? { ...slot, score: { status: "TIMEOUT", recall: 0 } } : slot) };
   const result = compare({ pack: timedOut });

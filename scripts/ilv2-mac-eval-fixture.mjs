@@ -39,7 +39,15 @@ const FILES = {
   "src/main/java/demo/PercentRule.java": "package demo;\n\npublic final class PercentRule implements PriceRule {\n    @Override\n    public int apply(int amount) {\n        return amount * 9 / 10;\n    }\n}\n",
   "src/main/java/demo/OrderService.java": "package demo;\n\npublic final class OrderService {\n    private final PriceRule rule;\n\n    public OrderService(PriceRule rule) {\n        this.rule = rule;\n    }\n\n    public int total(int amount) {\n        return Calc.clamp(rule.apply(amount), 0, 1000);\n    }\n}\n",
   "src/main/java/demo/OrderController.java": "package demo;\n\npublic final class OrderController {\n    private final OrderService service = new OrderService(new FlatRule());\n\n    public int quote(int amount) {\n        return service.total(amount);\n    }\n}\n",
-  "src/main/resources/demo/OrderMapper.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mapper namespace=\"demo.OrderMapper\">\n  <select id=\"findTotal\">select total from orders where id = #{id}</select>\n</mapper>\n"
+  "src/main/resources/demo/OrderMapper.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<mapper namespace=\"demo.OrderMapper\">\n  <select id=\"findTotal\">select total from orders where id = #{id}</select>\n</mapper>\n",
+  // Test sources: one unrelated to the repair (kept), one that names the repaired class (hidden by reference).
+  "src/test/java/demo/OrderControllerTest.java": "package demo;\n\nfinal class OrderControllerTest {\n    int quote() {\n        return new OrderController().quote(10);\n    }\n}\n",
+  "src/testFixtures/java/demo/CalcFixtures.java": "package demo;\n\nfinal class CalcFixtures {\n    static final Class<?> TYPE = Calc.class;\n}\n"
+};
+// The fix commit's own tests (hidden by the commit): a test of the repaired class and a test resource.
+export const FIX_TESTS = {
+  "src/test/java/demo/CalcTest.java": "package demo;\n\nfinal class CalcTest {\n    boolean upperBound() {\n        return Calc.clamp(20, 0, 10) == 10;\n    }\n}\n",
+  "src/test/resources/demo/clamp-cases.txt": "20 0 10 -> 10\n"
 };
 export const CLAMP_ORACLE = `package demo;
 
@@ -78,16 +86,22 @@ export async function evalFixture(root, { tasks } = {}) {
   const parent = (await git(repoRoot, "rev-parse", "HEAD")).stdout.trim();
   await writeFile(path.join(repoRoot, "src/main/java/demo/Calc.java"), calc(FIXED_CLAMP));
   await writeFile(path.join(repoRoot, "src/main/java/demo/OrderService.java"), FILES["src/main/java/demo/OrderService.java"].replace("0, 1000", "0, 999"));
-  await git(repoRoot, "commit", "-q", "-am", "fix clamp above the upper bound and lower the order cap");
+  for (const [file, text] of Object.entries(FIX_TESTS)) {
+    await mkdir(path.dirname(path.join(repoRoot, file)), { recursive: true });
+    await writeFile(path.join(repoRoot, file), text);
+  }
+  await git(repoRoot, "add", "-A");
+  await git(repoRoot, "commit", "-q", "-m", "fix clamp above the upper bound and lower the order cap");
   const head = (await git(repoRoot, "rev-parse", "HEAD")).stdout.trim();
   const inputManifest = path.join(root, "fixture-input.json");
   const manifestText = `${JSON.stringify({ schema: "ilv2-mac-input/v1", repoRoot, head, files: [] })}\n`;
   await writeFile(inputManifest, manifestText);
   const inputsFile = path.join(root, "inputs.json");
-  await writeFile(inputsFile, `${JSON.stringify([{ name: "fixture", repoRoot, head, manifest: inputManifest, manifestSha256: sha256(manifestText), inputFiles: 7 }])}\n`);
+  await writeFile(inputsFile, `${JSON.stringify([{ name: "fixture", repoRoot, head, manifest: inputManifest, manifestSha256: sha256(manifestText), inputFiles: 11 }])}\n`);
   const candidatesFile = path.join(root, "jin-commit-tasks-fixture.json");
   await writeFile(candidatesFile, `${JSON.stringify({ schemaVersion: "jin-commit-tasks/v1", project: "fixture", repo: repoRoot, head, train: [{ commit: head, parent, timestamp: 1, task: "fix clamp above the upper bound and lower the order cap",
-    files: [{ path: "src/main/java/demo/Calc.java", status: "modify", methods: [] }, { path: "src/main/java/demo/OrderService.java", status: "modify", methods: [] }] }], holdout: [] })}\n`);
+    files: [{ path: "src/main/java/demo/Calc.java", status: "modify", methods: [] }, { path: "src/main/java/demo/OrderService.java", status: "modify", methods: [] },
+    ...Object.keys(FIX_TESTS).map(file => ({ path: file, status: "add", methods: [] }))] }], holdout: [] })}\n`);
   const curationDir = path.join(root, "curation");
   await mkdir(path.join(curationDir, "oracles"), { recursive: true });
   await writeFile(path.join(curationDir, "oracles/ClampOracle.java"), CLAMP_ORACLE);
