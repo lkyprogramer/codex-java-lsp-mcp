@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { childPids, closeRecoveryOwner, command, copyEvidence, eventually, evidence, processAlive, startRecoveryOwner } from "./ilv2-mac-recovery-fixture.mjs";
 import { execute, readJson, relevantInput, sha256, verifyFrozenInput } from "./ilv2-mac-contracts.mjs";
 import { hostLoad, historyTierState } from "./ilv2-mac-full-delta.mjs";
-import { LIMITS, analyze, auditEvidence, deltaCalibration, fairness, healthyKills, heartbeatGaps, jobsFrom, nearestRank, processProfile, resourcePeaks, seedTier, timingItem, unboundedCalls } from "./ilv2-mac-system-loop.mjs";
+import { LIMITS, analyze, auditEvidence, deltaCalibration, fairness, healthyKills, heartbeatGaps, jobsFrom, leaseLeaks, nearestRank, processProfile, resourcePeaks, seedTier, starvation, timingItem, unboundedCalls } from "./ilv2-mac-system-loop.mjs";
 
 // pageDiff reads every page through synchronous dbstat (seconds on a full index); in this process it would stall the event
 // loop and inflate the elapsed of any request in flight, so it runs in a child.
@@ -94,11 +94,31 @@ test("process samples attribute event-loop spikes to the publishes that just end
   assert.deepEqual(profile.spikes[0].publishes, [{ kind: "delta", changed: 1, publishMs: 300 }]);
 });
 
+test("starvation and lease leaks come from the queue and sweep telemetry, so the lifecycle gates can fail", () => {
+  const queued = (ms, ws, owner = 100) => at(ms, "scheduler", { type: "queued", workspaceId: ws, kind: "delta", queued: 1 }, owner);
+  const dispatched = (ms, ws, owner = 100) => at(ms, "scheduler", { type: "dispatched", workspaceId: ws, kind: "delta", pid: 9, waitedMs: 0, builders: 1, full: 0, parserTokens: 2 }, owner);
+  const rows = [queued(0, "a"), dispatched(1000, "a"), queued(2000, "b"), queued(3000, "c", 200), { at: 3500, pid: 200, type: "round", workspaceId: "x", outcome: "noop" },
+    queued(4000, "d"), { at: 5000, pid: 100, type: "round", workspaceId: "d", outcome: "failed" }, dispatched(LIMITS.starvationMs + 9000, "b")];
+  const starve = starvation(rows);
+  assert.equal(starve.queued, 4);
+  assert.deepEqual(starve.starved.map(row => [row.workspaceId, row.waitedMs]), [["b", LIMITS.starvationMs + 7000]], "served only past the bound: starved");
+  assert.deepEqual(starve.cutOff.map(row => row.workspaceId), ["c"], "still queued when its owner's telemetry ends: cut off by that owner's exit, not starved");
+  const sweep = (ms, owner, kept) => ({ at: ms, pid: owner, type: "sweep", report: { kept } });
+  const leases = leaseLeaks([sweep(0, 100, { leased: 1 }), sweep(LIMITS.leaseHoldMs + 1, 100, { leased: 1 }), sweep(LIMITS.leaseHoldMs + 2, 100, {}),
+    sweep(0, 200, { leased: 2, "in-flight": 1 }), sweep(9, 200, { leased: 2, "in-flight": 1 }), sweep(0, 300, { leased: 1, "in-flight": 1 }), sweep(5, 300, {})]);
+  assert.deepEqual(leases.leaks.map(row => [row.owner, row.reason]), [[100, "held without a build in flight"], [200, "kept at the incarnation's last sweep"]]);
+  assert.deepEqual([leases.sweeps, leases.owners], [7, 3]);
+});
+
 test("analyze keeps hard gates separate from measured performance and never calls measurement a pass", () => {
   const verdict = analyze({ calls: [], telemetry: [], edits: [{ id: 1, firstCorrectMs: 100, firstCorrect: 1 }], seeds: [], physical: [], fulls: [], statusSamples: [1],
     loads: {}, versions: {}, injectedPids: [], negatives: [], faults: [], restart: { ok: true }, lifecycle: { ok: true } });
-  assert.equal(verdict.status, "PASS");
+  assert.equal(verdict.status, "FAIL", "no calls, jobs, sweeps or audited evidence: the evidence-bound gates cannot pass");
+  assert.deepEqual(["isolation", "requestDeadline", "resources", "noStarvation"].map(name => [verdict.hardGates[name].verdict, verdict.hardGates[name].evidenceFloor ?? false]),
+    [["FAIL", false], ["FAIL", false], ["FAIL", false], ["FAIL", false]]);
+  assert.equal(verdict.hardGates.correctness.verdict, "PASS");
   assert.equal(verdict.performanceReady, false);
+  assert.deepEqual(verdict.performanceVerdicts.FAIL.includes("editFirstCorrect"), true);
   assert.equal(verdict.performance.editFirstCorrect.verdict, "FAIL", "1 round < 20");
   assert.equal(verdict.performance.physical20.verdict, "FAIL");
 });

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readRuntimeBuild, type RuntimeBuildInfo } from "../build-info.js";
-import { probeLayout, type LayoutContext } from "../layout-probe.js";
+import { probeLayoutOffThread, type LayoutContext } from "../layout-probe.js";
 import type { JdtlsProgressStatus } from "../jdtls-session.js";
 import type { GeneratedCodeStatus } from "../generated-code.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
@@ -66,7 +66,7 @@ export async function javaStatus(
   _args: z.infer<z.ZodObject<typeof statusSchema>>,
   request?: Pick<RequestContext, "budget">
 ): Promise<Record<string, unknown>> {
-  const layout = probeLayout(context.repoRoot, context.layoutProfile);
+  const layout = await probeLayoutOffThread(context.repoRoot, context.layoutProfile);
   const runtimeBuild = readRuntimeBuild();
   const warnings = rootWarnings(context.repoRoot);
   if (_args.start) {

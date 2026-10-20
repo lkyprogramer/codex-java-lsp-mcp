@@ -11,7 +11,7 @@ import path from "node:path";
 import { BUILD_MARKER_RELATIVE_PATHS, computeBuildFingerprint } from "../build-fingerprint.js";
 import { IGNORED_DIRECTORY_NAMES, javaSourceRoot, resourceSourceRoot } from "../manifest.js";
 import { captureSource } from "../source-capture.js";
-import { probeLayout, type LayoutContext } from "../../layout-probe.js";
+import { probeLayoutOffThread, type LayoutContext } from "../../layout-probe.js";
 import { MacFSEvents } from "../../mac-platform/fsevents.js";
 import { contentManifestIdOf, currentBuildKey, type ContentEntry } from "../sql/snapshot-manifest.js";
 import type { RootIdentity, WorkspaceBinding } from "./binding.js";
@@ -310,7 +310,8 @@ export class WorkspaceTracker {
     const owedFullStat = this.fullStatThrough > 0;
     const dispatchedAt = this.now();
     await this.checkRoot();
-    const layout = probeLayout(this.root.canonicalRoot);
+    // Off this thread: the walk is synchronous fs, and the owner serves requests while rounds run.
+    const layout = await probeLayoutOffThread(this.root.canonicalRoot);
     const layoutKey = JSON.stringify([layout.sourceRoots, layout.resourceRoots, layout.layout]);
     const fingerprint = await computeBuildFingerprint(this.root.canonicalRoot, layout);
     if (this.epoch !== epoch) throw new Error("event stream restarted during dispatch");

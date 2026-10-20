@@ -12,7 +12,10 @@ export const LIMITS = {
   heartbeatGapMs: 2_000, statusP99Ms: 200, statusSamples: 100,
   physicalRatio: { 20: 0.1, 200: 0.3 }, physicalRounds: 3,
   builders: 2, full: 1, parsers: 4, queries: 2,
-  deadlineSlackMs: 1_000, daemonExitMs: 10_000, idleLoadPerCpu: 1.0
+  deadlineSlackMs: 1_000, daemonExitMs: 10_000, idleLoadPerCpu: 1.0,
+  // Harness bounds, not manual thresholds: a short job queued longer than starvationMs is starved; a lease held this long
+  // with no build in flight is leaked (request/candidate leases last seconds; the longest seen idle-held lease was 35 s).
+  starvationMs: 600_000, leaseHoldMs: 120_000
 };
 
 /** Nearest-rank percentile (§5.3): the ceil(p·n)-th sorted value. Censored samples are Infinity and stay in. */
@@ -122,6 +125,56 @@ export function heartbeatGaps(rows) {
     last.set(key, row);
   }
   return gaps;
+}
+
+/**
+ * Short jobs the scheduler queued and did not serve within the bound. Each queued entry is answered by the next dispatch
+ * (an escalation's re-dispatch merges a pending entry) or failed round of that workspace in the same owner; one still
+ * open when its owner's telemetry ends is cut off by the owner's exit (a daemon kill), not starved, unless already overdue.
+ */
+export function starvation(rows, boundMs = LIMITS.starvationMs) {
+  const lastAt = new Map(), open = new Map(), starved = [], cutOff = [];
+  let queued = 0;
+  for (const row of rows) lastAt.set(row.pid, Math.max(lastAt.get(row.pid) ?? -Infinity, row.at));
+  const serve = (owner, workspaceId, at) => {
+    const pending = open.get(`${owner}:${workspaceId}`);
+    const entry = pending?.shift();
+    if (entry && at - entry.at > boundMs) starved.push({ ...entry, waitedMs: at - entry.at });
+  };
+  for (const row of rows) {
+    const event = row.event;
+    if (row.type === "scheduler" && event.type === "queued" && event.kind !== "full") {
+      queued += 1;
+      const key = `${row.pid}:${event.workspaceId}`;
+      open.set(key, [...(open.get(key) ?? []), { owner: row.pid, workspaceId: event.workspaceId, kind: event.kind, at: row.at }]);
+    }
+    if (row.type === "scheduler" && event.type === "dispatched") serve(row.pid, event.workspaceId, row.at);
+    if (row.type === "round" && row.outcome === "failed") serve(row.pid, row.workspaceId, row.at);
+  }
+  for (const pending of open.values()) for (const entry of pending) {
+    const age = lastAt.get(entry.owner) - entry.at;
+    (age > boundMs ? starved : cutOff).push({ ...entry, waitedMs: age });
+  }
+  return { queued, starved, cutOff };
+}
+
+/** Leases the owner kept with no build in flight past the hold bound, and any lease still kept at an incarnation's last sweep. */
+export function leaseLeaks(rows, holdMs = LIMITS.leaseHoldMs) {
+  const byOwner = new Map(), leaks = [];
+  for (const row of rows) if (row.type === "sweep" && row.report) byOwner.set(row.pid, [...(byOwner.get(row.pid) ?? []), row]);
+  for (const [owner, sweeps] of byOwner) {
+    let since;
+    for (const sweep of sweeps) {
+      const kept = sweep.report.kept ?? {};
+      if ((kept.leased ?? 0) > 0 && !kept["in-flight"]) {
+        since ??= sweep.at;
+        if (sweep.at - since > holdMs) { leaks.push({ owner, since, at: sweep.at, leased: kept.leased, reason: "held without a build in flight" }); since = undefined; }
+      } else since = undefined;
+    }
+    const last = sweeps.at(-1).report.kept ?? {};
+    if ((last.leased ?? 0) > 0) leaks.push({ owner, at: sweeps.at(-1).at, leased: last.leased, reason: "kept at the incarnation's last sweep" });
+  }
+  return { sweeps: [...byOwner.values()].reduce((n, sweeps) => n + sweeps.length, 0), owners: byOwner.size, leaks };
 }
 
 /**
@@ -253,17 +306,30 @@ export function analyze({ calls, telemetry, edits, seeds, physical, fulls, statu
   const fair = fairness(jobs);
   const gaps = heartbeatGaps(telemetry);
   const idle = name => idleWindow(loads[name]?.start, loads[name]?.end);
+  const starve = starvation(telemetry);
+  const leases = leaseLeaks(telemetry);
+  // A gate decided on no evidence is not a pass: each hard gate also needs the evidence it judges to exist.
+  const dispatched = jobs.filter(job => job.dispatchAt !== undefined).length;
+  const floor = {
+    isolation: audit.audited >= edits.length + seeds.length && (negatives ?? []).length > 0,
+    requestDeadline: calls.length > 0,
+    resources: dispatched > 0 && leases.sweeps > 0,
+    noStarvation: starve.queued > 0 && (quick || fair.deltas.length > 0)
+  };
   const hard = {
     correctness: gate(edits.every(row => row.firstCorrect !== undefined) && seeds.every(row => row.firstCorrect !== undefined) && (negatives ?? []).every(row => row.ok)
       && (faults ?? []).every(row => row.ok) && (restart?.ok ?? false),
     { editsMissed: edits.filter(row => row.firstCorrect === undefined).map(row => row.id), seedsMissed: seeds.filter(row => row.firstCorrect === undefined).map(row => row.id),
       negativesFailed: (negatives ?? []).filter(row => !row.ok), faultsFailed: (faults ?? []).filter(row => !row.ok).map(row => row.name), restart: restart ?? null }),
-    isolation: gate(audit.cross.length === 0 && audit.mixed.length === 0 && audit.unknown.length === 0, { audited: audit.audited, cross: audit.cross, mixed: audit.mixed, unknown: audit.unknown }),
-    requestDeadline: gate(unbounded.length === 0, { calls: calls.length, unbounded: unbounded.map(call => ({ requestId: call.requestId, tool: call.tool, deadlineMs: call.deadlineMs, elapsedMs: call.elapsedMs })) }),
+    isolation: gate(floor.isolation && audit.cross.length === 0 && audit.mixed.length === 0 && audit.unknown.length === 0,
+      { audited: audit.audited, negatives: (negatives ?? []).length, evidenceFloor: floor.isolation, cross: audit.cross, mixed: audit.mixed, unknown: audit.unknown }),
+    requestDeadline: gate(floor.requestDeadline && unbounded.length === 0, { calls: calls.length, evidenceFloor: floor.requestDeadline, unbounded: unbounded.map(call => ({ requestId: call.requestId, tool: call.tool, deadlineMs: call.deadlineMs, elapsedMs: call.elapsedMs })) }),
     resources: gate(peaks.builders <= LIMITS.builders && peaks.full <= LIMITS.full && peaks.parserTokens <= LIMITS.parsers && peaks.queryWorkers <= LIMITS.queries
-      && kills.length === 0 && (lifecycle?.ok ?? false), { peaks, healthyKills: kills, lifecycle: lifecycle ?? null }),
-    noStarvation: gate(fair.deltas.every(row => Number.isFinite(row.waitedMs)) && jobs.filter(job => job.kind !== "full").every(job => job.closeAt !== undefined || job.dispatchAt !== undefined),
-      { deltasDuringFull: fair.deltas.length, maxWaitedMs: fair.deltas.length ? Math.max(...fair.deltas.map(row => row.waitedMs)) : null })
+      && kills.length === 0 && (lifecycle?.ok ?? false) && floor.resources && leases.leaks.length === 0,
+      { peaks, healthyKills: kills, lifecycle: lifecycle ?? null, dispatched, leaseLeaks: leases, evidenceFloor: floor.resources }),
+    noStarvation: gate(floor.noStarvation && starve.starved.length === 0 && jobs.filter(job => job.kind !== "full").every(job => job.closeAt !== undefined || job.dispatchAt !== undefined),
+      { queued: starve.queued, starved: starve.starved, cutOffByOwnerExit: starve.cutOff, boundMs: LIMITS.starvationMs, deltasDuringFull: fair.deltas.length,
+        maxWaitedMs: fair.deltas.length ? Math.max(...fair.deltas.map(row => row.waitedMs)) : null, evidenceFloor: floor.noStarvation })
   };
   const tier = name => seeds.filter(row => row.tier === name && row.window === "seed").map(row => row.firstCorrectMs ?? Infinity);
   const singleBuilds = jobs.filter(job => job.kind !== "full" && job.touched === 1 && Number.isFinite(job.runMs)).map(job => job.runMs);
@@ -284,8 +350,10 @@ export function analyze({ calls, telemetry, edits, seeds, physical, fulls, statu
   };
   const hardPass = Object.values(hard).every(item => item.verdict === "PASS");
   const performanceReady = Object.values(performance).every(item => item.verdict === "PASS");
+  const performanceVerdicts = {};
+  for (const [name, item] of Object.entries(performance)) (performanceVerdicts[item.verdict] ??= []).push(name);
   return {
-    gateId: "G11", status: quick ? "DIAGNOSTIC_ONLY" : hardPass ? "PASS" : "FAIL", hardGates: hard, performance, performanceReady,
+    gateId: "G11", status: quick ? "DIAGNOSTIC_ONLY" : hardPass ? "PASS" : "FAIL", hardGates: hard, performance, performanceReady, performanceVerdicts,
     performanceNote: "performance items are measured and recorded as PASS/FAIL/INVALID_EXPERIMENT; measurement completion is not a performance pass",
     profiles: profiles(jobs, rounds), process: processProfile(telemetry),
     deltaCalibration: deltaCalibration(jobs, rounds, { limit: deltaClosureLimit ?? 400, fullMs: nearestRank(fulls.map(row => row.ms), 0.5) }), jobs: jobs.map(({ stages, ...job }) => ({ ...job, stages })), fairness: fair, heartbeat: stats(gaps.map(row => row.gapMs)), heartbeatEmit: stats(gaps.map(row => row.emitGapMs).filter(Number.isFinite))

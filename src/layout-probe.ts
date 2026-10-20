@@ -3,6 +3,7 @@
 // pos: Shared lightweight layout probe; falls back to current broad scan behavior.
 import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 
 export type LayoutKind = "gradle-multi" | "maven-multi" | "single" | "flat-layers";
 
@@ -44,6 +45,45 @@ export function probeLayout(repoRoot: string, layoutProfile = "generic-java"): L
     broadRoots: broadRoots(repoRoot, sourceRoots),
     ...(linked.size ? { symlinkedRoots: [...linked].sort() } : {})
   };
+}
+
+type Prober = { worker: Worker; waiting: Map<number, { resolve: (layout: LayoutContext) => void; reject: (error: Error) => void }>; next: number };
+let prober: Prober | undefined;
+
+/**
+ * probeLayout on one shared worker thread: the walk's synchronous stat/readdir never block the calling
+ * event loop. The worker keeps the process alive only while a probe is outstanding; if it dies, the
+ * waiting probes reject and the next call starts a new one.
+ */
+export function probeLayoutOffThread(repoRoot: string, layoutProfile = "generic-java"): Promise<LayoutContext> {
+  const state = prober ??= startProber();
+  const id = state.next++;
+  return new Promise((resolve, reject) => {
+    if (state.waiting.size === 0) state.worker.ref();
+    state.waiting.set(id, { resolve, reject });
+    state.worker.postMessage({ id, repoRoot, layoutProfile });
+  });
+}
+
+function startProber(): Prober {
+  const worker = new Worker(new URL("./layout-probe-worker.js", import.meta.url), { execArgv: ["--disable-warning=ExperimentalWarning"] });
+  worker.unref();
+  const state: Prober = { worker, waiting: new Map(), next: 1 };
+  worker.on("message", (reply: { id: number; value?: LayoutContext; error?: string; code?: string }) => {
+    const waiter = state.waiting.get(reply.id);
+    state.waiting.delete(reply.id);
+    if (state.waiting.size === 0) worker.unref();
+    if (reply.error !== undefined) waiter?.reject(Object.assign(new Error(reply.error), reply.code ? { code: reply.code } : {}));
+    else waiter?.resolve(reply.value!);
+  });
+  const fail = (error: Error) => {
+    if (prober === state) prober = undefined;
+    for (const waiter of state.waiting.values()) waiter.reject(error);
+    state.waiting.clear();
+  };
+  worker.on("error", fail);
+  worker.on("exit", code => fail(new Error(`layout probe worker exited ${code}`)));
+  return state;
 }
 
 /** Whether any component of `relativePath` below the repo root is a symlink; undefined if it vanished. */

@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
-import { probeLayout } from "../layout-probe.js";
+import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { normalizeRepoFile } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
@@ -224,9 +224,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   constructor(
     private readonly repoRoot: string,
     private readonly client: JavaIndexClientApi,
-    private readonly openOptions: JavaIndexOpenOptions = {}
+    private readonly openOptions: JavaIndexOpenOptions = {},
+    // The caller's already-probed layout; without one the constructor walks the repository synchronously.
+    layout: LayoutContext = probeLayout(repoRoot)
   ) {
-    const layout = probeLayout(repoRoot);
     this.conventionalDeclarationRoots = layout.sourceRoots.map(root => root.relativePath);
     this.foregroundImplementationRoots = layout.sourceRoots
       .filter(root => root.sourceSet === "main")

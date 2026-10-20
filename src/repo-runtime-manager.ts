@@ -30,7 +30,7 @@ import {
   type RequestView,
   type ViewLabels
 } from "./java-index/snapshot/request-view.js";
-import { probeLayout, type LayoutContext } from "./layout-probe.js";
+import { probeLayoutOffThread, type LayoutContext } from "./layout-probe.js";
 import { OwnerAdmission, type OwnerAdmissionStatus } from "./index-builder/owner-admission.js";
 import { faultBarrier } from "./mac-platform/fault-barrier.js";
 import { serviceGradleDomain, type GradleDomain } from "./mac-platform/gradle-domain.js";
@@ -499,7 +499,7 @@ export class RepoRuntimeManager {
     if (raced) return raced;
     const shared = entry.shared;
     const javaIndexClient = new SnapshotJavaIndexClient(view.owner, snapshotId, entry.context.repoRoot, status, shared.layout);
-    const javaIndex = new RouterJavaIndex(entry.context.repoRoot, javaIndexClient);
+    const javaIndex = new RouterJavaIndex(entry.context.repoRoot, javaIndexClient, {}, shared.layout);
     await javaIndex.open(status.indexedGeneration);
     const router = new AgentRouter(entry.context.repoRoot, entry.context.session, javaIndex, shared.layout,
       resolveRoutingPolicy(entry.context.repoRoot), shared.rgRunner, shared.edgeStore);
@@ -755,7 +755,8 @@ export class RepoRuntimeManager {
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const ownership = this.ownership?.acquire(resolved.repoRoot);
     const shared: SharedRouterState = {
-      layout: probeLayout(resolved.repoRoot, resolved.layoutProfile),
+      // Off the owner thread: the walk is synchronous fs and stalled every request on a busy disk.
+      layout: await probeLayoutOffThread(resolved.repoRoot, resolved.layoutProfile),
       rgRunner: new RgRunner(),
       edgeStore: new FileSemanticEdgeStoreV2(resolved.repoRoot)
     };
@@ -1098,7 +1099,7 @@ function createRuntime(
   });
   // Until a request holds a verified snapshot, every index read refuses (NOT_READY, never a sibling).
   const javaIndexClient = new NotReadyJavaIndexClient();
-  const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
+  const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient, {}, shared.layout);
   const router = new AgentRouter(resolved.repoRoot, session, javaIndex, shared.layout,
     resolveRoutingPolicy(resolved.repoRoot), shared.rgRunner, shared.edgeStore);
   return {

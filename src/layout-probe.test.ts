@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { probeLayout } from "./layout-probe.js";
+import { probeLayout, probeLayoutOffThread } from "./layout-probe.js";
 
 test("probeLayout detects single-module Maven source roots", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-layout-single-"));
@@ -89,4 +89,30 @@ test("probeLayout reports roots reached through a symlink instead of walking the
     path.join("linkedmod", "src", "main", "resources")
   ]);
   assert.equal(probeLayout(path.join(base, "outside", "module")).symlinkedRoots, undefined, "a plain layout reports no symlinked root");
+});
+
+test("probeLayoutOffThread returns probeLayout's result, keeps fs errors, and leaves the process free to exit", async () => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "java-lsp-layout-offthread-")));
+  await mkdir(path.join(root, "exam-service", "candidate", "src", "main", "java", "demo"), { recursive: true });
+  await mkdir(path.join(root, "report", "src", "main", "resources"), { recursive: true });
+  await mkdir(path.join(root, "shared", "java"), { recursive: true });
+  await mkdir(path.join(root, "linked", "src", "main"), { recursive: true });
+  await symlink("../../../shared/java", path.join(root, "linked", "src", "main", "java"));
+  await writeFile(path.join(root, "pom.xml"), "<project><modules><module>exam-service</module><module>report</module></modules></project>\n");
+
+  const [first, second] = await Promise.all([probeLayoutOffThread(root, "maven-reactor"), probeLayoutOffThread(root)]);
+  assert.deepEqual(first, probeLayout(root, "maven-reactor"));
+  assert.deepEqual(second, probeLayout(root));
+
+  // An unreadable module directory fails the walk with its errno, and the next probe still answers.
+  const sealed = path.join(root, "sealed");
+  await mkdir(path.join(sealed, "inner"), { recursive: true });
+  await chmod(sealed, 0o000);
+  try {
+    await assert.rejects(probeLayoutOffThread(root), (error: NodeJS.ErrnoException) => error.code === "EACCES");
+  } finally {
+    await chmod(sealed, 0o755);
+  }
+  assert.deepEqual(await probeLayoutOffThread(root), probeLayout(root));
+  // The test runner's exit after this file is the check that an idle worker holds no ref.
 });
