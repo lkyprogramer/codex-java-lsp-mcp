@@ -8,8 +8,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import { childPids, closeRecoveryOwner, command, copyEvidence, eventually, evidence, processAlive, startRecoveryOwner } from "./ilv2-mac-recovery-fixture.mjs";
 import { execute, readJson, relevantInput, sha256, verifyFrozenInput } from "./ilv2-mac-contracts.mjs";
 import { hostLoad, historyTierState } from "./ilv2-mac-full-delta.mjs";
-import { pageDiff } from "./ilv2-mac-snapshot-equivalence.mjs";
 import { LIMITS, analyze, auditEvidence, deltaCalibration, fairness, healthyKills, heartbeatGaps, jobsFrom, nearestRank, processProfile, resourcePeaks, seedTier, timingItem, unboundedCalls } from "./ilv2-mac-system-loop.mjs";
+
+// pageDiff reads every page through synchronous dbstat (seconds on a full index); in this process it would stall the event
+// loop and inflate the elapsed of any request in flight, so it runs in a child.
+const pageDiff = async (before, after) => JSON.parse((await execute(process.execPath, [...process.execArgv.filter(arg => !arg.startsWith("--test")), "--input-type=module", "-e",
+  `import { pageDiff } from ${JSON.stringify(new URL("./ilv2-mac-snapshot-equivalence.mjs", import.meta.url).href)}; process.stdout.write(JSON.stringify(await pageDiff(process.argv[1], process.argv[2])));`,
+  before, after], { maxBuffer: 16 * 1024 * 1024 })).stdout);
 
 // ---------------------------------------------------------------- analysis (always runs)
 
