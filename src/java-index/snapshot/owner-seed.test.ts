@@ -1,0 +1,225 @@
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import { chmod, cp, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { performance } from "node:perf_hooks";
+import test, { type TestContext } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+import { startBuildProcess } from "../../index-builder/build-process.js";
+import type { BuilderJob } from "../../index-builder/incremental.js";
+import { close, openImmutableIndexDb } from "../sql/driver.js";
+import { logicalDigest } from "../sql/logical-export.js";
+import { IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
+import { FSEVENT_FLAGS, type TrackerSourceFactory } from "./workspace-tracker.js";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
+const serviceRel = "src/main/java/demospring/OrderService.java";
+const FILE_MODIFIED = 0x1000 | FSEVENT_FLAGS.ItemIsFile;
+
+function fakeSources() {
+  const emitters = new Map<string, (flags: number, file: string) => void>();
+  const factory = (root: string): TrackerSourceFactory => async onSignal => {
+    emitters.set(root, onSignal);
+    return { epoch: randomBytes(16).toString("hex"), fence: async () => {}, stop: async () => {}, closed: new Promise<void>(() => undefined) };
+  };
+  return { factory, emit: (root: string, relative: string) => emitters.get(root)!(FILE_MODIFIED, path.join(root, relative)) };
+}
+
+async function until<T>(probe: () => T | undefined | false, label: string, timeoutMs = 120_000): Promise<T> {
+  const deadline = performance.now() + timeoutMs;
+  for (;;) {
+    const value = probe();
+    if (value) return value;
+    if (performance.now() >= deadline) throw new Error(`Timed out: ${label}`);
+    await delay(10);
+  }
+}
+
+async function base(t: TestContext): Promise<string> {
+  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-owner-seed-")));
+  t.after(async () => {
+    const writable = async (current: string): Promise<void> => {
+      await chmod(current, 0o755).catch(() => undefined);
+      for (const entry of await readdir(current, { withFileTypes: true }).catch(() => [])) if (entry.isDirectory()) await writable(path.join(current, entry.name));
+    };
+    await writable(dir);
+    await rm(dir, { recursive: true, force: true });
+  });
+  return dir;
+}
+
+/** An owner whose builder starts are recorded per workspace root. */
+async function openOwner(t: TestContext, cacheRoot: string, options: Partial<IndexOwnerOptions> = {}) {
+  const sources = fakeSources();
+  const events: OwnerEvent[] = [];
+  const jobs: Array<{ repoRoot: string; job: BuilderJob }> = [];
+  const owner = await IndexOwner.open({ cacheRoot, trackerSource: root => sources.factory(root), roundDelayMs: 5, gcCycleMs: 60_000,
+    onEvent: event => events.push(event), startBuild: input => { jobs.push({ repoRoot: input.repoRoot, job: input.job }); return startBuildProcess(input); }, ...options });
+  t.after(() => owner.stop());
+  return { owner, sources, events, jobs, jobsFor: (root: string) => jobs.filter(job => job.repoRoot === root).map(job => job.job) };
+}
+
+async function repo(dir: string, name: string): Promise<string> {
+  const root = path.join(dir, name);
+  await cp(fixturesRoot, root, { recursive: true });
+  return realpath(root);
+}
+
+async function bound(ctx: Awaited<ReturnType<typeof openOwner>>, root: string) {
+  const workspace = await ctx.owner.workspace(root);
+  await until(() => ctx.owner.store.binding(workspace.workspaceId) && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, `first binding ${root}`);
+  return { workspace, binding: ctx.owner.store.binding(workspace.workspaceId)! };
+}
+
+function rounds(ctx: Awaited<ReturnType<typeof openOwner>>, workspaceId: string) {
+  return ctx.events.filter((event): event is Extract<OwnerEvent, { type: "round" }> => event.type === "round" && event.workspaceId === workspaceId);
+}
+
+function digestOf(owner: IndexOwner, snapshotId: string): string {
+  const db = openImmutableIndexDb(owner.store.snapshotPath(snapshotId));
+  try { return logicalDigest(db).digest; } finally { close(db); }
+}
+
+async function addMethod(root: string, name: string): Promise<void> {
+  const file = path.join(root, serviceRel);
+  const text = await readFile(file, "utf8");
+  await writeFile(file, text.replace(/}\s*$/, `  public String ${name}() { return "${name}"; }\n}\n`));
+}
+
+test("a worktree with a sibling's exact content binds the sibling's sealed snapshot: no build, no new snapshot", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const twin = await repo(dir, "twin");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full"]);
+  const second = await bound(ctx, twin);
+  assert.equal(second.binding.snapshotId, first.binding.snapshotId, "the verified twin is bound to the same snapshot");
+  assert.equal(second.binding.contentManifestId, first.binding.contentManifestId);
+  assert.notEqual(second.workspace.workspaceId, first.workspace.workspaceId);
+  assert.deepEqual(ctx.jobsFor(twin), [], "a zero-diff seed starts no builder");
+  assert.deepEqual(await readdir(ctx.owner.store.layout.snapshots), [first.binding.snapshotId]);
+  const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
+  assert.deepEqual([round.outcome, round.kind, round.seedFrom, round.changed, round.deleted], ["noop", "seed-bind", first.binding.snapshotId, 0, 0]);
+});
+
+test("a worktree one file away seeds a delta from the sibling's base: only that file is rebuilt, and the result equals its own full", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const branch = await repo(dir, "branch");
+  await addMethod(branch, "seededOnlyHere");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const second = await bound(ctx, branch);
+  assert.notEqual(second.binding.snapshotId, first.binding.snapshotId);
+  assert.deepEqual(ctx.jobsFor(branch), [{ kind: "refresh", generation: 2, changed: [serviceRel], deleted: [] }]);
+  const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
+  assert.deepEqual([round.outcome, round.kind, round.seedFrom, round.changed], ["published", "delta", first.binding.snapshotId, 1]);
+  // The sibling keeps its own snapshot; the seed did not supersede it.
+  assert.equal(ctx.owner.store.binding(first.workspace.workspaceId)?.snapshotId, first.binding.snapshotId);
+  assert.ok(existsSync(path.join(ctx.owner.store.layout.snapshots, first.binding.snapshotId)));
+  // An independent full of the same tree (another store) is logically equal to the seeded delta.
+  const independent = await openOwner(t, path.join(dir, "cache-full"));
+  const full = await bound(independent, branch);
+  assert.deepEqual(independent.jobsFor(branch).map(job => job.kind), ["full"]);
+  assert.equal(second.binding.contentManifestId, full.binding.contentManifestId);
+  assert.equal(digestOf(ctx.owner, second.binding.snapshotId), digestOf(independent.owner, full.binding.snapshotId));
+});
+
+test("a sibling under another buildKey is never a seed base: the worktree builds its own full", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const other = await repo(dir, "other-build");
+  const pom = path.join(other, "pom.xml");
+  await writeFile(pom, (await readFile(pom, "utf8")).replace("</project>", "  <!-- another build input -->\n</project>"));
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const second = await bound(ctx, other);
+  assert.notEqual(second.binding.buildKey, first.binding.buildKey);
+  assert.deepEqual(ctx.jobsFor(other).map(job => job.kind), ["full"]);
+  const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
+  assert.deepEqual([round.kind, round.seedFrom], ["full", undefined]);
+});
+
+test("a snapshot bound by a seeded twin survives its first workspace's next publish and every sweep", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const twin = await repo(dir, "twin");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const second = await bound(ctx, twin);
+  assert.equal(second.binding.snapshotId, first.binding.snapshotId);
+  await addMethod(main, "movedOn");
+  ctx.sources.emit(main, serviceRel);
+  await until(() => ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId !== first.binding.snapshotId
+    && first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "main publishes");
+  await ctx.owner.reclaim();
+  await ctx.owner.sweep();
+  await ctx.owner.sweep();
+  assert.equal(ctx.owner.store.binding(second.workspace.workspaceId)?.snapshotId, first.binding.snapshotId);
+  assert.ok(existsSync(path.join(ctx.owner.store.layout.snapshots, first.binding.snapshotId, "index.sqlite")), "the twin's bound snapshot is kept");
+});
+
+test("a bound workspace whose build inputs changed gets an explicit full on an empty job, never a rescan delta", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const pom = path.join(main, "pom.xml");
+  await writeFile(pom, (await readFile(pom, "utf8")).replace("</project>", "  <!-- changed build input -->\n</project>"));
+  ctx.sources.emit(main, "pom.xml");
+  await until(() => ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId !== first.binding.snapshotId
+    && first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "main republishes");
+  assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full", "full"]);
+  const round = rounds(ctx, first.workspace.workspaceId).at(-1)!;
+  assert.deepEqual([round.outcome, round.kind, round.timings?.cloneMs], ["published", "full", undefined], "no base clone for an explicit full");
+  assert.notEqual(ctx.owner.store.binding(first.workspace.workspaceId)!.buildKey, first.binding.buildKey);
+});
+
+test("a reopened workspace whose binding carries a later generation keeps publishing: the new tracker starts at that generation", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const pom = path.join(main, "pom.xml");
+  await writeFile(pom, (await readFile(pom, "utf8")).replace("</project>", "  <!-- changed build input -->\n</project>"));
+  ctx.sources.emit(main, "pom.xml");
+  await until(() => ctx.owner.store.binding(first.workspace.workspaceId)!.workspaceGeneration === 2
+    && first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "the build-input change publishes at generation 2");
+  // Idle retirement and a daemon restart both start a new tracker for the same root.
+  await ctx.owner.retire(main);
+  const reopened = await bound(ctx, main);
+  const before = ctx.owner.store.binding(reopened.workspace.workspaceId)!;
+  await addMethod(main, "afterReopen");
+  ctx.sources.emit(main, serviceRel);
+  await until(() => ctx.owner.store.binding(reopened.workspace.workspaceId)!.snapshotId !== before.snapshotId
+    && reopened.workspace.trackerStatus() === "FRESH" && !reopened.workspace.status().roundInFlight, "the reopened workspace publishes the edit", 60_000);
+  assert.equal(rounds(ctx, first.workspace.workspaceId).filter(round => round.outcome === "failed").length, 0, "no round is refused for a generation below the binding's");
+  assert.equal(ctx.owner.store.binding(reopened.workspace.workspaceId)!.workspaceGeneration, 2);
+});
+
+test("a delta that ran out its job deadline is followed by a full, not by the same delta again", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  let failed = 0;
+  const ctx = await openOwner(t, path.join(dir, "cache"), { startBuild: input => {
+    ctx.jobs.push({ repoRoot: input.repoRoot, job: input.job });
+    if (input.job.kind !== "refresh" || failed > 0) return startBuildProcess(input);
+    failed += 1;
+    // The scheduler's own deadline message, without waiting the real 60 s.
+    return { child: spawn(process.execPath, ["-e", "setTimeout(() => {}, 100)"], { stdio: "ignore" }), result: Promise.reject(new Error("delta build deadline exceeded")) };
+  } });
+  const first = await bound(ctx, main);
+  await addMethod(main, "afterDeadline");
+  ctx.sources.emit(main, serviceRel);
+  await until(() => ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId !== first.binding.snapshotId
+    && first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "main publishes after the failed delta");
+  assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full", "refresh", "full"]);
+  assert.deepEqual(rounds(ctx, first.workspace.workspaceId).filter(round => round.kind !== "noop").map(round => [round.kind, round.outcome]),
+    [["full", "published"], ["delta", "failed"], ["full", "published"]]);
+});

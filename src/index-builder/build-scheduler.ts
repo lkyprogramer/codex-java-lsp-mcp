@@ -38,7 +38,12 @@ export type BuildCompletion = {
 };
 export type BuildSchedulerEvent =
   | { type: "forced-exit"; workspaceId: string; pid?: number }
-  | { type: "reap-overdue"; workspaceId: string; pid?: number; exited: boolean };
+  | { type: "reap-overdue"; workspaceId: string; pid?: number; exited: boolean }
+  /** Lifecycle telemetry (§5.3): queue → dispatch → result → close, with the slot occupancy at dispatch. */
+  | { type: "queued"; workspaceId: string; kind: BuildKind; queued: number }
+  | { type: "dispatched"; workspaceId: string; kind: BuildKind; pid?: number; baseId?: string; waitedMs: number; builders: number; full: number; parserTokens: number }
+  | { type: "result"; workspaceId: string; kind: BuildKind; pid?: number; ok: boolean; escalation?: string; files?: number; stages?: unknown; runMs: number }
+  | { type: "closed"; workspaceId: string; kind: BuildKind; pid?: number; code: number | null; signal: NodeJS.Signals | null; runMs: number; failure?: string; forcedExit?: boolean };
 export type BuildSchedulerOptions = {
   /** Select from the owner's current bindings at admission, never from a queued CURRENT path. */
   select(hint: Readonly<BuildHint>): BuildSelection;
@@ -53,6 +58,7 @@ type Change = { deleted: boolean; generation: number };
 /** One process run for an entry; a delta that escalates runs a second attempt. */
 type Attempt = {
   selection: BuildSelection;
+  startedAt: number;
   kind: BuildKind;
   child?: ChildProcess;
   state: "RUNNING" | "RESULT_RECEIVED" | "REAPING";
@@ -78,8 +84,12 @@ type Entry = {
   baseId?: string;
   done: Promise<void>;
   reaped(): void;
+  /** When this entry (re)entered the queue. */
+  queuedAt: number;
 };
 
+/** ILV2 §6.1: a closure above this many files is published as an explicit full, never a delta. */
+export const DELTA_CLOSURE_LIMIT = 400;
 export const MAX_BUILDERS = 2;
 export const PARSERS_PER_BUILDER = 2;
 const JOB_MS = { delta: 60_000, full: 1_230_000 };
@@ -119,8 +129,9 @@ export class BuildScheduler {
       if (!entry) {
         let reaped!: () => void;
         const done = new Promise<void>(finish => { reaped = finish; });
-        entry = { hint: { ...hint }, order: this.order++, changes: new Map(), waiters: [], captures: [], done, reaped };
+        entry = { hint: { ...hint }, order: this.order++, changes: new Map(), waiters: [], captures: [], done, reaped, queuedAt: performance.now() };
         this.queue.push(entry);
+        this.options.onEvent?.({ type: "queued", workspaceId: hint.workspaceId, kind: hint.kind, queued: this.queue.length });
       }
       this.mergeHint(entry, hint);
       entry.waiters.push(resolve);
@@ -231,18 +242,24 @@ export class BuildScheduler {
   }
 
   private launch(entry: Entry, selection: BuildSelection): void {
-    const attempt: Attempt = { selection, kind: selection.kind, state: "RUNNING", exited: false, closed: false,
+    const attempt: Attempt = { selection, startedAt: performance.now(), kind: selection.kind, state: "RUNNING", exited: false, closed: false,
       killSent: false, reapOverdue: false, timers: new Set() };
     entry.attempt = attempt;
     entry.baseId = selection.baseId;
     const started = selection.start({ parserTokens: PARSERS_PER_BUILDER, captures: entry.captures });
     const child = started.child;
     attempt.child = child;
+    const full = [...this.active.values()].filter(item => item.attempt?.kind === "full").length;
+    this.options.onEvent?.({ type: "dispatched", workspaceId: entry.hint.workspaceId, kind: attempt.kind, pid: child.pid, ...(selection.baseId ? { baseId: selection.baseId } : {}),
+      waitedMs: attempt.startedAt - entry.queuedAt, builders: this.active.size, full, parserTokens: this.active.size * PARSERS_PER_BUILDER });
     let resultSettled = false;
     const settledResult = started.result.then(outcome => {
       resultSettled = true;
       if (entry.attempt !== attempt || attempt.closed) return;
       attempt.outcome = outcome;
+      this.options.onEvent?.({ type: "result", workspaceId: entry.hint.workspaceId, kind: attempt.kind, pid: child.pid,
+        ...(outcome.kind === "result" ? { ok: outcome.result.ok, files: outcome.result.files, stages: outcome.result.stages } : { ok: false, escalation: outcome.reason }),
+        runMs: performance.now() - attempt.startedAt });
       if (attempt.state !== "RUNNING") return;
       attempt.state = "RESULT_RECEIVED";
       this.arm(attempt, this.exitGraceMs, () => {
@@ -301,6 +318,8 @@ export class BuildScheduler {
     attempt.closed = true;
     for (const timer of attempt.timers) clearTimeout(timer);
     attempt.timers.clear();
+    this.options.onEvent?.({ type: "closed", workspaceId: entry.hint.workspaceId, kind: attempt.kind, pid: attempt.child?.pid, code, signal,
+      runMs: performance.now() - attempt.startedAt, ...(attempt.failure ? { failure: attempt.failure } : {}), ...(attempt.forcedExit ? { forcedExit: true } : {}) });
     this.release(attempt.selection);
     if (entry.attempt !== attempt) return;
     const outcome = attempt.outcome;
@@ -316,6 +335,7 @@ export class BuildScheduler {
       entry.captures = outcome.captures;
       entry.escalated = true;
       entry.hint.kind = "full";
+      entry.queuedAt = performance.now();
       const pending = this.queue.find(item => item.hint.workspaceId === entry.hint.workspaceId);
       if (pending) {
         this.mergeHint(entry, pending.hint, pending.changes);

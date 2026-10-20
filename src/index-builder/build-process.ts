@@ -23,13 +23,34 @@ export function builderJobFor(hint: Readonly<BuildHint>, kind = hint.kind): Buil
   return { kind: "refresh", generation: hint.generation, changed: [...hint.changed ?? []], deleted: [...hint.deleted ?? []] };
 }
 
-/** Fork one builder for one job. It keeps the owner's PGID and lock fd (fd4). */
-export function startBuildProcess(input: { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant; env?: NodeJS.ProcessEnv }): BuildAttempt {
+/** A builder liveness line (contract §2.6): `work` counts real progress, `stage` the last finished stage. */
+export type BuilderHeartbeat = { seq: number; at: number; stage: string; work: number };
+/** The builder writes liveness lines to this inherited fd (after IPC fd3 and the lock fd4). */
+const LIVENESS_FD = 5;
+
+/** Fork one builder for one job. It keeps the owner's PGID and lock fd (fd4); `onHeartbeat` receives its liveness lines (fd5). */
+export function startBuildProcess(input: { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant; env?: NodeJS.ProcessEnv;
+  onHeartbeat?: (beat: BuilderHeartbeat) => void }): BuildAttempt {
+  const stdio = ownerChildStdio(["ignore", "ignore", "inherit", "ipc"], input.env) as Array<unknown>;
+  if (input.onHeartbeat) stdio.push(...Array(LIVENESS_FD - stdio.length).fill("ignore"), "pipe");
   const child = fork(workerPath, [], {
     execArgv: ["--disable-warning=ExperimentalWarning"],
     env: input.env ?? process.env,
-    stdio: ownerChildStdio(["ignore", "ignore", "inherit", "ipc"], input.env)
+    stdio: stdio as never
   });
+  const liveness = input.onHeartbeat ? (child.stdio as unknown as Array<import("node:stream").Readable | null>)[LIVENESS_FD] : undefined;
+  if (liveness && input.onHeartbeat) {
+    let partial = "";
+    liveness.setEncoding("utf8");
+    liveness.on("data", (chunk: string) => {
+      const lines = (partial + chunk).split("\n");
+      partial = lines.pop() ?? "";
+      for (const line of lines) {
+        try { input.onHeartbeat!(JSON.parse(line) as BuilderHeartbeat); } catch { /* a torn or foreign line is not a heartbeat */ }
+      }
+    });
+    liveness.on("error", () => undefined);
+  }
   const result = new Promise<BuildOutcome>((resolve, reject) => {
     child.on("message", (message: BuildProcessReply) => {
       if (message.type === "failed") { reject(new Error(message.error)); return; }
@@ -59,19 +80,26 @@ async function runWorker(): Promise<void> {
   const { applyBuilderJob } = await import("./incremental.js");
   const { contentManifestId } = await import("../java-index/sql/snapshot-manifest.js");
   const { faultBarrier } = await import("../mac-platform/fault-barrier.js");
+  const { noteBuilderStage, startBuilderLiveness } = await import("./builder-liveness.js");
+  const { fstatSync } = await import("node:fs");
+  let stopLiveness: (() => Promise<void>) | undefined;
+  // Node's "pipe" above fd 2 is a socketpair, not a FIFO.
+  try { const info = fstatSync(LIVENESS_FD); if (info.isSocket() || info.isFIFO()) stopLiveness = startBuilderLiveness(LIVENESS_FD); }
+  catch { /* no liveness pipe: an owner that does not listen */ }
   const barrier = faultBarrier();
   let reply: BuildProcessReply;
   const db = openIndexDb(request.dbPath);
   try {
     ensureSchema(db);
     const result = await applyBuilderJob({ repoRoot: request.repoRoot, db, job: request.job, escalation: "report", parallelism: request.parallelism,
-      ...(barrier ? { onStage: (stage: string) => Promise.resolve(barrier(`builder-${stage}`)) } : {}) });
+      onStage: async (stage: string) => { noteBuilderStage(stage); if (barrier) await barrier(`builder-${stage}`); } });
     // The publish plan carries the content this builder actually captured (contract §2.7), never one derived later.
     reply = { type: "result", result: result.ok && result.escalation === undefined ? { ...result, contentManifestId: contentManifestId(db).id } : result };
   } catch (error) {
     reply = { type: "failed", error: error instanceof Error ? error.message : String(error) };
   } finally {
     close(db);
+    await stopLiveness?.();
   }
   // The result follows the commit; exit only once it is handed to the channel.
   process.send!(reply, () => process.exit(0));

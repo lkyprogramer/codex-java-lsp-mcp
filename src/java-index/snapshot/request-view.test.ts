@@ -55,6 +55,8 @@ async function setup(t: TestContext, options: Partial<IndexOwnerOptions> & { roo
   for (let index = 0; index < (options.roots ?? 1); index += 1) {
     const repo = path.join(base, `repo-${index}`);
     await cp(fixturesRoot, repo, { recursive: true });
+    // Each further root differs from the first: an identical twin would be seeded onto its snapshot without a build (MAC-11).
+    if (index > 0) await writeFile(path.join(repo, serviceRel), `${await readFile(path.join(repo, serviceRel), "utf8")}\n// repo-${index}\n`);
     roots.push(repo);
   }
   const sources = fakeSources();

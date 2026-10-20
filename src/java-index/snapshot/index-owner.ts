@@ -7,8 +7,8 @@
 //      owner's GC runs one sweep at open (recovery of a dead incarnation) and then every cycle.
 import type { ChildProcess } from "node:child_process";
 import path from "node:path";
-import { builderJobFor, startBuildProcess } from "../../index-builder/build-process.js";
-import { BuildScheduler, type BuildAttempt, type BuildGrant, type BuildHint, type BuildSelection } from "../../index-builder/build-scheduler.js";
+import { builderJobFor, startBuildProcess, type BuilderHeartbeat } from "../../index-builder/build-process.js";
+import { BuildScheduler, DELTA_CLOSURE_LIMIT, type BuildAttempt, type BuildGrant, type BuildHint, type BuildSelection } from "../../index-builder/build-scheduler.js";
 import type { BuilderJob } from "../../index-builder/incremental.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -17,9 +17,9 @@ import type { WorkspaceBinding } from "./binding.js";
 import type { QueryOpName, QueryOps, QueryRequest, SnapshotIndexStatus } from "./query-ops.js";
 import { QueryPool, type QueryCompletion } from "./query-pool.js";
 import { queryOpTask, spawnQueryWorker } from "./query-process.js";
-import type { FaultHook } from "./seal.js";
+import type { FaultHook, SealTimings } from "./seal.js";
 import { SnapshotStore, type BuildJob, type LeasePurpose, type SnapshotLease, type SweepReport } from "./snapshot-store.js";
-import { nativeTrackerSource, WorkspaceTracker, type TrackerSourceFactory, type TrackerStatus } from "./workspace-tracker.js";
+import { nativeTrackerSource, rebase, WorkspaceTracker, type TrackerSourceFactory, type TrackerStatus, type TrackerVerification } from "./workspace-tracker.js";
 
 /** The freshness label a request view freezes at its one acquire. */
 export type ViewState = "FRESH" | "STALE" | "NOT_READY";
@@ -37,15 +37,38 @@ export type PublishEvent = {
   buildKeyChanged: boolean;
 };
 
+/** What a round did, for lifecycle telemetry: the plan kind, its size and the snapshot it bound. */
+export type RoundDetail = {
+  kind?: "noop" | "seed-bind" | "full" | "delta" | "rescan";
+  /** The sibling snapshot a workspace without a binding of its own was judged against (seed). */
+  seedFrom?: string;
+  changed?: number;
+  deleted?: number;
+  hashed?: number;
+  statted?: number;
+  snapshotId?: string;
+  bindingVersion?: number;
+  /** Epoch ms of the binding commit. */
+  boundAt?: number;
+  /** The builder's captured content differs from the tracker's verified census (the binding is the builder's; a later round reconciles). */
+  censusDiverged?: boolean;
+  /** Owner-side stage wall times (ms): verify, sibling seed scan, base clone, scheduler submit (queue + build), publish (seal + bind). */
+  timings?: { verifyMs?: number; seedMs?: number; cloneMs?: number; buildMs?: number; publishMs?: number; seal?: SealTimings };
+};
+
 export type OwnerEvent =
-  | { type: "round"; workspaceId: string; mode: string; outcome: "noop" | "published" | "failed"; elapsedMs: number; error?: string }
+  | ({ type: "round"; workspaceId: string; mode: string; outcome: "noop" | "published" | "failed"; elapsedMs: number; error?: string } & RoundDetail)
   /** One request's freshness prepare: `none` when nothing was owed at entry; `covered` once the entry-time hints are committed. */
   | { type: "prepare"; workspaceId: string; waitedMs: number; outcome: "none" | "covered" | "capped" | "backoff" | "aborted" | "stopped" }
   | { type: "reclaimed"; snapshotId: string }
   /** One GC cycle; `error` when the cycle stopped early (its deletions so far stand). */
   | { type: "sweep"; report?: SweepReport; elapsedMs: number; error?: string }
   | { type: "pool"; event: unknown }
-  | { type: "scheduler"; event: unknown };
+  | { type: "scheduler"; event: unknown }
+  /** A builder's liveness line (contract §2.6), at most one per second. */
+  | { type: "builder"; workspaceId: string; pid?: number; beat: BuilderHeartbeat }
+  /** Diagnosis only: a live builder whose work counter has not moved for STALL_DIAGNOSIS_MS. Its job deadline still decides termination. */
+  | { type: "stall"; workspaceId: string; pid?: number; stage: string; work: number; sinceMs: number };
 
 export type IndexOwnerOptions = {
   /** The owner cache root; the store lives in `<cacheRoot>/mac1`. */
@@ -60,7 +83,7 @@ export type IndexOwnerOptions = {
   restored?: () => void;
   spawnQueryWorker?: () => ChildProcess;
   /** Test seam: the builder process for an admitted job. */
-  startBuild?: (input: { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant }) => BuildAttempt;
+  startBuild?: (input: BuildStart) => BuildAttempt;
   /** Test seam: the change source for a workspace (default: the native FSEvents helper). */
   trackerSource?: (canonicalRoot: string) => TrackerSourceFactory;
   onEvent?: (event: OwnerEvent) => void;
@@ -83,6 +106,10 @@ export type IndexOwnerOptions = {
   fullHashIntervalMs?: number;
 };
 
+type BuildStart = { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant; onHeartbeat?: (beat: BuilderHeartbeat) => void };
+
+/** A builder phase without real progress this long is reported for diagnosis (contract §2.6). */
+export const STALL_DIAGNOSIS_MS = 30_000;
 /** Freshness prepare never waits longer than this (contract §2.6). */
 export const PREPARE_CAP_MS = 1_000;
 const ROUND_DELAY_MS = 25;
@@ -97,6 +124,12 @@ export const GC_CYCLE_MS = 30_000;
 const START_STOP_GRACE_MS = 6_000;
 /** Internal reads (the verification base) are bounded too. */
 const INTERNAL_QUERY_MS = 60_000;
+/** A workspace without a binding judges at most this many sibling snapshots as its seed base. */
+export const MAX_SEED_CANDIDATES = 16;
+
+type SnapshotContent = { entries: Map<string, ContentEntry>; status: SnapshotIndexStatus };
+/** A leased sibling snapshot a workspace without a binding was judged against; the caller releases the lease. */
+type SeedBase = SnapshotContent & { snapshotId: string; lease: SnapshotLease };
 
 function queryError(completion: Exclude<QueryCompletion<unknown>, { status: "ok" }>, op: string): JavaIntelligenceError {
   if (completion.status === "deadline") return new JavaIntelligenceError("DEADLINE_EXCEEDED", `Deadline exceeded during ${op}`);
@@ -112,6 +145,8 @@ export class IndexOwner {
   private readonly starting = new Map<string, Promise<WorkspaceIndex>>();
   private readonly byId = new Map<string, WorkspaceIndex>();
   private readonly superseded = new Set<string>();
+  /** Sealed snapshots never change: their content is read once (bounded, oldest first out). */
+  private readonly contents = new Map<string, Promise<SnapshotContent>>();
   private readonly publishListeners = new Set<(event: PublishEvent) => void>();
   private sweepTimer?: NodeJS.Timeout;
   private sweeping?: Promise<SweepReport | undefined>;
@@ -218,6 +253,47 @@ export class IndexOwner {
     return this.store.acquireBound(workspaceId, purpose);
   }
 
+  /** A sealed snapshot's captured content and status, read once through the pool. The caller holds a lease on it. */
+  content(snapshotId: string): Promise<SnapshotContent> {
+    const cached = this.contents.get(snapshotId);
+    if (cached) return cached;
+    const budget = DeadlineBudget.fromTimeout(INTERNAL_QUERY_MS);
+    const read = Promise.all([
+      this.query(snapshotId, { op: "contentEntries", args: {} }, budget),
+      this.query(snapshotId, { op: "status", args: {} }, budget)
+    ]).then(([rows, status]) => ({ entries: new Map(rows.map(row => [row.path, row])), status }));
+    this.contents.set(snapshotId, read);
+    read.catch(() => { if (this.contents.get(snapshotId) === read) this.contents.delete(snapshotId); });
+    while (this.contents.size > MAX_SEED_CANDIDATES) this.contents.delete(this.contents.keys().next().value!);
+    return read;
+  }
+
+  /**
+   * Seed (contract §2.7): for a workspace without a binding of its own, the sibling snapshot under the
+   * same buildKey whose content differs least from this capture, judged by hash. It is returned under a
+   * candidate-scan lease, so no publish or GC can reclaim it before it is bound or cloned.
+   */
+  async seedFor(workspaceId: string, verification: TrackerVerification): Promise<SeedBase | undefined> {
+    const buildKey = verification.round.buildKey;
+    let best: (SeedBase & { size: number }) | undefined;
+    for (const snapshotId of this.store.seedCandidates(workspaceId, buildKey).slice(0, MAX_SEED_CANDIDATES)) {
+      let lease: SnapshotLease | undefined;
+      try { lease = this.store.acquire(snapshotId, "candidate-scan"); } catch { continue; } // being reclaimed: not a base
+      try {
+        const content = await this.content(snapshotId);
+        const judged = rebase(verification, { entries: content.entries, buildKey });
+        const size = judged.changed.length + judged.deleted.length;
+        if (!best || size < best.size) {
+          best?.lease.release();
+          best = { ...content, snapshotId, lease, size };
+          lease = undefined;
+        }
+      } catch { /* unreadable: not a base */ } finally { lease?.release(); }
+      if (best?.size === 0) break;
+    }
+    return best;
+  }
+
   /** A superseded snapshot is deleted once nothing binds or leases it: now if it can be, else by the sweep. */
   supersede(snapshotId: string): void {
     this.superseded.add(snapshotId);
@@ -273,7 +349,7 @@ export class IndexOwner {
     return workspace.selection(hint);
   }
 
-  startBuild(input: { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant }): BuildAttempt {
+  startBuild(input: BuildStart): BuildAttempt {
     return (this.options.startBuild ?? startBuildProcess)(input);
   }
 
@@ -310,6 +386,8 @@ export class WorkspaceIndex {
   private readonly listeners = new Set<(event: PublishEvent) => void>();
   private readonly settled = new Set<() => void>();
   private lastError?: string;
+  /** The last delta ran out its job deadline: the next round is a full. */
+  private fullNext = false;
   private rounds = 0;
   private lastRound?: { outcome: string; at: number; elapsedMs: number };
 
@@ -325,6 +403,9 @@ export class WorkspaceIndex {
       // A signal is only a hint: it schedules the next round.
       source: (onSignal, onResume) => source((flags, file) => { onSignal(flags, file); index?.kick(); }, () => { onResume(); index?.kick(); }),
       onInvalidRoot: () => { if (index) owner.store.track(index.workspaceId, tracker.trackedState()); },
+      // A new tracker (idle reopen, daemon restart) continues its binding's generation: the store refuses any plan below
+      // it, so starting at 1 after a build-input change would reject every round of this workspace for good.
+      workspaceGeneration: workspaceId => owner.store.binding(workspaceId)?.workspaceGeneration,
       ...(owner.options.fullHashIntervalMs ? { fullHashIntervalMs: owner.options.fullHashIntervalMs } : {})
     });
     index = new WorkspaceIndex(owner, canonicalRoot, tracker);
@@ -448,45 +529,79 @@ export class WorkspaceIndex {
     }
     mode = round.mode;
     store.track(this.workspaceId, this.tracker.trackedState());
+    let seed: SeedBase | undefined;
+    let hint: BuildHint | undefined;
+    const detail: RoundDetail = {};
+    const timings: NonNullable<RoundDetail["timings"]> = {};
+    const timed = async <T>(name: Exclude<keyof typeof timings, "seal">, work: () => Promise<T>): Promise<T> => {
+      const at = performance.now();
+      try { return await work(); } finally { timings[name] = performance.now() - at; detail.timings = timings; }
+    };
     try {
       // Fault seam: a dispatched round of a known mode, not yet confirmed (the workspace is not FRESH).
       await this.owner.options.faultAt?.(`round-${mode}`);
       const bound = store.binding(this.workspaceId);
-      const base = bound ? await this.baseOf(bound.snapshotId) : undefined;
-      const verification = await this.tracker.verify(round, base && { entries: base.entries, buildKey: bound!.buildKey });
+      const own = bound ? await this.baseOf(bound.snapshotId) : undefined;
+      let verification = await timed("verifyMs", () => this.tracker.verify(round, own && { entries: own.entries, buildKey: bound!.buildKey }));
+      // No binding of its own: a sibling's sealed snapshot under the same buildKey is the base (seed).
+      if (!bound) {
+        seed = await timed("seedMs", () => this.owner.seedFor(this.workspaceId, verification));
+        if (seed) verification = rebase(verification, { entries: seed.entries, buildKey: round.buildKey });
+      }
+      Object.assign(detail, { changed: verification.changed.length, deleted: verification.deleted.length, hashed: verification.hashed,
+        statted: verification.statted, ...(seed ? { seedFrom: seed.snapshotId } : {}) });
       if (verification.noop) {
-        const binding = await store.confirmNoop(this.tracker.planFor(verification));
+        // Zero diff: the own binding only moves its watermark; a seed binds the sibling's snapshot after a full manifest/file check.
+        const binding = bound ? await store.confirmNoop(this.tracker.planFor(verification))
+          : await store.bindVerified(this.tracker.planFor(verification), seed!.snapshotId);
         this.tracker.complete(round, binding);
-        this.finish("noop", mode, started);
+        Object.assign(detail, { kind: bound ? "noop" : "seed-bind", snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
+        this.finish("noop", mode, started, undefined, detail);
+        if (!bound) this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
+          indexedGeneration: seed!.status.indexedGeneration, changed: [], deleted: [], buildKeyChanged: false });
         return;
       }
+      const base = own ?? seed;
+      const baseId = bound?.snapshotId ?? seed?.snapshotId;
       const javaOnly = [...verification.changed, ...verification.deleted].every(file => file.endsWith(".java"));
       const generation = (base?.status.indexedGeneration ?? 0) + 1;
-      const hint: BuildHint = !bound ? { workspaceId: this.workspaceId, kind: "full", generation }
-        : round.mode === "paths" && javaOnly && bound.buildKey === round.buildKey
+      const files = verification.changed.length + verification.deleted.length;
+      // An explicit full on an empty job: no base; a difference above the delta closure limit (a seed's or the
+      // workspace's own: the closure holds at least the changed files); changed build inputs; or the previous
+      // delta ran out its job deadline (a misjudged small job goes to the full queue, never back into a delta slot).
+      const fullNext = this.fullNext;
+      const keyChanged = Boolean(bound) && bound!.buildKey !== round.buildKey;
+      const chosen: BuildHint = !baseId || files > DELTA_CLOSURE_LIMIT || keyChanged || fullNext ? { workspaceId: this.workspaceId, kind: "full", generation }
+        : (bound ? round.mode === "paths" : true) && javaOnly && (bound?.buildKey ?? round.buildKey) === round.buildKey
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }
           : { workspaceId: this.workspaceId, kind: "delta", generation, rescan: true };
+      hint = chosen;
+      detail.kind = chosen.kind === "full" ? "full" : chosen.rescan ? "rescan" : "delta";
+      if (chosen.kind === "full") this.fullNext = false;
+      const cloned = chosen.kind === "full" ? undefined : baseId;
       const job = await store.createJob({ workspaceId: this.workspaceId, captureId: round.captureId });
       try {
-        if (bound) {
+        if (cloned && bound) {
           const baseLease = store.acquire(bound.snapshotId, "base");
-          try { await store.cloneBase(baseLease, job); } finally { baseLease.release(); }
-        }
-        this.prepared = { job, baseId: bound?.snapshotId };
-        const completion = await this.owner.scheduler.submit(hint);
+          try { await timed("cloneMs", () => store.cloneBase(baseLease, job)); } finally { baseLease.release(); }
+        } else if (cloned) await timed("cloneMs", () => store.cloneBase(seed!.lease, job));
+        seed?.lease.release();
+        seed = undefined;
+        this.prepared = { job, baseId: cloned };
+        const completion = await timed("buildMs", () => this.owner.scheduler.submit(chosen));
         const built = completion.result?.contentManifestId;
         if (!completion.ok || !built) throw new Error(completion.error ?? "builder reported no content identity");
-        const binding = await store.publish(this.tracker.planFor(verification, built), job);
+        if (built !== verification.contentManifestId) detail.censusDiverged = true;
+        const binding = await timed("publishMs", () => store.publish(this.tracker.planFor(verification, built), job)).finally(() => {
+          if (job.sealTimings) timings.seal = job.sealTimings;
+        });
         this.tracker.complete(round, binding);
         this.base = undefined;
-        this.finish("published", mode, started);
-        const event: PublishEvent = { workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
+        Object.assign(detail, { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
+        this.finish("published", mode, started, undefined, detail);
+        this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
           ...(bound ? { previousSnapshotId: bound.snapshotId } : {}), indexedGeneration: completion.result?.indexedGeneration ?? generation,
-          changed: verification.changed, deleted: verification.deleted, buildKeyChanged: Boolean(bound) && bound!.buildKey !== binding.buildKey };
-        for (const listener of this.listeners) {
-          try { listener(event); } catch { /* a consumer failure never undoes a publish */ }
-        }
-        this.owner.published(event);
+          changed: verification.changed, deleted: verification.deleted, buildKeyChanged: Boolean(bound) && bound!.buildKey !== binding.buildKey });
         if (bound && bound.snapshotId !== binding.snapshotId) this.owner.supersede(bound.snapshotId);
       } finally {
         this.prepared = undefined;
@@ -495,18 +610,28 @@ export class WorkspaceIndex {
       }
     } catch (error) {
       // Nothing is cleared: the old binding keeps serving, every hint stays owed.
+      if (hint?.kind === "delta" && error instanceof Error && /deadline exceeded/.test(error.message)) this.fullNext = true;
       this.tracker.abandon(round);
       store.track(this.workspaceId, this.tracker.trackedState());
-      this.finish("failed", mode, started, error);
+      this.finish("failed", mode, started, error, detail);
+    } finally {
+      seed?.lease.release();
     }
   }
 
-  private finish(outcome: "noop" | "published" | "failed", mode: string, started: number, error?: unknown): void {
+  private announce(event: PublishEvent): void {
+    for (const listener of this.listeners) {
+      try { listener(event); } catch { /* a consumer failure never undoes a publish */ }
+    }
+    this.owner.published(event);
+  }
+
+  private finish(outcome: "noop" | "published" | "failed", mode: string, started: number, error?: unknown, detail: RoundDetail = {}): void {
     const elapsedMs = performance.now() - started;
     this.rounds += 1;
     this.lastRound = { outcome, at: Date.now(), elapsedMs };
     this.lastError = error === undefined ? undefined : error instanceof Error ? error.message : String(error);
-    this.owner.options.onEvent?.({ type: "round", workspaceId: this.workspaceId, mode, outcome, elapsedMs,
+    this.owner.options.onEvent?.({ type: "round", workspaceId: this.workspaceId, mode, outcome, elapsedMs, ...detail,
       ...(this.lastError ? { error: this.lastError } : {}) });
   }
 
@@ -529,7 +654,25 @@ export class WorkspaceIndex {
     return {
       kind: hint.kind,
       ...(prepared.baseId ? { baseId: prepared.baseId } : {}),
-      start: grant => this.owner.startBuild({ repoRoot: this.canonicalRoot, dbPath: prepared.job.dbPath, job: builderJobFor(hint, hint.kind), grant })
+      start: grant => {
+        let pid: number | undefined;
+        let work = -1;
+        let movedAt = performance.now();
+        let reported = false;
+        const onEvent = this.owner.options.onEvent;
+        const attempt = this.owner.startBuild({ repoRoot: this.canonicalRoot, dbPath: prepared.job.dbPath, job: builderJobFor(hint, hint.kind), grant,
+          onHeartbeat: beat => {
+            const now = performance.now();
+            if (beat.work !== work) { work = beat.work; movedAt = now; reported = false; }
+            else if (!reported && now - movedAt >= STALL_DIAGNOSIS_MS) {
+              reported = true;
+              onEvent?.({ type: "stall", workspaceId: this.workspaceId, pid, stage: beat.stage, work: beat.work, sinceMs: now - movedAt });
+            }
+            onEvent?.({ type: "builder", workspaceId: this.workspaceId, pid, beat });
+          } });
+        pid = attempt.child.pid;
+        return attempt;
+      }
     };
   }
 

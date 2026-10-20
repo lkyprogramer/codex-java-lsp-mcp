@@ -20,6 +20,7 @@ import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { IndexOwner, type IndexOwnerOptions, type PublishEvent } from "./java-index/snapshot/index-owner.js";
+import { ownerTelemetrySink } from "./java-index/snapshot/owner-telemetry.js";
 import {
   NotReadyJavaIndexClient,
   snapshotIndexStatus,
@@ -180,8 +181,9 @@ export function defaultIndexOwner(overrides: Partial<IndexOwnerOptions> = {}): (
   const gcCycleMs = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.JAVA_LSP_GC_CYCLE_MS
     ? positiveInteger(process.env.JAVA_LSP_GC_CYCLE_MS, 0) || undefined : undefined;
   const owned = ownerCacheRoot() !== undefined;
+  const onEvent = ownerTelemetrySink();
   return () => IndexOwner.open({ cacheRoot: ownerCacheRoot() ?? repoCacheBase(), assertOwner: () => assertOwnerLock(), gc: owned,
-    ...(faultAt ? { faultAt } : {}), ...(gcCycleMs ? { gcCycleMs } : {}), ...overrides });
+    ...(faultAt ? { faultAt } : {}), ...(gcCycleMs ? { gcCycleMs } : {}), ...(onEvent ? { onEvent } : {}), ...overrides });
 }
 
 export class RepoRuntimeManager {
@@ -297,6 +299,7 @@ export class RepoRuntimeManager {
   /** The index owner, opened once. A failed open leaves the index NOT_READY with the reason on status. */
   private indexOwner(): Promise<IndexOwner | undefined> {
     if (this.options.index === false) return Promise.resolve(undefined);
+    if (this.ownerPromise) return this.ownerPromise;
     const admission = this.admission;
     const source = this.options.index ?? defaultIndexOwner(admission ? { admitted: admission.admitted, restored: () => admission.openStatic() } : {});
     return this.ownerPromise ??= source().then(owner => {

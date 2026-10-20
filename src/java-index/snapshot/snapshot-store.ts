@@ -12,7 +12,7 @@ import path from "node:path";
 import { cloneSealedDatabase } from "../../mac-platform/clonefile.js";
 import type { SnapshotManifest } from "../sql/snapshot-manifest.js";
 import { BINDING_FILE, BINDING_FORMAT, readBinding, removeStaleBindingTmp, sameRoot, workspaceDir, writeBinding, type RootIdentity, type WorkspaceBinding } from "./binding.js";
-import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, sealJobDatabase, syncDir, type FaultHook, type Mac1Layout } from "./seal.js";
+import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, sealJobDatabase, syncDir, type FaultHook, type Mac1Layout, type SealTimings } from "./seal.js";
 
 export type LeasePurpose = "request" | "query-worker" | "candidate-scan" | "base" | "publish";
 export type SnapshotLease = { readonly snapshotId: string; readonly purpose: LeasePurpose; readonly dbPath: string; release(): void };
@@ -51,6 +51,8 @@ export type BuildJob = {
   /** Fixed before sealing starts, so a half-sealed candidate is already in flight. */
   snapshotId?: string;
   manifest?: SnapshotManifest;
+  /** Filled while sealing: the per-step profile. */
+  sealTimings?: SealTimings;
 };
 
 export type ReclaimTarget = { snapshotId: string } | { jobId: string } | { workspaceId: string };
@@ -151,6 +153,16 @@ export class SnapshotStore {
     return binding && { ...binding, root: { ...binding.root } };
   }
 
+  /**
+   * Distinct snapshots that other workspaces bind under `buildKey`: the sealed bases a workspace without
+   * a binding of its own may seed from. Content is judged by hash against its own capture, never assumed.
+   */
+  seedCandidates(workspaceId: string, buildKey: string): string[] {
+    const ids = new Set<string>();
+    for (const [id, binding] of this.bindings) if (id !== workspaceId && binding.buildKey === buildKey) ids.add(binding.snapshotId);
+    return [...ids].sort();
+  }
+
   /** The bindingVersion a plan dispatched now must carry: the served binding's, else a quarantined one's, else 0. */
   bindingVersionOf(workspaceId: string): number {
     return this.bindings.get(workspaceId)?.bindingVersion ?? this.quarantined.get(workspaceId)?.bindingVersion ?? 0;
@@ -225,7 +237,8 @@ export class SnapshotStore {
   async seal(job: BuildJob): Promise<SnapshotManifest> {
     if (job.state !== "OPEN" || job.snapshotId) throw new BindRejected("job-state", `job ${job.jobId} is ${job.state}`);
     job.snapshotId = newSnapshotId();
-    const manifest = await sealJobDatabase(this.layout, job.dir, { snapshotId: job.snapshotId, faultAt: this.options.faultAt });
+    job.sealTimings = {};
+    const manifest = await sealJobDatabase(this.layout, job.dir, { snapshotId: job.snapshotId, faultAt: this.options.faultAt, timings: job.sealTimings });
     job.manifest = manifest;
     job.state = "SEALED";
     return manifest;

@@ -8,9 +8,10 @@ import { chmod, mkdir, open, readFile, rename, stat, writeFile } from "node:fs/p
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
-import { compatibleDeltaBase } from "../../index-builder/execution-plan.js";
+import { Worker } from "node:worker_threads";
 import { OWNER_STORE_DIR } from "../../repo-layout.js";
-import { buildSnapshotManifest, parseSnapshotManifest, type ContentEntry, type SnapshotManifest } from "../sql/snapshot-manifest.js";
+import { parseSnapshotManifest, type ContentEntry, type SnapshotManifest } from "../sql/snapshot-manifest.js";
+import type { SealStep } from "./seal-worker.js";
 
 export const DB_FILE = "index.sqlite";
 export const MANIFEST_FILE = "manifest.json";
@@ -59,6 +60,20 @@ async function fileSha256(file: string): Promise<string> {
   return hash.digest("hex");
 }
 
+/** One synchronous SQLite seal step on a worker thread, never on the owner's event loop. */
+function sealStep<T>(input: SealStep): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./seal-worker.js", import.meta.url), { workerData: input, execArgv: ["--disable-warning=ExperimentalWarning"] });
+    let settled = false;
+    worker.once("message", (reply: { value?: T; error?: string }) => {
+      settled = true;
+      if (reply.error !== undefined) reject(new Error(reply.error)); else resolve(reply.value as T);
+    });
+    worker.once("error", error => { settled = true; reject(error); });
+    worker.once("exit", code => { if (!settled) reject(new Error(`seal ${input.step} worker exited ${code}`)); });
+  });
+}
+
 export type SealFault = "sealed-checkpointed" | "sealed-verified" | "manifest-written" | "snapshot-renamed";
 export type FaultHook = (step: string) => void | Promise<void>;
 
@@ -66,39 +81,30 @@ export type FaultHook = (step: string) => void | Promise<void>;
  * Seal `jobDir/index.sqlite` into `snapshots/<snapshotId>`. Throws, publishing
  * nothing, unless the file is a complete, consistent, single-file database.
  */
-export async function sealJobDatabase(layout: Mac1Layout, jobDir: string, options: { snapshotId?: string; faultAt?: FaultHook } = {}): Promise<SnapshotManifest> {
+/** Wall ms of each seal step (the SQL/seal profile). */
+export type SealTimings = { checkpointMs?: number; verifyMs?: number; hashMs?: number; manifestMs?: number; persistMs?: number };
+
+export async function sealJobDatabase(layout: Mac1Layout, jobDir: string, options: { snapshotId?: string; faultAt?: FaultHook; timings?: SealTimings } = {}): Promise<SnapshotManifest> {
   const snapshotId = options.snapshotId ?? newSnapshotId();
   assertId("snapshotId", snapshotId);
   const source = path.join(jobDir, DB_FILE);
   const target = path.join(layout.snapshots, snapshotId);
   if (existsSync(target)) throw new Error(`snapshot ${snapshotId} exists`);
-  let manifest: SnapshotManifest;
-  const db = new DatabaseSync(source);
-  let dbOpen = true;
-  try {
-    // A writer still open elsewhere keeps the WAL: TRUNCATE reports busy and DELETE mode fails.
-    const checkpoint = db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get() as { busy: number };
-    if (checkpoint.busy !== 0) throw new Error("seal: a writer still holds the database");
-    const mode = (db.prepare("PRAGMA journal_mode=DELETE").get() as { journal_mode: string }).journal_mode;
-    if (mode !== "delete") throw new Error(`seal: journal_mode ${mode}`);
-    await options.faultAt?.("sealed-checkpointed");
-    const integrity = db.prepare("PRAGMA integrity_check").all() as Array<{ integrity_check: string }>;
-    if (integrity.length !== 1 || integrity[0]!.integrity_check !== "ok") throw new Error(`seal: integrity ${JSON.stringify(integrity.slice(0, 3))}`);
-    const foreign = db.prepare("PRAGMA foreign_key_check").all();
-    if (foreign.length) throw new Error(`seal: ${foreign.length} foreign key violations`);
-    // Census and derived pipeline complete: the same rule a delta uses to accept a base.
-    if (!compatibleDeltaBase(db)) throw new Error("seal: incomplete build (census, pipeline or schema)");
-    const pageSize = (db.prepare("PRAGMA page_size").get() as { page_size: number }).page_size;
-    db.close();
-    dbOpen = false;
-    for (const suffix of SIDECARS) if (existsSync(`${source}${suffix}`)) throw new Error(`seal: ${DB_FILE}${suffix} remains`);
-    const bytes = (await stat(source)).size;
-    const sha256 = await fileSha256(source);
-    const reader = new DatabaseSync(source, { readOnly: true });
-    try { manifest = buildSnapshotManifest(reader, { snapshotId, bytes, pageSize, sha256 }); } finally { reader.close(); }
-  } finally {
-    if (dbOpen) db.close();
-  }
+  // Checkpoint and close every writer, then integrity/foreign-key/census/derived checks, then the
+  // manifest: each step on a worker thread (seal-worker.ts), each on its own connection.
+  const timings = options.timings ?? {};
+  const timed = async <T>(name: keyof SealTimings, work: () => Promise<T>): Promise<T> => {
+    const at = performance.now();
+    try { return await work(); } finally { timings[name] = performance.now() - at; }
+  };
+  await timed("checkpointMs", () => sealStep({ step: "checkpoint", source }));
+  await options.faultAt?.("sealed-checkpointed");
+  const { pageSize } = await timed("verifyMs", () => sealStep<{ pageSize: number }>({ step: "verify", source }));
+  for (const suffix of SIDECARS) if (existsSync(`${source}${suffix}`)) throw new Error(`seal: ${DB_FILE}${suffix} remains`);
+  const bytes = (await stat(source)).size;
+  const sha256 = await timed("hashMs", () => fileSha256(source));
+  const manifest = await timed("manifestMs", () => sealStep<SnapshotManifest>({ step: "manifest", source, sealed: { snapshotId, bytes, pageSize, sha256 } }));
+  const persistStarted = performance.now();
   await options.faultAt?.("sealed-verified");
   const staging = path.join(jobDir, "sealed");
   await mkdir(staging);
@@ -116,6 +122,7 @@ export async function sealJobDatabase(layout: Mac1Layout, jobDir: string, option
   await chmod(target, 0o555);
   await syncDir(layout.snapshots);
   await syncDir(jobDir);
+  timings.persistMs = performance.now() - persistStarted;
   await options.faultAt?.("snapshot-renamed");
   return manifest;
 }

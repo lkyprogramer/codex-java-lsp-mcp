@@ -49,6 +49,8 @@ async function until(condition: () => boolean, label: string): Promise<void> {
   }
 }
 const hint = (workspaceId: string, kind: "full" | "delta" = "delta", generation = 1): BuildHint => ({ workspaceId, kind, generation });
+/** The fault reports among the scheduler's events (the rest is lifecycle telemetry). */
+const faults = (events: BuildSchedulerEvent[]) => events.filter(event => event.type === "forced-exit" || event.type === "reap-overdue");
 const capture = (root: string, name: string): SourceCapture => ({ repoRoot: root, inputPath: path.join(root, name), bytes: Buffer.from(name), contentHash: name });
 type Attempt = {
   hint: BuildHint; kind: "full" | "delta"; child: ChildProcess;
@@ -170,6 +172,29 @@ test("short-delta-not-starved-by-full", async t => {
   await f.finish(a);
   await f.finish(await f.started("full-b"));
   assert.ok((await first).ok && (await queued).ok);
+});
+
+test("lifecycle telemetry: each job is queued, dispatched with its wait and occupancy, gets a result, then closes", async t => {
+  const events: BuildSchedulerEvent[] = [];
+  const f = await fixture(t, { scheduler: { onEvent: event => events.push(event) } });
+  const full = f.scheduler.submit(hint("full-a", "full"));
+  const a = await f.started("full-a");
+  const waiting = f.scheduler.submit(hint("full-b", "full"));
+  await delay(120);
+  await f.finish(a);
+  const b = await f.started("full-b");
+  await f.finish(b);
+  assert.ok((await full).ok && (await waiting).ok);
+  const of = (workspaceId: string) => events.filter(event => "workspaceId" in event && event.workspaceId === workspaceId).map(event => event.type);
+  assert.deepEqual(of("full-a"), ["queued", "dispatched", "result", "closed"]);
+  assert.deepEqual(of("full-b"), ["queued", "dispatched", "result", "closed"]);
+  const dispatchedB = events.find(event => event.type === "dispatched" && event.workspaceId === "full-b") as Extract<BuildSchedulerEvent, { type: "dispatched" }>;
+  const closedA = events.find(event => event.type === "closed" && event.workspaceId === "full-a") as Extract<BuildSchedulerEvent, { type: "closed" }>;
+  // The waiting full queued behind the running one; it is dispatched with one full and one builder in the domain.
+  assert.ok(dispatchedB.waitedMs >= 100, `full-b waited ${dispatchedB.waitedMs} ms`);
+  assert.deepEqual([dispatchedB.kind, dispatchedB.builders, dispatchedB.full, dispatchedB.parserTokens, dispatchedB.pid], ["full", 1, 1, 2, b.child.pid]);
+  assert.deepEqual([closedA.kind, closedA.code, closedA.pid], ["full", 0, a.child.pid]);
+  assert.ok(closedA.runMs > 0);
 });
 
 test("result-before-exit-keeps-slot", async t => {
@@ -381,7 +406,7 @@ test("a builder hung after its result is forced to exit and still reports the re
   const outcome = await completion;
   assert.equal(outcome.ok, true);
   assert.equal(outcome.forcedExit, true);
-  assert.deepEqual(events.map(event => event.type), ["forced-exit"]);
+  assert.deepEqual(faults(events).map(event => event.type), ["forced-exit"]);
   await f.finish(await f.started("next-2"));
   await f.finish(second);
   assert.ok((await queued).ok && (await other).ok);
@@ -439,8 +464,8 @@ test("an unreaped kill is reported and keeps the builder slot until actual close
   const completion = scheduler.submit(hint("stuck"));
   await until(() => scheduler.status().builders === 1 && scheduler.status().jobs.length === 1, "started");
   const stopping = scheduler.stop();
-  await until(() => events.length === 1, "reap overdue");
-  assert.deepEqual(events, [{ type: "reap-overdue", workspaceId: "stuck", pid: 515151, exited: false }]);
+  await until(() => faults(events).length === 1, "reap overdue");
+  assert.deepEqual(faults(events), [{ type: "reap-overdue", workspaceId: "stuck", pid: 515151, exited: false }]);
   assert.equal(scheduler.status().builders, 1);
   assert.equal(scheduler.status().reapOverdue, 1);
   assert.equal(releases, 0);
@@ -476,8 +501,8 @@ test("a kill that fails synchronously is sent once and reported, not re-entered"
   child.emit("error", new Error("send failed"));
   const stopping = scheduler.stop();
   assert.equal(child.kills, 1);
-  await until(() => events.length === 1, "reap overdue");
-  assert.deepEqual(events, [{ type: "reap-overdue", workspaceId: "eperm", pid: 545454, exited: false }]);
+  await until(() => faults(events).length === 1, "reap overdue");
+  assert.deepEqual(faults(events), [{ type: "reap-overdue", workspaceId: "eperm", pid: 545454, exited: false }]);
   assert.equal(scheduler.status().builders, 1);
   child.emit("exit", null, "SIGKILL");
   child.emit("close", null, "SIGKILL");
@@ -715,6 +740,46 @@ async function writeTimeline(name: string, value: unknown): Promise<void> {
   await mkdir(root, { recursive: true });
   await writeFile(path.join(root, `${name}.json`), JSON.stringify(value, null, 2));
 }
+
+test("a real builder's liveness lines reach onHeartbeat through the scheduler's process adapter", { timeout: 60_000 }, async t => {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-liveness-builder-")));
+  let scheduler: BuildScheduler | undefined;
+  t.after(async () => {
+    await scheduler?.stop();
+    await rm(base, { recursive: true, force: true, maxRetries: 3 });
+  });
+  const [root] = await rootsFor(base, [["beat", 20, 60]]);
+  const beats: Array<{ seq: number; stage: string; work: number }> = [];
+  scheduler = new BuildScheduler({ select: hint => ({ kind: hint.kind, start: grant =>
+    startBuildProcess({ repoRoot: root!.repo, dbPath: root!.db, job: builderJobFor(hint), grant, onHeartbeat: beat => beats.push(beat) }) }) });
+  const outcome = await scheduler.submit({ workspaceId: "beat", kind: "full", generation: 1 });
+  assert.equal(outcome.ok, true, outcome.error);
+  assert.ok(beats.length >= 1, "the builder's first liveness line is written at start");
+  assert.deepEqual(beats.map(beat => beat.seq), beats.map((_, index) => index + 1));
+  assert.ok(beats.every((beat, index) => index === 0 || beat.work >= beats[index - 1]!.work), "work never moves backwards");
+});
+
+test("a delta whose own inputs exceed the closure limit reports escalation before parsing any of them", { timeout: 120_000 }, async t => {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-early-escalation-")));
+  let scheduler: BuildScheduler | undefined;
+  t.after(async () => {
+    await scheduler?.stop();
+    await rm(base, { recursive: true, force: true, maxRetries: 3 });
+  });
+  const [root] = await rootsFor(base, [["wide", 10, 45]]);
+  const events: BuildSchedulerEvent[] = [];
+  scheduler = new BuildScheduler({ onEvent: event => events.push(event), select: hint => ({ kind: hint.kind, start: grant =>
+    startBuildProcess({ repoRoot: root!.repo, dbPath: root!.db, job: builderJobFor(hint), grant }) }) });
+  assert.equal((await scheduler.submit({ workspaceId: "wide", kind: "full", generation: 1 })).ok, true);
+  const changed = root!.files.slice(0, 401);
+  for (const file of changed) await writeFile(file, `${await readFile(file, "utf8")}// wide edit\n`);
+  events.length = 0;
+  const outcome = await scheduler.submit({ workspaceId: "wide", kind: "delta", generation: 2, changed });
+  assert.equal(outcome.ok, true, outcome.error);
+  const results = events.filter((event): event is Extract<BuildSchedulerEvent, { type: "result" }> => event.type === "result");
+  assert.deepEqual(results.map(event => event.kind), ["delta", "full"], "the delta escalates, the full publishes");
+  assert.match(results[0]!.escalation ?? "", /401 changed\/deleted inputs > 400 files/, "escalated on its inputs, before any parse or closure");
+});
 
 test("mixed-full-load-short-delta-queue-latency", { timeout: 240_000 }, async t => {
   const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-g06c-fair-")));

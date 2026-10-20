@@ -46,6 +46,16 @@ static void watch_callback(ConstFSEventStreamRef stream, void *context, size_t c
     }
     fflush(stdout);
 }
+/* Test hook only: a synthetic UserDropped|MustScanSubDirs event on the root, in the one sequence, so a
+ * harness can drive the drop-recovery path end to end. It does not establish that macOS dropped events. */
+static void watch_test_drop(WatchState *state, const char *root) {
+    watch_prefix(state, "event");
+    printf(",\"eventId\":\"0\",\"flags\":%" PRIu32 ",\"path\":",
+        (FSEventStreamEventFlags)(kFSEventStreamEventFlagUserDropped | kFSEventStreamEventFlagMustScanSubDirs));
+    watch_string(root);
+    puts("}");
+    fflush(stdout);
+}
 static void watch_resume(WatchState *state, const char *source) {
     watch_prefix(state, "resume");
     printf(",\"source\":\"%s\"}\n", source);
@@ -86,16 +96,20 @@ static int watch_fsevents(const char *cache_root, const char *root) {
         FSEventStreamInvalidate(state.stream); FSEventStreamRelease(state.stream); dispatch_release(state.queue);
         return failure("POWER_REGISTER_FAILED", 0);
     }
-    /* Test hook only (never set by the service): SIGUSR1 replays the resume path on the protocol queue,
-     * so an external fault harness can wake a helper without sleeping the host. */
+    /* Test hooks only (never set by the service): SIGUSR1 replays the resume path and SIGUSR2 a dropped-events
+     * signal on the protocol queue, so an external fault harness can drive both without sleeping the host. */
     const char *hooks = getenv("ILV2_NATIVE_TEST_HOOKS");
     bool test_hooks = hooks != NULL && strcmp(hooks, "1") == 0;
     dispatch_source_t test_resume = NULL;
+    dispatch_source_t test_drop = NULL;
     if (test_hooks) {
         signal(SIGUSR1, SIG_IGN);
+        signal(SIGUSR2, SIG_IGN);
         test_resume = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGUSR1, 0, state.queue);
+        test_drop = dispatch_source_create(DISPATCH_SOURCE_TYPE_SIGNAL, SIGUSR2, 0, state.queue);
         WatchState *target = &state;
         dispatch_source_set_event_handler(test_resume, ^{ watch_resume(target, "test-hook"); });
+        dispatch_source_set_event_handler(test_drop, ^{ watch_test_drop(target, root); });
     }
     __block bool started = false;
     WatchState *shared = &state;
@@ -114,6 +128,7 @@ static int watch_fsevents(const char *cache_root, const char *root) {
         FSEventStreamInvalidate(state.stream); FSEventStreamRelease(state.stream);
         /* Never activated: a suspended source must be resumed (after cancel) before its release. */
         if (test_resume != NULL) { dispatch_source_cancel(test_resume); dispatch_resume(test_resume); dispatch_release(test_resume); }
+        if (test_drop != NULL) { dispatch_source_cancel(test_drop); dispatch_resume(test_drop); dispatch_release(test_drop); }
         IODeregisterForSystemPower(&state.power_notifier); IOServiceClose(state.power); IONotificationPortDestroy(state.power_port);
         dispatch_release(state.queue);
         return failure("STREAM_START_FAILED", 0);
@@ -123,6 +138,7 @@ static int watch_fsevents(const char *cache_root, const char *root) {
         /* Delivered only after ready: a wake before it is covered by the new epoch's startup hash. */
         IONotificationPortSetDispatchQueue(state.power_port, state.queue);
         if (test_resume != NULL) dispatch_resume(test_resume);
+        if (test_drop != NULL) dispatch_resume(test_drop);
         /* A bounded token protocol: never allocate an unbounded stdin line. */
         char command[96];
         while (fgets(command, sizeof(command), stdin) != NULL) {
@@ -148,6 +164,7 @@ static int watch_fsevents(const char *cache_root, const char *root) {
     IODeregisterForSystemPower(&state.power_notifier);
     IOServiceClose(state.power);
     if (test_resume != NULL) { dispatch_source_cancel(test_resume); dispatch_release(test_resume); }
+    if (test_drop != NULL) { dispatch_source_cancel(test_drop); dispatch_release(test_drop); }
     dispatch_sync(state.queue, ^{
         watch_prefix(shared, status ? "error" : "stopped");
         if (status) printf(",\"code\":\"CONTROL_PROTOCOL_ERROR\"");

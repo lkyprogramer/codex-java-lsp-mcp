@@ -2,6 +2,7 @@ import { computeExtractorVersion } from "../java-index/build-fingerprint.js";
 import type { SourceRootCoverage } from "../java-index/index-types.js";
 import { prepareCached, type IndexDatabase } from "../java-index/sql/driver.js";
 import type { LayoutContext } from "../layout-probe.js";
+import { noteBuilderWork } from "./builder-liveness.js";
 
 export type BuildPhase = "declare" | "resolve";
 
@@ -45,6 +46,7 @@ export function readBuildProgress(db: IndexDatabase): BuildProgress | undefined 
 
 export function writeBuildProgress(db: IndexDatabase, progress: BuildProgress): void {
   writeMeta(db, "buildProgress", JSON.stringify(progress));
+  noteBuilderWork();
 }
 
 function countStar(db: IndexDatabase, table: "file" | "type" | "method" | "edge"): number {

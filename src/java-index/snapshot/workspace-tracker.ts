@@ -53,6 +53,24 @@ export function workspaceIdFor(root: RootIdentity): string {
   return `w-${createHash("sha256").update(`${root.canonicalRoot}\0${root.volume}\0${root.dev}\0${root.ino}`).digest("hex").slice(0, 40)}`;
 }
 
+/**
+ * The verification's capture against `base`: changed/deleted members and whether it is a verified noop.
+ * Without a base every captured member is changed. The capture itself (entries, manifest id) is kept,
+ * so the same round can be judged against a sibling workspace's snapshot (seed) instead of its own.
+ */
+export function rebase(verification: TrackerVerification, base?: { entries: ReadonlyMap<string, ContentEntry>; buildKey: string }): TrackerVerification {
+  const { entries } = verification;
+  const changed: string[] = [];
+  const deleted: string[] = [];
+  if (base) {
+    for (const entry of entries.values()) if (base.entries.get(entry.path)?.hash !== entry.hash || base.entries.get(entry.path)?.kind !== entry.kind) changed.push(entry.path);
+    for (const name of base.entries.keys()) if (!entries.has(name)) deleted.push(name);
+  } else changed.push(...entries.keys());
+  changed.sort();
+  deleted.sort();
+  return { ...verification, changed, deleted, noop: Boolean(base) && !changed.length && !deleted.length && base!.buildKey === verification.round.buildKey };
+}
+
 export class TrackerRootInvalid extends Error {
   constructor(message: string, readonly replacement?: RootIdentity) { super(`INVALID_ROOT: ${message}`); }
 }
@@ -94,8 +112,8 @@ type Cached = { key: StatKey; hash: string };
 
 export type WorkspaceTrackerOptions = {
   canonicalRoot: string;
-  /** The generation to continue from (a restored binding's), default 1. */
-  workspaceGeneration?: number;
+  /** The generation to continue from (a restored binding's), default 1; a function is asked with this root's workspaceId. */
+  workspaceGeneration?: number | ((workspaceId: string) => number | undefined);
   source: TrackerSourceFactory;
   now?: () => number;
   /** RootChanged found the root gone or replaced: refresh SnapshotStore.track() from trackedState() now. */
@@ -138,7 +156,8 @@ export class WorkspaceTracker {
 
   private constructor(readonly root: RootIdentity, private readonly options: WorkspaceTrackerOptions) {
     this.workspaceId = workspaceIdFor(root);
-    this.generation = options.workspaceGeneration ?? 1;
+    const restored = typeof options.workspaceGeneration === "function" ? options.workspaceGeneration(this.workspaceId) : options.workspaceGeneration;
+    this.generation = restored ?? 1;
     this.now = options.now ?? Date.now;
     this.fullHashIntervalMs = options.fullHashIntervalMs ?? FULL_HASH_INTERVAL_MS;
   }
@@ -393,19 +412,11 @@ export class WorkspaceTracker {
       for (const found of await walkMembers(root, "", round.layout)) await read(found.path, found.kind);
     }
     const content = contentManifestIdOf(entries.values());
-    const changed: string[] = [];
-    const deleted: string[] = [];
-    if (base) {
-      for (const entry of entries.values()) if (base.entries.get(entry.path)?.hash !== entry.hash || base.entries.get(entry.path)?.kind !== entry.kind) changed.push(entry.path);
-      for (const name of base.entries.keys()) if (!entries.has(name)) deleted.push(name);
-    } else changed.push(...entries.keys());
-    changed.sort();
-    deleted.sort();
     if (this.epoch === round.epoch && this.inFlight === round) {
       this.view = entries;
       this.verified = round;
     }
-    return { round, contentManifestId: content.id, entries, changed, deleted, noop: Boolean(base) && !changed.length && !deleted.length && base!.buildKey === round.buildKey, ...counts };
+    return rebase({ round, contentManifestId: content.id, entries, changed: [], deleted: [], noop: false, ...counts }, base);
   }
 
   /** The confirmation a SnapshotStore publish or noop asks for, frozen at this round's dispatch. */

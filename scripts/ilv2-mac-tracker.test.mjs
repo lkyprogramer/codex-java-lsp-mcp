@@ -107,6 +107,16 @@ test("real-fsevents-drive-tracker-rounds-noop-restart-and-root-replacement", { t
     assert.deepEqual([steps.resume.mode, steps.resume.hashed, steps.resume.noop, steps.resume.status], ["full-hash", 29, true, "FRESH"]);
     assert.ok(processAlive(helpers[0]), "the helper survives its wake");
 
+    // MAC-11: a dropped-events signal from the helper (its SIGUSR2 test hook) owes a full hash in the same stream.
+    steps.dropBefore = await command("status");
+    process.kill(helpers[0], "SIGUSR2");
+    steps.dropSeen = await observed("STALE");
+    assert.equal(steps.dropSeen.diagnostics.epoch, steps.dropBefore.diagnostics.epoch, "a drop is a signal in the same stream, not a restart");
+    assert.ok(steps.dropSeen.diagnostics.fullHashThrough > steps.resume.cut);
+    steps.drop = await settle();
+    assert.deepEqual([steps.drop.mode, steps.drop.hashed, steps.drop.noop, steps.drop.status], ["full-hash", 29, true, "FRESH"]);
+    assert.ok(processAlive(helpers[0]), "the helper survives its drop signal");
+
     await rename(repo, `${repo}.old`);
     await cp(fixture, repo, { recursive: true });
     steps.rootSeen = await observed("INVALID_ROOT");
@@ -125,7 +135,7 @@ test("real-fsevents-drive-tracker-rounds-noop-restart-and-root-replacement", { t
     }
     catch (error) { closeoutError = error; }
     await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), "tracker-native-acceptance.json"), {
-      route: "G01-direct-owned-fixture", launchd: "NOT_RUN", steps, actualOsDrop: "NOT_INDUCED", fakeDropTests: "PROTOCOL_ONLY", resumeSignal: "NATIVE_TEST_HOOK_REPLAY (IOKit registration real; the host was not slept)",
+      route: "G01-direct-owned-fixture", launchd: "NOT_RUN", steps, actualOsDrop: "NOT_INDUCED", fakeDropTests: "PROTOCOL_ONLY", dropSignal: "NATIVE_TEST_HOOK (synthetic UserDropped event from the helper; macOS dropped nothing)", resumeSignal: "NATIVE_TEST_HOOK_REPLAY (IOKit registration real; the host was not slept)",
       stdout, stderr, failure: failure && String(failure), closeoutError: closeoutError && String(closeoutError), quotaReleased: !closeoutError
     });
     for (const waiting of pending.values()) { clearTimeout(waiting.timer); waiting.reject(new Error("fixture closed")); } pending.clear();

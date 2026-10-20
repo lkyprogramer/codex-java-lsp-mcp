@@ -1,6 +1,7 @@
 import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
 import { sqlStage, compatibleDeltaBase, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { runSqlColdBuild } from "./cold-build.js";
+import { DELTA_CLOSURE_LIMIT } from "./build-scheduler.js";
 import { captureSource, type SourceCapture } from "../java-index/source-capture.js";
 import { captureCensus, finishCaptureCensus, type CaptureCensusEntry } from "./capture-census.js";
 import { realpath, stat } from "node:fs/promises";
@@ -46,13 +47,16 @@ export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: num
   /** The committed job's content identity (the builder's own capture), reported by the build process. */
   contentManifestId?: string };
 
-/** ILV2 §6.1: a closure above this many files is published as an explicit full, never a delta. */
-export const DELTA_CLOSURE_LIMIT = 400;
+export { DELTA_CLOSURE_LIMIT };
 const MAX_RESOLVE_ROUNDS = 16;
 
 /** The delta cannot prove a bounded dependency closure; the job runs as a full instead. */
 class DeltaEscalation extends Error {
   constructor(readonly reason: string) { super(reason); }
+}
+/** The closure holds at least the inputs themselves: past the limit, escalate before any parse or write. */
+function escalateOversizedInputs(inputs: number): void {
+  if (inputs > DELTA_CLOSURE_LIMIT) throw new DeltaEscalation(`${inputs} changed/deleted inputs > ${DELTA_CLOSURE_LIMIT} files`);
 }
 /** escalation "report": unwinds the delta's transaction so the scheduler can queue the full. */
 class ReportedEscalation extends Error {
@@ -807,6 +811,7 @@ async function applyRefresh(
     else deleted.push(resolved.rel);
   }
   const uniqueDeleted = [...new Set(deleted)];
+  escalateOversizedInputs(existing.length + uniqueDeleted.length);
   if (existing.length === 0 && uniqueDeleted.length === 0) {
     sqlStage(db,stages,()=>finishIndex(db,generation,roots));
     return;
@@ -1009,6 +1014,7 @@ async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: n
   const javaCapture=await captureJavaDelta(db,repoRoot,layout);
   if(stages) stages.capture={files:javaCapture.discovered.length+resources.discoveredFiles,javaFiles:javaCapture.discovered.length,xmlFiles:resources.discoveredFiles,elapsedMs:performance.now()-captureStart};
   await stages?.onStage?.("capture");
+  escalateOversizedInputs(javaCapture.changed.length + javaCapture.deleted.length + resources.changed.length + resources.deleted.length);
   if (resources.stamps.length > 0) sqlStage(db,stages, () => recordStats(db, "resource", resources.stamps));
   if (resources.changed.length > 0 || resources.deleted.length > 0) {
     await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false, captures: resources.captures, stages });

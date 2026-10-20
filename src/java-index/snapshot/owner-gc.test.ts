@@ -148,6 +148,9 @@ test("a retired workspace whose root was replaced loses binding and snapshot; a 
   const dir = await base(t);
   const replacedRoot = await repo(dir, "replaced");
   const liveRoot = await repo(dir, "live");
+  // Distinct content: an identical twin would be seeded onto the same snapshot (MAC-11).
+  const liveService = path.join(liveRoot, serviceRel);
+  await writeFile(liveService, `${await readFile(liveService, "utf8")}\n// live\n`);
   const ctx = await openOwner(t, path.join(dir, "cache"), { gcCycleMs: 60_000 });
   const replaced = await bound(ctx, replacedRoot);
   const live = await bound(ctx, liveRoot);
@@ -155,6 +158,9 @@ test("a retired workspace whose root was replaced loses binding and snapshot; a 
   await ctx.owner.retire(liveRoot);
   await rename(replacedRoot, `${replacedRoot}-moved`);
   await mkdir(replacedRoot);
+  // The live root seeded from the replaced one's snapshot, so a query worker kept a connection to it;
+  // retire() trims that connection, and its lease goes once the worker confirms the close.
+  await until(() => ctx.owner.store.leaseCount(replaced.binding.snapshotId) === 0, "seed read connection closed", 5_000);
   const report = (await ctx.owner.sweep())!;
   assert.deepEqual(report.workspaces, [replaced.workspace.workspaceId]);
   assert.deepEqual(report.snapshots, [replaced.binding.snapshotId]);
