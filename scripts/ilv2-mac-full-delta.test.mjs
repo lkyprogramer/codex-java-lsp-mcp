@@ -101,8 +101,10 @@ test('full-delta-driver-chains-history-tiers-to-one-oracle-and-records-every-ste
   assert.ok(Number.isFinite(slice.statPages.changed));
   assert.equal(slice.stagePages,undefined,'non-diagnostic windows take no stage snapshots');
   assert.ok(Number.isFinite(slice.samples[0].cpuMs) && Number.isFinite(slice.samples[0].unattributedMs));
+  assert.equal(slice.samples[0].idle, [slice.samples[0].host.start.load1, slice.samples[0].host.end.load1].every(load1=>load1<20));
  }
  const progress=JSON.parse(await readFile(path.join(root,'matrix','full-delta-progress.json'),'utf8'));
+ assert.equal(progress.idleLoad1Limit,20);
  assert.equal(progress.status,result.status);
  assert.deepEqual(Object.values(progress.steps).filter(step=>step.status==='NOT_RUN'),[]);
  assert.equal(progress.steps['delta-6'].status,'NOT_GATED','a tier without a limit is measured, not gated');
@@ -127,11 +129,11 @@ test('full-delta-driver-stops-at-the-first-falsifier-restores-the-tree-and-marks
  const root=await mkdtemp(path.join(process.env.ILV2_RUN_ROOT,'tmp','driver-fail-'));
  try{
   const {history}=await historyRepo(root);const repo=path.join(root,'repos','materialized');
-  await assert.rejects(runFullDelta({repo,history,out:path.join(root,'matrix'),work:path.join(root,'work'),changes:[2,6],limits:{...LIMITS,deltaMs:{2:LIMITS.deltaMs[20],6:0}},idleLoadPerCpu:Infinity}),/delta-6 first correct query/);
+  await assert.rejects(runFullDelta({repo,history,out:path.join(root,'matrix'),work:path.join(root,'work'),changes:[2,6],limits:{...LIMITS,deltaMs:{2:LIMITS.deltaMs[20],6:0}},idleLoad1Limit:Infinity}),/delta-6 first correct query/);
   const progress=JSON.parse(await readFile(path.join(root,'matrix','full-delta-progress.json'),'utf8'));
   assert.equal(progress.status,'FAIL');assert.equal(progress.steps['delta-6'].status,'FAIL');assert.equal(progress.steps['delta-2'].status,'PASS');
   // Overridden limits can still falsify, never certify.
-  assert.ok(progress.notGated.includes('limits differ from the gate limits')&&progress.notGated.includes('idle load limit Infinity is not 1'),JSON.stringify(progress.notGated));
+  assert.ok(progress.notGated.includes('limits differ from the gate limits')&&progress.notGated.includes('idle load1 limit Infinity is not 20'),JSON.stringify(progress.notGated));
   assert.equal(progress.input.materialized,true,'an absent copy is materialized from the frozen worktree');
   await stat(path.join(root,'work','sealed','facts.sqlite'));await assert.rejects(stat(path.join(root,'matrix','sealed')),{code:'ENOENT'},'databases stay in the work dir, reports in out');
   for(const step of ['chain-2-6','oracle-full','oracle-compare','full-2','full-determinism']) assert.equal(progress.steps[step].status,'NOT_RUN',step);
@@ -170,7 +172,7 @@ test('timing verdicts need an idle host and re-measure near the threshold',()=>{
  const root=await mkdtemp(path.join(process.env.ILV2_RUN_ROOT,'tmp','driver-full-fail-'));
  try{
   const {history,repo}=await historyRepo(root);
-  await assert.rejects(runFullDelta({repo,history,out:path.join(root,'matrix'),work:path.join(root,'work'),changes:[2,6],limits:{...LIMITS,fullMs:0},idleLoadPerCpu:Infinity}),/full .* ms > 0 ms/);
+  await assert.rejects(runFullDelta({repo,history,out:path.join(root,'matrix'),work:path.join(root,'work'),changes:[2,6],limits:{...LIMITS,fullMs:0},idleLoad1Limit:Infinity}),/full .* ms > 0 ms/);
   const progress=JSON.parse(await readFile(path.join(root,'matrix','full-delta-progress.json'),'utf8'));
   const first=progress.steps['full-1'];
   assert.equal(first.status,'FAIL');assert.equal(first.correctness,'NOT_RUN');

@@ -160,6 +160,54 @@ async function openFixtureClient(fixture: Fixture): Promise<void> {
   await (fixture.client as SqlJavaIndexClient).open(1);
 }
 
+test("MAC11 stale view cannot return a confident static miss", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    const held = { state: "STALE" as const, workspaceId: "workspace-held", snapshotId: "snapshot-held", bindingVersion: 7, coveredThroughSeq: 7 };
+    context.indexView = held;
+    const query = args({ query: "com.acme.AbsentMac11Type", searchMode: "exact", preview: "none" });
+    const stale = await javaSymbol(context, query, { budget: DeadlineBudget.fromTimeout(15000) }) as Record<string, unknown>;
+    assert.equal(stale.scopeState, "PARTIAL");
+    assert.equal(stale.exact, undefined, "an old complete snapshot cannot prove a current miss");
+    assert.equal(stale.emptyReason, undefined);
+    assert.deepEqual(stale.indexView, held);
+    const hit = await javaSymbol(context, args({ query: "com.acme.OrderService", searchMode: "exact", preview: "none" })) as Record<string, unknown>;
+    assert.equal(hit.scopeState, "PARTIAL");
+    assert.equal(hit.exact, "match", "verified positive evidence remains usable from the held view");
+    assert.deepEqual(hit.indexView, held);
+    context.indexView = { ...held, state: "FRESH", bindingVersion: 8 };
+    const fresh = await javaSymbol(context, query) as Record<string, unknown>;
+    assert.equal(fresh.scopeState, "READY");
+    assert.equal(fresh.exact, "miss");
+    const incomplete = await javaSymbol(context, query, { budget: DeadlineBudget.fromTimeout(15000), negativeLookupAllowed: false }) as Record<string, unknown>;
+    assert.equal(incomplete.scopeState, "PARTIAL", "FRESH does not make partial coverage complete");
+    assert.equal(incomplete.exact, undefined);
+    context.indexView = { state: "NOT_READY" };
+    const cold = await javaSymbol(context, query) as Record<string, unknown>;
+    assert.equal(cold.scopeState, "PARTIAL");
+    assert.equal(cold.exact, undefined);
+    assert.deepEqual(stale.indexView, held, "later bindings cannot relabel an earlier response");
+    assert.equal(probe.startCalls, 0);
+  } finally { await fixture.cleanup(); }
+});
+
+test("MAC11 stale evidence exposes the held view and remains partial", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    context.indexView = { state: "STALE", snapshotId: "snapshot-held", bindingVersion: 7 };
+    const out = await javaSymbol(context, args({ operation: "evidence", file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21 })) as Record<string, unknown>;
+    assert.equal(out.scopeState, "PARTIAL");
+    assert.deepEqual(out.indexView, context.indexView);
+    assert.ok((out.reasons as string[]).includes("INDEX_VIEW_STALE"));
+  } finally { await fixture.cleanup(); }
+});
+
 test("explicit evidence uses the static index and does not start JDT", async () => {
   const fixture = await buildFixture();
   const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };

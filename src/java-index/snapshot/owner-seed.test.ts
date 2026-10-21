@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { chmod, cp, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,6 +14,7 @@ import type { BuilderJob } from "../../index-builder/incremental.js";
 import { close, openImmutableIndexDb } from "../sql/driver.js";
 import { logicalDigest } from "../sql/logical-export.js";
 import { IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
+import { readSnapshotContent } from "./seal.js";
 import { FSEVENT_FLAGS, type TrackerSourceFactory } from "./workspace-tracker.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -222,4 +223,107 @@ test("a delta that ran out its job deadline is followed by a full, not by the sa
   assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full", "refresh", "full"]);
   assert.deepEqual(rounds(ctx, first.workspace.workspaceId).filter(round => round.kind !== "noop").map(round => [round.kind, round.outcome]),
     [["full", "published"], ["delta", "failed"], ["full", "published"]]);
+});
+
+test("a divergent builder census publishes usable content but owes a full hash before confirming freshness", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  let race = false;
+  let hold = false;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const extra = "src/main/java/demospring/Late.java";
+  const children: ReturnType<typeof startBuildProcess>["child"][] = [];
+  // Release a paused follow-up before the owner's after hook waits for it.
+  t.after(release);
+  const ctx = await openOwner(t, path.join(dir, "cache"), {
+    faultAt: async stage => { if (hold && stage === "round-full-hash") await gate; },
+    startBuild: input => {
+      ctx.jobs.push({ repoRoot: input.repoRoot, job: input.job });
+      if (race) {
+        race = false;
+        hold = true;
+        const file = path.join(main, serviceRel);
+        writeFileSync(file, readFileSync(file, "utf8").replace(/}\s*$/, "  public void capturedLater() {}\n}\n"));
+        writeFileSync(path.join(main, extra), "package demospring; public class Late {}\n");
+        // No native hint: the observed census disagreement itself must schedule the rescan.
+      }
+      const attempt = startBuildProcess(input);
+      children.push(attempt.child);
+      return attempt;
+    }
+  });
+  const first = await bound(ctx, main);
+  const confirmed = first.workspace.tracker.diagnostics().confirmed;
+  await addMethod(main, "dispatchEdit");
+  race = true;
+  ctx.sources.emit(main, serviceRel);
+  const event = await until(() => rounds(ctx, first.workspace.workspaceId).find(round => round.censusDiverged), "divergent publish");
+  try {
+    assert.equal(event.outcome, "published");
+    assert.notEqual(ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId, first.binding.snapshotId);
+    assert.equal(first.workspace.trackerStatus(), "STALE", "the builder census cannot confirm a different verified census");
+    assert.equal(first.workspace.status().view, "STALE");
+    assert.deepEqual(first.workspace.tracker.diagnostics().confirmed, confirmed, "no confirmation watermark advances");
+    assert.equal(first.workspace.tracker.diagnostics().pending, 1, "the dispatched hint is still owed");
+    assert.ok(first.workspace.tracker.diagnostics().fullHashThrough > ctx.owner.store.binding(first.workspace.workspaceId)!.coveredThroughSeq);
+    const content = await readSnapshotContent(ctx.owner.store.layout, event.snapshotId!);
+    assert.equal(content.entries.get(serviceRel)!.hash, createHash("sha256").update(await readFile(path.join(main, serviceRel))).digest("hex"),
+      "the usable binding records the bytes the real builder captured");
+    assert.equal(content.entries.has(extra), false, "the delta did not pretend to capture an unplanned member");
+  } finally { hold = false; release(); }
+  await until(() => first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "rescan converges");
+  const final = ctx.owner.store.binding(first.workspace.workspaceId)!;
+  assert.ok((await readSnapshotContent(ctx.owner.store.layout, final.snapshotId)).entries.has(extra));
+  assert.equal(first.workspace.tracker.diagnostics().pending, 0);
+  assert.equal(rounds(ctx, first.workspace.workspaceId).at(-1)!.mode, "full-hash");
+  assert.ok(children.length >= 3);
+  assert.ok(children.every(child => child.exitCode === 0), "every real builder exited before its round settled");
+});
+
+test("a builder that reads a later build key is refused without clearing hints, then retries the stable environment", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  let race = false;
+  let hold = false;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const children: ReturnType<typeof startBuildProcess>["child"][] = [];
+  t.after(release);
+  const ctx = await openOwner(t, path.join(dir, "cache"), {
+    faultAt: async stage => { if (hold && stage.startsWith("round-")) await gate; },
+    startBuild: input => {
+      ctx.jobs.push({ repoRoot: input.repoRoot, job: input.job });
+      if (race) {
+        race = false;
+        hold = true;
+        const pom = path.join(main, "pom.xml");
+        writeFileSync(pom, `${readFileSync(pom, "utf8")}<!-- after dispatch -->\n`);
+      }
+      const attempt = startBuildProcess(input);
+      children.push(attempt.child);
+      return attempt;
+    }
+  });
+  const first = await bound(ctx, main);
+  const confirmed = first.workspace.tracker.diagnostics().confirmed;
+  await addMethod(main, "keyRace");
+  race = true;
+  ctx.sources.emit(main, serviceRel);
+  const failed = await until(() => rounds(ctx, first.workspace.workspaceId).find(round => round.outcome === "failed"), "build key refusal");
+  try {
+    assert.match(failed.error!, /buildKey differs/);
+    assert.deepEqual(ctx.owner.store.binding(first.workspace.workspaceId), first.binding, "the safe refusal preserves the old binding");
+    assert.equal(first.workspace.trackerStatus(), "STALE");
+    assert.deepEqual(first.workspace.tracker.diagnostics().confirmed, confirmed);
+    assert.equal(first.workspace.tracker.diagnostics().pending, 1);
+  } finally { hold = false; release(); }
+  await until(() => first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "stable key retry");
+  const final = ctx.owner.store.binding(first.workspace.workspaceId)!;
+  assert.notEqual(final.buildKey, first.binding.buildKey);
+  assert.equal(final.workspaceGeneration, first.binding.workspaceGeneration + 1);
+  assert.equal(first.workspace.tracker.diagnostics().pending, 0);
+  assert.equal(rounds(ctx, first.workspace.workspaceId).at(-1)!.kind, "full");
+  assert.ok(children.length >= 3);
+  assert.ok(children.every(child => child.exitCode === 0), "the refused and successful real builders were reaped");
 });

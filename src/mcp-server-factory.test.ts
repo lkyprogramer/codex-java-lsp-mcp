@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { JavaLspApplication } from "./application.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,8 @@ import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
 import { resetImpactTelemetryForTests } from "./telemetry/impact-telemetry.js";
+import { IndexOwner } from "./java-index/snapshot/index-owner.js";
+import { FSEVENT_FLAGS } from "./java-index/snapshot/workspace-tracker.js";
 
 const expectedTools = [...PUBLIC_JAVA_TOOLS].sort();
 
@@ -183,6 +186,93 @@ test("register wrapper records a counter line without changing java_status bytes
     else process.env.JAVA_LSP_TELEMETRY_DIR = previousDir;
     if (previousFlag === undefined) delete process.env.JAVA_LSP_TELEMETRY;
     else process.env.JAVA_LSP_TELEMETRY = previousFlag;
+  }
+});
+
+test("MAC11 public symbol freezes STALE labels, suppresses misses, then converges to FRESH", { timeout: 120000 }, async () => {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-public-stale-")));
+  const root = path.join(base, "repo");
+  const relative = "src/main/java/com/acme/Ready.java";
+  await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  await writeFile(path.join(root, relative), "package com.acme; public class Ready {}\n");
+  const configPath = path.join(base, "projects.json");
+  await writeFile(configPath, JSON.stringify({ aliases: [] }));
+  let emit!: (flags: number, file: string) => void;
+  let hold = false;
+  let entered = false;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const owner = await IndexOwner.open({ cacheRoot: path.join(base, "cache"), roundDelayMs: 5,
+    trackerSource: () => async onSignal => {
+      emit = onSignal;
+      return { epoch: "a".repeat(32), fence: async () => {}, stop: async () => {}, closed: new Promise<void>(() => undefined) };
+    },
+    faultAt: async stage => { if (hold && stage.startsWith("round-")) { entered = true; await gate; } }
+  });
+  const application = new JavaLspApplication({ transportMode: "streamable_http", projectsConfigPath: configPath,
+    resolverOptions: { cwdFallback: "reject" }, index: async () => owner,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }) });
+  let client: Client | undefined;
+  const until = async (probe: () => boolean, label: string) => {
+    const end = Date.now() + 60000;
+    while (!probe()) { if (Date.now() > end) throw new Error(`Timed out: ${label}`); await delay(10); }
+  };
+  try {
+    await application.initialize();
+    client = (await connect(application, "mac11-stale")).client;
+    const workspace = await owner.workspace(root);
+    await until(() => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, "initial FRESH");
+    const before = owner.store.binding(workspace.workspaceId)!;
+    const query = async (name: string) => {
+      const result = await client!.callTool({ name: "java_symbol", arguments: { repoRoot: root, query: name, searchMode: "exact", preview: "none" } });
+      assert.notEqual(result.isError, true, toolText(result));
+      return toolJson(result);
+    };
+    const ready = await query("com.acme.Ready");
+    assert.equal(ready.scopeState, "READY");
+    assert.equal((ready.indexView as { state: string }).state, "FRESH");
+    hold = true;
+    await writeFile(path.join(root, relative), "package com.acme; public class Ready { public void addedMac11() {} }\n");
+    emit(0x1000 | FSEVENT_FLAGS.ItemIsFile, path.join(root, relative));
+    await until(() => entered, "held edit round");
+    const started = performance.now();
+    const stale = await query("com.acme.Ready#addedMac11()");
+    const elapsedMs = performance.now() - started;
+    assert.equal(stale.scopeState, "PARTIAL");
+    assert.equal(stale.exact, undefined);
+    assert.deepEqual(stale.candidates, []);
+    const held = stale.indexView as { state: string; snapshotId: string; bindingVersion: number };
+    assert.equal(held.state, "STALE");
+    assert.equal(held.snapshotId, before.snapshotId);
+    assert.equal(held.bindingVersion, before.bindingVersion);
+    assert.ok(elapsedMs < 5000, `prepare must cap rather than wait for the held builder: ${elapsedMs}`);
+    release(); hold = false;
+    await until(() => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight
+      && owner.store.binding(workspace.workspaceId)?.snapshotId !== before.snapshotId, "edit FRESH");
+    const fresh = await query("com.acme.Ready#addedMac11()");
+    assert.equal(fresh.scopeState, "READY");
+    assert.equal(fresh.exact, "match");
+    assert.equal((fresh.indexView as { state: string }).state, "FRESH");
+    assert.equal(held.state, "STALE", "a later binding cannot relabel a completed response");
+    if (process.env.ILV2_EVIDENCE_ROOT) {
+      await writeFile(path.join(process.env.ILV2_EVIDENCE_ROOT, "stale-symbol.json"), JSON.stringify({
+        fixture: "synthetic Java; deterministic held tracker round; real builder/query processes and MCP handler",
+        elapsedMs, before: ready.indexView, stale: stale.indexView, after: fresh.indexView,
+        staleScope: stale.scopeState, staleExact: stale.exact ?? null, freshExact: fresh.exact
+      }, null, 2));
+    }
+  } finally {
+    release();
+    await client?.close();
+    await application.close();
+    await owner.stop();
+    const writable = async (dir: string): Promise<void> => {
+      await chmod(dir, 0o755);
+      for (const entry of await readdir(dir, { withFileTypes: true })) if (entry.isDirectory()) await writable(path.join(dir, entry.name));
+    };
+    await writable(base);
+    await rm(base, { recursive: true, force: true });
   }
 });
 

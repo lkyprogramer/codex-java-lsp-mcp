@@ -423,7 +423,7 @@ test("two concurrent contextFor calls share one runtime", async () => {
   assert.equal(contextCalls, 1, "the runtime is created once");
 });
 
-test("request-path cache stamps (sync meta I/O and git spawns) run once per interval, not per request", async t => {
+test("request-path cache stamps (sync meta I/O) run once per interval, not per request", async t => {
   const base = mkdtempSync(path.join(tmpdir(), "runtime-touch-"));
   const repoRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-touch-repo-")));
   const previousBase = process.env.JAVA_LSP_CACHE_BASE;

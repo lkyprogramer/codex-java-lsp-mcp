@@ -595,7 +595,12 @@ export class WorkspaceIndex {
         const binding = await timed("publishMs", () => store.publish(this.tracker.planFor(verification, built), job)).finally(() => {
           if (job.sealTimings) timings.seal = job.sealTimings;
         });
-        this.tracker.complete(round, binding);
+        if (detail.censusDiverged) {
+          // The self-consistent builder capture is usable, but it did not verify this round's
+          // census. Keep its hints and watermark owed, including changes with no native signal.
+          this.tracker.abandon(round);
+          this.tracker.resume();
+        } else this.tracker.complete(round, binding);
         this.base = undefined;
         Object.assign(detail, { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
         this.finish("published", mode, started, undefined, detail);

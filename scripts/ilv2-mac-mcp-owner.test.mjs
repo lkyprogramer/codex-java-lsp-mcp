@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { writeJson } from "./ilv2-mac-contracts.mjs";
 import { eventually } from "./ilv2-mac-owner-fixture.mjs";
 import { call, children, httpClient, startOwner, stdioClient, withDaemonLog } from "./ilv2-mac-mcp-owner-fixture.mjs";
+import { repoCacheRoot } from "../dist/repo-layout.js";
 
 // MAC-08B MCP contracts: the HTTP daemon is the one owner (under the owner launcher, so its FSEvents
 // trackers run for real); stdio only relays to it. Isolated caches, ports and HOME; never :38456.
@@ -92,6 +94,73 @@ test("status-only-does-not-bootstrap", { timeout: 120000 }, async t => {
   const workspaceDir = path.join(owner.cache, "mac1", "workspaces");
   assert.ok(!existsSync(workspaceDir) || readdirSync(workspaceDir).length <= 1, "no workspace state was written for the unknown repo");
   evidence["status-only-does-not-bootstrap"] = { before, cold, again: again.indexView, workspaces: daemonStatus.index.workspaces };
+});
+
+test("MAC11 concurrent public deadlines across a real cache stamp refresh", { timeout: 180000 }, async t => {
+  const owner = await startOwner(t, "stamp-deadline", { repos: 6, env: { JAVA_LSP_IDLE_TTL_MS: "180000" } });
+  const record = { owner: { pid: owner.daemon.pid, pgid: owner.daemon.pid }, calls: [] };
+  evidence[t.name] = record;
+  await withDaemonLog(owner, async () => {
+    const queries = await httpClient(owner), statuses = await httpClient(owner);
+    const query = { operation: "query", query: "demospring.OrderService", searchMode: "exact", preview: "none" };
+    const meta = async repo => JSON.parse(await readFile(path.join(repoCacheRoot(repo, owner.cache), "repo-meta.json"), "utf8"));
+    async function timed(client, tool, repo, stage) {
+      const startedAt = Date.now(), start = performance.now();
+      const value = await call(client, tool, { repoRoot: repo, ...(tool === "java_symbol" ? query : {}) });
+      const deadlineMs = tool === "java_status" ? 3000 : 15000;
+      const row = { stage, repo, tool, startedAt, elapsedMs: performance.now() - start, deadlineMs, value };
+      record.calls.push(row);
+      assert.ok(row.elapsedMs <= deadlineMs + 1000, `${tool} took ${row.elapsedMs} ms`);
+      if (stage === "warm" && value.error) {
+        assert.match(value.error, /on-disk Java index, which is not ready yet/);
+        return value; // The cold request starts the workspace; fresh() must still observe its publication.
+      }
+      assert.equal(value.error, undefined, value.error);
+      if (tool === "java_symbol" && stage !== "warm") {
+        assert.equal(value.exact, "match");
+        assert.equal(value.indexView?.state, "FRESH");
+        assert.ok(value.candidates.some(candidate => candidate.declaration?.fqn === query.query));
+      }
+      return value;
+    }
+    await Promise.all(owner.repos.map(async repo => {
+      await timed(queries, "java_symbol", repo, "warm");
+      await fresh(statuses, repo);
+    }));
+    record.before = await Promise.all(owner.repos.map(meta));
+    for (const row of record.before) {
+      assert.ok(Number.isFinite(Date.parse(row.lastRequestAt)));
+      assert.equal(typeof row.ownerToken, "string");
+      assert.equal(row.ownerPid, owner.daemon.pid);
+    }
+    // Exercise the actual 60 s interval, with the same runtime and no clock injection.
+    const refreshAt = Math.max(...record.before.map(row => Date.parse(row.lastRequestAt))) + 60050;
+    await delay(Math.max(0, refreshAt - Date.now()));
+    await Promise.all([
+      ...owner.repos.map(repo => timed(queries, "java_symbol", repo, "refresh")),
+      (async () => {
+        for (let round = 0; round < 3; round += 1) {
+          await Promise.all(owner.repos.map(repo => timed(statuses, "java_status", repo, "refresh")));
+          await delay(25);
+        }
+      })()
+    ]);
+    record.after = await Promise.all(owner.repos.map(meta));
+    for (let index = 0; index < owner.repos.length; index += 1) {
+      assert.ok(Date.parse(record.after[index].lastRequestAt) > Date.parse(record.before[index].lastRequestAt));
+      assert.equal(record.after[index].ownerToken, record.before[index].ownerToken, "the existing runtime refreshed");
+      assert.equal(record.after[index].ownerPid, owner.daemon.pid);
+    }
+    const symbols = record.calls.filter(row => row.stage === "refresh" && row.tool === "java_symbol");
+    const statusCalls = record.calls.filter(row => row.stage === "refresh" && row.tool === "java_status");
+    assert.equal(symbols.length, 6);
+    assert.equal(statusCalls.length, 18);
+    assert.ok(symbols.some(symbol => statusCalls.some(status => symbol.startedAt <= status.startedAt + status.elapsedMs
+      && status.startedAt <= symbol.startedAt + symbol.elapsedMs)), "the status requests overlapped the refreshing queries");
+    await owner.kill();
+    record.exit = await owner.closed;
+    assert.equal(record.exit.signal, "SIGKILL");
+  });
 });
 
 test.after(async () => {

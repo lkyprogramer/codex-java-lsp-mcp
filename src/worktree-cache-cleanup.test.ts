@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -291,6 +291,36 @@ test("cleanupStaleWorktreeCaches reclaims a dead owner but fails closed on unrea
   assert.equal(result.removed, 1);
   assert.equal(existsSync(path.join(cacheBase, "dead-owner")), false);
   assert.equal(existsSync(path.join(cacheBase, "unknown-owner")), true);
+});
+
+test("touchRepoCache does not probe Git while stamping request metadata", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-touch-no-git-"));
+  const bin = path.join(root, "bin");
+  const marker = path.join(root, "git-called");
+  const previous = {
+    PATH: process.env.PATH,
+    JAVA_LSP_CACHE_BASE: process.env.JAVA_LSP_CACHE_BASE,
+    ILV2_TEST_GIT_MARKER: process.env.ILV2_TEST_GIT_MARKER
+  };
+  t.after(async () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(bin);
+  await writeFile(path.join(bin, "git"), '#!/bin/sh\nprintf "called\\n" >> "$ILV2_TEST_GIT_MARKER"\nexit 1\n', { mode: 0o755 });
+  process.env.PATH = `${bin}${path.delimiter}${previous.PATH ?? ""}`;
+  process.env.JAVA_LSP_CACHE_BASE = path.join(root, "cache");
+  process.env.ILV2_TEST_GIT_MARKER = marker;
+
+  touchRepoCache(root, { ownerPid: process.pid, ownerToken: "request-owner", touchLastRequest: true });
+  const meta = JSON.parse(await readFile(path.join(repoCacheRoot(root), "repo-meta.json"), "utf8"));
+  assert.equal(meta.ownerPid, process.pid);
+  assert.equal(meta.ownerToken, "request-owner");
+  assert.equal(typeof meta.lastRequestAt, "string");
+  assert.equal(existsSync(marker), false, "request metadata must not launch Git on the owner thread");
 });
 
 test("touchRepoCache preserves ownership metadata and clears stopped JDT identity", async t => {

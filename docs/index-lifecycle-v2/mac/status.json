@@ -161,7 +161,9 @@
     {
       "gateId": "G11",
       "taskId": "MAC-11",
-      "status": "PLAN"
+      "status": "PASS",
+      "result": "mac-11/task-result.json",
+      "performanceReady": false
     },
     {
       "gateId": "G12",
@@ -279,6 +281,6 @@
     }
   ],
   "next": [
-    "MAC-11"
+    "MAC-12"
   ]
 }

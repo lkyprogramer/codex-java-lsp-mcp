@@ -8,6 +8,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CONTRACT_VERSION = "ilv2-mac-run/v1";
+// User-approved absolute timing-window admission limit (2026-10-21).
+export const TIMING_LOAD1_LIMIT = 20;
+export function timingWindowIdle(start, end, limit = TIMING_LOAD1_LIMIT) {
+  return [start?.load1, end?.load1].every(value => Number.isFinite(value) && value >= 0 && value < limit);
+}
 // ILV2-MAC/5: outside every TCC-protected folder. The pre-MAC/5 root under
 // ~/Documents/evidence-archive stays a read-only historical archive.
 export const MAC_WORK_ROOT = path.join(os.userInfo().homedir, "Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac");

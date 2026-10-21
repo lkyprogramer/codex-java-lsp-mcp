@@ -14,7 +14,7 @@
 //  - a timed window holds the job, checkpoint and its first correct query: stage
 //    snapshots run only in the diagnostic mode, whose delta timings are not
 //    gated;
-//  - a timing is valid only on an idle host (load1/cpu <= 1.0 at start and
+//  - a timing is valid only on an idle host (absolute load1 < 20 at start and
 //    end); within 5% of its threshold it is re-measured to a median of 3;
 //  - every published state passes the index invariants, and correctness is a
 //    chain: base -> D(small) -> D(small->large) and base -> D(large) both equal
@@ -33,7 +33,7 @@ import {copyFile,mkdtemp,mkdir,readdir,readFile,realpath,rm,rmdir,stat,unlink,wr
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {cliOptions,execute,isMain,relevantInput,requireUnprotectedRoot,runCli,sha256,writeJson} from './ilv2-mac-contracts.mjs';
+import {TIMING_LOAD1_LIMIT,timingWindowIdle,cliOptions,execute,isMain,relevantInput,requireUnprotectedRoot,runCli,sha256,writeJson} from './ilv2-mac-contracts.mjs';
 import {cloneSealedDatabase} from '../dist/mac-platform/clonefile.js';
 import {createHash} from 'node:crypto';
 import {pageDiff} from './ilv2-mac-snapshot-equivalence.mjs';
@@ -41,7 +41,7 @@ import {pageDiff} from './ilv2-mac-snapshot-equivalence.mjs';
 const modules=async()=>Object.assign({},...await Promise.all(['sql/driver','sql/schema','sql/logical-export','sql/entity-search','sql/rows','sql/index-invariants','build-fingerprint'].map(name=>import(new URL(`../dist/java-index/${name}.js`,import.meta.url)))),await import('../dist/index-builder/cold-build.js'),await import('../dist/index-builder/incremental.js'));
 
 export const LIMITS={fullMs:327900,noopMs:2500,deltaMs:{20:5000,200:15000},pageRatio:{20:0.1,200:0.3}};
-const IDLE_LOAD_PER_CPU=1.0,BAND=0.05,SAMPLES=3,TIER_FILL=0.5;
+const BAND=0.05,SAMPLES=3,TIER_FILL=0.5;
 export const GATE_CHANGES=[20,200];
 
 export function hostLoad(){const [load1]=os.loadavg();const cpus=os.availableParallelism?.() ?? os.cpus().length;return {load1,cpus,perCpu:load1/cpus};}
@@ -63,7 +63,7 @@ export function freshFullFault(stages){
 export function timingVerdict(samples,limit,{strict=false}={}){
  const sorted=samples.map(sample=>sample.ms).sort((a,b)=>a-b);const median=sorted[Math.floor(sorted.length/2)];
  if(!Number.isFinite(limit)) return {verdict:'UNBOUNDED',median};
- if(samples.some(sample=>!sample.idle)) return {verdict:'INVALID_EXPERIMENT',reason:'host load/cpu above the idle limit at a window edge'};
+ if(samples.some(sample=>!sample.idle)) return {verdict:'INVALID_EXPERIMENT',reason:'host load1 missing or outside the timing limit at a window edge'};
  if(samples.length<SAMPLES && (samples.length>1 || Math.abs(median-limit)<=limit*BAND)) return {verdict:'INCONCLUSIVE',median};
  return {verdict:(strict?median<limit:median<=limit)?'PASS':'FAIL',median};
 }
@@ -171,7 +171,7 @@ const unlinkIfPresent=file=>unlink(file).catch(error=>{if(error.code!=='ENOENT')
 const exists=file=>stat(file).then(()=>true,error=>{if(error.code==='ENOENT') return false;throw error;});
 const requireFresh=async directory=>{const entries=await readdir(directory).catch(error=>{if(error.code==='ENOENT') return [];throw error;});assert.equal(entries.length,0,`${directory} must be absent or empty; give each run fresh --out/--work dirs`);};
 
-export async function runFullDelta({repo,history,out,work=out,changes=GATE_CHANGES,resumeBase,costOnly=false,correctnessOnly=false,diagnostic=false,limits=LIMITS,idleLoadPerCpu=IDLE_LOAD_PER_CPU}) {
+export async function runFullDelta({repo,history,out,work=out,changes=GATE_CHANGES,resumeBase,costOnly=false,correctnessOnly=false,diagnostic=false,limits=LIMITS,idleLoad1Limit=TIMING_LOAD1_LIMIT}) {
  assert.ok(history,'history is the frozen input git worktree the copy was taken from');
  history=await realpath(history);out=path.resolve(out);work=path.resolve(work);
  const run=await realpath(process.env.ILV2_RUN_ROOT);
@@ -194,10 +194,10 @@ export async function runFullDelta({repo,history,out,work=out,changes=GATE_CHANG
  requireUnprotectedRoot(repo);requireUnprotectedRoot(history);
  await requireFresh(out);await requireFresh(work);await mkdir(out,{recursive:true});await mkdir(work,{recursive:true});
  const notGated=[...(correctnessOnly?['correctness-only']:[]),...(costOnly?['cost-only']:[]),...(diagnostic?['diagnostic: stage snapshots inside delta windows']:[]),...(resumeBase?['carried-over base: no fresh full']:[]),...(changes.join(',')===GATE_CHANGES.join(',')?[]:[`changes ${changes.join(',')} are not the gate tiers ${GATE_CHANGES.join(',')}`]),
-  ...(JSON.stringify(limits)===JSON.stringify(LIMITS)?[]:['limits differ from the gate limits']),...(idleLoadPerCpu===IDLE_LOAD_PER_CPU?[]:[`idle load limit ${idleLoadPerCpu} is not ${IDLE_LOAD_PER_CPU}`])];
+  ...(JSON.stringify(limits)===JSON.stringify(LIMITS)?[]:['limits differ from the gate limits']),...(idleLoad1Limit===TIMING_LOAD1_LIMIT?[]:[`idle load1 limit ${idleLoad1Limit} is not ${TIMING_LOAD1_LIMIT}`])];
  const copyMode=correctnessOnly?'BYTE_COPY_NOT_NATIVE':'NATIVE_CLONE';
  const notClaimed=[...(correctnessOnly?['BYTE_COPY_NOT_NATIVE']:[]),'physical COW','publisher','tracker','JDT','production','XML and build-file deltas on the real repos (held at HEAD)'];
- const report={copyMode,notClaimed,mode:correctnessOnly?'correctness-only':costOnly?'cost-only':diagnostic?'diagnostic':notGated.length?'not-gated':'gate',notGated,limits,idleLoadPerCpu,steps:{},falsifiers:[],invalid:[]};
+ const report={copyMode,notClaimed,mode:correctnessOnly?'correctness-only':costOnly?'cost-only':diagnostic?'diagnostic':notGated.length?'not-gated':'gate',notGated,limits,idleLoad1Limit,steps:{},falsifiers:[],invalid:[]};
  const progress=path.join(out,'full-delta-progress.json');
  const record=async(name,value)=>{report.steps[name]=value;await writeJson(progress,report);return value;};
  const plan=['full-1','base-invariants','delta-reconcile','delta-empty',...changes.map(cap=>`delta-${cap}`),...(!costOnly && changes.length>1?[`chain-${changes.join('-')}`]:[]),...(!costOnly?['oracle-full','oracle-compare','full-2','full-determinism']:[])];
@@ -223,7 +223,7 @@ export async function runFullDelta({repo,history,out,work=out,changes=GATE_CHANG
  const inspect=file=>{const reader=m.openIndexDb(file,{readOnly:true});try{return {digest:m.logicalDigest(reader),invariants:m.checkIndexInvariants(reader)};}finally{m.close(reader);}};
  const violations=invariants=>invariants.checks.filter(item=>item.violations>0);
  const window=async fn=>{const start=hostLoad(),cpu=process.cpuUsage(),t0=performance.now();const value=await fn();const ms=performance.now()-t0,used=process.cpuUsage(cpu),end=hostLoad();
-  return {value,sample:{ms,cpuMs:(used.user+used.system)/1000,host:{start,end},idle:start.perCpu<=idleLoadPerCpu && end.perCpu<=idleLoadPerCpu}};};
+  return {value,sample:{ms,cpuMs:(used.user+used.system)/1000,host:{start,end},idle:timingWindowIdle(start,end,idleLoad1Limit)}};};
  const query=(db,candidates)=>{
   for(const relative of candidates){
    const bundle=m.readBundle(db,relative);const type=bundle?.types.find(type=>type.fqn);

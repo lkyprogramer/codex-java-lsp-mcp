@@ -6,8 +6,8 @@
 import { z } from "zod";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
-import { DISCOVERY_DEFAULT_LIMIT, DISCOVERY_MAX_LIMIT, runStaticDiscovery } from "../discovery/query.js";
-import { runEvidenceUnit } from "../discovery/evidence-unit.js";
+import { DISCOVERY_DEFAULT_LIMIT, DISCOVERY_MAX_LIMIT, runStaticDiscovery, type DiscoveryResult } from "../discovery/query.js";
+import { runEvidenceUnit, type EvidenceUnitResult } from "../discovery/evidence-unit.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
@@ -50,6 +50,7 @@ export const symbolSchema = {
 };
 
 type SymbolArgs = z.infer<z.ZodObject<typeof symbolSchema>>;
+type SymbolRequest = Pick<RequestContext, "budget"> & Partial<Pick<RequestContext, "negativeLookupAllowed">>;
 
 /** T06: single JDT admission predicate shared by the public registration
  *  (mayStartLsp/requireLspEnabled) and the handler, so a static query can
@@ -64,7 +65,7 @@ export function symbolNeedsJdt(args: Pick<SymbolArgs, "operation" | "query" | "b
 export async function javaSymbol(
   context: ToolContext,
   args: SymbolArgs,
-  request?: Pick<RequestContext, "budget">
+  request?: SymbolRequest
 ): Promise<unknown> {
   const operation = args.operation ?? (args.query ? "query" : "position");
   if (operation === "evidence") {
@@ -77,13 +78,13 @@ export async function javaSymbol(
     const client = context.javaIndexClient;
     if (!client) throw new Error("java_symbol operation=evidence requires the on-disk Java index.");
     await waitStaticIndexReady(client, request?.budget);
-    return runEvidenceUnit(client, {
+    return staticResultForView(await runEvidenceUnit(client, {
       repoRoot: context.repoRoot,
       file: args.file,
       line: args.line,
       column: args.column,
       budget: request?.budget
-    });
+    }), context, request);
   }
   if (operation === "references") {
     return javaSymbolReferences(context, args, request);
@@ -105,7 +106,7 @@ export async function javaSymbol(
       // Static discovery consumes the shared index snapshot; it never touches
       // the LSP session, so no semantic timeout is projected onto it. The
       // request deadline (when present) bounds the query work instead.
-      return runStaticDiscovery(client, {
+      return staticResultForView(await runStaticDiscovery(client, {
         query: args.query,
         terms: args.terms,
         searchMode: args.searchMode,
@@ -116,7 +117,7 @@ export async function javaSymbol(
         repoRoot: context.repoRoot,
         repoHash: context.repoHash,
         budget: request ? { remainingMs: () => request.budget.remainingMs() } : undefined
-      });
+      }), context, request);
     }
     const limit = clampLimit(args.limit);
     const result = await context.session.workspaceSymbols(args.query, limit, request?.budget ?? args.semanticTimeoutMs);
@@ -160,6 +161,21 @@ export async function javaSymbol(
     definitions: await describeContainedLocations(context.repoRoot, result.definitions, args.detail),
     implementations: await describeContainedLocations(context.repoRoot, result.implementations, args.detail)
   };
+}
+
+/** Snapshot coverage describes its build; freshness belongs to this request's held view. */
+function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, context: ToolContext, request?: SymbolRequest): unknown {
+  const view = context.indexView;
+  const labels = view ? { indexView: view } : {};
+  if ((!view || view.state === "FRESH") && request?.negativeLookupAllowed !== false) return { ...result, ...labels };
+  if ("units" in result) {
+    const reason = view && view.state !== "FRESH" ? `INDEX_VIEW_${view.state}` : "INDEX_COVERAGE_INCOMPLETE";
+    return { ...result, ...labels, scopeState: "PARTIAL", reasons: [...new Set([...result.reasons, reason])] };
+  }
+  // Positive locators remain useful after their source hash check. A miss or an
+  // empty vocabulary cannot establish absence while the workspace is changing.
+  const { exact, emptyReason: _emptyReason, ...rest } = result;
+  return { ...rest, ...labels, scopeState: "PARTIAL", stopReason: result.stopReason ?? "index_partial", ...(exact && exact !== "miss" ? { exact } : {}) };
 }
 
 function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {

@@ -136,7 +136,7 @@ type RuntimeEntry = {
   runtimeLease?: LeaseHandle;
   gate: RuntimeLifecycleGate;
   ownership?: RepoOwnershipLease;
-  /** Last cache-meta stamp (refreshResource): it does synchronous file I/O and git spawns. */
+  /** Last cache-meta stamp (refreshResource): it does synchronous file I/O. */
   cacheTouch?: { at: number; ownerToken?: string };
 };
 
@@ -399,7 +399,7 @@ export class RepoRuntimeManager {
     if (!entry || entry.stoppedAt !== undefined || !owner?.peek(resolved.repoRoot)) {
       return handler({ resolved, context: entry?.stoppedAt === undefined ? entry?.context : undefined, labels: { state: "NOT_READY" } });
     }
-    // Memory only: no cache stamp (meta file I/O, git spawns); status is not use for the janitor.
+    // Memory only: no cache stamp (meta file I/O); status is not use for the janitor.
     entry.context.resource = this.resourceStatus();
     return withRequestView({
       owner, budget, signal: options.signal, start: false, resolve: async () => resolved.repoRoot,
@@ -475,11 +475,11 @@ export class RepoRuntimeManager {
       owner, budget, signal, start, resolve: async () => entry.context.repoRoot,
       handler: async view => {
         const runtime = view.snapshotId ? await this.snapshotRuntime(entry, view) : undefined;
-        if (!runtime) return handler(entry.context, view);
+        if (!runtime) return handler({ ...entry.context, indexView: view.labels }, view);
         runtime.users += 1;
         runtime.lastUsedAt = Date.now();
         try {
-          const context: ManagedToolContext = { ...entry.context, javaIndexClient: runtime.javaIndexClient, javaIndex: runtime.javaIndex, router: runtime.router };
+          const context: ManagedToolContext = { ...entry.context, indexView: view.labels, javaIndexClient: runtime.javaIndexClient, javaIndex: runtime.javaIndex, router: runtime.router };
           // Reads that carry no explicit options still run under this request's deadline and signal.
           return await withRequestDefaults({ budget, signal }, () => runtime.javaIndex.withRequestOptions({ budget, signal }, () => handler(context, view)));
         } finally {
@@ -810,8 +810,8 @@ export class RepoRuntimeManager {
 
   private refreshResource(entry: RuntimeEntry): void {
     entry.context.resource = this.resourceStatus();
-    // The stamp runs synchronously on the owner's event loop (meta read/write,
-    // two git spawns): once per interval per runtime, not once per request.
+    // The metadata read/write runs synchronously on the owner's event loop:
+    // once per interval per runtime, not once per request.
     const ownerToken = entry.runtimeLease?.owner.ownerToken;
     const now = Date.now();
     if (entry.cacheTouch && entry.cacheTouch.ownerToken === ownerToken && now - entry.cacheTouch.at < CACHE_TOUCH_INTERVAL_MS) return;
