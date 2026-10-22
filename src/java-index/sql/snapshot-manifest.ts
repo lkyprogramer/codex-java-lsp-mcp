@@ -2,14 +2,16 @@ import { createHash } from "node:crypto";
 import { computeExtractorVersion, JAVA_FACTS_REVISION } from "../build-fingerprint.js";
 import { STABLE_ID_VERSION } from "../stable-id.js";
 import type { IndexDatabase } from "./driver.js";
-import { LOGICAL_EXPORT_VERSION, logicalDigest, type LogicalTableDigest } from "./logical-export.js";
 import { SCHEMA_VERSION } from "./schema.js";
 
 // The sealed manifest written next to a published snapshot's index.sqlite
 // (contract §2.x). It names what the snapshot logically contains, independent
 // of workspace: no root, stat or workspaceId. The publisher (MAC-07 seal.ts)
-// fills snapshotId and the sealed file digest after the final checkpoint.
-export const SNAPSHOT_MANIFEST_FORMAT = "ilv2-snapshot-manifest/mac1";
+// fills snapshotId and the file size after the final checkpoint.
+// mac2 omitted the unused full logical export digest. mac3 also omits the file
+// digest: a delta publish no longer reads the whole file (contract §2.7, plan B);
+// the background verifier records it in verified/<snapshotId>.json instead.
+export const SNAPSHOT_MANIFEST_FORMAT = "ilv2-snapshot-manifest/mac3";
 
 export type SnapshotManifest = {
   formatVersion: typeof SNAPSHOT_MANIFEST_FORMAT;
@@ -22,8 +24,7 @@ export type SnapshotManifest = {
   /** Which facts this content produced: schema/identity/facts revisions, extractor and build/resolver inputs (§2.3.4). */
   buildKey: string;
   sources: { java: number; resources: number };
-  logical: { version: typeof LOGICAL_EXPORT_VERSION; digest: string; tables: Record<string, LogicalTableDigest> };
-  file: { bytes: number; pageSize: number; pages: number; sha256: string };
+  file: { bytes: number; pageSize: number; pages: number };
 };
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -74,9 +75,8 @@ export function buildKeyFor(input: { schemaVersion: number; identityVersion: num
     factsRevision: input.factsRevision, extractor: computeExtractorVersion(), buildFingerprint: input.buildFingerprint })).digest("hex");
 }
 
-export function buildSnapshotManifest(db: IndexDatabase, sealed: { snapshotId: string; bytes: number; pageSize: number; sha256: string }): SnapshotManifest {
+export function buildSnapshotManifest(db: IndexDatabase, sealed: { snapshotId: string; bytes: number; pageSize: number }): SnapshotManifest {
   const content = contentManifestId(db);
-  const logical = logicalDigest(db);
   const manifest: SnapshotManifest = {
     formatVersion: SNAPSHOT_MANIFEST_FORMAT,
     snapshotId: sealed.snapshotId,
@@ -86,13 +86,12 @@ export function buildSnapshotManifest(db: IndexDatabase, sealed: { snapshotId: s
     contentManifestId: content.id,
     buildKey: buildKeyOf(db),
     sources: { java: content.java, resources: content.resources },
-    logical,
-    file: { bytes: sealed.bytes, pageSize: sealed.pageSize, pages: sealed.bytes / sealed.pageSize, sha256: sealed.sha256 }
+    file: { bytes: sealed.bytes, pageSize: sealed.pageSize, pages: sealed.bytes / sealed.pageSize }
   };
   return parseSnapshotManifest(JSON.parse(JSON.stringify(manifest)));
 }
 
-const KEYS = ["buildKey", "contentManifestId", "factsRevision", "file", "formatVersion", "identityVersion", "logical", "schemaVersion", "snapshotId", "sources"];
+const KEYS = ["buildKey", "contentManifestId", "factsRevision", "file", "formatVersion", "identityVersion", "schemaVersion", "snapshotId", "sources"];
 
 /** Strict reader: any other format or shape is rejected, never upgraded. */
 export function parseSnapshotManifest(value: unknown): SnapshotManifest {
@@ -107,13 +106,8 @@ export function parseSnapshotManifest(value: unknown): SnapshotManifest {
   if (typeof m.buildKey !== "string" || !HEX64.test(m.buildKey)) fail("buildKey");
   const sources = m.sources as Record<string, unknown> | undefined;
   if (!sources || !Number.isSafeInteger(sources.java) || !Number.isSafeInteger(sources.resources)) fail("sources");
-  const logical = m.logical as Record<string, unknown> | undefined;
-  if (!logical || logical.version !== LOGICAL_EXPORT_VERSION || typeof logical.digest !== "string" || !HEX64.test(logical.digest) || !logical.tables || typeof logical.tables !== "object") fail("logical");
-  for (const [table, row] of Object.entries(logical!.tables as Record<string, LogicalTableDigest>)) {
-    if (!Number.isSafeInteger(row?.rows) || typeof row?.digest !== "string" || !HEX64.test(row.digest)) fail(`logical table ${table}`);
-  }
   const file = m.file as Record<string, unknown> | undefined;
   if (!file || !Number.isSafeInteger(file.bytes) || !Number.isSafeInteger(file.pageSize) || !Number.isSafeInteger(file.pages)
-    || (file.pages as number) * (file.pageSize as number) !== file.bytes || typeof file.sha256 !== "string" || !HEX64.test(file.sha256)) fail("file");
+    || (file.pages as number) * (file.pageSize as number) !== file.bytes || JSON.stringify(Object.keys(file).sort()) !== '["bytes","pageSize","pages"]') fail("file");
   return value as SnapshotManifest;
 }

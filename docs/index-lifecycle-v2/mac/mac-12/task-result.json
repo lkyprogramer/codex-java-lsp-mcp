@@ -1,0 +1,396 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-12",
+  "gateId": "G12",
+  "status": "IN_PROGRESS",
+  "dependency": {
+    "head": "4cfa0402",
+    "requiredGates": [
+      "G11"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "b33781af08e17ba029b2aa22908e9c3a82ba151eb6c4aa9ab844acdd22135ec9",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "c0456ad98feecafd219a49ceaf2fc5c04098b827c036dc17d0441bc220a65474",
+    "nativeSourceDigest": "5cf63981c0c0433a25c28e44410edaabc2ea5c609fe5b68efe84739748c47561",
+    "buildStampSha256": "a2cef8b2db8d7cbede914a274044084d918edf2dfff89c4e3d5e36e5db6a8ed6",
+    "distInventorySha256": "fe8f1c9c4c4863d2c1c5f376dbeb2f822805596657fe94d3a7baae16491a19a2",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "json-syntax-targeted",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/json-syntax-targeted/result.json",
+      "sourceDigest": "b33781af08e17ba029b2aa22908e9c3a82ba151eb6c4aa9ab844acdd22135ec9",
+      "commands": 1,
+      "tests": 40,
+      "pass": 40,
+      "fail": 0,
+      "elapsedMs": 14723,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/java-index/snapshot/seal-integrity.test.js",
+        "dist/java-index/sql/logical-export.test.js",
+        "dist/java-index/snapshot/snapshot-store.test.js"
+      ]
+    },
+    {
+      "name": "json-syntax-compare",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/json-syntax-compare/result.json",
+      "sourceDigest": "b33781af08e17ba029b2aa22908e9c3a82ba151eb6c4aa9ab844acdd22135ec9",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 71565,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-timeout=900000",
+        "--test-name-pattern=^MAC12 bounded verification compares actual complete seal publication$",
+        "scripts/ilv2-mac-seal-profile.test.mjs"
+      ]
+    },
+    {
+      "name": "json-syntax-cpu-profile",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/json-syntax-cpu-profile/result.json",
+      "sourceDigest": "b33781af08e17ba029b2aa22908e9c3a82ba151eb6c4aa9ab844acdd22135ec9",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 6133,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-timeout=180000",
+        "--test-name-pattern=^MAC12 actual seal worker task timeline$",
+        "scripts/ilv2-mac-seal-profile.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "cache-policy-rejected",
+      "file": "cache-policy-decision.json",
+      "sha256": "7c8760da2bab5386052f438439d67918d12939af53f919862652d29e4a9e88c6",
+      "status": "REJECTED",
+      "provenance": null
+    },
+    {
+      "name": "manifest-cpu-profile",
+      "file": "cpu-profile-summary.json",
+      "sha256": "2fb478bfda1d760dc5c4077215c992087ab7236639bcb9627e5ae91219d58e21",
+      "status": "DIAGNOSTIC_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "array-trial-code-review",
+      "file": "array-code-review.json",
+      "sha256": "53bee3ed06d50b234d44c3918ef8eb0e0413ede46945ed534e2414689bba3307",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "array-trial-rejected",
+      "file": "array-projection-decision.json",
+      "sha256": "7bd184175b9a0bb2d8a88fd1263d47b7e6bda1714f530ff8b0764da96146d646",
+      "status": "REJECTED",
+      "provenance": null
+    },
+    {
+      "name": "seal-data-code-review",
+      "file": "seal-validation-code-review.json",
+      "sha256": "d234a1682e200dbbb3938736057b1ad3573c22272d9ff7abe80393a4be377954",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "seal-validation-result",
+      "file": "seal-validation-decision.json",
+      "sha256": "d0ac723f5a07bcc16a46a649b04f9cfd75d1f483c71405668dbbf3ce231e0831",
+      "status": "SUPPORTED_CANDIDATE",
+      "provenance": null
+    },
+    {
+      "name": "remaining-seal-check-costs",
+      "file": "seal-check-summary.json",
+      "sha256": "149ef01cc21e58a412e4dc6b287fdc8ecf32e6f3852d8efb29b2eca756fed1eb",
+      "status": "DIAGNOSTIC_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "posting-reference-alternatives",
+      "file": "posting-reference-decision.json",
+      "sha256": "75205f4b355d2208d846f4c5e7f8416dd2c5ebc313f0b6c87fa97b3baca56876",
+      "status": "SUPPORTED_FOR_IMPLEMENTATION",
+      "provenance": null
+    },
+    {
+      "name": "direct-reference-code-review",
+      "file": "reference-code-review.json",
+      "sha256": "599d20f82a52469d6a9b8c1dfb392f102756b528657d31df4e2d3edc3180b39a",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "direct-reference-result",
+      "file": "reference-validation-decision.json",
+      "sha256": "0a54038f1d4979ae5c60d1e14e3a05b4fdef0ab3de568869a2c39d169af21588",
+      "status": "SUPPORTS_CANDIDATE",
+      "provenance": null
+    },
+    {
+      "name": "integrity-composition-source-review",
+      "file": "integrity-composition-source.json",
+      "sha256": "8c128407c9ed7ba7a50d60632449b80485737f83a8ead9ecece36f3f732c2ed9",
+      "status": "SOURCE_INFERENCE_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "bounded-seal-code-review",
+      "file": "parallel-code-review.json",
+      "sha256": "d122c746677f5504f6473fce031a9c48d168ac2b6fa8eb513c39794da1db11f9",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "initial-parallel-compare-failure",
+      "file": "parallel-initial-failure.json",
+      "sha256": "78a55374275afc549196766ff2abcbe72e89dee5f96501d64795f8f0e751d277",
+      "status": "FAILED",
+      "provenance": null
+    },
+    {
+      "name": "native-clone-fixture-and-reuse-review",
+      "file": "parallel-native-clone-review.json",
+      "sha256": "b123ac9237ed733539773b03033c59785bde830439ea4903ab615162bda94632",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "bounded-seal-comparison-decision",
+      "file": "parallel-seal-decision.json",
+      "sha256": "6ce3445354b5e97532efc407a005cf440a30344fc1d1f515e86e2f73f5f6232f",
+      "status": "SUPPORTS_CANDIDATE",
+      "provenance": null
+    },
+    {
+      "name": "verification-tail-actual-costs",
+      "file": "verification-tail-decision.json",
+      "sha256": "addeb92d4fed963f2b222ac9d2406bb8709720a7d52839f659c6d138fd68ad6c",
+      "status": "PROFILE_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "method-facts-source-review",
+      "file": "method-facts-code-review.json",
+      "sha256": "0340bf534c7c25a8cc84d5c198ef2155b0f3374024dd3f1469ad3cf3c69ec9db",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "method-facts-trial-rejected",
+      "file": "method-facts-rejected.json",
+      "sha256": "8763e25504169ca234db4da7c24971c914ba7637835c321532f3962186348fb3",
+      "status": "REJECTED_INSUFFICIENT_GAIN",
+      "provenance": null
+    },
+    {
+      "name": "native-cancel-fix",
+      "file": "seal-cancel-fix.json",
+      "sha256": "f697466a07a46fdcf68cfab73ddaf472c08e8d9a43dc08df50908c4dc73181af",
+      "status": "FORMAL_CAP4_DIRECT_REGRESSIONS_PASSED",
+      "provenance": null
+    },
+    {
+      "name": "cap-compiled-scope",
+      "file": "raw/seal-cap-compiled-scope.json",
+      "sha256": "e1ca94577f44874c27ad4aeceb18a32cafda59065a7e645fb19fe956893bc202",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "cap6-trial-rejected",
+      "file": "seal-cap-rejected.json",
+      "sha256": "f4c9351cc9d08234eee87440c137658671cf8b47c0babb64878a94330f124fb9",
+      "status": "REJECTED_INSUFFICIENT_GAIN",
+      "provenance": null
+    },
+    {
+      "name": "facts-buffer-diagnostic-review",
+      "file": "facts-buffer-code-review.json",
+      "sha256": "a5b798466719f4f36254056c74e7459d91d0075560b68d61983e6783bd9c8d67",
+      "status": "PASS_FOR_DIAGNOSTIC",
+      "provenance": null
+    },
+    {
+      "name": "facts-buffer-compiled-scope",
+      "file": "raw/facts-buffer-compiled-scope.json",
+      "sha256": "f3e3c74411cab25983aa1e20ba288ae990d403024a59e4d3598110d48fd55ca6",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "facts-buffer-hypothesis-rejected",
+      "file": "facts-buffer-rejected.json",
+      "sha256": "cb25d54cf66ec9c02151588a20be79b1df1acff5df4be85c8ed9f62aba3c30a3",
+      "status": "REJECTED_INSUFFICIENT_GAIN",
+      "provenance": null
+    },
+    {
+      "name": "actual-timeline-source-review",
+      "file": "worker-timeline-code-review.json",
+      "sha256": "cf653ad0c056e5c15d7527615b72fb7c4256e21f37e377d212134257b1cf2289",
+      "status": "PASS_FOR_DIAGNOSTIC",
+      "provenance": null
+    },
+    {
+      "name": "actual-timeline-compiled-reuse",
+      "file": "raw/worker-timeline-compiled-reuse.json",
+      "sha256": "1b6820c9cfe2af48dafe555891c35abc91d1e1d3ab064b2d686527229c0328d6",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "actual-task-timeline-invalid",
+      "file": "worker-timeline-decision.json",
+      "sha256": "cb5291becf978fdf20cc45af837d357f25b285084c886d0ab1a3edc38a2ce6dc",
+      "status": "PROFILE_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "reference-duplicate-cost-assessment",
+      "file": "reference-duplication-assessment.json",
+      "sha256": "1402b39b0d8e763a1eda5df10acdf526a7247bae352f735d79a997b12cd1f71c",
+      "status": "NO_PRODUCT_CHANGE",
+      "provenance": null
+    },
+    {
+      "name": "per-worker-cpu-source-review",
+      "file": "worker-cpu-code-review.json",
+      "sha256": "c0488057e7aad3701cd57be28c47e835164864deeff132dfb21bededf0e32e25",
+      "status": "PASS_FOR_DIAGNOSTIC",
+      "provenance": null
+    },
+    {
+      "name": "per-worker-cpu-compiled-reuse",
+      "file": "raw/worker-cpu-compiled-reuse.json",
+      "sha256": "f20e970b7dd45e7a387db0c1ad7ca0328ea18ae230ca36aab21eac7e25d756ac",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "actual-worker-cpu-result",
+      "file": "worker-cpu-decision.json",
+      "sha256": "58f1a1e983582eb9a4e883b20c0814c554883e4a06878368f19766bfc6d7dfe7",
+      "status": "VALID_DIAGNOSTIC_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "method-cap-source-review",
+      "file": "method-cap-code-review.json",
+      "sha256": "fcfa6da1ffd4ef9d37ce633c6c5740f070918d8cd5b3a9e7db948b4b1dbec9f8",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "method-cap-compiled-scope",
+      "file": "raw/method-cap-compiled-scope.json",
+      "sha256": "0d82695a2ea36c7d26c1a714535331b3081cbe9b9ee2eef5685e9df989754400",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "method-cap-composite-rejected",
+      "file": "method-cap-rejected.json",
+      "sha256": "2fb7e5984b3e9cd74514c4dab91cae13853de4f49c6a08747f5b683efe718570",
+      "status": "REJECTED_PER_PAIR_MINIMUM",
+      "provenance": null
+    },
+    {
+      "name": "json-syntax-source-review",
+      "file": "json-syntax-code-review.json",
+      "sha256": "fb5747158abc132c1f3eeeaaab19b6bd2c84752b0c8bc3977dbc0a66746f3c50",
+      "status": "PASS_FOR_MEASUREMENT",
+      "provenance": null
+    },
+    {
+      "name": "json-syntax-compiled-scope",
+      "file": "raw/json-syntax-compiled-scope.json",
+      "sha256": "acaef8c6443410126fcaff10a2dcfb07031ac210e53848e179df21134007679a",
+      "status": null,
+      "provenance": null
+    },
+    {
+      "name": "json-syntax-rejected",
+      "file": "json-syntax-rejected.json",
+      "sha256": "81b02df2aea43fc57b53543337a104a6b4ebdae25ac7c7aee7b12959882ce6f1",
+      "status": "REJECTED",
+      "provenance": null
+    },
+    {
+      "name": "facts-reuse-feasibility",
+      "file": "facts-reuse-feasibility.json",
+      "sha256": "e76d87031407ddd729b0957b39738be760cddc55859252e9a96dbaefbaa54163",
+      "status": "NOT_SUPPORTED_BY_EXISTING_CONTRACT",
+      "provenance": null
+    },
+    {
+      "name": "physical-layout-survey",
+      "file": "layout-survey-decision.json",
+      "sha256": "f53abaa7e53d1fad6211328a0d9a2c79b5d8a8933d3fe11efc23d0b99a2e91c7",
+      "status": "DIAGNOSTIC_ONLY",
+      "provenance": null
+    },
+    {
+      "name": "json-syntax-actual-exit",
+      "file": "json-syntax-exit-check.json",
+      "sha256": "c40c1180abc06b6db730044b70c7ec7dc74c586f46a9617c9a60bc2f25144c2e",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": "NOT_RUN",
+  "independent": {
+    "review": "NOT_RUN"
+  },
+  "validationIndexSha256": "419b405699d4c1cb7b96922499c6a0ab6b7d8a2000ccd2f61fac602c4a2f7d3f",
+  "notClaimed": [
+    "G12 IN_PROGRESS, performanceReady=false. No absolute gate PASS for the current candidate.",
+    "Cache policy1.407% and array projection13.632% rejected; their code reverted and all actual samples retained.",
+    "Seal validation candidate28formaltestsPASS,3pairs6VALID combined43.807s to15.516s,64.581% improvement; independent raw review passed. NOT_GATED cost result, not G12PASS.",
+    "Current scalar/orphan/facts guards and strictmac2format retained. Offline full/delta logical oracle unchanged.",
+    "Direct-reference source cd6 formal29PASS and3pairs6VALID,15.678s to10.745s,31.465% cost gain; exact manifest/registered logical oracle/unchanged DB. NOT_GATED.",
+    "G11 five measured performanceFAILs remain. All applicable G12 absolute gates, independent final review, resource exit, verified archive and final closeout pending.",
+    "Actualserialprofile19logicaltables6151.559ms vs6151.871overall; method3112.644ms with66969facts/nativeiterator146.079ms; noactualparallel tasktimeline claim.",
+    "Methodfacts formal40PASS and6VALID pairs, no >=20% gain; trial rejected and reverted. Raw results and patch retained.",
+    "Cap6 formal30PASS/complete diagnostic1PASS,6VALID but all3 gains<20%; cap6 reverted only, cooperative cancel fix retained. No instantaneous cancel claim.",
+    "Cap4 three direct cancellation/orphan regressions3PASS; facts-buffer serial1PASS/6VALID but1KiB slower in everypair; hypothesis rejected and productdecoder unchanged. Independentrawreview+8PIDexit complete.",
+    "Actual timeline1PASS protocol/coverage but load21.810->20.384 INVALID_EXPERIMENT; allraw retained, no performance inference. Independentrawreview complete.",
+    "ActualworkerCPU1PASS/VALIDdiagnostic,4profilehashes/24ACK/7threadexit0/5PIDsESRCH independentlychecked.14.263s is sampleweight notprocessCPU; nodefunctionself not purelyJSONparse.",
+    "Compositeformal41PASS/compare1PASS/6VALID butmiddle19.379%<20 and3.504-3.585s>3: rejected,6filesrestoredsafe4, independentrawreview/9PIDexitcomplete.",
+    "JSON syntax formal40PASS0skip/compare1PASS/6VALID, three fullseal gains10.143/5.071/5.820% all below20; rejected, four files restored byte-exact safe4. CPU1PASS4profile/24ACK/7worker exit0 plus11PID ESRCH independently checked; instrumented wall is not performance gate.",
+    "factsMoved is not a complete persistent write set; no inherited facts validation implemented. Cross clone/base/lease/seal proof contract proposal awaits user decision.",
+    "One read-only dbstat survey confirms facts compressed bytes about20% of572321792byte DB and no free pages; no codec/layout optimization or speedup measured."
+  ],
+  "next": "User decision on bounded facts-validation inheritance contract proposal; no next test batch scheduled.",
+  "authorization": null,
+  "notes": "G12 IN_PROGRESS; latest executed b337/yn5WV9 JSON trial rejected, current product files restored to ZTiG7d safe4. Cooperative stop and supported earlier candidates retained. No MAC12 commit/push.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-12/20261021T181104Z"
+}

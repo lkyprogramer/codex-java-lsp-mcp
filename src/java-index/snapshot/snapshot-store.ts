@@ -4,6 +4,8 @@
 //      reclaim decisions are serialized here; requests, query workers, candidate scans, builder bases
 //      and publishing candidates all hold the same kind of lease. MAC-09: sweep() is one GC cycle over
 //      the store's own objects (snapshots/, jobs/, workspaces/), each through the same tryReclaim decision.
+//      MAC-12 (plan B): a delta candidate is published before its full verification; verified/ holds the
+//      verdicts. A FAILED snapshot, and every unverified one built on it, is quarantined, never a base.
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readdir, rm, stat } from "node:fs/promises";
@@ -12,9 +14,10 @@ import path from "node:path";
 import { cloneSealedDatabase } from "../../mac-platform/clonefile.js";
 import type { SnapshotManifest } from "../sql/snapshot-manifest.js";
 import { BINDING_FILE, BINDING_FORMAT, readBinding, removeStaleBindingTmp, sameRoot, workspaceDir, writeBinding, type RootIdentity, type WorkspaceBinding } from "./binding.js";
-import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, sealJobDatabase, syncDir, type FaultHook, type Mac1Layout, type SealTimings } from "./seal.js";
+import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, readVerification, sealJobDatabase, syncDir, verificationEntries,
+  verificationFile, verifyDatabaseFile, writeVerification, type FaultHook, type Mac1Layout, type SealTimings, type VerificationRecord } from "./seal.js";
 
-export type LeasePurpose = "request" | "query-worker" | "candidate-scan" | "base" | "publish";
+export type LeasePurpose = "request" | "query-worker" | "candidate-scan" | "base" | "publish" | "verify";
 export type SnapshotLease = { readonly snapshotId: string; readonly purpose: LeasePurpose; readonly dbPath: string; release(): void };
 
 /** What the tracker currently holds for a workspace (in memory, never persisted as FRESH). */
@@ -35,7 +38,7 @@ export type BindPlan = {
 };
 
 export type RejectReason = "not-tracked" | "generation" | "tracker-epoch" | "root" | "binding-version" | "watermark"
-  | "capture" | "content" | "build-key" | "no-binding" | "job-state";
+  | "capture" | "content" | "build-key" | "no-binding" | "job-state" | "base-failed";
 export class BindRejected extends Error {
   constructor(readonly reason: RejectReason, message: string) { super(`${reason}: ${message}`); }
 }
@@ -48,6 +51,8 @@ export type BuildJob = {
   /** The private, writable database the builder fills (absent until written or cloned). */
   readonly dbPath: string;
   state: "OPEN" | "SEALED" | "FINISHED";
+  /** The sealed base cloned into this job: its seal is a delta seal, and it fails with that base. */
+  baseSnapshotId?: string;
   /** Fixed before sealing starts, so a half-sealed candidate is already in flight. */
   snapshotId?: string;
   manifest?: SnapshotManifest;
@@ -61,7 +66,10 @@ export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "trac
 export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: ReclaimReason };
 
 /** One GC cycle: what was deleted, and how many store objects each refusal kept. */
-export type SweepReport = { snapshots: string[]; jobs: string[]; workspaces: string[]; kept: Partial<Record<ReclaimReason, number>> };
+export type SweepReport = { snapshots: string[]; jobs: string[]; workspaces: string[]; records: string[]; kept: Partial<Record<ReclaimReason, number>> };
+
+/** One background verification: the verdict, and the workspaces a failure took out of service. */
+export type VerifyResult = { result: "VERIFIED" } | { result: "FAILED"; error: string; quarantined: string[] };
 
 export type RecoveryReport = {
   bindings: Array<{ workspaceId: string; snapshotId: string; bindingVersion: number }>;
@@ -70,6 +78,8 @@ export type RecoveryReport = {
   removedBindingTmp: string[];
   unboundSnapshots: string[];
   staleJobs: string[];
+  /** Served snapshots without a verdict yet: the background verifier's first work. */
+  unverified: string[];
   /** Entries that are not store objects (e.g. Finder's .DS_Store): left alone, never served or deleted. */
   ignored: string[];
 };
@@ -90,6 +100,16 @@ export class SnapshotStore {
   private readonly leases = new Map<string, Set<SnapshotLease>>();
   private readonly reclaiming = new Set<string>();
   private readonly jobs = new Map<string, BuildJob>();
+  /** Verdicts by snapshotId (verified/); absent: not verified yet. */
+  private readonly verdicts = new Map<string, VerificationRecord>();
+  /**
+   * Lineage of this incarnation: the base each delta snapshot ("s-…") or open job ("job:<id>") was
+   * cloned from. An unverified node fails with its base. A forgotten node's children are relinked
+   * to its own base, so a later failure upstream still reaches them.
+   */
+  private readonly bases = new Map<string, string>();
+  /** Nodes a failure already reached (set eagerly, so relinking can never lose them). */
+  private readonly tainted = new Set<string>();
   private queue: Promise<unknown> = Promise.resolve();
 
   private constructor(readonly cacheRoot: string, private readonly options: SnapshotStoreOptions) {
@@ -100,8 +120,8 @@ export class SnapshotStore {
   static async open(cacheRoot: string, options: SnapshotStoreOptions = {}): Promise<{ store: SnapshotStore; recovery: RecoveryReport }> {
     const store = new SnapshotStore(cacheRoot, options);
     const { layout } = store;
-    for (const directory of [layout.root, layout.owner, layout.snapshots, layout.workspaces, layout.jobs]) await mkdir(directory, { recursive: true });
-    const recovery: RecoveryReport = { bindings: [], invalidBindings: [], removedBindingTmp: [], unboundSnapshots: [], staleJobs: [], ignored: [] };
+    for (const directory of [layout.root, layout.owner, layout.snapshots, layout.workspaces, layout.jobs, layout.verified]) await mkdir(directory, { recursive: true });
+    const recovery: RecoveryReport = { bindings: [], invalidBindings: [], removedBindingTmp: [], unboundSnapshots: [], staleJobs: [], unverified: [], ignored: [] };
     const objects = async (directory: string): Promise<string[]> => {
       const entries: Dirent[] = await readdir(directory, { withFileTypes: true });
       const ids: string[] = [];
@@ -111,6 +131,12 @@ export class SnapshotStore {
       }
       return ids.sort();
     };
+    const { records, foreign } = await verificationEntries(layout);
+    for (const name of foreign) recovery.ignored.push(path.join("verified", name));
+    for (const snapshotId of records) {
+      try { store.verdicts.set(snapshotId, (await readVerification(layout, snapshotId))!); }
+      catch { /* unreadable: not verified; the verifier writes a new one */ }
+    }
     for (const workspaceId of await objects(layout.workspaces)) {
       let named: { snapshotId: string; bindingVersion: number; root: RootIdentity } | undefined;
       try {
@@ -120,6 +146,7 @@ export class SnapshotStore {
         named = { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, root: binding.root };
         const manifest = await readSealedManifest(layout, binding.snapshotId);
         if (manifest.contentManifestId !== binding.contentManifestId || manifest.buildKey !== binding.buildKey) throw new Error("binding does not match its snapshot manifest");
+        if (store.verdicts.get(binding.snapshotId)?.result === "FAILED") throw new Error(`snapshot ${binding.snapshotId} failed verification`);
         store.bindings.set(workspaceId, binding);
         recovery.bindings.push({ workspaceId, snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion });
       } catch (error) {
@@ -131,6 +158,7 @@ export class SnapshotStore {
     const bound = new Set([...store.bindings.values()].map(binding => binding.snapshotId).concat([...store.quarantined.values()].map(entry => entry.snapshotId)));
     recovery.unboundSnapshots = (await objects(layout.snapshots)).filter(name => !bound.has(name));
     recovery.staleJobs = await objects(layout.jobs);
+    recovery.unverified = store.unverifiedBound();
     recovery.ignored.sort();
     return { store, recovery };
   }
@@ -159,13 +187,56 @@ export class SnapshotStore {
    */
   seedCandidates(workspaceId: string, buildKey: string): string[] {
     const ids = new Set<string>();
-    for (const [id, binding] of this.bindings) if (id !== workspaceId && binding.buildKey === buildKey) ids.add(binding.snapshotId);
+    // Verified or not: a FAILED verdict quarantines every binding on the snapshot and fails what was cloned from it.
+    for (const [id, binding] of this.bindings) if (id !== workspaceId && binding.buildKey === buildKey && !this.failed(binding.snapshotId)) ids.add(binding.snapshotId);
     return [...ids].sort();
   }
 
   /** The bindingVersion a plan dispatched now must carry: the served binding's, else a quarantined one's, else 0. */
   bindingVersionOf(workspaceId: string): number {
     return this.bindings.get(workspaceId)?.bindingVersion ?? this.quarantined.get(workspaceId)?.bindingVersion ?? 0;
+  }
+
+  /** The snapshot's background verdict, if any. */
+  verification(snapshotId: string): VerificationRecord | undefined {
+    return this.verdicts.get(snapshotId);
+  }
+
+  isVerified(snapshotId: string): boolean {
+    return this.verdicts.get(snapshotId)?.result === "VERIFIED";
+  }
+
+  /** Served (not quarantined) by some workspace. */
+  isBound(snapshotId: string): boolean {
+    return [...this.bindings.values()].some(binding => binding.snapshotId === snapshotId);
+  }
+
+  /** Served snapshots with no verdict yet. */
+  unverifiedBound(): string[] {
+    return [...new Set([...this.bindings.values()].map(binding => binding.snapshotId))].filter(id => !this.verdicts.has(id)).sort();
+  }
+
+  /** FAILED, or unverified and built (in this incarnation) on a failed snapshot. */
+  private failed(node: string | undefined): boolean {
+    // Acyclic by construction; the bound only guards against a bug turning into a hang.
+    for (let id = node, steps = 0; id && steps <= this.bases.size; id = this.bases.get(id), steps += 1) {
+      const verdict = this.verdicts.get(id)?.result;
+      if (verdict) return verdict === "FAILED";
+      if (this.tainted.has(id)) return true;
+    }
+    return false;
+  }
+
+  /** Drop a reclaimed snapshot or finished job from the lineage, relinking its children. */
+  private forget(node: string): void {
+    const parent = this.bases.get(node);
+    const sound = this.isVerified(node);
+    for (const [child, base] of this.bases) {
+      if (base !== node) continue;
+      if (sound || !parent) this.bases.delete(child); else this.bases.set(child, parent);
+    }
+    this.bases.delete(node);
+    this.tainted.delete(node);
   }
 
   snapshotPath(snapshotId: string): string {
@@ -226,7 +297,10 @@ export class SnapshotStore {
   async cloneBase(base: SnapshotLease, job: BuildJob): Promise<void> {
     if (job.state !== "OPEN" || existsSync(job.dbPath)) throw new Error(`job ${job.jobId} cannot take a base`);
     if (!this.leases.get(base.snapshotId)?.has(base)) throw new Error("base lease is not held");
+    if (this.failed(base.snapshotId)) throw new BindRejected("base-failed", `snapshot ${base.snapshotId} failed verification`);
     await readSealedManifest(this.layout, base.snapshotId);
+    job.baseSnapshotId = base.snapshotId;
+    this.bases.set(`job:${job.jobId}`, base.snapshotId);
     await cloneSealedDatabase(base.dbPath, job.dbPath, this.cacheRoot);
     await this.options.faultAt?.("base-cloned");
     // The clone keeps the sealed mode; the private copy is the job's to write.
@@ -238,7 +312,16 @@ export class SnapshotStore {
     if (job.state !== "OPEN" || job.snapshotId) throw new BindRejected("job-state", `job ${job.jobId} is ${job.state}`);
     job.snapshotId = newSnapshotId();
     job.sealTimings = {};
-    const manifest = await sealJobDatabase(this.layout, job.dir, { snapshotId: job.snapshotId, faultAt: this.options.faultAt, timings: job.sealTimings });
+    const mode = job.baseSnapshotId ? "delta" : "full";
+    const manifest = await sealJobDatabase(this.layout, job.dir, { snapshotId: job.snapshotId, mode, faultAt: this.options.faultAt, timings: job.sealTimings });
+    const node = `job:${job.jobId}`;
+    if (this.bases.has(node)) this.bases.set(manifest.snapshotId, this.bases.get(node)!);
+    if (this.tainted.has(node)) this.tainted.add(manifest.snapshotId);
+    this.forget(node);
+    if (!job.baseSnapshotId) {
+      const record = await readVerification(this.layout, manifest.snapshotId);
+      if (record) this.verdicts.set(manifest.snapshotId, record);
+    }
     job.manifest = manifest;
     job.state = "SEALED";
     return manifest;
@@ -247,6 +330,7 @@ export class SnapshotStore {
   /** Discard a job: its private files and an unbound sealed candidate become reclaimable. */
   finishJob(job: BuildJob): void {
     job.state = "FINISHED";
+    this.forget(`job:${job.jobId}`);
   }
 
   // ------------------------------------------------------------ binding CAS
@@ -262,6 +346,7 @@ export class SnapshotStore {
       return await this.serial(async () => {
         this.checkPlan(plan);
         this.checkContent(plan, manifest);
+        if (this.failed(manifest.snapshotId)) throw new BindRejected("base-failed", `job ${job.jobId} was built on a snapshot that failed verification`);
         const binding = await this.commit(plan, manifest);
         job.state = "FINISHED";
         return binding;
@@ -281,15 +366,63 @@ export class SnapshotStore {
     });
   }
 
-  /** Zero-diff: bind an existing snapshot whose manifest and file fully verify against this workspace's capture. */
+  /**
+   * Zero-diff: bind an existing snapshot whose manifest verifies against this workspace's capture.
+   * A verified snapshot's file is re-hashed against its verdict; an unverified one is shared as
+   * it is served, and its verdict, when it comes, applies to every binding on it.
+   */
   async bindVerified(plan: BindPlan, snapshotId: string): Promise<WorkspaceBinding> {
     const lease = this.acquire(snapshotId, "candidate-scan");
     try {
-      const manifest = await readSealedManifest(this.layout, snapshotId, { verifyFile: true });
+      const manifest = await readSealedManifest(this.layout, snapshotId, { verifyFile: this.verdicts.has(snapshotId) });
       return await this.serial(async () => {
         this.checkPlan(plan);
         this.checkContent(plan, manifest);
+        if (this.failed(snapshotId)) throw new BindRejected("base-failed", `snapshot ${snapshotId} failed verification`);
         return this.commit(plan, manifest);
+      });
+    } finally { lease.release(); }
+  }
+
+  // ------------------------------------------------------------ background verification
+
+  /**
+   * The full check of one sealed snapshot under a verify lease, then its verdict. A FAILED verdict
+   * quarantines every binding on it or on an unverified snapshot built from it. An abort of
+   * `signal` (superseded, stop) rejects with its reason and records nothing.
+   */
+  async verifySnapshot(snapshotId: string, options: { workers?: number; signal?: AbortSignal } = {}): Promise<VerifyResult> {
+    const lease = this.acquire(snapshotId, "verify");
+    try {
+      let verdict: { result: "VERIFIED"; bytes: number; sha256: string } | { result: "FAILED"; error: string };
+      try {
+        const manifest = await readSealedManifest(this.layout, snapshotId);
+        const file = await verifyDatabaseFile(lease.dbPath, { workers: options.workers, signal: options.signal });
+        if (file.bytes !== manifest.file.bytes) throw new Error(`snapshot ${snapshotId}: ${file.bytes} bytes, manifest ${manifest.file.bytes}`);
+        verdict = { result: "VERIFIED", bytes: file.bytes, sha256: file.sha256 };
+      } catch (error) {
+        if (options.signal?.aborted) throw options.signal.reason;
+        verdict = { result: "FAILED", error: error instanceof Error ? error.message : String(error) };
+      }
+      return await this.serial(async () => {
+        this.options.assertOwner?.();
+        this.verdicts.set(snapshotId, await writeVerification(this.layout, { snapshotId, ...verdict }));
+        if (verdict.result === "VERIFIED") {
+          // Its descendants no longer need the chain above it.
+          for (const [child, base] of this.bases) if (base === snapshotId && !this.tainted.has(child)) this.bases.delete(child);
+          return { result: "VERIFIED" as const };
+        }
+        // Eagerly: an open job or unverified snapshot built on it stays failed after it is reclaimed.
+        for (const node of [...this.bases.keys()]) if (this.failed(node)) this.tainted.add(node);
+        const quarantined: string[] = [];
+        for (const [workspaceId, binding] of this.bindings) {
+          if (!this.failed(binding.snapshotId)) continue;
+          // Not served from now on; its version stays the CAS base of the replacing publish.
+          this.bindings.delete(workspaceId);
+          this.quarantined.set(workspaceId, { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, root: binding.root });
+          quarantined.push(workspaceId);
+        }
+        return { result: "FAILED" as const, error: verdict.error, quarantined: quarantined.sort() };
       });
     } finally { lease.release(); }
   }
@@ -378,6 +511,8 @@ export class SnapshotStore {
         await this.options.faultAt?.("reclaim-marked");
         await removeTree(dir);
         await syncDir(this.layout.snapshots);
+        // After the snapshot: a crash in between leaves an orphan verdict, which the sweep removes.
+        await this.removeVerdict(snapshotId);
       } finally { this.reclaiming.delete(snapshotId); }
       return { reclaimed: true };
     });
@@ -389,7 +524,7 @@ export class SnapshotStore {
    * jobs/ and workspaces/ (the owner lock, legacy caches, the Gradle home) are never visited.
    */
   async sweep(): Promise<SweepReport> {
-    const report: SweepReport = { snapshots: [], jobs: [], workspaces: [], kept: {} };
+    const report: SweepReport = { snapshots: [], jobs: [], workspaces: [], records: [], kept: {} };
     const visit = async (directory: string, list: string[], target: (id: string) => ReclaimTarget) => {
       for (const id of await storeObjects(directory)) {
         const result = await this.tryReclaim(target(id));
@@ -400,7 +535,35 @@ export class SnapshotStore {
     await visit(this.layout.workspaces, report.workspaces, workspaceId => ({ workspaceId }));
     await visit(this.layout.jobs, report.jobs, jobId => ({ jobId }));
     await visit(this.layout.snapshots, report.snapshots, snapshotId => ({ snapshotId }));
+    report.records = await this.serial(() => this.sweepVerdicts());
     return report;
+  }
+
+  /** Verdicts whose snapshot is gone, and a dead writer's tmp files; foreign names are never touched. */
+  private async sweepVerdicts(): Promise<string[]> {
+    const removed: string[] = [];
+    const { records, foreign } = await verificationEntries(this.layout);
+    for (const snapshotId of records) {
+      if (existsSync(path.join(this.layout.snapshots, snapshotId)) || this.reclaiming.has(snapshotId)) continue;
+      await this.removeVerdict(snapshotId);
+      removed.push(snapshotId);
+    }
+    for (const name of foreign) {
+      if (!/^[A-Za-z0-9_-]{8,128}\.json\.tmp-/.test(name)) continue;
+      this.options.assertOwner?.();
+      await rm(path.join(this.layout.verified, name), { force: true });
+    }
+    return removed;
+  }
+
+  private async removeVerdict(snapshotId: string): Promise<void> {
+    this.forget(snapshotId);
+    this.verdicts.delete(snapshotId);
+    const file = verificationFile(this.layout, snapshotId);
+    if (!existsSync(file)) return;
+    this.options.assertOwner?.();
+    await rm(file, { force: true });
+    await syncDir(this.layout.verified);
   }
 
   private async reclaimWorkspace(workspaceId: string): Promise<ReclaimResult> {

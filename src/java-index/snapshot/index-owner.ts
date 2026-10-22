@@ -19,6 +19,7 @@ import { QueryPool, type QueryCompletion } from "./query-pool.js";
 import { queryOpTask, spawnQueryWorker } from "./query-process.js";
 import type { FaultHook, SealTimings } from "./seal.js";
 import { SnapshotStore, type BuildJob, type LeasePurpose, type SnapshotLease, type SweepReport } from "./snapshot-store.js";
+import { SnapshotVerifier, type VerificationEvent } from "./snapshot-verifier.js";
 import { nativeTrackerSource, rebase, WorkspaceTracker, type TrackerSourceFactory, type TrackerStatus, type TrackerVerification } from "./workspace-tracker.js";
 
 /** The freshness label a request view freezes at its one acquire. */
@@ -68,7 +69,9 @@ export type OwnerEvent =
   /** A builder's liveness line (contract §2.6), at most one per second. */
   | { type: "builder"; workspaceId: string; pid?: number; beat: BuilderHeartbeat }
   /** Diagnosis only: a live builder whose work counter has not moved for STALL_DIAGNOSIS_MS. Its job deadline still decides termination. */
-  | { type: "stall"; workspaceId: string; pid?: number; stage: string; work: number; sinceMs: number };
+  | { type: "stall"; workspaceId: string; pid?: number; stage: string; work: number; sinceMs: number }
+  /** A background full verification of a published snapshot (contract §2.7, plan B). */
+  | VerificationEvent;
 
 export type IndexOwnerOptions = {
   /** The owner cache root; the store lives in `<cacheRoot>/mac1`. */
@@ -104,6 +107,8 @@ export type IndexOwnerOptions = {
   gc?: boolean;
   /** Test seam: the trackers' periodic full-hash interval (default FULL_HASH_INTERVAL_MS). */
   fullHashIntervalMs?: number;
+  /** Quiet time before a published snapshot's background verification (default VERIFY_DELAY_MS). */
+  verifyDelayMs?: number;
 };
 
 type BuildStart = { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant; onHeartbeat?: (beat: BuilderHeartbeat) => void };
@@ -141,6 +146,7 @@ export class IndexOwner {
   readonly store: SnapshotStore;
   readonly scheduler: BuildScheduler;
   readonly pool: QueryPool<unknown>;
+  readonly verifier: SnapshotVerifier;
   private readonly workspaces = new Map<string, WorkspaceIndex>();
   private readonly starting = new Map<string, Promise<WorkspaceIndex>>();
   private readonly byId = new Map<string, WorkspaceIndex>();
@@ -166,6 +172,14 @@ export class IndexOwner {
       retain: snapshotId => [...this.byId.values()].some(workspace => store.binding(workspace.workspaceId)?.snapshotId === snapshotId),
       onEvent: event => options.onEvent?.({ type: "pool", event })
     });
+    this.verifier = new SnapshotVerifier(store, {
+      ...(options.verifyDelayMs !== undefined ? { delayMs: options.verifyDelayMs } : {}),
+      onEvent: event => options.onEvent?.(event),
+      // The binding is quarantined (NOT_READY): the workspace rebuilds in full, never on that base.
+      onFailed: workspaceIds => { for (const id of workspaceIds) this.byId.get(id)?.verificationFailed(); },
+      // A verify lease went: a superseded snapshot may be deletable now.
+      onSettled: () => void this.reclaim()
+    });
   }
 
   static async open(options: IndexOwnerOptions): Promise<IndexOwner> {
@@ -174,6 +188,8 @@ export class IndexOwner {
     const owner = new IndexOwner(store, options);
     // Recovery: what a dead incarnation left (jobs, unbound snapshots, tmp) goes in the first cycle.
     if (options.gc !== false) void owner.sweep();
+    // Served but never fully verified (a delta publish before a restart): checked in the background.
+    for (const snapshotId of store.unverifiedBound()) owner.verifier.enqueue(snapshotId);
     return owner;
   }
 
@@ -194,6 +210,7 @@ export class IndexOwner {
 
   /** @internal WorkspaceIndex reports its publishes here. */
   published(event: PublishEvent): void {
+    if (!this.store.verification(event.snapshotId)) this.verifier.enqueue(event.snapshotId);
     for (const listener of this.publishListeners) {
       try { listener(event); } catch { /* a consumer failure never undoes a publish */ }
     }
@@ -355,7 +372,7 @@ export class IndexOwner {
 
   status() {
     return { workspaces: this.list().map(workspace => workspace.status()), scheduler: this.scheduler.status(), pool: this.pool.status(),
-      superseded: this.superseded.size, gcCycleMs: this.options.gcCycleMs ?? GC_CYCLE_MS };
+      verifier: this.verifier.status(), superseded: this.superseded.size, gcCycleMs: this.options.gcCycleMs ?? GC_CYCLE_MS };
   }
 
   async stop(): Promise<void> {
@@ -367,7 +384,7 @@ export class IndexOwner {
     let graceTimer: NodeJS.Timeout | undefined;
     const grace = new Promise<void>(resolve => { graceTimer = setTimeout(resolve, this.options.startStopGraceMs ?? START_STOP_GRACE_MS); });
     // Together: a round waiting on a builder or a query ends when the scheduler and pool stop.
-    await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop(),
+    await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop(), this.verifier.stop(),
       Promise.race([Promise.all(starts), grace]).finally(() => clearTimeout(graceTimer)), this.sweeping]);
   }
 }
@@ -434,6 +451,7 @@ export class WorkspaceIndex {
     const binding = this.owner.store.binding(this.workspaceId);
     return { workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, tracker: this.tracker.status(), view: this.viewState(binding),
       snapshotId: binding?.snapshotId, bindingVersion: binding?.bindingVersion, coveredThroughSeq: binding?.coveredThroughSeq,
+      ...(binding ? { verified: this.owner.store.isVerified(binding.snapshotId) } : {}),
       roundInFlight: Boolean(this.round), rounds: this.rounds, lastRound: this.lastRound, ...(this.lastError ? { lastError: this.lastError } : {}) };
   }
 
@@ -679,6 +697,18 @@ export class WorkspaceIndex {
         return attempt;
       }
     };
+  }
+
+  /**
+   * The background verifier failed this workspace's snapshot and quarantined its binding (NOT_READY).
+   * The next round is a full build: no base, so nothing of the failed snapshot is carried forward.
+   */
+  verificationFailed(): void {
+    this.fullNext = true;
+    this.base = undefined;
+    this.tracker.resume();
+    this.owner.store.track(this.workspaceId, this.tracker.trackedState());
+    this.kick(0);
   }
 
   /** Absolute path of a workspace member. */

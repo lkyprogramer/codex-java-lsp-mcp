@@ -166,15 +166,22 @@ export async function startRecoveryOwner(t, name, { repos, pins = () => [], froz
       for (const id of await list("workspaces")) workspaceFiles[id] = (await readdir(path.join(owner.mac1, "workspaces", id)).catch(() => [])).sort();
       return { snapshots: await list("snapshots"), jobs: await list("jobs"), workspaceFiles };
     },
-    /** A bound snapshot is sealed and its database still hashes to its manifest. */
+    /**
+     * A bound snapshot is sealed, its size is the manifest's, and, once the background verifier wrote
+     * its verdict (MAC-12 plan B: a delta publish is verified after binding), the verdict is VERIFIED
+     * and the database still hashes to it.
+     */
     async verifySnapshot(snapshotId) {
       const dir = path.join(owner.mac1, "snapshots", snapshotId);
       const manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8"));
-      const actual = sha256(await readFile(path.join(dir, "index.sqlite")));
-      // The binding's content identity is the manifest's; the file still hashes to the sealed digest.
+      const bytes = await readFile(path.join(dir, "index.sqlite"));
+      const actual = sha256(bytes);
+      const verdict = await readFile(path.join(owner.mac1, "verified", `${snapshotId}.json`), "utf8").then(JSON.parse, () => undefined);
+      // The binding's content identity is the manifest's.
       const binding = Object.values(await owner.bindings()).find(item => item.snapshotId === snapshotId);
-      return { snapshotId, manifestSha256: manifest.file?.sha256, actualSha256: actual,
-        matches: manifest.file?.sha256 === actual && manifest.snapshotId === snapshotId && (!binding || binding.contentManifestId === manifest.contentManifestId),
+      return { snapshotId, verified: verdict?.result ?? "PENDING", verdictSha256: verdict?.sha256, actualSha256: actual,
+        matches: manifest.snapshotId === snapshotId && manifest.file?.bytes === bytes.length && (!binding || binding.contentManifestId === manifest.contentManifestId)
+          && (!verdict || (verdict.result === "VERIFIED" && verdict.sha256 === actual && verdict.bytes === bytes.length)),
         sidecars: (await readdir(dir)).filter(entry => entry !== "index.sqlite" && entry !== "manifest.json") };
     },
     clients

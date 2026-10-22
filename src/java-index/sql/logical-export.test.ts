@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { applyBuilderJob } from "../../index-builder/incremental.js";
 import { close, openIndexDb, type IndexDatabase } from "./driver.js";
-import { diffLogical, exportLogical, logicalDigest } from "./logical-export.js";
+import { diffLogical, exportLogical, logicalDigest, validateLogicalData, validateLogicalTable } from "./logical-export.js";
 import { ensureSchema } from "./schema.js";
 import { buildSnapshotManifest, parseSnapshotManifest, SNAPSHOT_MANIFEST_FORMAT } from "./snapshot-manifest.js";
 import { internSym, symId } from "./sym.js";
@@ -16,6 +16,63 @@ import { internSym, symId } from "./sym.js";
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
 const serviceRel = "src/main/java/demospring/OrderService.java";
+
+test("seal data validation rejects unsafe scalar integers while preserving omitted surrogate ids and generations", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    db.exec("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT); CREATE TABLE sample(id INTEGER PRIMARY KEY, generation INTEGER, value INTEGER)");
+    db.prepare("INSERT INTO sample VALUES (?, ?, ?)").run(9223372036854775807n, 9223372036854775807n, 9007199254740991n);
+    for (const value of [9007199254740991n, -9007199254740991n]) {
+      db.prepare("UPDATE sample SET value=?").run(value);
+      validateLogicalData(db);
+      assert.doesNotThrow(() => logicalDigest(db));
+    }
+    for (const value of [9007199254740992n, -9007199254740992n]) {
+      db.prepare("UPDATE sample SET value=?").run(value);
+      assert.throws(() => logicalDigest(db));
+      assert.throws(() => validateLogicalData(db), /unsafe integer/);
+    }
+  } finally { close(db); }
+});
+
+test("a scoped check covers exactly the rows its predicate selects: facts, references and unsafe integers", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    db.exec(`CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT); CREATE TABLE sym(id INTEGER PRIMARY KEY, text TEXT);
+      CREATE TABLE sample(owner_sym INTEGER, generation INTEGER, value INTEGER, facts BLOB); INSERT INTO sym VALUES (1, 'owner')`);
+    const insert = db.prepare("INSERT INTO sample VALUES (?, ?, ?, ?)");
+    insert.run(1, 2, 1, deflateRawSync(Buffer.from('{"value":1}')));
+    // Old rows of generation 1, each corrupt in its own way.
+    insert.run(1, 1, 1, Buffer.from("invalid deflate"));
+    insert.run(999, 1, 1, deflateRawSync(Buffer.from('{"value":1}')));
+    insert.run(1, 1, 9007199254740992n, deflateRawSync(Buffer.from('{"value":1}')));
+    assert.doesNotThrow(() => validateLogicalTable(db, "sample", "t.generation=2"));
+    assert.throws(() => validateLogicalTable(db, "sample"));
+    assert.throws(() => validateLogicalTable(db, "sample", "t.generation=1"));
+    for (const [sql, error] of [["UPDATE sample SET facts=X'00' WHERE generation=2", /invalid|incorrect|unexpected|unknown/i],
+      ["UPDATE sample SET facts=?, owner_sym=999 WHERE generation=2", /orphan reference in sample.owner_sym/],
+      ["UPDATE sample SET owner_sym=1, value=9007199254740992 WHERE generation=2", /unsafe integer in sample/]] as const) {
+      const statement = db.prepare(sql);
+      if (sql.includes("?")) statement.run(deflateRawSync(Buffer.from('{"value":1}'))); else statement.run();
+      assert.throws(() => validateLogicalTable(db, "sample", "t.generation=2"), error, sql);
+    }
+  } finally { close(db); }
+});
+
+test("seal data validation preserves nullable references and rejects non-blob, deflate and JSON corruption", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    db.exec("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT); CREATE TABLE sym(id INTEGER PRIMARY KEY, text TEXT); CREATE TABLE sample(owner_sym INTEGER, facts BLOB)");
+    const insert = db.prepare("INSERT INTO sample VALUES (NULL, ?)");
+    insert.run(deflateRawSync(Buffer.from('{"value":1}')));
+    validateLogicalData(db);
+    for (const invalid of ["not a blob", Buffer.from("invalid deflate"), deflateRawSync(Buffer.from("not JSON"))]) {
+      db.prepare("UPDATE sample SET facts=?").run(invalid);
+      assert.throws(() => logicalDigest(db));
+      assert.throws(() => validateLogicalData(db));
+    }
+  } finally { close(db); }
+});
 
 async function withRepo<T>(fn: (repo: string) => Promise<T>): Promise<T> {
   const repo = await mkdtemp(path.join(tmpdir(), "logical-export-"));
@@ -143,6 +200,24 @@ test("a line-shifting edit re-indexes its search documents without growing the s
   });
 });
 
+test("seal reference validation also rejects missing symbols in existing posting parents", async () => {
+  await withRepo(async repo => {
+    const db = await build(repo);
+    try {
+      for (const [table, column] of [["search_doc", "declaration_sym"], ["search_doc", "source_path_sym"], ["kg_edge", "from_sym"], ["kg_edge", "to_sym"]]) {
+        db.exec("SAVEPOINT damaged");
+        try {
+          const result = db.prepare(`UPDATE ${table} SET ${column}=999999999 WHERE id=(SELECT min(id) FROM ${table})`).run();
+          assert.equal(Number(result.changes), 1);
+          assert.throws(() => logicalDigest(db), /orphan reference/);
+          assert.throws(() => validateLogicalData(db), /orphan reference/);
+        } finally { db.exec("ROLLBACK TO damaged; RELEASE damaged"); }
+      }
+      validateLogicalData(db);
+    } finally { close(db); }
+  });
+});
+
 test("dangling references are rejected by SQLite or by the export", async () => {
   await withRepo(async repo => {
     const db = await build(repo);
@@ -152,6 +227,7 @@ test("dangling references are rejected by SQLite or by the export", async () => 
       // Columns without a declared FK still cannot point outside the dictionary unnoticed.
       db.prepare("UPDATE kg_edge SET kind_sym=999999999 WHERE id=(SELECT min(id) FROM kg_edge)").run();
       assert.throws(() => logicalDigest(db), /orphan reference in kg_edge/);
+      assert.throws(() => validateLogicalData(db), /orphan reference in kg_edge/);
     } finally {
       close(db);
     }
@@ -160,6 +236,7 @@ test("dangling references are rejected by SQLite or by the export", async () => 
       docs.exec("PRAGMA foreign_keys=OFF");
       docs.prepare("UPDATE search_doc_token SET doc_id=999999999 WHERE (doc_id, token_sym)=(SELECT doc_id, token_sym FROM search_doc_token LIMIT 1)").run();
       assert.throws(() => logicalDigest(docs), /orphan reference in search_doc_token/);
+      assert.throws(() => validateLogicalData(docs), /orphan reference in search_doc_token/);
     } finally {
       close(docs);
     }
@@ -168,6 +245,7 @@ test("dangling references are rejected by SQLite or by the export", async () => 
       owned.exec("PRAGMA foreign_keys=OFF");
       owned.prepare("UPDATE kg_edge_owner SET edge_id=999999999 WHERE (edge_id, owner_sym)=(SELECT edge_id, owner_sym FROM kg_edge_owner LIMIT 1)").run();
       assert.throws(() => logicalDigest(owned), /orphan reference in kg_edge_owner/);
+      assert.throws(() => validateLogicalData(owned), /orphan reference in kg_edge_owner/);
     } finally {
       close(owned);
     }
@@ -179,12 +257,18 @@ test("the sealed snapshot manifest is workspace-free and strictly parsed", async
     const left = await build(repo);
     const right = await build(repo, { padSyms: 31, batchSize: 2 });
     try {
-      const sealed = { snapshotId: "snap-0001", bytes: 8192, pageSize: 4096, sha256: "a".repeat(64) };
+      const sealed = { snapshotId: "snap-0001", bytes: 8192, pageSize: 4096 };
       const manifest = buildSnapshotManifest(left, sealed);
       assert.equal(manifest.formatVersion, SNAPSHOT_MANIFEST_FORMAT);
       assert.ok(manifest.sources.java > 0 && manifest.sources.resources > 0);
       assert.equal(manifest.contentManifestId, buildSnapshotManifest(right, sealed).contentManifestId);
-      assert.equal(manifest.logical.digest, buildSnapshotManifest(right, sealed).logical.digest);
+      assert.equal(logicalDigest(left).digest, logicalDigest(right).digest);
+      assert.equal("logical" in manifest, false);
+      assert.throws(() => parseSnapshotManifest({ ...manifest, formatVersion: "ilv2-snapshot-manifest/mac1" }), /formatVersion/);
+      // mac2 named the file digest; a delta publish no longer computes it (contract §2.7, plan B).
+      assert.throws(() => parseSnapshotManifest({ ...manifest, formatVersion: "ilv2-snapshot-manifest/mac2", file: { ...manifest.file, sha256: "a".repeat(64) } }), /formatVersion/);
+      assert.throws(() => parseSnapshotManifest({ ...manifest, file: { ...manifest.file, sha256: "a".repeat(64) } }), /invalid snapshot manifest: file/);
+      assert.throws(() => parseSnapshotManifest({ ...manifest, logical: logicalDigest(left) }), /unexpected fields/);
       assert.equal(JSON.stringify(manifest).includes(repo), false);
       assert.throws(() => parseSnapshotManifest({ ...manifest, formatVersion: "ilv2-snapshot-manifest/v0" }), /formatVersion/);
       assert.throws(() => parseSnapshotManifest({ ...manifest, repoRoot: repo }), /unexpected fields/);

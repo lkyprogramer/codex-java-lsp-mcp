@@ -168,7 +168,8 @@
     {
       "gateId": "G12",
       "taskId": "MAC-12",
-      "status": "PLAN"
+      "status": "IN_PROGRESS",
+      "result": "mac-12/task-result.json"
     },
     {
       "gateId": "G13",

@@ -5,11 +5,14 @@ import { constants, existsSync, readFileSync } from "node:fs";
 import { access, appendFile, chmod, copyFile, cp, mkdir, mkdtemp, open, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { close, openIndexDb } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
+import { logicalDigest } from "../sql/logical-export.js";
+import { deflateRawSync } from "node:zlib";
 import { buildKeyOf, contentManifestId } from "../sql/snapshot-manifest.js";
 import { BINDING_FILE, readBinding, type RootIdentity } from "./binding.js";
 import { DB_FILE, MANIFEST_FILE, openSealedDatabase, readSealedManifest } from "./seal.js";
@@ -148,7 +151,53 @@ test("sealing refuses a database with a live writer or an incomplete build and p
   assert.equal(await readBinding(store.layout, WS), undefined);
 });
 
-const SEAL_STEPS = ["sealed-checkpointed", "sealed-verified", "manifest-written", "snapshot-renamed"];
+test("orphan references and corrupt facts cannot replace a valid binding", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const original = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  const mutations: Array<{ sql: string; value: number | bigint | string | Buffer; error: RegExp }> = [
+    { sql: "UPDATE kg_edge SET kind_sym=? WHERE id=(SELECT min(id) FROM kg_edge)", value: 999999999, error: /orphan reference/ },
+    { sql: "UPDATE kg_edge SET from_sym=? WHERE id=(SELECT min(id) FROM kg_edge)", value: 999999999, error: /orphan reference/ },
+    { sql: "UPDATE search_doc SET declaration_sym=? WHERE id=(SELECT min(id) FROM search_doc)", value: 999999999, error: /orphan reference/ },
+    { sql: "UPDATE entity_token SET tf=? WHERE (entity_sym, field, token_sym)=(SELECT entity_sym, field, token_sym FROM entity_token LIMIT 1)", value: 9223372036854775807n, error: /unsafe integer/ },
+    { sql: "UPDATE file SET facts=? WHERE id=(SELECT min(id) FROM file)", value: "not a blob", error: /expected facts blob/ },
+    { sql: "UPDATE file SET facts=? WHERE id=(SELECT min(id) FROM file)", value: Buffer.from("invalid deflate"), error: /invalid|incorrect|unexpected|unknown/i },
+    { sql: "UPDATE file SET facts=? WHERE id=(SELECT min(id) FROM file)", value: deflateRawSync(Buffer.from("not JSON")), error: /JSON/ }
+  ];
+  for (const mutation of mutations) {
+    const job = await jobFrom(store, fixture.b, "cap-00000002");
+    const db = openIndexDb(job.dbPath);
+    try { db.prepare(mutation.sql).run(mutation.value); } finally { close(db); }
+    await assert.rejects(store.publish(plan(fixture.b, { bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-00000002" }), job), mutation.error);
+    assert.deepEqual(store.binding(WS), original);
+    assert.deepEqual(await readBinding(store.layout, WS), original);
+    assert.deepEqual(await snapshotsOf(root), [original.snapshotId]);
+  }
+});
+
+test("a file changed during verification or after manifest construction cannot replace a valid binding", async () => {
+  const root = await cacheRoot();
+  let mutateAt = "", source = "";
+  const { store } = await openStore(root, { faultAt: async at => {
+    if (at !== mutateAt) return;
+    await chmod(source, 0o644);
+    const db = new DatabaseSync(source);
+    try { db.exec("INSERT INTO meta(key, value) VALUES('sealMutation', 'changed')"); }
+    finally { db.close(); await chmod(source, 0o444); }
+  } });
+  const original = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  for (const step of ["verification-planned", "sealed-verified"]) {
+    const job = await jobFrom(store, fixture.b, "cap-00000002");
+    source = job.dbPath;
+    mutateAt = step;
+    await assert.rejects(store.publish(plan(fixture.b, { bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-00000002" }), job), /database changed during verification/);
+    assert.deepEqual(store.binding(WS), original);
+    assert.deepEqual(await readBinding(store.layout, WS), original);
+    assert.deepEqual(await snapshotsOf(root), [original.snapshotId]);
+  }
+});
+
+const SEAL_STEPS = ["sealed-checkpointed", "verification-planned", "sealed-verified", "manifest-written", "snapshot-renamed"];
 const BINDING_STEPS = ["binding-tmp-written", "binding-renamed", "workspace-synced"];
 const NEW_BINDING = new Set(["binding-renamed", "workspace-synced", "none"]);
 
@@ -426,6 +475,29 @@ test("recovery refuses a binding that does not match its snapshot manifest", asy
   assert.deepEqual(await reopened.store.tryReclaim({ snapshotId: first.snapshotId }), { reclaimed: true });
 });
 
+test("recovery quarantines the old manifest format until a verified publish replaces it", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const original = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  const manifest = await readSealedManifest(store.layout, original.snapshotId);
+  const db = openSealedDatabase(store.layout, original.snapshotId);
+  let logical;
+  try { logical = logicalDigest(db); } finally { db.close(); }
+  const file = path.join(store.layout.snapshots, original.snapshotId, MANIFEST_FILE);
+  await chmod(file, 0o644);
+  await writeFile(file, JSON.stringify({ ...manifest, formatVersion: "ilv2-snapshot-manifest/mac1", logical }));
+  await chmod(file, 0o444);
+  const reopened = await openStore(root);
+  assert.deepEqual(reopened.recovery.invalidBindings.map(entry => [entry.workspaceId, entry.bindingVersion]), [[WS, 1]]);
+  assert.equal(reopened.store.acquireBound(WS, "request"), undefined);
+  assert.deepEqual(await reopened.store.tryReclaim({ snapshotId: original.snapshotId }), { reclaimed: false, reason: "bound" });
+  const next = await reopened.store.publish(plan(fixture.b, { bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-00000002" }),
+    await jobFrom(reopened.store, fixture.b, "cap-00000002"));
+  assert.equal(next.bindingVersion, 2);
+  assert.equal((await readSealedManifest(reopened.store.layout, next.snapshotId)).formatVersion, "ilv2-snapshot-manifest/mac3");
+  assert.deepEqual(await reopened.store.tryReclaim({ snapshotId: original.snapshotId }), { reclaimed: true });
+});
+
 test("one sweep removes a dead incarnation's jobs, unbound snapshots and empty workspace dirs, and nothing it does not own", async () => {
   const root = await cacheRoot();
   const first = await openStore(root);
@@ -531,4 +603,167 @@ test("a job is registered before its directory exists, so a concurrent sweep nev
     assert.ok(existsSync(job.dir), `job ${index}`);
     assert.deepEqual(await store.tryReclaim({ jobId: job.jobId }), { reclaimed: false, reason: "in-flight" });
   }
+});
+
+// ------------------------------------------------------------ MAC-12 plan B: delta seal, background verification
+
+/** A delta job: cloned from `baseId`, then holding `template`'s build in which only `serviceRel` was rewritten (generation 2). */
+async function deltaJob(store: SnapshotStore, baseId: string, template: Template, captureId: string, mutate?: (db: DatabaseSync) => void): Promise<BuildJob> {
+  const base = store.acquire(baseId, "base");
+  const job = await store.createJob({ workspaceId: WS, captureId });
+  try { await store.cloneBase(base, job); } finally { base.release(); }
+  await copyFile(template.file, job.dbPath);
+  const db = new DatabaseSync(job.dbPath);
+  try {
+    db.exec("UPDATE meta SET value='2' WHERE key='indexedGeneration'");
+    db.prepare("UPDATE file SET generation=2 WHERE path=?").run(serviceRel);
+    mutate?.(db);
+  } finally { db.close(); }
+  return job;
+}
+
+const nextPlan = (template: Template, bindingVersion: number, seq: number) =>
+  plan(template, { bindingVersion, coveredThroughSeq: seq, captureId: `cap-0000000${seq}` });
+
+test("a delta publish checks only the rows its build wrote and leaves the full check to a background verdict", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const first = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  assert.equal(store.verification(first.snapshotId)?.result, "VERIFIED", "a full seal is verified at once");
+  // A corrupt row of the rewritten file is refused before publish.
+  const touched = await deltaJob(store, first.snapshotId, fixture.b, "cap-00000002", db =>
+    db.prepare("UPDATE file SET facts=? WHERE path=?").run(Buffer.from("invalid deflate"), serviceRel));
+  await assert.rejects(store.publish(nextPlan(fixture.b, 1, 2), touched), /invalid|incorrect|unexpected|unknown/i);
+  assert.deepEqual(store.binding(WS)?.snapshotId, first.snapshotId);
+  store.finishJob(touched);
+  // So is an orphan in a graph row the rewritten file owns.
+  const owned = await deltaJob(store, first.snapshotId, fixture.b, "cap-00000002", db => {
+    const changed = db.prepare(`UPDATE kg_edge SET kind_sym=999999999 WHERE id=(SELECT min(edge_id) FROM kg_edge_owner
+      WHERE owner_sym=(SELECT id FROM sym WHERE text=?))`).run(serviceRel).changes;
+    assert.equal(Number(changed), 1, "the rewritten file owns graph edges");
+  });
+  await assert.rejects(store.publish(nextPlan(fixture.b, 1, 2), owned), /orphan reference in kg_edge/);
+  store.finishJob(owned);
+  const job = await deltaJob(store, first.snapshotId, fixture.b, "cap-00000002");
+  const second = await store.publish(nextPlan(fixture.b, 1, 2), job);
+  assert.equal(job.sealTimings?.hashMs, undefined, "no file digest on the delta publish path");
+  assert.equal(store.verification(second.snapshotId), undefined);
+  assert.deepEqual(store.unverifiedBound(), [second.snapshotId]);
+  const manifest = await readSealedManifest(store.layout, second.snapshotId);
+  assert.deepEqual(Object.keys(manifest.file).sort(), ["bytes", "pageSize", "pages"]);
+  await assert.rejects(readSealedManifest(store.layout, second.snapshotId, { verifyFile: true }), /not verified/);
+  // An unverified snapshot is still a seed: its verdict applies to every binding on it.
+  assert.deepEqual(store.seedCandidates("ws-other-00001", fixture.b.buildKey), [second.snapshotId]);
+  assert.deepEqual(await store.verifySnapshot(second.snapshotId), { result: "VERIFIED" });
+  const record = JSON.parse(await readFile(path.join(root, "mac1", "verified", `${second.snapshotId}.json`), "utf8"));
+  assert.deepEqual([record.result, record.bytes, record.sha256], ["VERIFIED", (await stat(store.snapshotPath(second.snapshotId))).size, sha(store.snapshotPath(second.snapshotId))]);
+  await readSealedManifest(store.layout, second.snapshotId, { verifyFile: true });
+  const reopened = await openStore(root);
+  assert.equal(reopened.store.isVerified(second.snapshotId), true);
+  assert.deepEqual(reopened.recovery.unverified, []);
+});
+
+test("a background FAILED verdict quarantines the binding and every unverified descendant, persistently", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const first = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  // A graph row the rewritten file does not own, with an orphan reference: outside the delta check.
+  const job = await deltaJob(store, first.snapshotId, fixture.b, "cap-00000002", db =>
+    db.prepare(`UPDATE kg_edge SET kind_sym=999999999 WHERE id=(SELECT min(id) FROM kg_edge WHERE id NOT IN
+      (SELECT edge_id FROM kg_edge_owner WHERE owner_sym=(SELECT id FROM sym WHERE text=?)))`).run(serviceRel));
+  const second = await store.publish(nextPlan(fixture.b, 1, 2), job);
+  store.finishJob(job);
+  // Built on the unverified snapshot before its verdict: a sealed child and an open job.
+  const child = await deltaJob(store, second.snapshotId, fixture.b, "cap-00000003");
+  const childManifest = await store.seal(child);
+  const open = await deltaJob(store, second.snapshotId, fixture.b, "cap-00000004");
+  // A zero-diff sibling shares the unverified snapshot.
+  const twin = "ws-twin-000001";
+  store.track(twin, { root: fixture.otherRoot, workspaceGeneration: 1, trackerEpoch: EPOCH });
+  await store.bindVerified(plan(fixture.b, { workspaceId: twin, root: fixture.otherRoot, captureId: "cap-twin-0001" }), second.snapshotId);
+  const verdict = await store.verifySnapshot(second.snapshotId);
+  assert.equal(verdict.result, "FAILED");
+  assert.match((verdict as { error: string }).error, /orphan reference in kg_edge/);
+  assert.deepEqual((verdict as { quarantined: string[] }).quarantined, [WS, twin].sort());
+  assert.deepEqual(store.seedCandidates("ws-other-00001", fixture.b.buildKey), [], "a failed snapshot is nobody's seed");
+  assert.equal(store.binding(WS), undefined, "NOT_READY, never the failed snapshot");
+  assert.equal(store.acquireBound(WS, "request"), undefined);
+  assert.equal(store.bindingVersionOf(WS), 2, "the quarantined version stays the CAS base");
+  await rejectedWith(store.publish(nextPlan(fixture.b, 2, 3), child), "base-failed");
+  assert.equal(store.isBound(childManifest.snapshotId), false);
+  // Quarantined, not garbage: kept until a verified publish replaces the binding.
+  assert.deepEqual(await store.tryReclaim({ snapshotId: second.snapshotId }), { reclaimed: false, reason: "bound" });
+  await rejectedWith(store.publish(nextPlan(fixture.b, 2, 4), open), "base-failed");
+  const base = store.acquire(second.snapshotId, "base");
+  try { await rejectedWith(store.cloneBase(base, await store.createJob({ workspaceId: WS, captureId: "cap-00000005" })), "base-failed"); }
+  finally { base.release(); }
+  const reopened = await openStore(root);
+  assert.deepEqual(reopened.recovery.invalidBindings.map(entry => [entry.workspaceId, entry.bindingVersion]), [[WS, 2], [twin, 1]].sort());
+  assert.match(reopened.recovery.invalidBindings[0]!.error, /failed verification/);
+  // A full rebuild replaces it; then the failed snapshot and its verdict go.
+  const full = await reopened.store.publish(nextPlan(fixture.b, 2, 6), await jobFrom(reopened.store, fixture.b, "cap-00000006"));
+  assert.equal(full.bindingVersion, 3);
+  assert.deepEqual(await reopened.store.tryReclaim({ snapshotId: second.snapshotId }), { reclaimed: false, reason: "bound" }, "the twin still holds it");
+  reopened.store.track(twin, { root: fixture.otherRoot, workspaceGeneration: 1, trackerEpoch: EPOCH });
+  await reopened.store.publish(plan(fixture.b, { workspaceId: twin, root: fixture.otherRoot, bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-twin-0002" }),
+    await jobFrom(reopened.store, fixture.b, "cap-twin-0002", twin));
+  assert.deepEqual(await reopened.store.tryReclaim({ snapshotId: second.snapshotId }), { reclaimed: true });
+  assert.equal(existsSync(path.join(root, "mac1", "verified", `${second.snapshotId}.json`)), false);
+});
+
+test("an aborted background check records nothing; the sweep removes orphan verdicts and dead tmp files only", async () => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const first = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  const second = await store.publish(nextPlan(fixture.b, 1, 2), await deltaJob(store, first.snapshotId, fixture.b, "cap-00000002"));
+  const controller = new AbortController();
+  controller.abort(new Error("superseded"));
+  await assert.rejects(store.verifySnapshot(second.snapshotId, { signal: controller.signal }), /superseded/);
+  assert.equal(store.verification(second.snapshotId), undefined);
+  assert.equal(store.leaseCount(second.snapshotId), 0);
+  const verified = path.join(root, "mac1", "verified");
+  await writeFile(path.join(verified, "s-gone-000000000000.json"), "{}");
+  await writeFile(path.join(verified, `${first.snapshotId}.json.tmp-1-dead`), "{}");
+  await writeFile(path.join(verified, ".DS_Store"), "finder");
+  const report = await store.sweep();
+  assert.deepEqual(report.snapshots, [first.snapshotId], "the superseded full snapshot goes with its verdict");
+  assert.equal(existsSync(path.join(verified, `${first.snapshotId}.json`)), false);
+  assert.deepEqual(report.records, ["s-gone-000000000000"]);
+  assert.deepEqual(await readdir(verified), [".DS_Store"]);
+});
+
+test("the background verifier checks only served snapshots, stops a superseded check and waits for its readers on stop", async t => {
+  const { SnapshotVerifier } = await import("./snapshot-verifier.js");
+  const { sealWorkerUsage } = await import("./seal.js");
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const first = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  const second = await store.publish(nextPlan(fixture.b, 1, 2), await deltaJob(store, first.snapshotId, fixture.b, "cap-00000002"));
+  // The verifier's timers are unref'd (they never hold an owner open); this test is the only work.
+  const keepAlive = setInterval(() => undefined, 1_000);
+  t.after(() => clearInterval(keepAlive));
+  const events: Array<{ snapshotId: string; outcome: string }> = [];
+  let settle!: () => void;
+  let settled = new Promise<void>(resolve => { settle = resolve; });
+  const verifier = new SnapshotVerifier(store, { delayMs: 0, onEvent: event => events.push({ snapshotId: event.snapshotId, outcome: event.outcome }), onSettled: () => settle() });
+  verifier.enqueue(second.snapshotId);
+  await settled;
+  assert.deepEqual(events, [{ snapshotId: second.snapshotId, outcome: "verified" }]);
+  // Not served any more: skipped without a check.
+  const third = await store.publish(nextPlan(fixture.a, 2, 3), await deltaJob(store, second.snapshotId, fixture.a, "cap-00000003"));
+  verifier.enqueue(second.snapshotId);
+  settled = new Promise<void>(resolve => { settle = resolve; });
+  verifier.enqueue(third.snapshotId);
+  await settled;
+  assert.deepEqual(events.slice(1), [{ snapshotId: second.snapshotId, outcome: "skipped" }, { snapshotId: third.snapshotId, outcome: "verified" }]);
+  // stop() during a check: no verdict, every reader gone.
+  const fourth = await store.publish(nextPlan(fixture.b, 3, 4), await deltaJob(store, third.snapshotId, fixture.b, "cap-00000004"));
+  verifier.enqueue(fourth.snapshotId);
+  await new Promise(resolve => setTimeout(resolve, 5));
+  await verifier.stop();
+  assert.equal(sealWorkerUsage().active, 0);
+  assert.equal(store.leaseCount(fourth.snapshotId), 0);
+  assert.ok(["aborted", "verified"].includes(events.at(-1)?.outcome ?? "aborted"));
+  verifier.enqueue(fourth.snapshotId);
+  assert.deepEqual(verifier.status(), { pending: [], current: undefined }, "a stopped verifier takes no work");
 });

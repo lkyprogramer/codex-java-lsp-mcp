@@ -327,3 +327,55 @@ test("a builder that reads a later build key is refused without clearing hints, 
   assert.ok(children.length >= 3);
   assert.ok(children.every(child => child.exitCode === 0), "the refused and successful real builders were reaped");
 });
+
+test("a delta publish is verified in the background; a FAILED verdict takes the workspace out of service until a full rebuild", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const ctx = await openOwner(t, path.join(dir, "cache"), { verifyDelayMs: 300 });
+  const first = await bound(ctx, main);
+  const id = first.workspace.workspaceId;
+  assert.equal(first.workspace.status().verified, true, "a full seal is verified before it is bound");
+  const verdicts = () => ctx.events.filter((event): event is Extract<OwnerEvent, { type: "verification" }> => event.type === "verification");
+  const publishOf = async (name: string, corrupt?: (file: string) => Promise<void>) => {
+    const previous = ctx.owner.store.binding(id)!.snapshotId;
+    let published: string | undefined;
+    // Inside the quiet delay, before the background check reads the file.
+    const off = ctx.owner.onPublished(event => { if (event.workspaceId === id) void (corrupt ? corrupt(ctx.owner.store.snapshotPath(event.snapshotId)) : Promise.resolve()).then(() => { published = event.snapshotId; }); });
+    await addMethod(main, name);
+    ctx.sources.emit(main, serviceRel);
+    // Polling keeps the event loop alive: the owner's own timers are unref'd.
+    const snapshotId = await until(() => published, `publish ${name}`);
+    off();
+    assert.notEqual(snapshotId, previous);
+    return snapshotId;
+  };
+  const delta = await publishOf("verifiedLater");
+  assert.equal(rounds(ctx, id).at(-1)!.kind, "delta");
+  assert.equal(ctx.owner.store.isVerified(delta), false, "bound before its full check");
+  await until(() => verdicts().some(event => event.snapshotId === delta && event.outcome === "verified"), "background verdict");
+  assert.equal(first.workspace.status().verified, true);
+  // A corrupt row the delta did not write: past the pre-publish check, caught by the background one.
+  const broken = await publishOf("brokenLater", async file => {
+    const dir = path.dirname(file);
+    await chmod(dir, 0o755); await chmod(file, 0o644);
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(file);
+    try {
+      const changed = db.prepare(`UPDATE kg_edge SET kind_sym=999999999 WHERE id=(SELECT max(id) FROM kg_edge WHERE id NOT IN
+        (SELECT edge_id FROM kg_edge_owner WHERE owner_sym=(SELECT id FROM sym WHERE text=?)))`).run(serviceRel).changes;
+      assert.equal(Number(changed), 1);
+    }
+    finally { db.close(); }
+    await chmod(file, 0o444); await chmod(dir, 0o555);
+  });
+  const failed = await until(() => verdicts().find(event => event.snapshotId === broken && event.outcome !== "skipped"), "failed verdict");
+  assert.equal(failed.outcome, "failed", JSON.stringify(failed));
+  assert.deepEqual(failed.quarantined, [id]);
+  const rebuilt = await until(() => {
+    const binding = ctx.owner.store.binding(id);
+    return binding && binding.snapshotId !== broken && !first.workspace.status().roundInFlight && binding;
+  }, "full rebuild after the failed verdict");
+  assert.equal(rounds(ctx, id).at(-1)!.kind, "full");
+  assert.equal(ctx.owner.store.isVerified(rebuilt.snapshotId), true);
+  assert.equal(rebuilt.bindingVersion, ctx.owner.store.bindingVersionOf(id));
+});
