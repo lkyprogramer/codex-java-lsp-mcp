@@ -1287,11 +1287,14 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
             && candidate.declaration.contentHash === captured.hash) };
         return fullOf(ws, sinceEpoch, `${ws.name}-HEAD~${FAR[ws.name]}`, oracle);
       }));
-      // The first full dispatched gets killed once it has beaten for 20 s (fault window).
-      const firstFull = await telemetry.waitFor(row => row.type === "scheduler" && row.event.type === "dispatched" && row.event.kind === "full" && row.at >= sinceEpoch
-        && [wt.w5.workspaceId, wt.w6.workspaceId].includes(row.event.workspaceId), 600000);
+      // The first far full still running 20 s after its dispatch gets killed (fault window). A full
+      // refused at its start (its round captured a checkout still writing build inputs) exits at once
+      // and is no victim: the next dispatched far full is.
+      const farFull = (after, skip) => row => row.type === "scheduler" && row.event.type === "dispatched" && row.event.kind === "full" && row.at >= after
+        && !skip.has(row.event.pid) && [wt.w5.workspaceId, wt.w6.workspaceId].includes(row.event.workspaceId);
+      const passed = new Set();
+      let firstFull = await telemetry.waitFor(farFull(sinceEpoch, passed), 600000);
       assert.ok(firstFull, "a far checkout escalated to a full");
-      const victim = [wt.w5, wt.w6].find(ws => ws.workspaceId === firstFull.event.workspaceId);
       // Short deltas in w1/w2 every 6 s while fulls run (normal window for them).
       const fairnessEdits = (async () => {
         let n = 0;
@@ -1308,12 +1311,25 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
           await delay(6000);
         }
       })();
-      await delay(20000);
-      setWindow("fault");
-      process.kill(firstFull.event.pid, "SIGKILL");
+      let killAt;
+      for (;;) {
+        await delay(Math.max(0, firstFull.at + 20000 - Date.now()));
+        setWindow("fault");
+        killAt = Date.now();
+        try { process.kill(firstFull.event.pid, "SIGKILL"); break; } catch (error) {
+          if (error.code !== "ESRCH") throw error;
+        }
+        // Already exited: not a running builder. No fault was injected; wait for the next far full.
+        setWindow("normal");
+        state.notes.push(`fairness: far full pid ${firstFull.event.pid} exited before the fault window; the next far full is the victim`);
+        passed.add(firstFull.event.pid);
+        firstFull = await telemetry.waitFor(farFull(sinceEpoch, passed), 600000);
+        assert.ok(firstFull, "a far full runs into the fault window");
+      }
+      const victim = [wt.w5, wt.w6].find(ws => ws.workspaceId === firstFull.event.workspaceId);
       state.injectedPids.push(firstFull.event.pid);
       const killedClose = await telemetry.waitFor(row => row.type === "scheduler" && row.event.type === "closed" && row.event.pid === firstFull.event.pid, 30000);
-      const failedRound = await roundOf(victim, sinceEpoch, row => row.outcome === "failed", 60000);
+      const failedRound = await roundOf(victim, killAt, row => row.outcome === "failed", 60000);
       setWindow("normal");
       await fairnessEdits;
       const fulls = await fullObservations;
