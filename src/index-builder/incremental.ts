@@ -1,4 +1,5 @@
 import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
+import { currentBuildKey } from "../java-index/sql/snapshot-manifest.js";
 import { sqlStage, compatibleDeltaBase, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { runSqlColdBuild } from "./cold-build.js";
 import { DELTA_CLOSURE_LIMIT } from "./build-scheduler.js";
@@ -15,7 +16,7 @@ import { recordsFromBundle } from "../java-index/entity-search.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../java-index/index-types.js";
 import { parseJavaSourceFile } from "../java-index/java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-index/java-parser-backend.js";
-import { discoverJavaFiles, discoverMyBatisResourceFiles, javaSourceRoot } from "../java-index/manifest.js";
+import { discoverJavaFiles, discoverMyBatisResourceFiles, javaSourceRoot, resourceMemberRoot } from "../java-index/manifest.js";
 import { extractMyBatisMapperFacts } from "../java-index/mybatis-xml-extractor.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
 import { JavaNameResolver } from "../java-index/name-resolver.js";
@@ -40,7 +41,9 @@ import { attachWorkspaceStat, deleteStats, observedStats, readStats, recordStats
 import { COVERAGE_GAP, coverageRoots, readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta, type CoverageRoots } from "./progress.js";
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full";
-export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
+export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[];
+  /** The buildKey the dispatching round captured: inputs read differently at start mean its publish would be refused. */
+  buildKey?: string };
 export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; stages?: PipelineMetrics; error?: string;
   /** escalation "report": this delta needs a full; nothing was published. */
   escalation?: string;
@@ -799,10 +802,25 @@ async function applyRefresh(
 ): Promise<void> {
   const layout = probeLayout(repoRoot);
   const roots = coverageRoots(layout);
+  // Resource XML in the paths goes first and unpublished, as in a reconcile: the
+  // Java pass below publishes this generation. Only the named XML is read, so a
+  // mapper edit costs its own files, not a walk of the whole census.
+  const resources = { changed: [] as string[], deleted: [] as string[] };
   const deleted: string[] = [];
-  for (const input of deletedInputs) deleted.push((await resolveInput(repoRoot, input)).rel);
-  const existing: string[] = [];
+  for (const input of deletedInputs) {
+    const rel = (await resolveInput(repoRoot, input)).rel;
+    if (resourceMemberRoot(rel, layout)) resources.deleted.push(input); else deleted.push(rel);
+  }
+  const javaInputs: string[] = [];
   for (const input of changedInputs) {
+    if (resourceMemberRoot((await resolveInput(repoRoot, input)).rel, layout)) resources.changed.push(input); else javaInputs.push(input);
+  }
+  escalateOversizedInputs(changedInputs.length + deletedInputs.length);
+  if (resources.changed.length > 0 || resources.deleted.length > 0) {
+    await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false, stages });
+  }
+  const existing: string[] = [];
+  for (const input of javaInputs) {
     const resolved = await resolveInput(repoRoot, input);
     const outsideCensus = resolved.rel.endsWith(".java") && javaSourceRoot(resolved.rel, layout) === undefined;
     if (resolved.exists && !outsideCensus) existing.push(resolved.abs);
@@ -1111,6 +1129,9 @@ async function applyBuilderJobStages(options: {
     repoRoot = await realpath(repoRoot);
     const layout=probeLayout(repoRoot);
     const fingerprint=await computeBuildFingerprint(repoRoot,layout);
+    // Build inputs changed after the round captured them (a checkout still writing): the publish
+    // would refuse this build, so it is not spent. The round keeps its hints and retries.
+    if (options.job.buildKey !== undefined && currentBuildKey(fingerprint) !== options.job.buildKey) return statusResult(options.db, id, false, "buildKey changed before build");
     const baseCompatible=compatibleDeltaBase(options.db);
     const inputsMatch=readMeta(options.db,"buildFingerprint")===fingerprint;
     const full = async (reason: string): Promise<BuilderJobResult> => {

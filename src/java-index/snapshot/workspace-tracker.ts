@@ -9,7 +9,7 @@ import { realpathSync, statSync } from "node:fs";
 import { lstat, opendir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { BUILD_MARKER_RELATIVE_PATHS, computeBuildFingerprint } from "../build-fingerprint.js";
-import { IGNORED_DIRECTORY_NAMES, javaSourceRoot, resourceSourceRoot } from "../manifest.js";
+import { IGNORED_DIRECTORY_NAMES, javaSourceRoot, resourceMemberRoot } from "../manifest.js";
 import { captureSource } from "../source-capture.js";
 import { probeLayoutOffThread, type LayoutContext } from "../../layout-probe.js";
 import { MacFSEvents } from "../../mac-platform/fsevents.js";
@@ -400,17 +400,18 @@ export class WorkspaceTracker {
       entries.set(relative, { kind, path: relative, hash });
       await this.options.afterRead?.(relative);
     };
+    // Each path is read on its own (distinct entries and cache keys), so the reads overlap; the phases stay in order.
     if (round.mode === "paths") {
-      for (const relative of round.pending.keys()) {
+      await eachLimited([...round.pending.keys()], VERIFY_READS, async relative => {
         const kind = memberKind(relative, round.layout);
         if (kind) await read(relative, kind); else entries.delete(relative);
-      }
+      });
       for (const prefix of round.subtrees.keys()) {
         for (const existing of [...entries.keys()]) if (existing === prefix || existing.startsWith(`${prefix}/`)) entries.delete(existing);
-        for (const found of await walkMembers(root, prefix, round.layout)) await read(found.path, found.kind);
+        await eachLimited(await walkMembers(root, prefix, round.layout), VERIFY_READS, found => read(found.path, found.kind));
       }
     } else {
-      for (const found of await walkMembers(root, "", round.layout)) await read(found.path, found.kind);
+      await eachLimited(await walkMembers(root, "", round.layout), VERIFY_READS, found => read(found.path, found.kind));
     }
     const content = contentManifestIdOf(entries.values());
     if (this.epoch === round.epoch && this.inFlight === round) {
@@ -466,6 +467,22 @@ function statKey(info: { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bi
   return `${info.size}:${info.mtimeNs}:${info.ctimeNs}:${info.ino}:${info.dev}`;
 }
 
+/** Reads one verify round keeps in flight: a new worktree hashes its whole census, latency-bound one file at a time. */
+const VERIFY_READS = 16;
+
+/** Runs `work` over `items` with at most `limit` in flight. After a failure no item starts; it rejects once every read in flight ended. */
+async function eachLimited<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0, failure: { error: unknown } | undefined;
+  const lane = async () => {
+    while (!failure && next < items.length) {
+      const item = items[next++]!;
+      try { await work(item); } catch (error) { failure ??= { error }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+  if (failure) throw failure.error;
+}
+
 function isMissing(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
   return code === "ENOENT" || code === "ENOTDIR";
@@ -474,10 +491,7 @@ function isMissing(error: unknown): boolean {
 /** The index census membership of a relative path, by the same rules discovery uses. */
 export function memberKind(relative: string, layout: LayoutContext): ContentEntry["kind"] | undefined {
   if (javaSourceRoot(relative, layout)) return "java";
-  if (!relative.endsWith(".xml")) return undefined;
-  const root = resourceSourceRoot(relative, layout);
-  if (!root || relative === root) return undefined;
-  return relative.slice(root.length + 1).split("/").slice(0, -1).some(part => IGNORED_DIRECTORY_NAMES.has(part)) ? undefined : "resource";
+  return resourceMemberRoot(relative, layout) ? "resource" : undefined;
 }
 
 function contentRoots(layout: LayoutContext): string[] {

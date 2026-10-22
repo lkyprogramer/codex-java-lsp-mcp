@@ -15,6 +15,7 @@ import { probeLayout } from "../../layout-probe.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { applyBuilderJob } from "../../index-builder/incremental.js";
 import { readMeta } from "../../index-builder/progress.js";
+import { currentBuildKey } from "../sql/snapshot-manifest.js";
 import { discoverJavaFiles } from "../manifest.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -283,6 +284,28 @@ test("reconcile sees an external edit and matches recold-build", async () => {
     } finally {
       close(recold.db);
     }
+  } finally {
+    close(incremental.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("a job whose round captured other build inputs is refused before any write", async () => {
+  const repo = await copyFixtures();
+  const incremental = await cold(repo, 1);
+  try {
+    const before = fileFacts(incremental.db);
+    const expected = readMeta(incremental.db, "buildFingerprint");
+    for (const job of [{ id: 1, kind: "full" as const, generation: 2 }, { id: 2, kind: "refresh" as const, generation: 2, changed: [serviceRel] }]) {
+      const refused = await applyBuilderJob({ repoRoot: repo, db: incremental.db, job: { ...job, buildKey: "0".repeat(64) } });
+      assert.deepEqual([refused.ok, refused.error], [false, "buildKey changed before build"]);
+    }
+    assert.equal(readMeta(incremental.db, "indexedGeneration"), "1");
+    assert.equal(readMeta(incremental.db, "buildFingerprint"), expected);
+    assert.deepEqual(fileFacts(incremental.db), before, "nothing was rebuilt");
+    const matching = await applyBuilderJob({ repoRoot: repo, db: incremental.db,
+      job: { id: 3, kind: "refresh", generation: 2, changed: [serviceRel], buildKey: currentBuildKey(expected!) } });
+    assert.equal(matching.ok, true, matching.error);
   } finally {
     close(incremental.db);
     await rm(repo, { recursive: true, force: true });

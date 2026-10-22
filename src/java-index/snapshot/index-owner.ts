@@ -389,7 +389,8 @@ export class IndexOwner {
   }
 }
 
-type PreparedJob = { job: BuildJob; baseId?: string };
+/** `buildKey`: what the round captured; the builder refuses to spend a build on other inputs. */
+type PreparedJob = { job: BuildJob; baseId?: string; buildKey: string };
 
 export class WorkspaceIndex {
   readonly workspaceId: string;
@@ -581,7 +582,8 @@ export class WorkspaceIndex {
       }
       const base = own ?? seed;
       const baseId = bound?.snapshotId ?? seed?.snapshotId;
-      const javaOnly = [...verification.changed, ...verification.deleted].every(file => file.endsWith(".java"));
+      // Census members only (Java sources, resource XML): a path delta reads exactly these; anything else rescans.
+      const pathsOnly = [...verification.changed, ...verification.deleted].every(file => file.endsWith(".java") || file.endsWith(".xml"));
       const generation = (base?.status.indexedGeneration ?? 0) + 1;
       const files = verification.changed.length + verification.deleted.length;
       // An explicit full on an empty job: no base; a difference above the delta closure limit (a seed's or the
@@ -590,7 +592,7 @@ export class WorkspaceIndex {
       const fullNext = this.fullNext;
       const keyChanged = Boolean(bound) && bound!.buildKey !== round.buildKey;
       const chosen: BuildHint = !baseId || files > DELTA_CLOSURE_LIMIT || keyChanged || fullNext ? { workspaceId: this.workspaceId, kind: "full", generation }
-        : (bound ? round.mode === "paths" : true) && javaOnly && (bound?.buildKey ?? round.buildKey) === round.buildKey
+        : (bound ? round.mode === "paths" : true) && pathsOnly && (bound?.buildKey ?? round.buildKey) === round.buildKey
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }
           : { workspaceId: this.workspaceId, kind: "delta", generation, rescan: true };
       hint = chosen;
@@ -605,7 +607,7 @@ export class WorkspaceIndex {
         } else if (cloned) await timed("cloneMs", () => store.cloneBase(seed!.lease, job));
         seed?.lease.release();
         seed = undefined;
-        this.prepared = { job, baseId: cloned };
+        this.prepared = { job, baseId: cloned, buildKey: round.buildKey };
         const completion = await timed("buildMs", () => this.owner.scheduler.submit(chosen));
         const built = completion.result?.contentManifestId;
         if (!completion.ok || !built) throw new Error(completion.error ?? "builder reported no content identity");
@@ -683,7 +685,7 @@ export class WorkspaceIndex {
         let movedAt = performance.now();
         let reported = false;
         const onEvent = this.owner.options.onEvent;
-        const attempt = this.owner.startBuild({ repoRoot: this.canonicalRoot, dbPath: prepared.job.dbPath, job: builderJobFor(hint, hint.kind), grant,
+        const attempt = this.owner.startBuild({ repoRoot: this.canonicalRoot, dbPath: prepared.job.dbPath, job: { ...builderJobFor(hint, hint.kind), buildKey: prepared.buildKey }, grant,
           onHeartbeat: beat => {
             const now = performance.now();
             if (beat.work !== work) { work = beat.work; movedAt = now; reported = false; }

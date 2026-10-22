@@ -174,8 +174,11 @@ function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, conte
   }
   // Positive locators remain useful after their source hash check. A miss or an
   // empty vocabulary cannot establish absence while the workspace is changing.
+  // A STALE view is behind edits on disk (source_changed); NOT_READY or a caller
+  // that disallows negatives has no complete coverage (index_partial).
   const { exact, emptyReason: _emptyReason, ...rest } = result;
-  return { ...rest, ...labels, scopeState: "PARTIAL", stopReason: result.stopReason ?? "index_partial", ...(exact && exact !== "miss" ? { exact } : {}) };
+  const stopReason = result.stopReason ?? (view?.state === "STALE" ? "source_changed" : "index_partial");
+  return { ...rest, ...labels, scopeState: "PARTIAL", stopReason, ...(exact && exact !== "miss" ? { exact } : {}) };
 }
 
 function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {

@@ -118,7 +118,7 @@ test("a worktree one file away seeds a delta from the sibling's base: only that 
   const first = await bound(ctx, main);
   const second = await bound(ctx, branch);
   assert.notEqual(second.binding.snapshotId, first.binding.snapshotId);
-  assert.deepEqual(ctx.jobsFor(branch), [{ kind: "refresh", generation: 2, changed: [serviceRel], deleted: [] }]);
+  assert.deepEqual(ctx.jobsFor(branch), [{ kind: "refresh", generation: 2, changed: [serviceRel], deleted: [], buildKey: first.binding.buildKey }]);
   const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
   assert.deepEqual([round.outcome, round.kind, round.seedFrom, round.changed], ["published", "delta", first.binding.snapshotId, 1]);
   // The sibling keeps its own snapshot; the seed did not supersede it.
@@ -130,6 +130,25 @@ test("a worktree one file away seeds a delta from the sibling's base: only that 
   assert.deepEqual(independent.jobsFor(branch).map(job => job.kind), ["full"]);
   assert.equal(second.binding.contentManifestId, full.binding.contentManifestId);
   assert.equal(digestOf(ctx.owner, second.binding.snapshotId), digestOf(independent.owner, full.binding.snapshotId));
+});
+
+test("a mapper XML edit is a path delta of that file, not a census rescan, and equals its own full", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const xmlRel = "src/main/resources/mapper/ItemMapper.xml";
+  const file = path.join(main, xmlRel);
+  await writeFile(file, (await readFile(file, "utf8")).replace("</mapper>", `  <select id="findActive" resultType="demomybatis.ItemEntity">select * from items where active</select>\n</mapper>`));
+  ctx.sources.emit(main, xmlRel);
+  await until(() => rounds(ctx, first.workspace.workspaceId).some(round => round.outcome === "published" && round.kind !== "full"), "xml delta");
+  assert.deepEqual(ctx.jobsFor(main).slice(1), [{ kind: "refresh", generation: 2, changed: [xmlRel], deleted: [], buildKey: first.binding.buildKey }]);
+  assert.equal(rounds(ctx, first.workspace.workspaceId).at(-1)!.kind, "delta");
+  const published = ctx.owner.store.binding(first.workspace.workspaceId)!;
+  const independent = await openOwner(t, path.join(dir, "cache-full"));
+  const full = await bound(independent, main);
+  assert.equal(published.contentManifestId, full.binding.contentManifestId);
+  assert.equal(digestOf(ctx.owner, published.snapshotId), digestOf(independent.owner, full.binding.snapshotId));
 });
 
 test("a sibling under another buildKey is never a seed base: the worktree builds its own full", async t => {
@@ -312,7 +331,8 @@ test("a builder that reads a later build key is refused without clearing hints, 
   ctx.sources.emit(main, serviceRel);
   const failed = await until(() => rounds(ctx, first.workspace.workspaceId).find(round => round.outcome === "failed"), "build key refusal");
   try {
-    assert.match(failed.error!, /buildKey differs/);
+    // The builder reads the later key at start and refuses before spending the build (the publish check is the backstop).
+    assert.match(failed.error!, /buildKey changed before build/);
     assert.deepEqual(ctx.owner.store.binding(first.workspace.workspaceId), first.binding, "the safe refusal preserves the old binding");
     assert.equal(first.workspace.trackerStatus(), "STALE");
     assert.deepEqual(first.workspace.tracker.diagnostics().confirmed, confirmed);

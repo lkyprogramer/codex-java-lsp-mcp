@@ -32,6 +32,15 @@ export function resourceSourceRoot(relativePath: string, layout: LayoutContext):
     .find(root => normalizedPath === root || normalizedPath.startsWith(`${root}/`));
 }
 
+/** Membership of the resource XML census (discoverMyBatisResourceFiles), also used for explicit refresh paths. */
+export function resourceMemberRoot(relativePath: string, layout: LayoutContext): string | undefined {
+  const normalized = relativePath.replace(/\\/g, "/");
+  if (!normalized.endsWith(".xml")) return undefined;
+  const root = resourceSourceRoot(normalized, layout);
+  if (!root || normalized === root) return undefined;
+  return normalized.slice(root.length + 1).split("/").slice(0, -1).some(part => IGNORED_DIRECTORY_NAMES.has(part)) ? undefined : root;
+}
+
 async function walkResourceDirectory(
   absoluteDir: string,
   repoRoot: string,

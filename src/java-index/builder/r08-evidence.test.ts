@@ -10,6 +10,7 @@ import test from "node:test";
 import { close, openIndexDb } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
 import { SqlEntitySearch } from "../sql/entity-search.js";
+import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { applyBuilderJob } from "../../index-builder/incremental.js";
 
@@ -175,6 +176,40 @@ test("R08: a Java refresh of the mapper keeps its XML-sourced documents (rebuilt
     assert.equal(after!.contentHash, before!.contentHash, "its source is still the unchanged XML");
     assert.deepEqual([after!.startLine, after!.endLine], [before!.startLine, before!.endLine]);
     assert.ok(after!.declaration.includes("ItemMapper#load"));
+  } finally {
+    close(db);
+    await rm(dir, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("MAC12: a refresh naming mapper XML reads only the named files and matches a recold build", async () => {
+  const { root, write } = await repo();
+  const { db, dir } = await cold(root);
+  try {
+    const nextXml = mapperXml("demo.ItemMapper", "update", 2);
+    const xml = await write(ITEM_XML, nextXml);
+    const java = await write(ITEM_JAVA, mapperJava("ItemMapper", "\n    /** lookup */"));
+    await rm(path.join(root, ORDER_XML));
+    const result = await applyBuilderJob({ repoRoot: root, db, job: { id: 1, kind: "refresh", generation: 2, changed: [xml, java], deleted: [ORDER_XML] } });
+    assert.ok(result.ok, result.error);
+    assert.equal(result.indexedGeneration, 2);
+    assert.equal(result.stages?.capture.xmlFiles, 1, "only the named XML is captured, not the resource census");
+    assert.equal((db.prepare("SELECT count(*) AS n FROM resource_scan WHERE path=?").get(ORDER_XML) as { n: number }).n, 0);
+    const recold = await cold(root);
+    try {
+      assert.deepEqual(mybatisDocs(db).map(row => row.doc), mybatisDocs(recold.db).map(row => row.doc));
+      assert.equal(new SqlKnowledgeGraph(db).digest(), new SqlKnowledgeGraph(recold.db).digest());
+    } finally {
+      close(recold.db);
+      await rm(recold.dir, { recursive: true, force: true });
+    }
+    // XML alone: the refresh still publishes its generation.
+    const again = mapperXml("demo.ItemMapper", "select", 4);
+    const onlyXml = await applyBuilderJob({ repoRoot: root, db, job: { id: 2, kind: "refresh", generation: 3, changed: [await write(ITEM_XML, again)] } });
+    assert.ok(onlyXml.ok, onlyXml.error);
+    assert.equal(onlyXml.indexedGeneration, 3);
+    assert.deepEqual(mybatisDocs(db).map(row => [row.source, row.contentHash, row.startLine]), [[ITEM_XML, sha(again), 7]]);
   } finally {
     close(db);
     await rm(dir, { recursive: true, force: true });

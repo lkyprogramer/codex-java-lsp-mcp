@@ -173,6 +173,7 @@ test("MAC11 stale view cannot return a confident static miss", async () => {
     assert.equal(stale.scopeState, "PARTIAL");
     assert.equal(stale.exact, undefined, "an old complete snapshot cannot prove a current miss");
     assert.equal(stale.emptyReason, undefined);
+    assert.equal(stale.stopReason, "source_changed", "a view behind edits on disk is partial because the source changed");
     assert.deepEqual(stale.indexView, held);
     const hit = await javaSymbol(context, args({ query: "com.acme.OrderService", searchMode: "exact", preview: "none" })) as Record<string, unknown>;
     assert.equal(hit.scopeState, "PARTIAL");
@@ -189,6 +190,7 @@ test("MAC11 stale view cannot return a confident static miss", async () => {
     const cold = await javaSymbol(context, query) as Record<string, unknown>;
     assert.equal(cold.scopeState, "PARTIAL");
     assert.equal(cold.exact, undefined);
+    assert.equal(cold.stopReason, "index_partial");
     assert.deepEqual(stale.indexView, held, "later bindings cannot relabel an earlier response");
     assert.equal(probe.startCalls, 0);
   } finally { await fixture.cleanup(); }

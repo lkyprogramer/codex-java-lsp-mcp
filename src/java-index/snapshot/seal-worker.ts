@@ -34,16 +34,20 @@ function integrity(db: DatabaseSync, sql: string): void {
  * The rows a delta build on a cloned base wrote: a rewritten file row carries the build's
  * generation; its declarations, edges and type names hang off it, and the graph rows it owns
  * are found through the owner indexes. Mapper rows carry no generation and are few: all of
- * them. Every other row (the sym dictionary, search and entity postings, graph rows only
+ * them, and the graph rows of the Java types their namespaces bind. Every other row (the sym dictionary, search and entity postings, graph rows only
  * another file owns) and SQLite's own page structure are the background verifier's.
  */
 export function deltaScopes(db: DatabaseSync): Map<string, string | undefined> {
   const generation = Number((db.prepare("SELECT value FROM main.meta WHERE key='indexedGeneration'").get() as { value?: string } | undefined)?.value);
   if (!Number.isSafeInteger(generation) || generation <= 0) throw new Error("seal: missing meta indexedGeneration");
   const written = db.prepare("SELECT id, path FROM main.file WHERE generation=?").all(generation) as Array<{ id: number; path: string }>;
+  // A mapper XML change resyncs the graph rows of its namespace's Java types without rewriting their file rows.
+  const mapperBound = db.prepare(`SELECT DISTINCT f.path FROM main.type t JOIN main.file f ON f.id=t.file_id
+    WHERE t.fqn IN (SELECT namespace FROM main.mybatis_resource WHERE namespace IS NOT NULL)`).all() as Array<{ path: string }>;
+  const ownerPaths = new Set([...written, ...mapperBound].map(row => row.path));
   // Integers only, so the literal lists are safe to inline.
   const files = `(SELECT value FROM json_each('${JSON.stringify(written.map(row => row.id))}'))`;
-  const owners = `(SELECT value FROM json_each('${JSON.stringify(written.flatMap(row => symId(db, row.path) ?? []))}'))`;
+  const owners = `(SELECT value FROM json_each('${JSON.stringify([...ownerPaths].flatMap(path => symId(db, path) ?? []))}'))`;
   return new Map<string, string | undefined>([["file", `t.id IN ${files}`], ["type", `t.file_id IN ${files}`], ["field", `t.file_id IN ${files}`],
     ["method", `t.file_id IN ${files}`], ["edge", `t.file_id IN ${files}`], ["type_ref_name", `t.file_id IN ${files}`],
     ["kg_node", `t.sym IN (SELECT node_sym FROM main.kg_node_owner WHERE owner_sym IN ${owners})`], ["kg_node_owner", `t.owner_sym IN ${owners}`],
