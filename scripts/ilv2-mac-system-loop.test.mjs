@@ -783,7 +783,14 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
   const load = () => ({ at: Date.now(), ...hostLoad() });
   const loadTimer = setInterval(() => state.loadSamples.push(load()), 5000);
   loadTimer.unref();
-  const begin = name => { phase = name; state.phases.push({ name, startedAt: Date.now(), load: load() }); state.loads[name] = { start: load() }; };
+  const begin = name => { phase = name; state.phases.push({ name, startedAt: Date.now(), load: load() }); state.loads[name] = { ...state.loads[name], start: load() }; };
+  // A timed phase starts once host load1 has fallen well below the timing limit (bounded wait): a preceding
+  // full leaves load1 lagging above it and would void every sample. Sample edges are still judged as before.
+  const settle = async name => {
+    const started = Date.now(), target = LIMITS.idleLoad1Limit * 0.75;
+    while (load().load1 >= target && Date.now() - started < 180000) await delay(5000);
+    state.loads[name] = { settle: { waitedMs: Date.now() - started, target, load: load() } };
+  };
   const end = name => { state.loads[name].end = load(); state.phases.find(row => row.name === name).endedAt = Date.now(); };
 
   async function tool(client, ws, name, args, extra = {}) {
@@ -1029,6 +1036,7 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
       return sample;
     }
     if (PHASES.has("seed")) {
+      await settle("seed");
       begin("seed");
       for (let index = 0; index < seedPlan.zero; index += 1) await seedSample({ commit: "HEAD", rows: [], label: "zero", files: 0 });
       for (const [depth, count] of seedPlan.k) {
@@ -1058,6 +1066,7 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
     // ------------------------------------------------ P3: six worktrees registered concurrently (five small deltas + one large full)
     const wt = {};
     if (PHASES.has("worktrees")) {
+      await settle("worktrees");
       begin("worktrees");
       const wtDir = path.join(owner.input, "wt");
       await mkdir(wtDir);
@@ -1137,6 +1146,7 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
       ({ hash }) => javaOracle(ws, base.shape, base.relativePath, token, hash), token);
     const mapperXml = (mapper, id) => `<?xml version="1.0" encoding="UTF-8"?>\n<mapper namespace="${mapper.type}">\n  <select id="${id}" resultType="int">select 1</select>\n</mapper>\n`;
     if (PHASES.has("edits")) {
+      await settle("edits");
       begin("edits");
       for (const ws of ["w1", "w2", "w3", "w4", "w5"].map(name => wt[name])) javaBase[ws.name] = { ...R, text: await readFile(path.join(ws.root, R.relativePath), "utf8") };
       // The mapper pair: same relative paths in w1 and w2, different statements (§5.2 同相对路径不同 Java/XML 内容).
@@ -1263,6 +1273,7 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
 
     // ------------------------------------------------ P6+P8: two long fulls, a builder SIGKILL, short-delta fairness
     if (PHASES.has("fairness")) {
+      await settle("fairness");
       begin("fairness");
       const sinceEpoch = Date.now();
       state.loadSamples.push(load());

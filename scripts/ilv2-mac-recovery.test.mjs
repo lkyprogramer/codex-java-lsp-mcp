@@ -217,7 +217,14 @@ test("gradle-stop-failure-static-recovers-semantic-blocks-then-recovers", { time
     }, 30000);
     const blockedAt = performance.now();
     assert.match(blocked.failure ?? "", /frozen Gradle launcher changed/);
-    assert.equal(blocked.staticAdmission, "OPEN");
+    // Static admission opens on its own path (the index owner's store open), which may finish after
+    // the failed cleanup: it must open within the bound while semantic stays blocked.
+    const staticOpen = await eventually(async () => {
+      const semantic = (await call(http2, "java_status", {})).semantic;
+      assert.equal(semantic?.semanticState, "RECOVERY_BLOCKED");
+      return semantic.staticAdmission === "OPEN" ? semantic : false;
+    }, 30000);
+    assert.equal(staticOpen.staticAdmission, "OPEN");
     assert.equal(processAlive(daemon), true, "a failed cleanup kills nothing by pid");
     Object.assign(record, { daemon, faultToOwnerGroupExitMs: ownerGoneMs, second, blocked });
 
