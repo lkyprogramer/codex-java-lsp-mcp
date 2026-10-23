@@ -16,6 +16,7 @@ import { recordsFromBundle } from "../java-index/entity-search.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../java-index/index-types.js";
 import { parseJavaSourceFile } from "../java-index/java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-index/java-parser-backend.js";
+import { parseOffThread } from "./parse-pool.js";
 import { discoverJavaFiles, discoverMyBatisResourceFiles, javaSourceRoot, resourceMemberRoot } from "../java-index/manifest.js";
 import { extractMyBatisMapperFacts } from "../java-index/mybatis-xml-extractor.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
@@ -590,6 +591,9 @@ function finishIndex(db: IndexDatabase, generation: number, roots: CoverageRoots
   publishIndexCoverage(db, generation, roots);
 }
 
+/** Below this many files a delta parses on its own thread: starting parser threads costs more. */
+const PARSE_OFF_THREAD_MIN = 24;
+
 async function parseChanged(
   db: IndexDatabase,
   repoRoot: string,
@@ -597,7 +601,8 @@ async function parseChanged(
   generation: number,
   absolutePaths: readonly string[],
   captures?: Map<string, SourceCapture>,
-  stages?: PipelineMetrics
+  stages?: PipelineMetrics,
+  parallelism = 1
 ): Promise<{ bundles: JavaFileBundle[]; missing: string[] }> {
   const captureStart=performance.now();
   const fixed=captures ?? new Map<string,SourceCapture>();
@@ -609,6 +614,26 @@ async function parseChanged(
   }
   if(stages) {stages.capture.files+=capturedFiles;stages.capture.elapsedMs+=performance.now()-captureStart;}
   const parseStart=performance.now();
+  if (parallelism > 1 && absolutePaths.length >= PARSE_OFF_THREAD_MIN) {
+    const total = absolutePaths.length;
+    const inputs = absolutePaths.filter(inputPath => !capturedMissing.has(inputPath));
+    const outcomes = await parseOffThread(inputs.map(inputPath => ({ repoRoot, resolvedRepoRoot: repoRoot, inputPath, generation, layout, capture: fixed.get(inputPath) })),
+      parallelism, done => writeBuildProgress(db, { phase: "declare", done, total }));
+    const bundles: JavaFileBundle[] = [];
+    const missing: string[] = [];
+    let parsed = 0;
+    // In input order, as the serial loop below reports them.
+    for (const inputPath of absolutePaths) {
+      if (capturedMissing.has(inputPath)) { missing.push(asRepoRel(repoRoot, inputPath)); continue; }
+      const outcome = outcomes[parsed++]!;
+      if ("bundle" in outcome) bundles.push(outcome.bundle);
+      else if (errCode(outcome.error) === "ENOENT") missing.push(asRepoRel(repoRoot, inputPath));
+      else throw outcome.error;
+    }
+    writeBuildProgress(db, { phase: "declare", done: total, total });
+    if(stages) {stages.parse.files+=total;stages.parse.javaFiles=total;stages.parse.elapsedMs+=performance.now()-parseStart;}
+    return { bundles, missing };
+  }
   const backend = await createJavaParserBackend();
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
   const bundles: JavaFileBundle[] = [];
@@ -798,7 +823,8 @@ async function applyRefresh(
   generation: number,
   changedInputs: readonly string[],
   deletedInputs: readonly string[],
-  stages?: PipelineMetrics
+  stages?: PipelineMetrics,
+  parallelism?: number
 ): Promise<void> {
   const layout = probeLayout(repoRoot);
   const roots = coverageRoots(layout);
@@ -835,7 +861,7 @@ async function applyRefresh(
     return;
   }
   writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, existing.length) });
-  const parsed = await parseChanged(db, repoRoot, layout, generation, existing, undefined, stages);
+  const parsed = await parseChanged(db, repoRoot, layout, generation, existing, undefined, stages, parallelism);
   writeBuildProgress(db, { phase: "resolve", done: 0, total: Math.max(1, parsed.bundles.length) });
   await applyParsedRefresh(db, repoRoot, generation, roots, [...uniqueDeleted, ...parsed.missing], parsed.bundles,undefined,stages);
 }
@@ -1021,7 +1047,7 @@ export async function changedResources(
   return { changed, deleted, stamps, captures, discoveredFiles:seen.size };
 }
 
-async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number, stages?: PipelineMetrics): Promise<void> {
+async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number, stages?: PipelineMetrics, parallelism?: number): Promise<void> {
   const layout = probeLayout(repoRoot);
   const roots = coverageRoots(layout);
   writeBuildProgress(db, { phase: "declare", done: 0, total: 1 });
@@ -1037,7 +1063,7 @@ async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: n
   if (resources.changed.length > 0 || resources.deleted.length > 0) {
     await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false, captures: resources.captures, stages });
   }
-  await applyJavaReconcile(db, repoRoot, generation, layout, roots, stages, javaCapture);
+  await applyJavaReconcile(db, repoRoot, generation, layout, roots, stages, javaCapture, parallelism);
 }
 
 type JavaDeltaCapture = { discovered: Awaited<ReturnType<typeof discoverJavaFiles>>; changed:string[];deleted:string[];stamps:StatRow[];captures:Map<string,SourceCapture> };
@@ -1086,7 +1112,8 @@ async function applyJavaReconcile(
   layout: LayoutContext,
   roots: CoverageRoots,
   stages?: PipelineMetrics,
-  input?: JavaDeltaCapture
+  input?: JavaDeltaCapture,
+  parallelism?: number
 ): Promise<void> {
   const {discovered,changed,deleted,stamps,captures}=input ?? await captureJavaDelta(db,repoRoot,layout);
   if (changed.length === 0 && deleted.length === 0) {
@@ -1098,7 +1125,7 @@ async function applyJavaReconcile(
     return;
   }
   if (stamps.length > 0) sqlStage(db,stages, () => recordStats(db, "java", stamps));
-  const parsed = await parseChanged(db, repoRoot, layout, generation, changed, captures, stages);
+  const parsed = await parseChanged(db, repoRoot, layout, generation, changed, captures, stages, parallelism);
   await applyParsedRefresh(db, repoRoot, generation, roots, [...deleted, ...parsed.missing], parsed.bundles, discovered,stages);
 }
 
@@ -1112,7 +1139,7 @@ async function applyBuilderJobStages(options: {
    * `escalation` instead, publishing nothing, so an owner scheduler can hold
    * the full to its own capacity. */
   escalation?: "full" | "report";
-  /** Parser concurrency of a full (the scheduler's parser grant). */
+  /** Parser concurrency (the scheduler's parser grant): a full's, and a large delta's parser threads. */
   parallelism?: number;
 }): Promise<BuilderJobResult> {
   const id = typeof options.job.id === "number" ? options.job.id : -1;
@@ -1145,11 +1172,11 @@ async function applyBuilderJobStages(options: {
     }
     try {
       if (options.job.kind === "refresh") {
-        await applyRefresh(options.db, repoRoot, generation, options.job.changed ?? [], options.job.deleted ?? [],stages);
+        await applyRefresh(options.db, repoRoot, generation, options.job.changed ?? [], options.job.deleted ?? [],stages,options.parallelism);
       } else if (options.job.kind === "resources") {
         await applyResources(options.db, repoRoot, generation, options.job.changed ?? [], options.job.deleted ?? [],{stages});
       } else if (options.job.kind === "reconcile") {
-        await applyReconcile(options.db, repoRoot, generation, stages);
+        await applyReconcile(options.db, repoRoot, generation, stages, options.parallelism);
       } else {
         return statusResult(options.db, id, false, `unknown kind ${String((options.job as BuilderJob).kind)}`);
       }

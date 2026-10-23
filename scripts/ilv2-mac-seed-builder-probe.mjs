@@ -1,7 +1,7 @@
 // Private Tier-0 probe (not evidence): one seed-shaped delta builder job (HEAD~k sources on a HEAD index)
 // on a clone of the MAC-12 572 MB baseline DB. Prints counts and stage timings only; no paths, symbols or source.
 // env: BASELINE (baseline-db.json), PROBE_TMP (work dir), CLONE_ROOT (a root holding both), REPO (frozen input worktree, read-only), DEPTH (k), OUT (json)
-// Run with --cpu-prof to profile the job; WARM=1 runs warmFile first, as the builder process does.
+// Run with --cpu-prof to profile the job; WARM=1 runs warmFile first, as the builder process does; PARALLELISM is the parser grant (the scheduler gives 2).
 import { execFileSync } from "node:child_process";
 import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -40,7 +40,7 @@ try {
   const marks = [];
   try {
     ensureSchema(db);
-    const result = await applyBuilderJob({ repoRoot: src, db, job: { kind: "refresh", changed, deleted }, escalation: "report",
+    const result = await applyBuilderJob({ repoRoot: src, db, job: { kind: "refresh", changed, deleted }, escalation: "report", parallelism: Number(process.env.PARALLELISM ?? 1),
       onStage: async stage => { marks.push([stage, Math.round(performance.now() - started)]); } });
     const totalMs = performance.now() - started;
     await writeFile(process.env.OUT, JSON.stringify({ depth, changed: changed.length, deleted: deleted.length, ok: result.ok, escalation: result.escalation ?? null,
