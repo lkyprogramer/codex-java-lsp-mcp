@@ -237,6 +237,27 @@ test("request memo singleflights exact queries, evicts rejection, and partitions
   assert.equal(client.queryFilesCalls.length, 6, "independent root requests never share request-local memo state");
 });
 
+test("request scopes of distinct indexes are independent and nest without hiding each other", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-request-scopes-"));
+  const file = path.join(repoRoot, "src/main/java/demo/A.java");
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  const outerClient = new RecordingFactsClient(repoRoot), innerClient = new RecordingFactsClient(repoRoot);
+  const outer = new RouterJavaIndex(repoRoot, outerClient as never), inner = new RouterJavaIndex(repoRoot, innerClient as never);
+
+  await outer.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, async () => {
+    await outer.queryFiles([file]);
+    await inner.queryFiles([file]);
+    await inner.queryFiles([file]);
+    assert.equal(innerClient.queryFilesCalls.length, 2, "another index's scope does not memoize this index");
+    await inner.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, async () => {
+      await Promise.all([inner.queryFiles([file]), inner.queryFiles([file])]);
+      await outer.queryFiles([file]);
+    });
+    assert.equal(innerClient.queryFilesCalls.length, 3, "the inner index memoizes within its own scope");
+    assert.equal(outerClient.queryFilesCalls.length, 1, "the outer scope stays in force inside the inner one");
+  });
+});
+
 test("request memo shares anchor and status probes while the final status refresh stays authoritative", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "router-request-probes-"));
   const file = path.join(repoRoot, "src/main/java/demo/A.java");

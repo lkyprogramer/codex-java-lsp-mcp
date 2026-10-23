@@ -192,11 +192,17 @@ type RouterRequestScope = {
 };
 
 /**
+ * Every index's request scope, keyed by index, in ONE AsyncLocalStorage. Node 22 propagates each enabled
+ * AsyncLocalStorage on every promise and keeps it until disable(): one per index (an owner opens one per
+ * workspace and snapshot) made every promise in the owner pay for every index it ever opened.
+ */
+const requestScopes = new AsyncLocalStorage<ReadonlyMap<RouterJavaIndex, RouterRequestScope>>();
+
+/**
  * High-level async index used by AgentRouter. Wraps JavaIndexClient and maps
  * V2 queries into the fact shapes collectors already understand.
  */
 export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkIndexView {
-  private readonly requestOptionsScope = new AsyncLocalStorage<RouterRequestScope>();
   private generation = 0;
   private opened = false;
   private openSource: JavaIndexOpenSource = "cold";
@@ -239,7 +245,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   withRequestOptions<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T> {
-    const parent = this.requestOptionsScope.getStore();
+    const parent = this.requestScope();
     const controlBoundaryChanged = parent !== undefined && (
       (Object.hasOwn(options, "budget") && options.budget !== parent.options.budget)
       || (Object.hasOwn(options, "signal") && options.signal !== parent.options.signal)
@@ -251,15 +257,20 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       // safely share the request memo.
       memo: parent && !controlBoundaryChanged ? parent.memo : { queries: new Map() }
     };
-    return this.requestOptionsScope.run(scope, action);
+    // Other indexes' scopes stay in force inside this one.
+    return requestScopes.run(new Map(requestScopes.getStore()).set(this, scope), action);
+  }
+
+  private requestScope(): RouterRequestScope | undefined {
+    return requestScopes.getStore()?.get(this);
   }
 
   private currentRequestOptions(): JavaIndexRequestOptions {
-    return this.requestOptionsScope.getStore()?.options ?? {};
+    return this.requestScope()?.options ?? {};
   }
 
   private requestMemoized<T>(key: string, action: () => Promise<T>): Promise<T> {
-    const memo = this.requestOptionsScope.getStore()?.memo;
+    const memo = this.requestScope()?.memo;
     if (!memo) return action();
     const existing = memo.queries.get(key) as Promise<T> | undefined;
     if (existing) return existing;
@@ -711,7 +722,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     generation: number
   ): Promise<Map<string, FactsForFileItem>> {
     const canonicalPaths = unique([...paths]).sort((left, right) => left.localeCompare(right));
-    const memo = this.requestOptionsScope.getStore()?.memo;
+    const memo = this.requestScope()?.memo;
     if (!memo) return this.hydrateFactsBatch(canonicalPaths, generation);
 
     const pending: Array<Promise<[string, FactsForFileItem]>> = [];
