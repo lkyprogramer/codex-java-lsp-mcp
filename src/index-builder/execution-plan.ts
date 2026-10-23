@@ -3,7 +3,9 @@ import { schemaVersionsMatch } from "../java-index/sql/schema.js";
 import { readMeta, readSourceRootCounts } from "./progress.js";
 
 export type PipelineStage = { files: number; elapsedMs: number; javaFiles?: number; xmlFiles?: number; rows?: number; measurement?: string; closure?: Record<string, number>; edgeFiles?: number; graphFiles?: number; documentFiles?: number };
-export type PipelineMetrics = { mode: "full" | "delta"; reason: string; capture: PipelineStage; parse: PipelineStage; resolve: PipelineStage; graphSearch: PipelineStage; sql: PipelineStage; onStage?: (name:string)=>Promise<void> };
+export type PipelineMetrics = { mode: "full" | "delta"; reason: string; capture: PipelineStage; parse: PipelineStage; resolve: PipelineStage; graphSearch: PipelineStage; sql: PipelineStage;
+  /** The builder process read its database once before the job (warmFile). */
+  warm?: PipelineStage; onStage?: (name:string)=>Promise<void> };
 export function pipelineMetrics(mode: "full" | "delta", reason: string): PipelineMetrics {
   return {mode,reason,capture:{files:0,elapsedMs:0},parse:{files:0,elapsedMs:0},resolve:{files:0,elapsedMs:0},graphSearch:{files:0,elapsedMs:0},sql:{files:0,elapsedMs:0}};
 }

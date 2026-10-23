@@ -470,21 +470,30 @@ export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: r
 }
 
 export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | undefined {
-  const file = prepareCached(db, "SELECT facts FROM file WHERE path=?").get(path);
+  const file = prepareCached(db, "SELECT id, facts FROM file WHERE path=?").get(path);
   if (!file) return undefined;
+  const fileId = asRowId(file.id as number | bigint);
   const fileFacts = decodeFacts<JavaFileFacts>(file.facts);
+  // One read per member table of the rows this file owns, by id text (sym is
+  // unique per text). An id stored under another file is still read by id.
+  const owned = (table: "type" | "field" | "method") => new Map((prepareCached(db,
+    `SELECT s.text AS id, m.facts AS facts FROM ${table} m JOIN sym s ON s.id=m.sym WHERE m.file_id=?`).all(fileId) as Array<{ id: string; facts: SQLOutputValue }>)
+    .map(row => [row.id, row.facts] as const));
+  const rows = { type: owned("type"), field: owned("field"), method: owned("method") };
+  const member = <T>(table: "type" | "field" | "method", id: string): T | undefined =>
+    rows[table].has(id) ? decodeFacts<T>(rows[table].get(id)!) : lookupMemberFacts<T>(db, table, id);
   const types: JavaTypeFacts[] = [];
   const fields: JavaFieldFacts[] = [];
   const methods: JavaMethodFacts[] = [];
   const seenField = new Set<string>();
   const seenMethod = new Set<string>();
   for (const typeId of fileFacts.allTypeIds) {
-    const type = lookupMemberFacts<JavaTypeFacts>(db, "type", typeId);
+    const type = member<JavaTypeFacts>("type", typeId);
     if (!type) continue;
     types.push(type);
     for (const fieldId of type.fieldIds) {
       if (seenField.has(fieldId)) continue;
-      const field = lookupMemberFacts<JavaFieldFacts>(db, "field", fieldId);
+      const field = member<JavaFieldFacts>("field", fieldId);
       if (field) {
         seenField.add(fieldId);
         fields.push(field);
@@ -492,15 +501,13 @@ export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | un
     }
     for (const methodId of type.methodIds) {
       if (seenMethod.has(methodId)) continue;
-      const method = lookupMemberFacts<JavaMethodFacts>(db, "method", methodId);
+      const method = member<JavaMethodFacts>("method", methodId);
       if (method) {
         seenMethod.add(methodId);
         methods.push(method);
       }
     }
   }
-  const idRow = prepareCached(db, "SELECT id FROM file WHERE path=?").get(path);
-  const fileId = asRowId(idRow?.id as number | bigint);
   const edges = prepareCached(db, `${STATIC_EDGE_SELECT} WHERE e.file_id=? ORDER BY e.id`).all(fileId);
   return {
     file: fileFacts,

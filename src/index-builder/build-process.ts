@@ -86,15 +86,19 @@ async function runWorker(): Promise<void> {
   // Node's "pipe" above fd 2 is a socketpair, not a FIFO.
   try { const info = fstatSync(LIVENESS_FD); if (info.isSocket() || info.isFIFO()) stopLiveness = startBuilderLiveness(LIVENESS_FD); }
   catch { /* no liveness pipe: an owner that does not listen */ }
+  const { warmFile } = await import("../mac-platform/clonefile.js");
   const barrier = faultBarrier();
   let reply: BuildProcessReply;
+  // A cloned base starts with a cold page cache; one ordered pass is far cheaper than the job's random reads.
+  const warmMs = await warmFile(request.dbPath);
   const db = openIndexDb(request.dbPath);
   try {
     ensureSchema(db);
     const result = await applyBuilderJob({ repoRoot: request.repoRoot, db, job: request.job, escalation: "report", parallelism: request.parallelism,
       onStage: async (stage: string) => { noteBuilderStage(stage); if (barrier) await barrier(`builder-${stage}`); } });
     // The publish plan carries the content this builder actually captured (contract §2.7), never one derived later.
-    reply = { type: "result", result: result.ok && result.escalation === undefined ? { ...result, contentManifestId: contentManifestId(db).id } : result };
+    const measured = result.stages ? { ...result, stages: { ...result.stages, warm: { files: 1, elapsedMs: warmMs } } } : result;
+    reply = { type: "result", result: measured.ok && measured.escalation === undefined ? { ...measured, contentManifestId: contentManifestId(db).id } : measured };
   } catch (error) {
     reply = { type: "failed", error: error instanceof Error ? error.message : String(error) };
   } finally {

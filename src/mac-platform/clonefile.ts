@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, open, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MAC_NATIVE_PROTOCOL } from "./native-protocol.js";
@@ -57,4 +57,26 @@ export async function cloneSealedDatabase(source: string, target: string, cacheR
   if (!path.isAbsolute(source) || !path.isAbsolute(target) || !inside(actualSource) || !(targetParent === root || inside(targetParent)) || (await lstat(source)).isSymbolicLink()) throw new Error("clone paths must belong to the cache root");
   const result = await callMacNative(["clone", actualSource, path.join(targetParent, path.basename(target))]);
   if (result.kind !== "cloned") throw new Error("native clone acknowledgement missing");
+}
+
+const WARM_CHUNK = 8 << 20, WARM_LANES = 4;
+/**
+ * Reads a file once, in order, so its pages are cached before random access. A clone shares the
+ * base's blocks but not its page cache: a delta builder on a cold 572 MB clone spent 1.0-1.7 s of a
+ * 2.2-5.1 s job waiting on page reads that one ordered pass (about 90 ms) makes warm.
+ */
+export async function warmFile(file: string): Promise<number> {
+  const started = performance.now();
+  // A full build creates its database: nothing to warm.
+  const handle = await open(file, "r").catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return undefined; throw error; });
+  if (!handle) return 0;
+  try {
+    const size = (await handle.stat()).size;
+    let next = 0;
+    await Promise.all(Array.from({ length: WARM_LANES }, async () => {
+      const buffer = Buffer.allocUnsafe(WARM_CHUNK);
+      while (next < size) { const at = next; next += WARM_CHUNK; await handle.read(buffer, 0, WARM_CHUNK, at); }
+    }));
+  } finally { await handle.close(); }
+  return performance.now() - started;
 }
