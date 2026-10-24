@@ -14,7 +14,7 @@ import type {
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { javaEdgeId } from "../stable-id.js";
-import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { onRollback, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
 import { internSym, internSymNullable, symId } from "./sym.js";
 
 export type FileRow = {
@@ -227,6 +227,7 @@ export type WriteBundleOptions = {
  * of being cascade-deleted and re-inserted; unchanged rows are not written.
  */
 export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, options: WriteBundleOptions = {}): number {
+  forgetBundle(db, bundle);
   return runInWriteTx(db, () => {
     const row = fileRow(bundle);
     const existing = prepareCached(db, "SELECT id FROM file WHERE path=?").get(row.path) as { id: number | bigint } | undefined;
@@ -429,6 +430,7 @@ function fileIdByPath(db: IndexDatabase, path: string): number {
 
 /** Rewrites one file's facts in place; true when any row changed. */
 export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): boolean {
+  forgetBundle(db, bundle);
   return runInWriteTx(db, () => {
     const id = fileIdByPath(db, bundle.file.relativePath);
     const row = fileRow(bundle);
@@ -466,10 +468,67 @@ export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): bo
 
 /** Replaces one file's static edges by difference; true when any row changed. */
 export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: readonly StaticEdge[]): boolean {
+  memos.get(db)?.bundles.delete(filePath);
   return runInWriteTx(db, () => syncStaticEdges(db, fileIdByPath(db, filePath), edges, true));
 }
 
+/**
+ * One job's reads of a file's bundle, kept until a write touches the rows it
+ * was read from: the file row and its edges (by path), and its members (by
+ * id, since a member row can move between files). A rollback drops it all.
+ * Callers treat bundles as immutable, so a kept one is shared.
+ */
+type BundleMemo = { bundles: Map<string, JavaFileBundle | undefined>; memberPaths: Map<string, string> };
+const memos = new WeakMap<IndexDatabase, BundleMemo>();
+const memoRollbackHooked = new WeakSet<IndexDatabase>();
+
+/** Keeps readBundle's results on this connection until endBundleMemo. Only the
+ * connection's writer may hold one: other writers' rows are not seen. */
+export function beginBundleMemo(db: IndexDatabase): void {
+  memos.set(db, { bundles: new Map(), memberPaths: new Map() });
+  if (memoRollbackHooked.has(db)) return;
+  memoRollbackHooked.add(db);
+  onRollback(db, () => {
+    const memo = memos.get(db);
+    memo?.bundles.clear();
+    memo?.memberPaths.clear();
+  });
+}
+
+export function endBundleMemo(db: IndexDatabase): void {
+  memos.delete(db);
+}
+
+/** Drops the kept bundle of a path about to be written or deleted, and of every file holding one of `bundle`'s members. */
+export function forgetBundle(db: IndexDatabase, target: string | JavaFileBundle): void {
+  const memo = memos.get(db);
+  if (!memo) return;
+  if (typeof target === "string") { memo.bundles.delete(target); return; }
+  memo.bundles.delete(target.file.relativePath);
+  for (const id of memberIdsOf(target)) {
+    const holder = memo.memberPaths.get(id);
+    if (holder !== undefined) memo.bundles.delete(holder);
+  }
+}
+
+function memberIdsOf(bundle: JavaFileBundle): string[] {
+  return [...bundle.types.map(type => type.typeId), ...bundle.fields.map(field => field.fieldId), ...bundle.methods.map(method => method.methodId)];
+}
+
 export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | undefined {
+  const memo = memos.get(db);
+  if (memo?.bundles.has(path)) return memo.bundles.get(path);
+  let foreign = false;
+  const bundle = readBundleRows(db, path, () => { foreign = true; });
+  // A member read by id from another file's rows is not tracked: not kept.
+  if (memo && !foreign) {
+    memo.bundles.set(path, bundle);
+    if (bundle) for (const id of memberIdsOf(bundle)) memo.memberPaths.set(id, path);
+  }
+  return bundle;
+}
+
+function readBundleRows(db: IndexDatabase, path: string, onForeign: () => void): JavaFileBundle | undefined {
   const file = prepareCached(db, "SELECT id, facts FROM file WHERE path=?").get(path);
   if (!file) return undefined;
   const fileId = asRowId(file.id as number | bigint);
@@ -481,7 +540,7 @@ export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | un
     .map(row => [row.id, row.facts] as const));
   const rows = { type: owned("type"), field: owned("field"), method: owned("method") };
   const member = <T>(table: "type" | "field" | "method", id: string): T | undefined =>
-    rows[table].has(id) ? decodeFacts<T>(rows[table].get(id)!) : lookupMemberFacts<T>(db, table, id);
+    rows[table].has(id) ? decodeFacts<T>(rows[table].get(id)!) : (onForeign(), lookupMemberFacts<T>(db, table, id));
   const types: JavaTypeFacts[] = [];
   const fields: JavaFieldFacts[] = [];
   const methods: JavaMethodFacts[] = [];

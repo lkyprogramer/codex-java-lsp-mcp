@@ -36,7 +36,7 @@ import { buildMyBatisSearchDocuments, buildSearchDocuments, type SearchDocument 
 import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
-import { deleteResourceScan, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
+import { beginBundleMemo, deleteResourceScan, endBundleMemo, forgetBundle, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import { symId } from "../java-index/sql/sym.js";
 import { attachWorkspaceStat, deleteStats, observedStats, readStats, recordStats, statUnchanged, type StatRow } from "../java-index/sql/workspace-stat.js";
 import { COVERAGE_GAP, coverageRoots, readIndexCounts, readMeta, refreshIndexCounts, publishIndexCoverage, writeBuildProgress, writeMeta, type CoverageRoots } from "./progress.js";
@@ -672,7 +672,17 @@ function changedExportIds(before: JavaFileBundle | undefined, after: JavaFileBun
   return { oldIds: [...left.keys()].filter(id => moved.has(id)), newIds: [...right.keys()].filter(id => moved.has(id)) };
 }
 
-async function applyParsedRefresh(
+/** A delta reads each closure file's bundle at several steps; between writes to its rows they read it once. */
+async function applyParsedRefresh(...args: Parameters<typeof applyParsedRefreshRows>): Promise<void> {
+  beginBundleMemo(args[0]);
+  try {
+    await applyParsedRefreshRows(...args);
+  } finally {
+    endBundleMemo(args[0]);
+  }
+}
+
+async function applyParsedRefreshRows(
   db: IndexDatabase,
   repoRoot: string,
   generation: number,
@@ -707,7 +717,10 @@ async function applyParsedRefresh(
   sqlStage(db, stages, () => {
     writeMeta(db,"pipelineComplete","0");
     writeMeta(db,"buildState","BUILDING");
-    for (const relativePath of deleted) prepareCached(db, "DELETE FROM file WHERE path=?").run(relativePath);
+    for (const relativePath of deleted) {
+      forgetBundle(db, relativePath);
+      prepareCached(db, "DELETE FROM file WHERE path=?").run(relativePath);
+    }
     // buildEdges replaces every changed file's edges before publication.
     for (const bundle of bundles) writeBundle(db, bundle, { edges: "keep" });
     deleteStats(db, deleted);

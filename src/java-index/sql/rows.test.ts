@@ -12,9 +12,9 @@ import type { JavaFileBundle } from "../index-types.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
-import { close, openIndexDb } from "./driver.js";
+import { close, openIndexDb, withTransaction } from "./driver.js";
 import { ensureSchema } from "./schema.js";
-import { readBundle, readMyBatisResource, writeBundle, writeMyBatisResource } from "./rows.js";
+import { beginBundleMemo, endBundleMemo, forgetBundle, readBundle, readMyBatisResource, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "./rows.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
@@ -203,6 +203,55 @@ test("artificially injected identical type_id keeps the documented last-write-wi
     assert.equal(types.n, first.types.length);
     assert.equal(owner.path, second.file.relativePath);
   } finally {
+    close(db);
+  }
+});
+
+test("a kept bundle is read again once a write touches its file row, edges or members, or the transaction rolls back", async () => {
+  const bundles = await parseFixtures();
+  const first = bundles.find(bundle => bundle.types.length > 0)!;
+  const other = bundles.find(bundle => bundle !== first)!;
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    for (const bundle of bundles) writeBundle(db, bundle);
+    beginBundleMemo(db);
+    const path0 = first.file.relativePath;
+    const kept = readBundle(db, path0)!;
+    assert.equal(readBundle(db, path0), kept, "unchanged rows are read once");
+    assert.equal(readBundle(db, other.file.relativePath), readBundle(db, other.file.relativePath));
+
+    updateBundleFacts(db, { ...kept, file: { ...kept.file, generation: 7 } });
+    const updated = readBundle(db, path0)!;
+    assert.notEqual(updated, kept);
+    assert.equal(updated.file.generation, 7);
+
+    const typeId = first.types[0]!.typeId;
+    replaceBundleEdges(db, path0, [{ edgeId: "", fromId: typeId, toId: typeId, kind: "DECLARES", confidence: 1, sourceFile: path0, generation: 7, resolution: { kind: "AST_EXPLICIT" } }]);
+    assert.deepEqual(readBundle(db, path0)!.edges.map(edge => edge.fromId), [typeId]);
+
+    // A member row that moves to another file changes the bundle that held it.
+    const holder = readBundle(db, path0)!;
+    const thief = structuredClone(first);
+    thief.file = { ...thief.file, relativePath: "dup/" + path0 };
+    writeBundle(db, thief);
+    assert.notEqual(readBundle(db, path0), holder);
+
+    const beforeRollback = readBundle(db, other.file.relativePath)!;
+    assert.throws(() => withTransaction(db, () => {
+      writeBundle(db, { ...other, file: { ...other.file, generation: 9 } });
+      assert.equal(readBundle(db, other.file.relativePath)!.file.generation, 9);
+      throw new Error("abort");
+    }), /abort/);
+    assert.deepEqual(readBundle(db, other.file.relativePath), beforeRollback, "a rolled-back write is not served");
+
+    forgetBundle(db, other.file.relativePath);
+    db.prepare("DELETE FROM file WHERE path=?").run(other.file.relativePath);
+    assert.equal(readBundle(db, other.file.relativePath), undefined);
+    endBundleMemo(db);
+    assert.notEqual(readBundle(db, path0), readBundle(db, path0), "outside a memo every read is fresh");
+  } finally {
+    endBundleMemo(db);
     close(db);
   }
 });
