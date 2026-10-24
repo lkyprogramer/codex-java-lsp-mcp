@@ -1,6 +1,19 @@
 # MAC-12 / G12
 
-**IN_PROGRESS。** G11 已通过并本地提交 `4cfa0402`。方案B实现与此前封存候选一并本地提交（未 push）；G12 全部适用绝对性能门尚未实测，`performanceReady=false`。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)。
+**IN_PROGRESS。** G11 已通过并本地提交 `4cfa0402`。最近一次 G12 Tier-1 尝试（候选 `f6a73539`）**FAIL**：硬门全过，但主测中两档 seed 未达绝对门，`performanceReady=false`。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)；本次尝试未重新生成 task-result，见下节。
+
+## G12 Tier-1 尝试：候选 `f6a73539`（2026-10-24）
+
+本轮 seed 优化提交：`6f7e1cc2`（delta 前预热克隆库、批量读 bundle、并行 verify 遍历）、`25523cf4`（路由索引共用一个 AsyncLocalStorage，修复 owner verify 随运行变慢）、`95e5d716`（≥24 个 Java 文件的 delta 用调度器的 parser 线程解析）、`f6a73539`（delta job 内同一文件的 bundle 在两次写之间只读一次）。
+
+| 运行 | 测试 | 硬门 | seedLe20 p95（≤5000ms） | seedTo200 p95（≤15000ms） | 其余性能项 | 窗口 load1 |
+|---|---|---|---|---|---|---|
+| final-g12（主测） | 156/156 | 5/5 PASS | 5246 FAIL（26 个全有效） | 19331 FAIL（29 个全有效） | 10/10 PASS | 7.2–14.4 |
+| rerun-g12（新构建，对照） | 156/156 | 5/5 PASS | 4795 PASS | 12428 PASS | 全 PASS | 3.6–7.1 |
+
+回归：dist 1577/1577，scripts 638 PASS、10 skip。独立只读评审 PASS，无未决问题；3 条低严重度备注留给下一轮。收尾 PASS：资源全部退出，raw 已归档并物理校验。
+
+**判定：** 主测样本满足计时有效性规则，FAIL 保留；rerun 的 PASS 只作对照，不替代主测。两次运行的闭包和代码路径相同，差异来自 CPU 阶段：resolve 6.1–7.6s 对 4.2–4.5s，graph 2.8–4.6s 对 1.8–2.7s。推断原因是主机为 8 个性能核 + 2 个能效核，load1 约 8 以上时性能核饱和；另一个未验证假设是未设置 ProcessType 的 launchd job 会受轻度 CPU/IO 限制。下一步按用户 2026-10-24 的选择，压缩 builder CPU（resolve、graph、实体与搜索文档），让 seed 在 load1 约 10 时仍过门，然后再跑一条新的 Tier-1 链。
 
 ## 方案B：发布前增量检查，全库校验放后台（2026-10-22，按用户要求）
 
