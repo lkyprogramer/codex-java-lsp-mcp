@@ -27,6 +27,16 @@ export async function captureSource(repoRoot: string, absolutePath: string): Pro
  } finally {await fd.close();}
 }
 
+/**
+ * The content hash a tracker's verify needs, for a root it already holds canonical (rootIdentityOf).
+ * Unlike captureSource it keeps no bytes and takes no fd stat pair: the caller lstats the path around
+ * the read and caches the hash only when that stat key did not move.
+ */
+export async function hashSourceWithin(canonicalRoot: string, absolutePath: string): Promise<string> {
+ const fd = await open(await resolvedWithin(canonicalRoot, absolutePath), "r");
+ try {return createHash("sha256").update(await fd.readFile()).digest("hex");} finally {await fd.close();}
+}
+
 export function fileStatOf(info: BigIntStats): FileStat {
  return { size: Number(info.size), mtimeNs: String(info.mtimeNs), ctimeNs: String(info.ctimeNs), ino: String(info.ino), dev: String(info.dev) };
 }

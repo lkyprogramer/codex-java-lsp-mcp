@@ -10,7 +10,7 @@ import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { BUILD_MARKER_RELATIVE_PATHS, computeBuildFingerprint } from "../build-fingerprint.js";
 import { IGNORED_DIRECTORY_NAMES, javaSourceRoot, resourceMemberRoot } from "../manifest.js";
-import { captureSource } from "../source-capture.js";
+import { hashSourceWithin } from "../source-capture.js";
 import { probeLayoutOffThread, type LayoutContext } from "../../layout-probe.js";
 import { MacFSEvents } from "../../mac-platform/fsevents.js";
 import { contentManifestIdOf, currentBuildKey, type ContentEntry } from "../sql/snapshot-manifest.js";
@@ -389,10 +389,8 @@ export class WorkspaceTracker {
       let hash: string;
       if (!suspect(relative) && cached && cached.key === key) hash = cached.hash;
       else {
-        let capture;
-        try { capture = await captureSource(root, absolute); } catch (error) { if (isMissing(error)) { entries.delete(relative); return; } throw error; }
+        try { hash = await hashSourceWithin(root, absolute); } catch (error) { if (isMissing(error)) { entries.delete(relative); return; } throw error; }
         counts.hashed += 1;
-        hash = capture.contentHash;
         const after = await lstat(absolute, { bigint: true }).catch(() => undefined);
         // Cached only when the read was stable; a racing write has its own, later event.
         if (after && statKey(after) === key) this.cache.set(relative, { key, hash }); else this.cache.delete(relative);

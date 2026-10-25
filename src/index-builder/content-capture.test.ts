@@ -1,8 +1,8 @@
-import { captureSource } from "../java-index/source-capture.js";
+import { captureSource, hashSourceWithin } from "../java-index/source-capture.js";
 import { applyBuilderJob } from "./incremental.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile, open, chmod, symlink, utimes } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile, open, chmod, symlink, utimes } from "node:fs/promises";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -73,6 +73,18 @@ test("capture-hashes-original-malformed-utf8-and-survives-edit-during-parse", as
   const read = await new RequestSourceReader(f.repo).read("src/main/java/A.java");
   assert.equal(read.state,"ok"); if(read.state === "ok") assert.notEqual(read.contentHash,bundle.file.contentHash);
  } finally {cache.clear();await rm(f.repo,{recursive:true,force:true});}
+});
+test("tracker-hash-matches-capture-and-stays-within-the-canonical-root", async () => {
+ const f = await fixture(); const outside = await mkdtemp(path.join(tmpdir(), "capture-outside-"));
+ const bytes = Buffer.concat([Buffer.from("// "),Buffer.from([255]),Buffer.from("\nclass A {}")]);
+ try {
+  const root = await realpath(f.repo);
+  await writeFile(f.file,bytes);
+  assert.equal(await hashSourceWithin(root,path.join(root,"src/main/java/A.java")),(await captureSource(f.repo,f.file)).contentHash);
+  await writeFile(path.join(outside,"B.java"),"class B {}");
+  await symlink(path.join(outside,"B.java"),path.join(root,"src/main/java/B.java"));
+  await assert.rejects(hashSourceWithin(root,path.join(root,"src/main/java/B.java")),/outside repo root/);
+ } finally {await rm(f.repo,{recursive:true,force:true});await rm(outside,{recursive:true,force:true});}
 });
 test("v11-facts-without-captured-signatures-are-invalidated", () => {
  const db = openIndexDb(":memory:"); ensureSchema(db);
