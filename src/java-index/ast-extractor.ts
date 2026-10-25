@@ -680,9 +680,13 @@ function argumentTypeHintOf(node: JavaSyntaxNode, scope: Scope, context: Extract
 }
 
 function countErrorNodes(node: JavaSyntaxNode): number {
-  let count = node.type === "ERROR" || node.isMissing ? 1 : 0;
-  for (const child of node.children) count += countErrorNodes(child);
-  return count;
+  const count = node.type === "ERROR" || node.isMissing ? 1 : 0;
+  // A node without hasError has no ERROR or MISSING descendant (a MISSING node
+  // itself reports false), so most files skip the walk below the root.
+  if (!node.hasError) return count;
+  let total = count;
+  for (const child of node.children) total += countErrorNodes(child);
+  return total;
 }
 
 function extractModifiers(modifiersNode: JavaSyntaxNode | undefined): string[] {
@@ -732,14 +736,13 @@ const LEADING_COMMENT_MAX = 4;
 
 type CollectedComment = { text: string; startLine: number; endLine: number };
 
-function collectComments(node: JavaSyntaxNode, source: string, out: CollectedComment[]): void {
-  if (COMMENT_NODE_TYPES.has(node.type)) {
+function collectComments(root: JavaSyntaxNode, source: string, out: CollectedComment[]): void {
+  for (const node of root.descendantsOfType([...COMMENT_NODE_TYPES])) {
     const text = stripCommentMarkers(textOf(node, source));
     if (text.length > 0) {
       out.push({ text, startLine: node.startPosition.row + 1, endLine: node.endPosition.row + 1 });
     }
   }
-  for (const child of node.children) collectComments(child, source, out);
 }
 
 function attachLeadingComments(

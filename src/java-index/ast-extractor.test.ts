@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createJavaParserBackend } from "./java-parser-backend.js";
+import { createJavaParserBackend, type JavaSyntaxNode } from "./java-parser-backend.js";
 import { extractJavaFile, type ExtractJavaInput } from "./ast-extractor.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -339,3 +339,25 @@ function lineColToIndex(text: string, position: { line: number; column: number }
   for (let i = 0; i < position.line - 1; i += 1) index += lines[i]!.length + 1;
   return index + (position.column - 1);
 }
+
+test("parseErrorCount counts every ERROR and MISSING node, including MISSING leaves and errors nested in recovered code", async () => {
+  const backend = await createJavaParserBackend();
+  const naive = (node: JavaSyntaxNode): number =>
+    (node.type === "ERROR" || node.isMissing ? 1 : 0) + node.children.reduce((sum, child) => sum + naive(child), 0);
+  const sources = [
+    "package demo;\nclass A { void m() { int x = 1 } }\n",
+    "package demo;\nclass A { void m() { call(1, 2; } int f = ; }\n",
+    "package demo;\nclass A { void m() { if (x) { y(); } \n",
+    "package demo;\nclass A { ){ int = ; class <> void n() {} }\n",
+    "package demo;\nclass A { /** doc */ void m() {} }\n"
+  ];
+  let missing = 0;
+  for (const content of sources) {
+    const root = backend.parse(content).rootNode;
+    const walk = (node: JavaSyntaxNode): void => { if (node.isMissing) missing++; node.children.forEach(walk); };
+    walk(root);
+    const facts = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/A.java" }), backend);
+    assert.equal(facts.file.parseErrorCount, Math.max(naive(root), root.hasError ? 1 : 0), content);
+  }
+  assert.ok(missing > 0, "the corpus exercises MISSING leaves");
+});
