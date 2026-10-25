@@ -88,6 +88,16 @@ export function internSym(db: IndexDatabase, text: string): number {
   return id;
 }
 
+/**
+ * Text/id pairs a caller read from rows it is about to rewrite: the rewrite
+ * interns the same texts, which then need no lookup. A sym row is never
+ * deleted or renumbered, so a pair stays valid (a rollback drops the cache).
+ */
+export function rememberSyms(db: IndexDatabase, rows: Iterable<{ text: unknown; id: unknown }>): void {
+  const cache = cacheOf(db);
+  for (const row of rows) if (typeof row.text === "string") cache.intern.set(row.text, asId(row.id));
+}
+
 export function internSymNullable(db: IndexDatabase, text: string | null | undefined): number | null {
   return text == null ? null : internSym(db, text);
 }

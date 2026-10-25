@@ -34,7 +34,7 @@ try {
   await cloneSealedDatabase(baseline.db, dbPath, process.env.CLONE_ROOT);
   await chmod(dbPath, 0o644);
   // WARM=1 measures the job as the builder process runs it: warmFile, then the job (warm time included).
-  const started = performance.now();
+  const started = performance.now(), cpuStarted = process.cpuUsage();
   const warmMs = process.env.WARM === "1" ? await warmFile(dbPath) : 0;
   const db = openIndexDb(dbPath);
   const marks = [];
@@ -43,7 +43,9 @@ try {
     const result = await applyBuilderJob({ repoRoot: src, db, job: { kind: "refresh", changed, deleted }, escalation: "report", parallelism: Number(process.env.PARALLELISM ?? 1),
       onStage: async stage => { marks.push([stage, Math.round(performance.now() - started)]); } });
     const totalMs = performance.now() - started;
+    // Process CPU (main thread, parser threads, GC): what host load inflates far less than wall time.
+    const cpu = process.cpuUsage(cpuStarted), cpuMs = (cpu.user + cpu.system) / 1000;
     await writeFile(process.env.OUT, JSON.stringify({ depth, changed: changed.length, deleted: deleted.length, ok: result.ok, escalation: result.escalation ?? null,
-      error: result.error ?? null, totalMs, warmMs, marks, stages: result.stages, load1: os.loadavg()[0] }, null, 1));
+      error: result.error ?? null, totalMs, cpuMs, warmMs, marks, stages: result.stages, load1: os.loadavg()[0] }, null, 1));
   } finally { close(db); }
 } finally { await rm(work, { recursive: true, force: true }); }

@@ -227,8 +227,13 @@ test("a kept bundle is read again once a write touches its file row, edges or me
     assert.equal(updated.file.generation, 7);
 
     const typeId = first.types[0]!.typeId;
-    replaceBundleEdges(db, path0, [{ edgeId: "", fromId: typeId, toId: typeId, kind: "DECLARES", confidence: 1, sourceFile: path0, generation: 7, resolution: { kind: "AST_EXPLICIT" } }]);
+    const edge = { edgeId: "", fromId: typeId, toId: typeId, kind: "DECLARES" as const, confidence: 1, range: first.types[0]!.range, sourceFile: path0, generation: 7, resolution: { kind: "AST_EXPLICIT" as const } };
+    replaceBundleEdges(db, path0, [edge]);
     assert.deepEqual(readBundle(db, path0)!.edges.map(edge => edge.fromId), [typeId]);
+    // The same edge written for another file moves its row there (duplicate FQNs).
+    replaceBundleEdges(db, other.file.relativePath, [{ ...edge, sourceFile: other.file.relativePath }]);
+    assert.deepEqual(readBundle(db, path0)!.edges, [], "an edge row moved away is not served from the file that held it");
+    replaceBundleEdges(db, path0, [edge]);
 
     // A member row that moves to another file changes the bundle that held it.
     const holder = readBundle(db, path0)!;

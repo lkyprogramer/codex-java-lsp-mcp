@@ -27,6 +27,7 @@ import { internSym, symId } from "./sym.js";
 export { decodeFacts };
 
 const LRU_LIMIT = 2048;
+type CacheKind = "type" | "method" | "field" | "file" | "fqn" | "simple" | "owner" | "methodsOf";
 
 export type PointLookup<V> = {
   get(key: string): V | undefined;
@@ -97,15 +98,17 @@ export class SqlFactsStore {
   readonly typeIdsBySimpleName: PointLookup<ReadonlySet<string>>;
   readonly methodIdsByOwnerAndName: PointLookup<ReadonlySet<string>>;
   private readonly db: IndexDatabase;
-  private readonly lru = new BoundedCache<string, unknown>(LRU_LIMIT);
+  // One LRU per kind, keyed by the id itself: an id string read from facts keeps its hash, a
+  // "kind:" + id key was built and hashed again at every lookup (most of edge building's cost).
+  private readonly lru = new Map<CacheKind, BoundedCache<string, unknown>>();
 
   constructor(db: IndexDatabase, private readonly options: { factsAreImmutable?: boolean } = {}) {
     this.db = db;
-    this.typesById = new PointMap(id => this.cached(`type:${id}`, () => this.selectMemberFacts("type", id)), () => this.countTable("type"));
-    this.methodsById = new PointMap(id => this.cached(`method:${id}`, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
-    this.fieldsById = new PointMap(id => this.cached(`field:${id}`, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
-    this.filesByPath = new PointMap(path => this.cached(`file:${path}`, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
-    this.typeIdsByFqn = new PointMap(fqn => this.cached(`fqn:${fqn}`, () => {
+    this.typesById = new PointMap(id => this.cached("type", id, () => this.selectMemberFacts("type", id)), () => this.countTable("type"));
+    this.methodsById = new PointMap(id => this.cached("method", id, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
+    this.fieldsById = new PointMap(id => this.cached("field", id, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
+    this.filesByPath = new PointMap(path => this.cached("file", path, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
+    this.typeIdsByFqn = new PointMap(fqn => this.cached("fqn", fqn, () => {
       // Every declaration of the FQN (the same FQN can be declared in several
       // source roots). Which one a reference binds to is decided by the
       // resolver from the referring location, never here.
@@ -116,7 +119,7 @@ export class SqlFactsStore {
       return ids.length > 0 ? ids : undefined;
     }), () => asCount(prepareCached(this.db, "SELECT count(DISTINCT fqn) AS n FROM type WHERE fqn IS NOT NULL").get()));
     this.typeIdsBySimpleName = new PointMap(
-      name => this.loadIdSet(`simple:${name}`, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name=?", name),
+      name => this.loadIdSet("simple", name, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name=?", name),
       () => asCount(prepareCached(this.db, "SELECT count(DISTINCT simple_name) AS n FROM type").get())
     );
     this.methodIdsByOwnerAndName = new PointMap(key => {
@@ -127,7 +130,8 @@ export class SqlFactsStore {
       const owner = symId(this.db, split.owner);
       if (owner === undefined) return undefined;
       return this.loadIdSet(
-        `owner:${key}`,
+        "owner",
+        key,
         "SELECT s.text AS id FROM method m JOIN sym s ON s.id=m.sym WHERE m.owner_sym=? AND m.name=?",
         owner,
         split.member
@@ -137,24 +141,31 @@ export class SqlFactsStore {
 
   clearRequestCache(): void { this.lru.clear(); }
 
+  private lruOf(kind: CacheKind): BoundedCache<string, unknown> {
+    let cache = this.lru.get(kind);
+    if (!cache) { cache = new BoundedCache(LRU_LIMIT); this.lru.set(kind, cache); }
+    return cache;
+  }
+
   /** Drops what one file's rows fed after its facts were rewritten in place
    * (updateBundleFacts): phase-1 resolution changes facts, never which
    * declarations exist, their names, owners or fqns. */
   forgetFile(bundle: JavaFileBundle): void {
-    this.lru.delete(`file:${bundle.file.relativePath}`);
+    this.lru.get("file")?.delete(bundle.file.relativePath);
     for (const type of bundle.types) {
-      this.lru.delete(`type:${type.typeId}`);
-      this.lru.delete(`methodsOf:${type.typeId}`);
+      this.lru.get("type")?.delete(type.typeId);
+      this.lru.get("methodsOf")?.delete(type.typeId);
     }
-    for (const method of bundle.methods) this.lru.delete(`method:${method.methodId}`);
-    for (const field of bundle.fields) this.lru.delete(`field:${field.fieldId}`);
+    for (const method of bundle.methods) this.lru.get("method")?.delete(method.methodId);
+    for (const field of bundle.fields) this.lru.get("field")?.delete(field.fieldId);
   }
 
-  private cached<T>(key: string, load: () => T | undefined): T | undefined {
-    const hit = this.lru.get(key);
+  private cached<T>(kind: CacheKind, key: string, load: () => T | undefined): T | undefined {
+    const cache = this.lruOf(kind);
+    const hit = cache.get(key);
     if (hit !== undefined) return hit as T;
     const value = load();
-    if (value !== undefined) this.lru.set(key, value);
+    if (value !== undefined) cache.set(key, value);
     return value;
   }
 
@@ -193,7 +204,7 @@ export class SqlFactsStore {
 
   /** Call resolution asks this once per call site; the list lives as long as its type's facts. */
   methodsOfOwner(typeId: string): JavaMethodFacts[] {
-    return this.cached(`methodsOf:${typeId}`, () => {
+    return this.cached("methodsOf", typeId, () => {
       const type = this.typesById.get(typeId);
       if (!type) return [];
       const methods: JavaMethodFacts[] = [];
@@ -577,8 +588,8 @@ export class SqlFactsStore {
     return asCount(prepareCached(this.db, `SELECT count(*) AS n FROM ${table}`).get());
   }
 
-  private loadIdSet(cacheKey: string, sql: string, ...params: Array<string | number>): ReadonlySet<string> | undefined {
-    return this.cached(cacheKey, () => {
+  private loadIdSet(kind: CacheKind, key: string, sql: string, ...params: Array<string | number>): ReadonlySet<string> | undefined {
+    return this.cached(kind, key, () => {
       const ids = new Set<string>();
       for (const row of prepareCached(this.db, sql).all(...params)) {
         if (typeof row.id === "string") ids.add(row.id);

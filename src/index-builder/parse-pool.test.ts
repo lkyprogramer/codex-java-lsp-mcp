@@ -82,3 +82,13 @@ test("a large delta parsed on parser threads writes the index a serial delta and
     await rm(repo, { recursive: true, force: true });
   }
 });
+
+test("a progress callback that throws rejects the call instead of crashing the process", async () => {
+  const { repo, file } = await fixture();
+  try {
+    const inputs = Array.from({ length: 4 }, (_, index) => ({ repoRoot: repo, resolvedRepoRoot: repo, inputPath: file(index), generation: 1 }));
+    await assert.rejects(parseOffThread(inputs, 2, () => { throw new Error("progress sink failed"); }), /progress sink failed/);
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});

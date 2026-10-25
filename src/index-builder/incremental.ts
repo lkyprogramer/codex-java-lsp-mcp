@@ -10,7 +10,7 @@ import path from "node:path";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { repositoryEntityNames } from "../java-knowledge/persistence-edge-builder.js";
 import { KnowledgeGraphBuilder } from "../java-knowledge/graph-builder.js";
-import { buildStaticEdges, resolveFileRefs } from "../java-index/edge-builder.js";
+import { buildStaticEdges, resolveFileRefs, sameResolution } from "../java-index/edge-builder.js";
 import { MAX_DISPATCH, dispatchMethodShape, dispatchTypeShape } from "../java-knowledge/call-resolver.js";
 import { recordsFromBundle } from "../java-index/entity-search.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../java-index/index-types.js";
@@ -309,10 +309,9 @@ function resolveFacts(db: IndexDatabase, relativePaths: readonly string[], raw: 
     const bundle = raw(relativePath);
     if (!bundle) continue;
     const resolved = resolveFileRefs(bundle, resolver, view);
-    // These are exactly the facts updateBundleFacts persists. Edges and the
-    // transient capture/stat data do not belong to this comparison.
-    if (JSON.stringify([bundle.file, bundle.types, bundle.fields, bundle.methods])
-      === JSON.stringify([resolved.file, resolved.types, resolved.fields, resolved.methods])) continue;
+    // Only refs' resolution moves; edges and the transient capture/stat data
+    // are not part of the facts updateBundleFacts persists.
+    if (sameResolution(bundle, resolved)) continue;
     if (!updateBundleFacts(db, { ...resolved, edges: [] })) continue;
     moved.add(relativePath);
     // Later files read this one's resolved facts, as after cold build's per-file clear.

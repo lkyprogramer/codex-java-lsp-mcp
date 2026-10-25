@@ -90,7 +90,8 @@ async function runWorker(): Promise<void> {
   const barrier = faultBarrier();
   let reply: BuildProcessReply;
   // A cloned base starts with a cold page cache; one ordered pass is far cheaper than the job's random reads.
-  const warmMs = await warmFile(request.dbPath);
+  // Only a speed-up: a failed read leaves the job to open (and report) the database itself.
+  const warmMs = await warmFile(request.dbPath).catch(() => 0);
   const db = openIndexDb(request.dbPath);
   try {
     ensureSchema(db);

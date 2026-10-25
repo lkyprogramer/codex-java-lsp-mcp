@@ -14,8 +14,9 @@ import type {
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { javaEdgeId } from "../stable-id.js";
+import { BoundedCache } from "./bounded-cache.js";
 import { onRollback, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
-import { internSym, internSymNullable, symId } from "./sym.js";
+import { internSym, internSymNullable, rememberSyms, symId } from "./sym.js";
 
 export type FileRow = {
   path: string;
@@ -77,11 +78,23 @@ export function encodeFacts(value: unknown): Buffer {
 }
 
 export function decodeFacts<T>(value: SQLOutputValue): T {
-  if (value instanceof Uint8Array) {
-    return JSON.parse(inflateRawSync(value).toString("utf8")) as T;
-  }
-  throw new Error("expected facts blob");
+  if (!(value instanceof Uint8Array)) throw new Error("expected facts blob");
+  if (!decoded) return JSON.parse(inflateRawSync(value).toString("utf8")) as T;
+  const key = Buffer.from(value.buffer, value.byteOffset, value.byteLength).toString("latin1");
+  const hit = decoded.get(key);
+  if (hit !== undefined) return hit as T;
+  const facts = JSON.parse(inflateRawSync(value).toString("utf8")) as T;
+  decoded.set(key, facts);
+  return facts;
 }
+
+// While any bundle memo is held, equal blobs decode once: a decoded value is a
+// function of its bytes alone, so nothing invalidates it, on any connection.
+// The same rows are decoded by every stage of a delta (snapshot, resolution,
+// edges, graph); callers already share decoded facts as immutable.
+const DECODED_LIMIT = 32_768;
+let decoded: BoundedCache<string, unknown> | undefined;
+let decodeScopes = 0;
 
 function asRowId(value: number | bigint): number {
   if (typeof value === "bigint" && value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`unsafe rowid ${value}`);
@@ -253,6 +266,15 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, options: 
         row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
       ).lastInsertRowid);
     }
+    if (existing) {
+      // A rewrite mostly re-interns the ids and names its rows already hold.
+      for (const sql of ["SELECT s.text AS text, s.id AS id FROM type m JOIN sym s ON s.id=m.sym WHERE m.file_id=?",
+        "SELECT s.text AS text, s.id AS id FROM field m JOIN sym s ON s.id=m.sym WHERE m.file_id=?",
+        "SELECT s.text AS text, s.id AS id FROM method m JOIN sym s ON s.id=m.sym WHERE m.file_id=?",
+        "SELECT s.text AS text, s.id AS id FROM type_ref_name r JOIN sym s ON s.id=r.name_sym WHERE r.file_id=?"]) {
+        rememberSyms(db, prepareCached(db, sql).all(id) as Array<{ text: unknown; id: unknown }>);
+      }
+    }
     const types = typeRows(bundle).map(type => ({ ...type, sym: internSym(db, type.typeId) }));
     const fields = fieldRows(bundle).map(field => ({ ...field, sym: internSym(db, field.fieldId) }));
     const methods = methodRows(bundle).map(method => ({ ...method, sym: internSym(db, method.methodId) }));
@@ -333,8 +355,11 @@ function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly Stat
   if (existed) {
     for (const row of prepareCached(
       db,
-      "SELECT id, kind_sym, from_sym, to_sym, sl, sc, el, ec, confidence, res_kind_sym, res_strategy_sym FROM edge WHERE file_id=?"
-    ).all(fileId) as Array<Record<string, number | null>>) {
+      `SELECT e.id AS id, kind_sym, from_sym, to_sym, sl, sc, el, ec, confidence, res_kind_sym, res_strategy_sym, fs.text AS from_text, ts.text AS to_text
+       FROM edge e JOIN sym fs ON fs.id=e.from_sym JOIN sym ts ON ts.id=e.to_sym WHERE e.file_id=?`
+    ).all(fileId) as Array<Record<string, number | string | null>>) {
+      // The new edge set mostly repeats these endpoints.
+      rememberSyms(db, [{ text: row.from_text, id: row.from_sym }, { text: row.to_text, id: row.to_sym }]);
       stale.set([row.kind_sym, row.from_sym, row.to_sym, row.sl, row.sc, row.el, row.ec].join(":"), {
         id: Number(row.id), confidence: Number(row.confidence), resKind: Number(row.res_kind_sym),
         resStrategy: row.res_strategy_sym == null ? null : Number(row.res_strategy_sym)
@@ -359,12 +384,21 @@ function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly Stat
       }
       continue;
     }
+    // The upsert takes over a row another file wrote (duplicate FQNs): that file's kept bundle is stale.
+    if (memos.has(db)) forgetEdgeHolder(db, [kindSym, fromSym, toSym, sl, sc, el, ec], fileId);
     insertStaticEdge(db, edge, fileId);
     changed = true;
   }
   const drop = prepareCached(db, "DELETE FROM edge WHERE id=?");
   for (const old of stale.values()) drop.run(old.id);
   return changed || stale.size > 0;
+}
+
+function forgetEdgeHolder(db: IndexDatabase, key: readonly (number | null)[], fileId: number): void {
+  const holder = prepareCached(db,
+    "SELECT f.path AS path FROM edge e JOIN file f ON f.id=e.file_id WHERE e.kind_sym=? AND e.from_sym=? AND e.to_sym=? AND e.sl IS ? AND e.sc IS ? AND e.el IS ? AND e.ec IS ? AND e.file_id<>?"
+  ).get(...key, fileId) as { path: string } | undefined;
+  if (holder) memos.get(db)?.bundles.delete(holder.path);
 }
 
 /** Records that a resource XML (mapper or not) with this content was examined. Its stat lives in the workspace store. */
@@ -485,6 +519,7 @@ const memoRollbackHooked = new WeakSet<IndexDatabase>();
 /** Keeps readBundle's results on this connection until endBundleMemo. Only the
  * connection's writer may hold one: other writers' rows are not seen. */
 export function beginBundleMemo(db: IndexDatabase): void {
+  if (!memos.has(db) && decodeScopes++ === 0) decoded = new BoundedCache(DECODED_LIMIT);
   memos.set(db, { bundles: new Map(), memberPaths: new Map() });
   if (memoRollbackHooked.has(db)) return;
   memoRollbackHooked.add(db);
@@ -496,7 +531,7 @@ export function beginBundleMemo(db: IndexDatabase): void {
 }
 
 export function endBundleMemo(db: IndexDatabase): void {
-  memos.delete(db);
+  if (memos.delete(db) && --decodeScopes === 0) decoded = undefined;
 }
 
 /** Drops the kept bundle of a path about to be written or deleted, and of every file holding one of `bundle`'s members. */

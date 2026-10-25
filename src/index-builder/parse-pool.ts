@@ -24,7 +24,8 @@ export async function parseOffThread(inputs: readonly ParseArgs[], workers: numb
       };
       worker.on("message", (reply: { id: number; bundle?: JavaFileBundle; error?: string; code?: string }) => {
         outcomes[reply.id] = reply.error !== undefined ? { error: Object.assign(new Error(reply.error), reply.code ? { code: reply.code } : {}) } : { bundle: reply.bundle! };
-        onDone?.(++done);
+        // A listener that throws would be an uncaught exception, not this call's rejection.
+        try { onDone?.(++done); } catch (error) { reject(error); return; }
         send();
       });
       worker.on("error", reject);

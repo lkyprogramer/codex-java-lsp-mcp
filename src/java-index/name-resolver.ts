@@ -269,7 +269,17 @@ const JAVA_LANG_SIMPLE_NAMES = new Set([
 ]);
 
 export class JavaNameResolver {
-  constructor(private readonly registry: TypeRegistryView) {}
+  constructor(private readonly registry: TypeRegistryView, private readonly outcomes?: Map<string, ResolveOutcome>) {}
+
+  /**
+   * This resolver for one file's contexts (one package, import list and
+   * location) while the registry stays unchanged: a name resolves once per
+   * enclosing scope. Type parameters, the one per-member input, are checked
+   * before the memo.
+   */
+  forFile(): JavaNameResolver {
+    return new JavaNameResolver(this.registry, new Map());
+  }
 
   resolveTypeText(text: string, context: JavaResolutionContext): JavaTypeRef {
     const parsed = parseTypeText(text);
@@ -348,12 +358,20 @@ export class JavaNameResolver {
   // A step producing multiple candidates is immediately AMBIGUOUS; it does
   // not pool with candidates a later step might also find.
   private resolveBaseName(dottedBase: string, context: JavaResolutionContext): ResolveOutcome {
-    const simpleName = simpleNameOf(dottedBase);
-
     // Step 1: type parameter declared in the current method/type scope.
     if (!dottedBase.includes(".") && context.typeParameterNames.has(dottedBase)) {
       return { kind: "type_variable", name: dottedBase };
     }
+    if (!this.outcomes) return this.resolveInScope(dottedBase, context);
+    const key = `${context.enclosingTypeIds.join("\n")}\n${dottedBase}`;
+    let outcome = this.outcomes.get(key);
+    if (!outcome) { outcome = this.resolveInScope(dottedBase, context); this.outcomes.set(key, outcome); }
+    return outcome;
+  }
+
+  // Steps 2-10, which read the context's package, imports, location and enclosing types only.
+  private resolveInScope(dottedBase: string, context: JavaResolutionContext): ResolveOutcome {
+    const simpleName = simpleNameOf(dottedBase);
 
     // Step 2: source text is already a qualified name.
     if (dottedBase.includes(".")) {
