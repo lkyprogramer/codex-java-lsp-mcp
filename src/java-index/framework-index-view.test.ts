@@ -17,7 +17,8 @@ import {
   bundlesToRequestedDeclarations,
   fqnOfTypeId,
   ownerTypeIdOf,
-  relativePathOfLocalTypeId
+  relativePathOfLocalTypeId,
+  relativePathOfNamedTypeId
 } from "./framework-index-view.js";
 import { javaParameterId } from "./stable-id.js";
 
@@ -99,14 +100,17 @@ test("T02: v2 source-scoped ids parse through the # separator in owner/fqn looku
   assert.equal(ownerTypeIdOf(`method:${tricky}#run()`), tricky);
 });
 
-test("ownerTypeIdOf: types/type-local ids are their own owner, field/method ids are split on the first #", () => {
-  assert.equal(ownerTypeIdOf("type:demo.Widget"), "type:demo.Widget");
-  assert.equal(ownerTypeIdOf("type-local:src/main/java/demo/W.java:3:1"), "type-local:src/main/java/demo/W.java:3:1");
-  assert.equal(ownerTypeIdOf("field:type:demo.Widget#name"), "type:demo.Widget");
-  assert.equal(ownerTypeIdOf("method:type:demo.Widget#run()"), "type:demo.Widget");
+test("ownerTypeIdOf: type-local ids are their own owner, field/method ids split at their owner; pre-v2 owners name nothing", () => {
+  const local = "type-local:src/main/java/demo/W.java:3:1";
+  assert.equal(ownerTypeIdOf(local), local);
+  assert.equal(ownerTypeIdOf(`field:${local}#name`), local);
+  assert.equal(ownerTypeIdOf(`method:${local}#run()`), local);
   // A parameter id (method:...#sig#pN) is deliberately not resolved - parameters
   // are reached through their owning method's own declaration, not standalone.
-  assert.equal(ownerTypeIdOf(javaParameterId("method:type:demo.Widget#run()", 0)), undefined);
+  assert.equal(ownerTypeIdOf(javaParameterId(`method:${local}#run()`, 0)), undefined);
+  assert.equal(ownerTypeIdOf("type:demo.Widget"), undefined);
+  assert.equal(ownerTypeIdOf("field:type:demo.Widget#name"), undefined);
+  assert.equal(ownerTypeIdOf("method:type:demo.Widget#run()"), undefined);
   assert.equal(ownerTypeIdOf("external:java.lang.Deprecated"), undefined);
 });
 
@@ -271,7 +275,7 @@ test("bundlesToRequestedDeclarations returns only the requested ids across multi
   assert.deepEqual(result.missingIds, ["field:type:demo.C#missing"]);
 });
 
-test("R05: a legacy bare-FQN alias shared by two declarations is ambiguous and answers nothing", () => {
+test("MAC-13 D08: a pre-v2 bare-FQN id names no declaration; exact v2 ids answer from their own file", () => {
   const owner = (path: string) => `type:v2:${encodeURIComponent(path)}#demo.Shared`;
   const field = (ownerTypeId: string): JavaFieldFacts => ({
     fieldId: `field:${ownerTypeId}#count`,
@@ -288,8 +292,13 @@ test("R05: a legacy bare-FQN alias shared by two declarations is ambiguous and a
   const bundleA: JavaFileBundle = { file: file({ relativePath: "a/src/main/java/demo/Shared.java" }), types: [], fields: [a, only], methods: [], edges: [] };
   const bundleB: JavaFileBundle = { file: file({ relativePath: "b/src/main/java/demo/Shared.java" }), types: [], fields: [b], methods: [], edges: [] };
   for (const order of [[bundleA, bundleB], [bundleB, bundleA]]) {
-    const result = bundlesToRequestedDeclarations(order, ["field:type:demo.Shared#count", b.fieldId, "field:type:demo.Only#count"]);
-    assert.deepEqual(result.fields.map(f => f.fieldId), [b.fieldId, only.fieldId], "exact v2 ids and unique aliases still answer");
-    assert.deepEqual(result.missingIds, ["field:type:demo.Shared#count"], "the shared alias is never resolved to the lowest id");
+    const result = bundlesToRequestedDeclarations(order, ["field:type:demo.Shared#count", b.fieldId, "field:type:demo.Only#count", only.fieldId]);
+    assert.deepEqual(result.fields.map(f => f.fieldId), [b.fieldId, only.fieldId]);
+    assert.deepEqual(result.missingIds, ["field:type:demo.Shared#count", "field:type:demo.Only#count"], "no bare-FQN alias, unique or shared, is answered");
   }
+  assert.equal(ownerTypeIdOf("field:type:demo.Only#count"), undefined, "a pre-v2 owner names no file");
+  assert.equal(ownerTypeIdOf("type:demo.Only"), undefined);
+  assert.equal(relativePathOfNamedTypeId(owner("a/src/main/java/demo/Shared.java")), "a/src/main/java/demo/Shared.java");
+  assert.equal(relativePathOfNamedTypeId(`type:v2:${encodeURIComponent("src/main/java/a#b%c.java")}#demo.X`), "src/main/java/a#b%c.java", "an escaped path decodes intact");
+  assert.equal(relativePathOfNamedTypeId("type-local:src/main/java/A.java:1:1"), undefined);
 });

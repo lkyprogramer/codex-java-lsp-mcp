@@ -497,6 +497,35 @@ test("springAdapter.collect chunks declarationsById past its 64-id-per-call cap 
   }
 });
 
+test("MAC-13 D08: an injected type whose FQN is also declared in test sources resolves to the one the service compiles against", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-scoped-target-"));
+  write(root, "src/main/java/demo/Dep.java", "package demo;\npublic class Dep {}\n");
+  write(root, "src/test/java/demo/Dep.java", "package demo;\npublic class Dep {}\n");
+  const servicePath = "src/main/java/demo/Service.java";
+  write(root, servicePath, [
+    "package demo;",
+    "",
+    "import org.springframework.stereotype.Service;",
+    "",
+    "@Service",
+    "class Service {",
+    "  private final Dep dep;",
+    "  Service(Dep dep) { this.dep = dep; }",
+    "}",
+    ""
+  ].join("\n"));
+  const router = await readyRouterAt(root);
+  try {
+    const candidate = path.join(root, servicePath);
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(candidate)], [candidate]));
+    const injections = result.outcome.evidence.filter(s => s.kind === "SPRING_INJECTION");
+    assert.ok(injections.length > 0, "the main-source Dep is the unique visible target, not an ambiguous alias");
+    assert.deepEqual([...new Set(injections.map(s => s.candidateFile))], [path.join(root, "src/main/java/demo/Dep.java")]);
+  } finally {
+    await router.close();
+  }
+});
+
 test("springAdapter.collect stops at an already-exhausted deadline instead of scanning any candidate file, and reports PARTIAL_TIMEOUT", async () => {
   const router = await readyRouter();
   try {

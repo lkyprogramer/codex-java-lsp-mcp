@@ -16,6 +16,7 @@ import { MAX_FRAMEWORK_FACT_FILES } from "./framework-index-view.js";
 import { MAX_FACTS_FOR_FILES } from "./router-facts.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 import { localRouterIndex } from "./local-index.js";
+import { scopedNamedTypeId } from "./stable-id.js";
 
 function write(root: string, relativePath: string, content: string): void {
   const absolutePath = path.join(root, relativePath);
@@ -593,34 +594,31 @@ test("frameworkFactsFor caches within a generation and drops the cache entry on 
   }
 });
 
-test("declarationsById hydrates a method/field/type id across two files with one batched lookup, and reports an unresolvable id as missing", async () => {
+test("declarationsById hydrates a method/field/type id across two files from the ids' own paths, and reports a pre-v2 or absent id as missing", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-decl-repo-"));
   write(repoRoot, "src/main/java/demo/A.java", "package demo;\nclass A {\n  String name;\n  void run() {}\n}\n");
   write(repoRoot, "src/main/java/demo/B.java", "package demo;\nclass B {}\n");
   const router = await readyRouter(repoRoot);
   try {
-    const methodId = "method:type:demo.A#run()";
-    const fieldId = "field:type:demo.A#name";
-    const typeId = "type:demo.B";
+    const ownerA = scopedNamedTypeId("src/main/java/demo/A.java", "demo.A");
+    const methodId = `method:${ownerA}#run()`;
+    const fieldId = `field:${ownerA}#name`;
+    const typeId = scopedNamedTypeId("src/main/java/demo/B.java", "demo.B");
+    const absent = `method:${scopedNamedTypeId("src/main/java/demo/Missing.java", "demo.Missing")}#gone()`;
 
-    const result = await router.declarationsById([methodId, fieldId, typeId, "method:type:demo.Missing#gone()"]);
+    const result = await router.declarationsById([methodId, fieldId, typeId, "method:type:demo.A#run()", absent]);
 
-    // Legacy v1-shaped request ids still resolve; the hydrated declarations
-    // report their canonical v2 source-scoped ids.
-    assert.equal(result.methods.length, 1);
-    assert.match(result.methods[0]!.methodId, /^method:type:v2:.+#demo\.A#run\(\)$/);
-    assert.equal(result.fields.length, 1);
-    assert.match(result.fields[0]!.fieldId, /^field:type:v2:.+#demo\.A#name$/);
-    assert.equal(result.types.length, 1);
-    assert.match(result.types[0]!.typeId, /^type:v2:.+#demo\.B$/);
-    assert.deepEqual(result.missingIds, ["method:type:demo.Missing#gone()"]);
+    assert.deepEqual(result.methods.map(method => method.methodId), [methodId]);
+    assert.deepEqual(result.fields.map(field => field.fieldId), [fieldId]);
+    assert.deepEqual(result.types.map(type => type.typeId), [typeId]);
+    assert.deepEqual(result.missingIds, ["method:type:demo.A#run()", absent], "a pre-v2 id is not an alias");
     assert.equal(result.truncated, false);
   } finally {
     await router.close();
   }
 });
 
-test("declarationsById foreground-refreshes a conventional cross-module type path while the initial sweep is incomplete", async () => {
+test("typesByName foreground-refreshes a conventional cross-module type path while the initial sweep is incomplete", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-cold-decl-repo-"));
   write(repoRoot, "modules/school/src/main/java/school/Mapper.java", "package school;\nimport common.IdConverter;\nclass Mapper {}\n");
   write(repoRoot, "modules/common/src/main/java/common/IdConverter.java", "package common;\npublic class IdConverter {}\n");
@@ -632,11 +630,36 @@ test("declarationsById foreground-refreshes a conventional cross-module type pat
     // before the background reconcile reaches its imported module.
     await router.frameworkFactsFor(path.join(repoRoot, "modules/school/src/main/java/school/Mapper.java"), 1);
 
-    const result = await router.declarationsById(["type:common.IdConverter"]);
+    const scopeFile = path.join(repoRoot, "modules/school/src/main/java/school/Mapper.java");
+    const [target] = await router.typesByName([{ fqn: "common.IdConverter", scopeFile }]);
 
-    assert.deepEqual(result.missingIds, []);
-    assert.deepEqual(result.types.map(type => type.fqn), ["common.IdConverter"]);
-    assert.equal(result.truncated, false);
+    assert.equal(target?.relativePath, "modules/common/src/main/java/common/IdConverter.java");
+    assert.equal(target?.typeId, scopedNamedTypeId("modules/common/src/main/java/common/IdConverter.java", "common.IdConverter"));
+  } finally {
+    await router.close();
+  }
+});
+
+test("MAC-13 D08: typesByName resolves a duplicated FQN from the referring file's source set and never guesses without one", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-names-repo-"));
+  write(repoRoot, "src/main/java/demo/Shared.java", "package demo;\npublic class Shared {}\n");
+  write(repoRoot, "src/test/java/demo/Shared.java", "package demo;\npublic class Shared {}\n");
+  write(repoRoot, "src/main/java/demo/UseMain.java", "package demo;\nclass UseMain { Shared shared; }\n");
+  write(repoRoot, "src/test/java/demo/UseTest.java", "package demo;\nclass UseTest { Shared shared; }\n");
+  const router = await readyRouter(repoRoot);
+  try {
+    const fromMain = path.join(repoRoot, "src/main/java/demo/UseMain.java");
+    const fromTest = path.join(repoRoot, "src/test/java/demo/UseTest.java");
+    const [main, test, unscoped, missing] = await router.typesByName([
+      { fqn: "demo.Shared", scopeFile: fromMain },
+      { fqn: "demo.Shared", scopeFile: fromTest },
+      { fqn: "demo.Shared" },
+      { fqn: "demo.Missing", scopeFile: fromMain }
+    ]);
+    assert.deepEqual(main, { typeId: scopedNamedTypeId("src/main/java/demo/Shared.java", "demo.Shared"), relativePath: "src/main/java/demo/Shared.java" });
+    assert.equal(test?.relativePath, "src/test/java/demo/Shared.java", "a test source sees its own source set first");
+    assert.equal(unscoped, undefined, "two equally visible declarations answer nothing");
+    assert.equal(missing, undefined);
   } finally {
     await router.close();
   }
@@ -647,17 +670,16 @@ test("declarationsById caps an oversized id list rather than issuing an unbounde
   write(repoRoot, "src/main/java/demo/Only.java", "package demo;\nclass Only {\n  void run() {}\n}\n");
   const router = await readyRouter(repoRoot);
   try {
-    const realId = "method:type:demo.Only#run()";
+    const realId = `method:${scopedNamedTypeId("src/main/java/demo/Only.java", "demo.Only")}#run()`;
     // 70 > MAX_DECLARATION_IDS (64) - the excess must never even be looked up.
-    const oversizedIds = Array.from({ length: 70 }, (_, i) => `field:type:demo.Fake${i}#x`);
+    const oversizedIds = Array.from({ length: 70 }, (_, i) => `field:${scopedNamedTypeId(`src/main/java/demo/Fake${i}.java`, `demo.Fake${i}`)}#x`);
     oversizedIds[0] = realId;
 
     const result = await router.declarationsById(oversizedIds);
 
     assert.equal(result.truncated, true);
     assert.equal(result.methods.length, 1);
-    // The v1-shaped request resolves to the canonical v2 method id.
-    assert.match(result.methods[0]!.methodId, /^method:type:v2:.+#demo\.Only#run\(\)$/);
+    assert.equal(result.methods[0]!.methodId, realId);
     assert.ok(result.missingIds.length >= 6, "ids beyond the cap must be reported, not silently dropped");
   } finally {
     await router.close();

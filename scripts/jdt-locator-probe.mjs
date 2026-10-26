@@ -57,9 +57,9 @@ export async function runLocatorProbe({ repoRoot, queries, call, readSource = fi
       }
       warm = true;
       const selected = summarize(atSelection, declaration);
-      if (!selected.definitionIsDeclaration) throw new Error(`definition does not bind to ${declaration.id} at ${relativePath}:${selection.line}:${selection.column}`);
+      if (!selected.definitionIsDeclaration) throw new Error(`definition does not bind to ${declaration.symbolId ?? declaration.name} at ${relativePath}:${selection.line}:${selection.column}`);
       const atOld = checked(await call('java_symbol', { operation: 'position', file: relativePath, ...old, semanticTimeoutMs: 10_000 }));
-      rows.push({ query, id: declaration.id, kind: declaration.kind, relativePath, selection, evidenceRange, oldLocator: old,
+      rows.push({ query, symbolId: declaration.symbolId, kind: declaration.kind, relativePath, selection, evidenceRange, oldLocator: old,
         oldLocatorText: oldLine.trim().slice(0, 80), jdtAtSelection: selected, jdtAtOldLocator: summarize(atOld, declaration) });
     }
   }

@@ -147,6 +147,15 @@ export type FrameworkIndexStatus = {
   coverage: "complete" | "partial" | "degraded";
 };
 
+/**
+ * A type named in framework source text (a resolved FQN, an annotation class literal, MyBatis XML), as
+ * the file `scopeFile` sees it. Adapters name targets this way instead of building lookup ids.
+ */
+export type FrameworkTypeName = { fqn: string; scopeFile?: string };
+
+/** The one declaration a FrameworkTypeName resolves to. */
+export type FrameworkTypeTarget = { typeId: string; relativePath: string };
+
 export type FrameworkRepositoryFactMarkers = {
   importPrefixFound: boolean;
   annotationPrefixFound: boolean;
@@ -162,6 +171,12 @@ export interface FrameworkIndexView {
   frameworkFactsFor(file: string, generation?: number): Promise<FrameworkFileFacts>;
   frameworkFactsForFiles(files: readonly string[], generation?: number): Promise<FrameworkFileFacts[]>;
   declarationsById(ids: readonly string[]): Promise<FrameworkDeclarations>;
+  /**
+   * Each name resolved from its scope file's module/source set (the resolver's visibility order), aligned
+   * by index: undefined when no declaration, or more than one equally visible, answers it - never a guess.
+   * At most MAX_DECLARATION_IDS_PER_CALL names per call; the rest come back undefined.
+   */
+  typesByName(names: readonly FrameworkTypeName[]): Promise<Array<FrameworkTypeTarget | undefined>>;
   resolvedCallees(methodId: string, limit?: number): Promise<FrameworkCallees>;
   resolvedCalleesFor(methodIds: readonly string[], limit?: number): Promise<Map<string, FrameworkCallees>>;
   repositoryMarkers(relativePaths: readonly string[]): Promise<Map<string, string>>;
@@ -188,30 +203,32 @@ export const MAX_FRAMEWORK_MYBATIS_NAMESPACES = 256;
  */
 export const MAX_DECLARATION_IDS_PER_CALL = 64;
 
-/** The owning type id embedded in a "type:"/"type-local:" id (itself) or a "field:"/"method:" id (the owner prefix before the member separator). v2 owner ids ("type:v2:<path>#<fqn>") embed one "#", so a member id carries a second "#" before its signature/name. undefined for anything else (e.g. a parameter id - declarationsById does not resolve those; parameters are reached via their owning method). */
+/** The owning type id embedded in a "type:v2:"/"type-local:" id (itself) or a "field:"/"method:" id (the owner prefix before the member separator). v2 owner ids ("type:v2:<path>#<fqn>") embed one "#", so a member id carries a second "#" before its signature/name. undefined for anything else, including a pre-v2 "type:<fqn>" owner and a parameter id (declarationsById does not resolve those; parameters are reached via their owning method). */
 export function ownerTypeIdOf(id: string): string | undefined {
-  if (id.startsWith("type:") || id.startsWith("type-local:")) return id;
+  if (id.startsWith("type:v2:") || id.startsWith("type-local:")) return id;
   for (const prefix of ["field:", "method:"]) {
     if (!id.startsWith(prefix)) continue;
-    const rest = id.slice(prefix.length);
-    if (!rest.startsWith("type:") && !rest.startsWith("type-local:")) return undefined;
-    let ownerEnd: number;
-    if (rest.startsWith("type:v2:")) {
-      const first = rest.indexOf("#");
-      if (first === -1) return undefined;
-      ownerEnd = rest.indexOf("#", first + 1);
-    } else {
-      ownerEnd = rest.indexOf("#");
-    }
-    if (ownerEnd === -1) return undefined;
+    const split = splitOwnerMemberKey(id.slice(prefix.length));
     // A parameter id (method:<owner>#<sig>#p<N>, see javaParameterId) has a
     // "#" after the owner/member split - reject rather than resolve to the
     // enclosing method's owner type, since declarationsById only hydrates
     // types/methods/fields, not standalone parameters.
-    if (rest.indexOf("#", ownerEnd + 1) !== -1) return undefined;
-    return rest.slice(0, ownerEnd);
+    if (!split || split.member.includes("#")) return undefined;
+    return split.owner;
   }
   return undefined;
+}
+
+/** The repo-relative path embedded in a "type:v2:<path>#<fqn>" id, or undefined for any other id. */
+export function relativePathOfNamedTypeId(typeId: string): string | undefined {
+  if (!typeId.startsWith("type:v2:")) return undefined;
+  const hash = typeId.indexOf("#");
+  if (hash === -1) return undefined;
+  try {
+    return decodeURIComponent(typeId.slice("type:v2:".length, hash));
+  } catch {
+    return undefined;
+  }
 }
 
 const TYPE_LOCAL_PATTERN = /^type-local:(.+):(\d+):(\d+)$/;
@@ -337,30 +354,6 @@ export function bundleToFrameworkFileFacts(bundle: JavaFileBundle): FrameworkFil
  * fetched to answer the request). ids not found in any of the given bundles
  * are reported in missingIds instead of silently omitted.
  */
-// A v2 declaration also answers legacy "type:<fqn>" (and
-// "method:type:<fqn>#<sig>" / "field:type:<fqn>#<name>") request ids: the
-// framework adapters build in-process lookup keys from a resolved FQN (never
-// persisted, never read back from a database). A legacy alias that two declarations share (the same FQN in two
-// source roots) is ambiguous and answers nothing (reported missing), the same
-// "never guess between duplicates" rule the name resolver applies.
-export function v1AliasIds(id: string): string[] {
-  if (id.startsWith("type:v2:")) {
-    const fqn = fqnOfTypeId(id);
-    return fqn ? [`type:${fqn}`] : [];
-  }
-  for (const prefix of ["method:", "field:"]) {
-    if (!id.startsWith(prefix)) continue;
-    // splitOwnerMemberKey expects the bare "owner#member" key, not the
-    // prefixed id.
-    const split = splitOwnerMemberKey(id.slice(prefix.length));
-    if (!split) continue;
-    const ownerFqn = fqnOfTypeId(split.owner);
-    if (!ownerFqn) continue;
-    return [`${prefix}type:${ownerFqn}#${split.member}`];
-  }
-  return [];
-}
-
 export function bundlesToRequestedDeclarations(
   bundles: readonly JavaFileBundle[],
   requestedIds: readonly string[]
@@ -374,27 +367,16 @@ export function bundlesToRequestedDeclarations(
     for (const method of declarations.methods) methodsById.set(method.methodId, method);
     for (const field of declarations.fields) fieldsById.set(field.fieldId, field);
   }
-  const typeAliasById = new Map<string, { id: string; decl?: FrameworkTypeDeclaration }>();
-  const methodAliasById = new Map<string, { id: string; decl?: FrameworkMethodDeclaration }>();
-  const fieldAliasById = new Map<string, { id: string; decl?: FrameworkFieldDeclaration }>();
-  const aliasWin = <T,>(map: Map<string, { id: string; decl?: T }>, alias: string, id: string, decl: T): void => {
-    const current = map.get(alias);
-    if (current === undefined) map.set(alias, { id, decl });
-    else if (current.id !== id) map.set(alias, { id: current.id });
-  };
-  for (const [id, type] of typesById) for (const alias of v1AliasIds(id)) aliasWin(typeAliasById, alias, id, type);
-  for (const [id, method] of methodsById) for (const alias of v1AliasIds(id)) aliasWin(methodAliasById, alias, id, method);
-  for (const [id, field] of fieldsById) for (const alias of v1AliasIds(id)) aliasWin(fieldAliasById, alias, id, field);
   const types: FrameworkTypeDeclaration[] = [];
   const methods: FrameworkMethodDeclaration[] = [];
   const fields: FrameworkFieldDeclaration[] = [];
   const missingIds: string[] = [];
   for (const id of requestedIds) {
-    const type = typesById.get(id) ?? typeAliasById.get(id)?.decl;
+    const type = typesById.get(id);
     if (type) { types.push(type); continue; }
-    const method = methodsById.get(id) ?? methodAliasById.get(id)?.decl;
+    const method = methodsById.get(id);
     if (method) { methods.push(method); continue; }
-    const field = fieldsById.get(id) ?? fieldAliasById.get(id)?.decl;
+    const field = fieldsById.get(id);
     if (field) { fields.push(field); continue; }
     missingIds.push(id);
   }

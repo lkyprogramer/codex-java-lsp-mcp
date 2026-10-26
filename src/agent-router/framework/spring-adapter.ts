@@ -18,8 +18,8 @@ import {
   frameworkSeedFiles,
   frameworkStatus,
   rankableFrameworkMethods,
-  relativePathLookup,
-  resolveFrameworkTargets
+  resolveFrameworkTargets,
+  type FrameworkTarget
 } from "./shared.js";
 import {
   hasAnnotation,
@@ -85,7 +85,7 @@ type SpringEvidenceKind =
 type PendingEvidence = {
   kind: SpringEvidenceKind;
   sourceFile: string;
-  targetId: string;
+  target: FrameworkTarget;
   weight: number;
   confidence: number;
   detail: string;
@@ -243,11 +243,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       const constructor = injectingConstructorOf(methods, factsForFile);
       for (const parameter of constructor?.parameters ?? []) {
         if (!parameter.type.resolvedFqn) continue;
-        pending.push({ kind: "SPRING_INJECTION", sourceFile: absolutePath, sourceRange: constructor!.range, targetId: `type:${parameter.type.resolvedFqn}`, weight: SPRING_INJECTION_WEIGHT, confidence: typeRefConfidence(parameter.type, 0.97), detail: `${type.simpleName} constructor parameter` });
+        pending.push({ kind: "SPRING_INJECTION", sourceFile: absolutePath, sourceRange: constructor!.range, target: { typeName: { fqn: parameter.type.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_INJECTION_WEIGHT, confidence: typeRefConfidence(parameter.type, 0.97), detail: `${type.simpleName} constructor parameter` });
       }
       for (const field of fields) {
         if (!hasAnnotation(annotationsOf(factsForFile, field.annotations), SPRING_AUTOWIRED_FQN) || !field.type.resolvedFqn) continue;
-        pending.push({ kind: "SPRING_INJECTION", sourceFile: absolutePath, targetId: `type:${field.type.resolvedFqn}`, weight: SPRING_INJECTION_WEIGHT, confidence: typeRefConfidence(field.type, 0.95), detail: `${type.simpleName}.${field.name} (@Autowired field)` });
+        pending.push({ kind: "SPRING_INJECTION", sourceFile: absolutePath, target: { typeName: { fqn: field.type.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_INJECTION_WEIGHT, confidence: typeRefConfidence(field.type, 0.95), detail: `${type.simpleName}.${field.name} (@Autowired field)` });
       }
     }
 
@@ -262,11 +262,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         endpoints.push(composeEndpointFact(method.methodId, classMapping, methodMapping));
         const responseType = candidateType(method.returnType);
         if (responseType?.resolvedFqn) {
-          pending.push({ kind: "SPRING_RESPONSE_TYPE", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${responseType.resolvedFqn}`, weight: SPRING_RESPONSE_TYPE_WEIGHT, confidence: typeRefConfidence(responseType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() response type` });
+          pending.push({ kind: "SPRING_RESPONSE_TYPE", sourceFile: absolutePath, sourceRange: method.range, target: { typeName: { fqn: responseType.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_RESPONSE_TYPE_WEIGHT, confidence: typeRefConfidence(responseType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() response type` });
         }
         const requestBody = method.parameters.find(parameter => hasAnnotation(annotationsOf(factsForFile, parameter.annotations), SPRING_REQUEST_BODY_FQN));
         if (requestBody?.type.resolvedFqn) {
-          pending.push({ kind: "SPRING_REQUEST_BODY", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${requestBody.type.resolvedFqn}`, weight: SPRING_REQUEST_BODY_WEIGHT, confidence: typeRefConfidence(requestBody.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() @RequestBody` });
+          pending.push({ kind: "SPRING_REQUEST_BODY", sourceFile: absolutePath, sourceRange: method.range, target: { typeName: { fqn: requestBody.type.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_REQUEST_BODY_WEIGHT, confidence: typeRefConfidence(requestBody.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() @RequestBody` });
         }
       }
 
@@ -274,17 +274,17 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       if (hasAnnotation(methodAnnotations, SPRING_BEAN_FQN)) {
         const beanType = candidateType(method.returnType);
         if (beanType?.resolvedFqn) {
-          pending.push({ kind: "SPRING_BEAN_PRODUCES", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${beanType.resolvedFqn}`, weight: SPRING_BEAN_PRODUCES_WEIGHT, confidence: typeRefConfidence(beanType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}()` });
+          pending.push({ kind: "SPRING_BEAN_PRODUCES", sourceFile: absolutePath, sourceRange: method.range, target: { typeName: { fqn: beanType.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_BEAN_PRODUCES_WEIGHT, confidence: typeRefConfidence(beanType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}()` });
         }
         for (const parameter of method.parameters) {
           if (!parameter.type.resolvedFqn) continue;
-          pending.push({ kind: "SPRING_BEAN_DEPENDS_ON", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${parameter.type.resolvedFqn}`, weight: SPRING_BEAN_DEPENDS_ON_WEIGHT, confidence: typeRefConfidence(parameter.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}() parameter` });
+          pending.push({ kind: "SPRING_BEAN_DEPENDS_ON", sourceFile: absolutePath, sourceRange: method.range, target: { typeName: { fqn: parameter.type.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_BEAN_DEPENDS_ON_WEIGHT, confidence: typeRefConfidence(parameter.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}() parameter` });
         }
       }
       if (hasAnnotation(methodAnnotations, SPRING_EVENT_LISTENER_FQN)) {
         const eventType = method.parameters[0]?.type;
         if (eventType?.resolvedFqn) {
-          pending.push({ kind: "SPRING_CONSUMES_EVENT", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${eventType.resolvedFqn}`, weight: SPRING_CONSUMES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() consumes event` });
+          pending.push({ kind: "SPRING_CONSUMES_EVENT", sourceFile: absolutePath, sourceRange: method.range, target: { typeName: { fqn: eventType.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_CONSUMES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() consumes event` });
         }
       }
 
@@ -297,12 +297,12 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         if (!receiver?.resolvedFqn || callSite.receiverDeclaredType?.resolvedFqn !== receiver.resolvedFqn) continue;
         const matchingCalls = calleeResult.callees.filter(edge => edge.kind === "CALLS" && sameRange(edge.range, callSite.range));
         if (matchingCalls.length === 1 && !calleeResult.truncated) {
-          pending.push({ kind: "SPRING_CALL_PATH", sourceFile: absolutePath, sourceRange: method.range, targetId: matchingCalls[0]!.targetId, weight: SPRING_CALL_PATH_WEIGHT, confidence: matchingCalls[0]!.confidence, detail: `${type.simpleName}.${method.name}() injected call path` });
+          pending.push({ kind: "SPRING_CALL_PATH", sourceFile: absolutePath, sourceRange: method.range, target: { declarationId: matchingCalls[0]!.targetId }, weight: SPRING_CALL_PATH_WEIGHT, confidence: matchingCalls[0]!.confidence, detail: `${type.simpleName}.${method.name}() injected call path` });
         }
         if (callSite.name !== "publishEvent" || callSite.arity !== 1 || receiver.resolvedFqn !== SPRING_APPLICATION_EVENT_PUBLISHER_FQN) continue;
         const eventType = callSite.argumentTypeHints[0];
         if (!eventType?.resolvedFqn) continue;
-        pending.push({ kind: "SPRING_PUBLISHES_EVENT", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${eventType.resolvedFqn}`, weight: SPRING_PUBLISHES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() publishes event` });
+        pending.push({ kind: "SPRING_PUBLISHES_EVENT", sourceFile: absolutePath, sourceRange: method.range, target: { typeName: { fqn: eventType.resolvedFqn, scopeFile: absolutePath } }, weight: SPRING_PUBLISHES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() publishes event` });
         const publishers = publishedEvents.get(eventType.resolvedFqn) ?? [];
         publishers.push({ sourceFile: absolutePath, sourceRange: method.range });
         publishedEvents.set(eventType.resolvedFqn, publishers);
@@ -335,22 +335,20 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       const eventType = listener.parameters[0]?.type;
       if (!eventType?.resolvedFqn || !publishedEvents.has(eventType.resolvedFqn) || !hasAnnotation(annotationFacts, SPRING_EVENT_LISTENER_FQN)) continue;
       for (const published of publishedEvents.get(eventType.resolvedFqn) ?? []) {
-        pending.push({ kind: "SPRING_EVENT_LISTENER", sourceFile: published.sourceFile, sourceRange: published.sourceRange, targetId: listener.methodId, weight: SPRING_EVENT_LISTENER_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `listener for ${eventType.resolvedFqn}` });
+        pending.push({ kind: "SPRING_EVENT_LISTENER", sourceFile: published.sourceFile, sourceRange: published.sourceRange, target: { declarationId: listener.methodId }, weight: SPRING_EVENT_LISTENER_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `listener for ${eventType.resolvedFqn}` });
       }
     }
   }
 
-  const targetIds = [...new Set(pending.map(item => item.targetId))];
   const resolved = timedOut
-    ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut: true }
-    : await resolveFrameworkTargets(context, targetIds);
+    ? { relativePathOf: () => undefined, truncated: false, timedOut: true }
+    : await resolveFrameworkTargets(context, pending.map(item => item.target));
   timedOut = timedOut || resolved.timedOut;
-  const relativePathById = relativePathLookup(resolved.declarations);
 
   const evidence: EvidenceSignal[] = [];
   let signalSeq = 0;
   for (const item of pending) {
-    const relativePath = relativePathById.get(item.targetId);
+    const relativePath = resolved.relativePathOf(item.target);
     if (!relativePath) continue;
     const targetAbsolutePath = path.resolve(context.repoRoot, relativePath);
     for (const anchorId of frameworkEvidenceOriginIds(context, item.sourceFile, item.sourceRange)) {
@@ -376,7 +374,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     }
   }
 
-  if (resolved.declarations.truncated) diagnostics.push(`spring adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);
+  if (resolved.truncated) diagnostics.push(`spring adapter: declarationsById truncated while resolving ${pending.length} evidence targets`);
   if (anyCalleesTruncated) diagnostics.push("spring adapter: resolvedCallees truncated for at least one Spring-managed method");
   if (timedOut) diagnostics.push("spring adapter: deadline exhausted before all bounded framework work completed");
   return {
@@ -384,7 +382,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: SPRING_ADAPTER_ID,
       providerVersion: SPRING_ADAPTER_VERSION,
       evidence,
-      completion: timedOut ? "PARTIAL_TIMEOUT" : limited || resolved.declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
+      completion: timedOut ? "PARTIAL_TIMEOUT" : limited || resolved.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata: { endpoints, transactionalMethodIds: [...new Set(transactionalMethodIds)] },

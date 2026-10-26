@@ -190,6 +190,7 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
       return [];
     },
     async declarationsById() { return { types: [], methods: [], fields: [], missingIds: [], truncated: false }; },
+    async typesByName(names: readonly unknown[]) { return names.map(() => undefined); },
     async resolvedCalleesFor() { return new Map(); },
     async repositoryMarkers() { return new Map<string, string>(); },
     async repositoryFactMarkers() { return { importPrefixFound: false, annotationPrefixFound: false }; },

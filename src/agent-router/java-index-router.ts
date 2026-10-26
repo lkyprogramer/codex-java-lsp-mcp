@@ -34,16 +34,18 @@ import {
   MAX_FRAMEWORK_MYBATIS_NAMESPACES,
   bundleToFrameworkFileFacts,
   bundlesToRequestedDeclarations,
-  fqnOfTypeId,
   ownerTypeIdOf,
   relativePathOfLocalTypeId,
+  relativePathOfNamedTypeId,
   type FrameworkCallees,
   type FrameworkDeclarations,
   type FrameworkFileFacts,
   type FrameworkIndexStatus,
   type FrameworkMethodDeclaration,
   type FrameworkRepositoryFactMarkers,
-  type FrameworkIndexView
+  type FrameworkIndexView,
+  type FrameworkTypeName,
+  type FrameworkTypeTarget
 } from "../java-index/framework-index-view.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
 import {
@@ -1171,12 +1173,12 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
 
   /**
    * Batch-hydrates arbitrary type/method/field ids (e.g. resolvedCallees'
-   * targetId values) into their declarations. A "type:<fqn>" owner resolves
-   * via one batched exact-fqn queryTypes() call; an FQN declared more than
-   * once comes back AMBIGUOUS and its ids stay in missingIds (no guess); a
-   * "type-local:<path>:.." owner's file is already embedded in the id. Both
-   * paths converge on a single batched queryFiles() call, mirroring
-   * typesToFacts()'s existing group-by-file-then-hydrate-once pattern.
+   * targetId values) into their declarations. Every hydratable id names its
+   * file: a v2 owner embeds its path ("type:v2:<path>#<fqn>"), a
+   * "type-local:<path>:.." owner its path and position. A pre-v2 "type:<fqn>"
+   * id names no declaration and is reported missing; a name is resolved with
+   * typesByName first. All paths converge on a single batched queryFiles()
+   * call, mirroring typesToFacts()'s group-by-file-then-hydrate-once pattern.
    *
    * Bounded at both ends: more than MAX_DECLARATION_IDS_PER_CALL ids are never even
    * looked up (reported via `truncated`, not silently accepted), and if the
@@ -1191,45 +1193,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const uniqueIds = unique([...ids]);
     const boundedIds = uniqueIds.slice(0, MAX_DECLARATION_IDS_PER_CALL);
     const relativePaths = new Set<string>();
-    const fqnsNeedingLookup = new Set<string>();
     for (const id of boundedIds) {
       const ownerTypeId = ownerTypeIdOf(id);
-      if (!ownerTypeId) continue;
-      const localPath = relativePathOfLocalTypeId(ownerTypeId);
-      if (localPath) {
-        relativePaths.add(localPath);
-        continue;
-      }
-      const fqn = fqnOfTypeId(ownerTypeId);
-      if (fqn) fqnsNeedingLookup.add(fqn);
-    }
-    if (fqnsNeedingLookup.size > 0) {
-      const fqnLookups = [...fqnsNeedingLookup];
-      const lookups = await this.queryTypes(fqnLookups.map(typeText => ({ typeText })));
-      for (const lookup of lookups) {
-        if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
-      }
-      // A request may foreground-refresh its mapper/anchor while the initial
-      // background reconcile has not reached a dependent module yet. The
-      // mapper's import is then visible but its exact FQN declaration is not
-      // in the store. Try only the normal top-level Java path under already
-      // discovered source roots, refresh files that actually exist, then
-      // repeat the exact lookup once. This is deliberately not a name scan
-      // and never guesses an arbitrary binding.
-      const unresolvedFqns = fqnLookups.filter((_, index) => lookups[index]?.state !== "RESOLVED");
-      if (unresolvedFqns.length > 0 && summarizeCoverage(this.client.localStatus()) !== "complete") {
-        const candidates = conventionalDeclarationCandidates(this.repoRoot, this.conventionalDeclarationRoots, unresolvedFqns);
-        if (candidates.length > 0) {
-          await this.ensureFresh(candidates, this.generation);
-          const retries = await this.client.queryTypes(
-            unresolvedFqns.map(typeText => ({ typeText })),
-            this.currentRequestOptions()
-          );
-          for (const lookup of retries) {
-            if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
-          }
-        }
-      }
+      const relativePath = ownerTypeId && (relativePathOfLocalTypeId(ownerTypeId) ?? relativePathOfNamedTypeId(ownerTypeId));
+      if (relativePath) relativePaths.add(relativePath);
     }
     const boundedPaths = [...relativePaths].slice(0, MAX_DECLARATION_PATHS);
     const absolutePaths = boundedPaths.map(relative => path.resolve(this.repoRoot, relative));
@@ -1242,6 +1209,41 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       missingIds: [...result.missingIds, ...uniqueIds.slice(MAX_DECLARATION_IDS_PER_CALL)],
       truncated: uniqueIds.length > MAX_DECLARATION_IDS_PER_CALL
     };
+  }
+
+  /**
+   * One batched exact-name queryTypes() call, each name scoped to the file
+   * that wrote it, so the same FQN in another module or source set loses to
+   * the one the referring file compiles against; two equally visible
+   * declarations stay AMBIGUOUS and answer nothing.
+   */
+  async typesByName(names: readonly FrameworkTypeName[]): Promise<Array<FrameworkTypeTarget | undefined>> {
+    await this.ensureOpened(this.generation);
+    const bounded = names.slice(0, MAX_DECLARATION_IDS_PER_CALL);
+    if (bounded.length === 0) return names.map(() => undefined);
+    const queries = bounded.map(name => ({ typeText: name.fqn, ...(name.scopeFile ? { scopeFile: name.scopeFile } : {}) }));
+    // A copy: the memoized batch is shared with other callers of this request.
+    const lookups = [...await this.queryTypes(queries)];
+    // A request may foreground-refresh its mapper/anchor while the initial
+    // background reconcile has not reached a dependent module yet. The
+    // mapper's import is then visible but its exact FQN declaration is not
+    // in the store. Try only the normal top-level Java path under already
+    // discovered source roots, refresh files that actually exist, then
+    // repeat the exact lookup once. This is deliberately not a name scan
+    // and never guesses an arbitrary binding.
+    const unresolved = bounded.flatMap((_, index) => lookups[index]?.state === "RESOLVED" ? [] : [index]);
+    if (unresolved.length > 0 && summarizeCoverage(this.client.localStatus()) !== "complete") {
+      const candidates = conventionalDeclarationCandidates(this.repoRoot, this.conventionalDeclarationRoots, unique(unresolved.map(index => bounded[index]!.fqn)));
+      if (candidates.length > 0) {
+        await this.ensureFresh(candidates, this.generation);
+        const retries = await this.client.queryTypes(unresolved.map(index => queries[index]!), this.currentRequestOptions());
+        unresolved.forEach((index, at) => { if (retries[at]) lookups[index] = retries[at]!; });
+      }
+    }
+    return names.map((_, index) => {
+      const lookup = index < bounded.length ? lookups[index] : undefined;
+      return lookup?.state === "RESOLVED" ? { typeId: lookup.type.typeId, relativePath: relativePathOfFileId(lookup.type.fileId) } : undefined;
+    });
   }
 
   /**

@@ -5,7 +5,7 @@ import { runLocatorProbe } from './jdt-locator-probe.mjs';
 
 const source = '@Deprecated\nclass Target {}\n';
 const candidate = {
-  declaration: { id: 'target', name: 'Target', kind: 'class', relativePath: 'Target.java', selection: { line: 2, column: 7 } },
+  declaration: { symbolId: 'jsym:mac1:workspace:dGFyZ2V0', name: 'Target', kind: 'class', relativePath: 'Target.java', selection: { line: 2, column: 7 } },
   evidenceRange: { relativePath: 'Target.java', contentHash: createHash('sha256').update(source).digest('hex'), startLine: 1, endLine: 2 },
   preview: source
 };

@@ -24,6 +24,7 @@ function fakeFrameworkIndex(): FrameworkIndexView {
     }),
     frameworkFactsForFiles: async () => [],
     declarationsById: async () => ({ types: [], methods: [], fields: [], missingIds: [], truncated: false }),
+    typesByName: async names => names.map(() => undefined),
     resolvedCallees: async () => ({ callees: [], truncated: false }),
     resolvedCalleesFor: async () => new Map(),
     repositoryMarkers: async () => new Map(),

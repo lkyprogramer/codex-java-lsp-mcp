@@ -7,7 +7,7 @@
 //      probe before writing the regex: `"(uses = AddressMapper.class)"` /
 //      `"(uses = {AddressMapper.class, ContactMapper.class})"`, parens included). A dotted capture
 //      is already qualified; a bare simple name is resolved via the file's own explicit import or
-//      a same-package guess, then verified through the same declarationsById batch as SOURCE/TARGET -
+//      a same-package guess, then resolved from the mapper's file in the same typesByName batch as SOURCE/TARGET -
 //      an unresolved candidate produces no evidence, never a guess.
 import path from "node:path";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
@@ -23,8 +23,8 @@ import {
   frameworkRepositoryMarkers,
   frameworkSeedFiles,
   frameworkStatus,
-  relativePathLookup,
-  resolveFrameworkTargets
+  resolveFrameworkTargets,
+  type FrameworkTarget
 } from "./shared.js";
 
 export const MAPSTRUCT_ADAPTER_ID = "mapstruct";
@@ -47,7 +47,7 @@ type MapStructEvidenceKind = "MAPSTRUCT_SOURCE" | "MAPSTRUCT_TARGET" | "MAPSTRUC
 type PendingEvidence = {
   kind: MapStructEvidenceKind;
   sourceFile: string;
-  targetId: string;
+  target: FrameworkTarget;
   weight: number;
   detail: string;
   anchorIds: readonly string[];
@@ -58,8 +58,8 @@ function hasAnnotation(annotations: readonly FrameworkAnnotation[], fqn: string)
 }
 
 /**
- * `@Mapper(uses = ...)`'s class literals, resolved to candidate "type:<fqn>"
- * ids - never guessed past what the file's own imports/package prove. A
+ * `@Mapper(uses = ...)`'s class literals, as candidate FQNs - never guessed past
+ * what the file's own imports/package prove. A
  * dotted capture (e.g. "demo.mappers.AddressMapper") is already qualified.
  * A bare simple name resolves via an explicit (non-wildcard) import match,
  * else falls back to the annotated type's own package - the same-package
@@ -69,26 +69,26 @@ function hasAnnotation(annotations: readonly FrameworkAnnotation[], fqn: string)
  * existing resolver already leaves an ambiguous wildcard candidate
  * unresolved elsewhere in this codebase rather than guessing.
  */
-function usesClassLiteralTargetIds(annotation: FrameworkAnnotation, facts: FrameworkFileFacts): string[] {
+function usesClassLiteralFqns(annotation: FrameworkAnnotation, facts: FrameworkFileFacts): string[] {
   const text = annotation.argumentsText;
   if (!text) return [];
   const explicitImports = facts.imports.filter((imp): imp is FrameworkImport => !imp.wildcard && !imp.static);
-  const targetIds: string[] = [];
+  const fqns: string[] = [];
   for (const captured of usesClassLiterals(text)) {
     if (captured.includes(".")) {
-      targetIds.push(`type:${captured}`);
+      fqns.push(captured);
       continue;
     }
     const explicitImport = explicitImports.find(imp => imp.qualifiedName.endsWith(`.${captured}`) || imp.qualifiedName === captured);
     if (explicitImport) {
-      targetIds.push(`type:${explicitImport.qualifiedName}`);
+      fqns.push(explicitImport.qualifiedName);
     } else if (facts.packageName) {
-      targetIds.push(`type:${facts.packageName}.${captured}`);
+      fqns.push(`${facts.packageName}.${captured}`);
     } else {
-      targetIds.push(`type:${captured}`);
+      fqns.push(captured);
     }
   }
-  return targetIds;
+  return fqns;
 }
 
 /** Extract only the value assigned to @Mapper's `uses` attribute. `config`,
@@ -186,11 +186,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       for (const type of factsForFile.types) {
         const mapperAnnotation = type.annotations.find(a => a.resolvedFqn === MAPSTRUCT_MAPPER_FQN);
         if (!mapperAnnotation) continue;
-        for (const targetId of usesClassLiteralTargetIds(mapperAnnotation, factsForFile)) {
+        for (const fqn of usesClassLiteralFqns(mapperAnnotation, factsForFile)) {
           pending.push({
             kind: "MAPSTRUCT_USES",
             sourceFile: absolutePath,
-            targetId,
+            target: { typeName: { fqn, scopeFile: absolutePath } },
             weight: MAPSTRUCT_USES_WEIGHT,
             detail: `${type.simpleName} @Mapper(uses = ...)`,
             anchorIds: frameworkEvidenceOriginIds(context, absolutePath)
@@ -213,7 +213,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
             pending.push({
               kind,
               sourceFile: absolutePath,
-              targetId: `type:${parameter.type.resolvedFqn}`,
+              target: { typeName: { fqn: parameter.type.resolvedFqn, scopeFile: absolutePath } },
               weight: kind === "MAPSTRUCT_TARGET" ? MAPSTRUCT_TARGET_WEIGHT : MAPSTRUCT_SOURCE_WEIGHT,
               detail: `${type.simpleName}.${method.name}(${parameter.name})`,
               anchorIds: frameworkEvidenceOriginIds(context, absolutePath, method.range)
@@ -223,7 +223,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
             pending.push({
               kind: "MAPSTRUCT_TARGET",
               sourceFile: absolutePath,
-              targetId: `type:${method.returnType.resolvedFqn}`,
+              target: { typeName: { fqn: method.returnType.resolvedFqn, scopeFile: absolutePath } },
               weight: MAPSTRUCT_TARGET_WEIGHT,
               detail: `${type.simpleName}.${method.name}() return type`,
               anchorIds: frameworkEvidenceOriginIds(context, absolutePath, method.range)
@@ -234,17 +234,15 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     }
   }
 
-  const targetIds = [...new Set(pending.map(item => item.targetId))];
-  const resolved = timedOut || targetIds.length === 0
-    ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut }
-    : await resolveFrameworkTargets(context, targetIds);
+  const resolved = timedOut || pending.length === 0
+    ? { relativePathOf: () => undefined, truncated: false, timedOut }
+    : await resolveFrameworkTargets(context, pending.map(item => item.target));
   timedOut = timedOut || resolved.timedOut;
-  const relativePathByTypeId = relativePathLookup(resolved.declarations);
 
   const evidence: EvidenceSignal[] = [];
   let signalSeq = 0;
   for (const item of pending) {
-    const relativePath = relativePathByTypeId.get(item.targetId);
+    const relativePath = resolved.relativePathOf(item.target);
     if (!relativePath) continue;
     const targetAbsolutePath = path.resolve(context.repoRoot, relativePath);
     for (const anchorId of item.anchorIds) {
@@ -270,7 +268,6 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     }
   }
 
-  if (resolved.declarations.truncated) diagnostics.push(`mapstruct adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);
   if (timedOut) diagnostics.push("mapstruct adapter: deadline exhausted before all bounded framework work completed");
 
   return {
@@ -278,7 +275,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: MAPSTRUCT_ADAPTER_ID,
       providerVersion: MAPSTRUCT_ADAPTER_VERSION,
       evidence,
-      completion: timedOut ? "PARTIAL_TIMEOUT" : resolved.declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
+      completion: timedOut ? "PARTIAL_TIMEOUT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata: {},

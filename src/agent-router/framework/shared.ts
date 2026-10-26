@@ -4,12 +4,11 @@
 import path from "node:path";
 import {
   MAX_DECLARATION_IDS_PER_CALL,
-  type FrameworkDeclarations,
   type FrameworkIndexStatus,
   type FrameworkIndexView,
   type FrameworkMethodDeclaration,
   type FrameworkRepositoryFactMarkers,
-  v1AliasIds
+  type FrameworkTypeName
 } from "../../java-index/framework-index-view.js";
 import {
   hasStaticStructureEvidence,
@@ -21,30 +20,6 @@ type FactMarkerInput = {
   importPrefixes: readonly string[];
   annotationPrefixes: readonly string[];
 };
-
-/**
- * id -> relativePath lookup for hydrated framework targets. Besides the v2
- * source-scoped ids it also answers legacy v1 "type:<fqn>" and
- * "method:/field:type:<fqn>#..." request ids (lowest-id declaration wins for
- * duplicated FQNs), so adapter evidence keyed by bare-FQN target ids still
- * resolves after the identity bump.
- */
-export function relativePathLookup(declarations: FrameworkDeclarations): Map<string, string> {
-  const out = new Map<string, string>();
-  const entries: Array<readonly [string, string]> = [
-    ...declarations.types.map(type => [type.typeId, type.relativePath] as const),
-    ...declarations.methods.map(method => [method.methodId, method.relativePath] as const),
-    ...declarations.fields.map(field => [field.fieldId, field.relativePath] as const)
-  ];
-  entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  for (const [id, relativePath] of entries) {
-    out.set(id, relativePath);
-    for (const alias of v1AliasIds(id)) {
-      if (!out.has(alias)) out.set(alias, relativePath);
-    }
-  }
-  return out;
-}
 
 export function createFrameworkPreflight(index: FrameworkIndexView): FrameworkPreflight {
   let statusRequest: Promise<FrameworkIndexStatus> | undefined;
@@ -136,29 +111,49 @@ export function rankableFrameworkMethods(
     method.range.start.line <= anchor.line && anchor.line <= method.range.end.line));
 }
 
+/** An evidence target: an exact declaration id (e.g. a listener methodId), or a type named in framework source. */
+export type FrameworkTarget = { declarationId: string } | { typeName: FrameworkTypeName };
+
+export type ResolvedFrameworkTargets = {
+  /** The target's repo-relative file; undefined when it is missing, ambiguous or was never looked up. */
+  relativePathOf(target: FrameworkTarget): string | undefined;
+  truncated: boolean;
+  timedOut: boolean;
+};
+
+function targetKey(target: FrameworkTarget): string {
+  return "declarationId" in target ? `id\0${target.declarationId}` : `name\0${target.typeName.scopeFile ?? ""}\0${target.typeName.fqn}`;
+}
+
+/** Resolves every target in bounded batches: ids through declarationsById, names through typesByName. */
 export async function resolveFrameworkTargets(
   context: FrameworkAdapterContext,
-  targetIds: readonly string[]
-): Promise<{ declarations: FrameworkDeclarations; timedOut: boolean }> {
-  const types: FrameworkDeclarations["types"] = [];
-  const methods: FrameworkDeclarations["methods"] = [];
-  const fields: FrameworkDeclarations["fields"] = [];
-  const missingIds: string[] = [];
+  targets: readonly FrameworkTarget[]
+): Promise<ResolvedFrameworkTargets> {
+  const paths = new Map<string, string>();
+  const ids = [...new Set(targets.flatMap(target => "declarationId" in target ? [target.declarationId] : []))];
+  const names = [...new Map(targets.flatMap(target => "typeName" in target ? [[targetKey(target), target.typeName] as const] : [])).values()];
+  const result = (truncated: boolean, timedOut: boolean): ResolvedFrameworkTargets =>
+    ({ relativePathOf: target => paths.get(targetKey(target)), truncated, timedOut });
   let truncated = false;
-  for (let offset = 0; offset < targetIds.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
-    if (context.budget.expired()) {
-      return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: true };
-    }
-    const result = await context.frameworkIndex.declarationsById(
-      targetIds.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL)
-    );
-    types.push(...result.types);
-    methods.push(...result.methods);
-    fields.push(...result.fields);
-    missingIds.push(...result.missingIds);
-    truncated = truncated || result.truncated;
+  for (let offset = 0; offset < ids.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
+    if (context.budget.expired()) return result(truncated, true);
+    const declarations = await context.frameworkIndex.declarationsById(ids.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL));
+    for (const type of declarations.types) paths.set(targetKey({ declarationId: type.typeId }), type.relativePath);
+    for (const method of declarations.methods) paths.set(targetKey({ declarationId: method.methodId }), method.relativePath);
+    for (const field of declarations.fields) paths.set(targetKey({ declarationId: field.fieldId }), field.relativePath);
+    truncated = truncated || declarations.truncated;
   }
-  return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: false };
+  for (let offset = 0; offset < names.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
+    if (context.budget.expired()) return result(truncated, true);
+    const batch = names.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL);
+    const resolved = await context.frameworkIndex.typesByName(batch);
+    batch.forEach((typeName, index) => {
+      const target = resolved[index];
+      if (target) paths.set(targetKey({ typeName }), target.relativePath);
+    });
+  }
+  return result(truncated, false);
 }
 
 function stableKey(values: readonly string[]): string {
