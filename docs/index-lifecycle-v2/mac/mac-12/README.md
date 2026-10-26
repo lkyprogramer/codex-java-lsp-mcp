@@ -1,6 +1,19 @@
 # MAC-12 / G12
 
-**IN_PROGRESS。** G11 已通过并本地提交 `4cfa0402`。最近一次 G12 Tier-1 尝试（候选 `e5faa371`）**FAIL**：硬门全过，主测全部性能项 PASS，但独立复跑的 200 文件物理成本 0.3054 超过 0.3，`performanceReady=false`。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)；本次尝试未重新生成 task-result，见下节。
+**IN_PROGRESS（暂停，先做 MAC-13）。** G11 已通过并本地提交 `4cfa0402`。最近一次 G12 Tier-1 尝试（候选 `5e852e0c`）**FAIL**：硬门全过，200 文件物理成本降到 0.234 / 0.150，但 status(start=false) p99 主测 248 ms、复跑 232 ms，超过 200 ms；复跑的 seedTo200 p95 15735 ms 也超限；`performanceReady=false`。按用户 2026-10-26 的决定，MAC-12 在此暂停，先推进可并行的 MAC-13；进入 MAC-14 前再做 G12 最终验证。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)；本次尝试未重新生成 task-result，见下节。
+
+## G12 Tier-1 尝试：候选 `5e852e0c`（2026-10-26）
+
+本轮物理成本提交：`4d34d0a6`（只平移了范围的边保留原行，只更新范围列）、`5e852e0c`（新建索引文件用 16 KiB 页）。根因：APFS 按 16 KiB 单元给克隆文件解除共享，delta 零散写入的每个 4 KiB 页都要付 16 KiB。Tier-0 探针（179 文件 delta，fresh full 作 base）：16 KiB 页让 delta 卷增长从 157–173 MB 降到 128–136 MB（约 −20%）；full 构建耗时不变，库小 3%，查询延迟在噪声内持平，seed delta 快 6–13%。已有的 4 KiB 文件及其克隆保持 4 KiB，混存可读，无需迁移。
+
+| 运行 | 硬门 | seedLe20 p95（≤5000ms） | seedTo200 p95（≤15000ms） | 200 文件物理成本（≤0.3） | status(start=false) p99（≤200ms） | 其余性能项 | 窗口 load1 中位 |
+|---|---|---|---|---|---|---|---|
+| final-g12（主测） | 5/5 PASS | 4172 PASS | 14709 PASS | 0.234 PASS | **248 FAIL**（n 4369） | 全 PASS | fairness 9.0 |
+| rerun-g12（新构建，独立复跑） | 5/5 PASS | 4545 PASS | **15735 FAIL**（29 个全有效） | 0.150 PASS | **232 FAIL**（n 5044） | 全 PASS | main 16.5、seed 12.8、fairness 11.6 |
+
+回归：dist 1584/1584，scripts 638 PASS、10 skip。独立只读评审 PASS，无 P1/P2；3 条 P3：syncStaticEdges 注释过时、平移候选表的构建是 O(k²)（这两条已在本轮收尾时修正），以及 `wal_autocheckpoint=1000` 按页计、16 KiB 文件上每次 checkpoint 约 16 MiB（待配对实测）。收尾 PASS：资源全部退出，raw 已归档并物理校验。
+
+**判定：** FAIL 保留。前四次运行的 status p99 为 112–120 ms。主测超 200 ms 的 58 个样本中有 46 个在 fairness 阶段：同一窗口 owner 事件循环阻塞最长 677 ms，但 owner CPU 不高，像是在等同步 I/O。评审从代码排除了 checkpoint 直接阻塞 owner（只有 builder 子进程持有写连接），并发现同一窗口主机争用明显：fairness load1 中位 9.0（以前 4.7–6.7），不碰 SQLite 的 parse/resolve 慢了 30–40%。复跑负载更高，慢样本分散在 seed、worktrees、fairness 各阶段。两次运行区分不了"主机争用"和"16 KiB 页带来的额外 I/O"，所以这一项记为未定。下一步（MAC-14 之前）：先做一次同主机、page_size 4096 对 16384 的配对 Tier-0，在 fairness 负载下比较 owner 事件循环阻塞、status p99 和 builder WAL 写入量；必要时把 checkpoint 阈值改成按字节计。然后在安静主机上连续跑 3 条 Tier-1，满足卡片"重复 ≥ 3 次"的要求。
 
 ## G12 Tier-1 尝试：候选 `e5faa371`（2026-10-26）
 

@@ -344,9 +344,9 @@ function dropMissingMembers(db: IndexDatabase, table: "type" | "field" | "method
 
 /**
  * Makes one file's static edges exactly `edges`. An edge keeps its row while
- * its identity (kind, endpoints, range) is unchanged; only a changed
- * resolution rewrites it, and a rewrite alone (same facts, new generation)
- * writes nothing.
+ * its kind and endpoints are unchanged: a shifted range moves the row, only a
+ * changed resolution rewrites it, and a rewrite alone (same facts, new
+ * generation) writes nothing.
  */
 /** Writes only the difference to the file's stored edges; true when any row changed. */
 function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly StaticEdge[], existed: boolean): boolean {
@@ -389,19 +389,21 @@ function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly Stat
   }
   // An edit above an edge only shifts its range: the row keeps its id, so the endpoint and file
   // indexes are left alone and only the range index moves. Pairs keep both sides' order.
-  const movable = new Map<string, number[]>();
+  const movable = new Map<string, { ids: number[]; next: number }>();
   for (const [key, old] of stale) {
     const loose = key.split(":", 3).join(":");
-    movable.set(loose, [...(movable.get(loose) ?? []), old.id]);
+    const group = movable.get(loose);
+    if (group) group.ids.push(old.id);
+    else movable.set(loose, { ids: [old.id], next: 0 });
   }
   const taken = prepareCached(db, "SELECT 1 AS hit FROM edge WHERE kind_sym=? AND from_sym=? AND to_sym=? AND sl=? AND sc=? AND el=? AND ec=?");
   const move = prepareCached(db, "UPDATE edge SET sl=?, sc=?, el=?, ec=?, confidence=?, res_kind_sym=?, res_strategy_sym=?, generation=? WHERE id=?");
   const moved = new Set<number>();
   for (const { edge, key, resKind, resStrategy } of unmatched) {
-    const candidates = movable.get(key.slice(0, 3).join(":"));
+    const group = movable.get(key.slice(0, 3).join(":"));
     // The range is free unless another file holds it (duplicate FQNs) or a duplicate edge here took it: then upsert as before.
-    if (candidates?.length && !taken.get(...key)) {
-      const id = candidates.shift()!;
+    if (group && group.next < group.ids.length && !taken.get(...key)) {
+      const id = group.ids[group.next++]!;
       move.run(key[3], key[4], key[5], key[6], edge.confidence, resKind, resStrategy, edge.generation, id);
       moved.add(id);
       changed = true;
