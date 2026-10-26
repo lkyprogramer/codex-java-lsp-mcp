@@ -288,7 +288,8 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     "src/main/java/com/acme/Orders.java": "package com.acme; public class Orders { public void place(int n) {} public void place(String s) {} public void ship() {} }\n",
     "src/main/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/test/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
-    "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n"
+    "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n",
+    "src/main/java/com/acme/Jobs.java": "package com.acme; public class Jobs { public void run() { class LocalStep {} new LocalStep(); } }\n"
   };
   for (const [relative, text] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
@@ -332,13 +333,19 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
       await until(() => settled() && owner.store.binding(workspace.workspaceId)?.snapshotId !== before, `publish ${relative}`);
     };
 
-    // Output: a named declaration carries its mac1 symbolId and an evidence handle; no internal key leaks.
+    // Output: a named declaration carries its mac1 symbolId (no evidence handle); no internal key leaks.
     const found = await ok("java_symbol", { query: "com.acme.Orders#ship", searchMode: "exact", preview: "none" });
     const ship = (found.candidates as Array<{ declaration: Declaration }>)[0]!.declaration;
     assert.equal(Object.hasOwn(ship, "id"), false);
     assert.equal(ship.stability, "STABLE");
     assert.match(ship.symbolId!, /^jsym:mac1:/);
-    assert.match(ship.evidenceHandle!, /^jev:mac1:/);
+    assert.equal(Object.hasOwn(ship, "evidenceHandle"), false);
+    // A local declaration has no lasting identity: stability=SNAPSHOT and an evidence handle only.
+    const local = (await ok("java_symbol", { query: "LocalStep", searchMode: "exact", preview: "none" })).candidates as Array<{ declaration: Declaration }>;
+    assert.equal(local.length, 1, JSON.stringify(local).slice(0, 400));
+    assert.equal(local[0]!.declaration.stability, "SNAPSHOT");
+    assert.equal(Object.hasOwn(local[0]!.declaration, "symbolId"), false);
+    assert.match(local[0]!.declaration.evidenceHandle!, /^jev:mac1:/);
     assert.equal(ship.symbolId!.split(":")[2], workspace.workspaceId);
     const evidence = await ok("java_symbol", { operation: "evidence", symbolId: ship.symbolId });
     const anchor = evidence.anchor as Declaration;

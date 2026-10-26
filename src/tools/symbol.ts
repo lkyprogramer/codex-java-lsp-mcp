@@ -183,19 +183,24 @@ export async function javaSymbol(
 
 /**
  * Public identity (§2.8): a declaration key never leaves the server. A named declaration is
- * returned as its workspace-bound mac1 symbolId; a position-keyed one only as stability=SNAPSHOT.
- * Either gets an evidence handle of the held snapshot when the view can mint it.
+ * returned as its workspace-bound mac1 symbolId; a position-keyed one only as stability=SNAPSHOT
+ * with an evidence handle of the held snapshot, when the view can mint it. A named declaration
+ * gets no handle: its symbolId plus evidenceRange.contentHash already pin it, and a handle would
+ * repeat the view, path and hash in every candidate (MAC-13 dev eval: +46% payload).
  */
 async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult>(result: T, context: ToolContext, request?: SymbolRequest): Promise<T> {
   const view = context.indexView;
   const keys = "units" in result ? (result.anchor ? [result.anchor.declarationId] : []) : result.candidates.map(candidate => candidate.declaration.id);
-  let minted: DeclarationIdentity[] | undefined;
-  if (keys.length > 0 && view?.workspaceId && view.contentManifestId && context.javaIndexClient?.declarationIdentities) {
-    minted = await context.javaIndexClient.declarationIdentities(view.workspaceId, view.contentManifestId, keys, request ? { budget: request.budget } : undefined)
+  const snapshotKeys = [...new Set(keys.filter(key => declarationStability(key) !== "STABLE"))];
+  const minted = new Map<string, DeclarationIdentity>();
+  if (snapshotKeys.length > 0 && view?.workspaceId && view.contentManifestId && context.javaIndexClient?.declarationIdentities) {
+    const identities = await context.javaIndexClient.declarationIdentities(view.workspaceId, view.contentManifestId, snapshotKeys, request ? { budget: request.budget } : undefined)
       .catch(() => undefined);
+    identities?.forEach((identity, index) => minted.set(snapshotKeys[index]!, identity));
   }
-  const identity = (key: string, index: number): DeclarationIdentity => {
-    if (minted?.[index]) return minted[index]!;
+  const identity = (key: string): DeclarationIdentity => {
+    const handled = minted.get(key);
+    if (handled) return handled;
     const stability = declarationStability(key);
     if (stability !== "STABLE" || !view?.workspaceId) return { stability };
     try { return { stability, symbolId: formatSymbolId(view.workspaceId, key) }; } catch { return { stability }; }
@@ -203,14 +208,14 @@ async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult
   if ("units" in result) {
     if (!result.anchor) return result;
     const { declarationId, ...anchor } = result.anchor;
-    return { ...result, anchor: { ...anchor, ...identity(declarationId, 0) } } as unknown as T;
+    return { ...result, anchor: { ...anchor, ...identity(declarationId) } } as unknown as T;
   }
   // Same result shape for the view labeling below; only the declaration's id is swapped.
   return {
     ...result,
-    candidates: result.candidates.map((candidate, index) => {
+    candidates: result.candidates.map(candidate => {
       const { id, ...declaration } = candidate.declaration;
-      return { ...candidate, declaration: { ...declaration, ...identity(id, index) } };
+      return { ...candidate, declaration: { ...declaration, ...identity(id) } };
     })
   } as unknown as T;
 }

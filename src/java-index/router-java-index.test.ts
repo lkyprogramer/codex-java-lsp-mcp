@@ -665,6 +665,27 @@ test("MAC-13 D08: typesByName resolves a duplicated FQN from the referring file'
   }
 });
 
+test("MAC-13 D08: typesByName resolves a duplicated FQN from the referring module, and leaves a third module without one unresolved", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-modules-repo-"));
+  write(repoRoot, "pom.xml", "<project><modules><module>a</module><module>b</module><module>c</module></modules></project>");
+  for (const module of ["a", "b", "c"]) write(repoRoot, `${module}/pom.xml`, `<project><artifactId>${module}</artifactId></project>`);
+  write(repoRoot, "a/src/main/java/demo/Shared.java", "package demo;\npublic class Shared {}\n");
+  write(repoRoot, "b/src/main/java/demo/Shared.java", "package demo;\npublic class Shared {}\n");
+  write(repoRoot, "a/src/main/java/demo/UseA.java", "package demo;\nclass UseA { Shared shared; }\n");
+  write(repoRoot, "b/src/main/java/demo/UseB.java", "package demo;\nclass UseB { Shared shared; }\n");
+  write(repoRoot, "c/src/main/java/demo/UseC.java", "package demo;\nclass UseC { Shared shared; }\n");
+  const router = await readyRouter(repoRoot);
+  try {
+    const [fromA, fromB, fromC] = await router.typesByName(["a", "b", "c"].map(module =>
+      ({ fqn: "demo.Shared", scopeFile: path.join(repoRoot, `${module}/src/main/java/demo/Use${module.toUpperCase()}.java`) })));
+    assert.equal(fromA?.relativePath, "a/src/main/java/demo/Shared.java");
+    assert.equal(fromB?.relativePath, "b/src/main/java/demo/Shared.java");
+    assert.equal(fromC, undefined, "two other modules' main sources are equally visible: no guess");
+  } finally {
+    await router.close();
+  }
+});
+
 test("declarationsById caps an oversized id list rather than issuing an unbounded worker query, and reports it as truncated", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-decl-cap-repo-"));
   write(repoRoot, "src/main/java/demo/Only.java", "package demo;\nclass Only {\n  void run() {}\n}\n");
