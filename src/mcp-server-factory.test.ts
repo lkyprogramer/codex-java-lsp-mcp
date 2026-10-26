@@ -258,9 +258,19 @@ test("MAC11 public symbol freezes STALE labels, suppresses misses, then converge
     const staleMiss = toolJson(staleImpact) as { status?: string; indexView?: { state: string } };
     assert.equal(staleMiss.status, "NOT_READY");
     assert.equal(staleMiss.indexView?.state, "STALE");
+    // The same for a symbolId minted by the newer snapshot: the held view misses it without proving it gone.
+    const readyId = String(((ready.candidates as Array<{ declaration: { symbolId: string } }>)[0]!).declaration.symbolId);
+    const [, , ws, encodedType] = readyId.split(":");
+    const methodKey = `method:${Buffer.from(encodedType!, "base64url").toString("utf8")}#addedMac11()`;
+    const newerId = `jsym:mac1:${ws}:${Buffer.from(methodKey, "utf8").toString("base64url")}`;
+    const staleById = toolJson(await client!.callTool({ name: "java_impact", arguments: { repoRoot: root, symbol: newerId } })) as { status?: string; indexView?: { state: string } };
+    assert.equal(staleById.status, "NOT_READY", JSON.stringify(staleById).slice(0, 400));
+    assert.equal(staleById.indexView?.state, "STALE");
     release(); hold = false;
     await until(() => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight
       && owner.store.binding(workspace.workspaceId)?.snapshotId !== before.snapshotId, "edit FRESH");
+    const freshById = toolJson(await client!.callTool({ name: "java_impact", arguments: { repoRoot: root, symbol: newerId, verbosity: "compact" } })) as { status?: string };
+    assert.equal(freshById.status, undefined, "the id resolves once its snapshot is published");
     const fresh = await query("com.acme.Ready#addedMac11()");
     assert.equal(fresh.scopeState, "READY");
     assert.equal(fresh.exact, "match");
@@ -291,7 +301,9 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
   const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-public-identity-")));
   const root = path.join(base, "repo");
   const files: Record<string, string> = {
-    "src/main/java/com/acme/Orders.java": "package com.acme; public class Orders { public void place(int n) {} public void place(String s) {} public void ship() {} }\n",
+    "src/main/java/com/acme/Orders.java": "package com.acme; public class Orders { public void place(int n) {} public void place(String s) {} public void ship() {}"
+      + " public void fill(String[] a) {} public void fill(String[][] a) {} public void log(String... lines) {}"
+      + " public <T extends Number> void pick(T value) {} public void nest(Orders.Line line) {} public static class Line {} }\n",
     "src/main/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/test/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n",
@@ -377,6 +389,18 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
       assert.equal(picked.status, undefined, `${symbol}: ${JSON.stringify(picked).slice(0, 300)}`);
     }
     assert.equal((await ok("java_impact", { symbol: "com.acme.Orders#place(long)" })).status, "NOT_FOUND");
+    // Arrays, varargs, a bounded type variable, nesting and annotation arguments are read from the parsed parameters.
+    const fills = ((await ok("java_impact", { symbol: "com.acme.Orders#fill" })).candidates as Declaration[]).map(candidate => candidate.symbolId);
+    assert.equal(fills.length, 2);
+    for (const symbol of ["com.acme.Orders#fill(String[])", "com.acme.Orders#fill(java.lang.String[][] grid)", "com.acme.Orders#log(String[])",
+      "com.acme.Orders#log(@SuppressWarnings({\"a\", \"b\"}) String... lines)", "com.acme.Orders#pick(T)", "com.acme.Orders#pick(Number)",
+      "com.acme.Orders#nest(Orders.Line)", "com.acme.Orders#nest(Orders$Line)", "com.acme.Orders#nest(com.acme.Orders.Line)"]) {
+      const picked = await ok("java_impact", { symbol, verbosity: "compact" });
+      assert.equal(picked.status, undefined, `${symbol}: ${JSON.stringify(picked).slice(0, 300)}`);
+    }
+    for (const symbol of ["com.acme.Orders#fill(String[][][])", "com.acme.Orders#log(String)", "com.acme.Orders#pick(Object)", "com.acme.Orders#nest(com.other.Line)"]) {
+      assert.equal((await ok("java_impact", { symbol })).status, "NOT_FOUND", symbol);
+    }
     // A symbolId past 512 characters round-trips from java_symbol into java_impact.
     const deep = ((await ok("java_symbol", { query: "Deep#handle", searchMode: "exact", preview: "none" })).candidates as Array<{ declaration: Declaration }>)[0]!.declaration;
     assert.ok(deep.symbolId!.length > 512, String(deep.symbolId!.length));

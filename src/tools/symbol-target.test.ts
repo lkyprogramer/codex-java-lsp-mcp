@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSymbolIdLike, selectorParameters } from "./symbol-target.js";
+import type { JavaTypeRef } from "../java-index/index-types.js";
+import { isSymbolIdLike, parametersFit, selectorParameters } from "./symbol-target.js";
 
-test("selectorParameters spells a parameter list the way an erased declaration key does", () => {
+test("selectorParameters reduces a parameter list to erased names with array dimensions", () => {
   assert.equal(selectorParameters("com.example.Orders#place"), undefined, "no list: a plain name");
   assert.equal(selectorParameters("com.example.Orders"), undefined);
   assert.deepEqual(selectorParameters("com.example.Orders#ship()"), { name: "com.example.Orders#ship", parameters: [] });
@@ -10,6 +11,58 @@ test("selectorParameters spells a parameter list the way an erased declaration k
   assert.deepEqual(selectorParameters("Orders#put(Map<String, List<Integer>> values, int n)")?.parameters, ["Map", "int"], "generics never split a list");
   assert.deepEqual(selectorParameters("Orders#log(@NotNull final String... lines)")?.parameters, ["String[]"], "annotations, modifiers and names drop; varargs is []");
   assert.deepEqual(selectorParameters("Orders#fill(byte [] data, @Named(\"x\") int[][] grid)")?.parameters, ["byte[]", "int[][]"]);
+  assert.deepEqual(selectorParameters("Orders#tag(@Size(min = 1, max = 2) String a, @Named({\"a,b\", \")\"}) Outer$Inner b)")?.parameters,
+    ["String", "Outer.Inner"], "annotation arguments hold commas, parentheses and strings; $ nesting reads as .");
+});
+
+const ref = (text: string, arrayDepth: number, resolution: JavaTypeRef["resolution"] = { state: "UNRESOLVED" }, extra: Partial<JavaTypeRef> = {}): JavaTypeRef => ({
+  text, simpleName: text.split("<")[0]!.replace(/\[\s*\]/g, "").split(".").pop()!, typeArguments: [], arrayDepth, resolution,
+  range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } }, ...extra
+});
+const method = (types: JavaTypeRef[], typeParameters: Array<{ name: string; bounds: JavaTypeRef[] }> = []) => ({
+  ownerTypeId: "type:v2:A.java#demo.A",
+  parameters: types.map((type, index) => ({ name: `p${index}`, type, varargs: false, annotations: [], range: type.range! })),
+  typeParameters: typeParameters.map(parameter => ({ ...parameter, range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } } }))
+});
+const fit = (types: JavaTypeRef[], selector: string, typeParameters?: Array<{ name: string; bounds: JavaTypeRef[] }>) =>
+  parametersFit(method(types, typeParameters), selectorParameters(`A#f(${selector})`)!.parameters);
+
+test("parametersFit compares array dimensions from the parsed facts, not the erased key spelling", () => {
+  // The extractor keys "String[] a" as String[][] (dimensions counted twice) and "String... a" as String[].
+  assert.equal(fit([ref("String[]", 1)], "String[]"), "yes");
+  assert.equal(fit([ref("String[]", 1)], "String..."), "yes", "varargs and [] erase alike");
+  assert.equal(fit([ref("String[]", 1)], "String[][]"), "no", "a different dimension count is another overload");
+  assert.equal(fit([ref("String", 1)], "String[]"), "yes", "a varargs declaration");
+  assert.equal(fit([ref("int[][]", 2)], "int[][]"), "yes");
+  assert.equal(fit([ref("List<String>[]", 1)], "List<Integer>[]"), "yes");
+  assert.equal(fit([ref("String", 0)], "String[]"), "no");
+});
+
+test("parametersFit qualifies names only as far as the facts prove", () => {
+  const external = ref("String", 0, { state: "EXTERNAL", qualifiedName: "java.lang.String", strategy: "JAVA_LANG" });
+  assert.equal(fit([external], "String"), "yes");
+  assert.equal(fit([external], "java.lang.String"), "yes");
+  assert.equal(fit([external], "com.other.String"), "no", "both sides qualified: no simple-name fallback");
+  const repo = ref("Line", 0, { state: "RESOLVED_REPO", typeId: `type:v2:${encodeURIComponent("src/main/java/demo/Orders.java")}#demo.Orders.Line`, strategy: "SAME_PACKAGE" } as JavaTypeRef["resolution"]);
+  assert.equal(fit([repo], "Orders.Line"), "yes");
+  assert.equal(fit([repo], "Orders$Line"), "yes");
+  assert.equal(fit([repo], "demo.Orders.Line"), "yes");
+  assert.equal(fit([repo], "other.Line"), "no");
+  assert.equal(fit([ref("Line", 0)], "demo.Line"), "maybe", "an unresolved simple source name cannot prove a qualifier");
+  assert.equal(fit([ref("a.Line", 0)], "b.Line"), "no");
+  assert.equal(fit([ref("int", 0)], "long"), "no");
+});
+
+test("parametersFit erases a type variable to its first bound", () => {
+  const variable = (name: string) => ref(name, 0, { state: "TYPE_VARIABLE", name });
+  assert.equal(fit([variable("T")], "T"), "yes");
+  assert.equal(fit([variable("T")], "Object", [{ name: "T", bounds: [] }]), "yes");
+  assert.equal(fit([variable("T")], "java.lang.Object", [{ name: "T", bounds: [] }]), "yes");
+  const number = ref("Number", 0, { state: "EXTERNAL", qualifiedName: "java.lang.Number", strategy: "JAVA_LANG" });
+  assert.equal(fit([variable("T")], "Number", [{ name: "T", bounds: [number] }]), "yes");
+  assert.equal(fit([variable("T")], "Object", [{ name: "T", bounds: [number] }]), "no");
+  assert.equal(fit([variable("T")], "Object"), "maybe", "a type variable declared out of reach decides nothing");
+  assert.equal(fit([variable("T"), ref("int", 0)], "Object, long", [{ name: "T", bounds: [] }]), "no");
 });
 
 test("isSymbolIdLike routes ids, not names", () => {

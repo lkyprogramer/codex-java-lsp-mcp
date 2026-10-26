@@ -193,7 +193,7 @@ release rollback 使用 `daemonctl.sh rollback-release`。它会先验证前一 
 - `maven-reactor`
 - `generic-java`
 
-每次调用都显式传当前 worktree 的绝对 `repoRoot`，不需要先调 `java_status`：daemon 只按入参的绝对 `repoRoot` 解析，不回退到 cwd 或其他仓库；静态结果的 `indexView` 标明所用的索引视图（`workspaceId`、snapshot、新鲜度 `state`）。
+每次调用都显式传当前 worktree 的绝对 `repoRoot`，不需要先调 `java_status`。daemon 从入参 `repoRoot` 向上找构建根（Gradle settings，或最外层 Maven 聚合 `pom.xml`）：普通仓库和独立目录的 worktree 就是它本身；worktree 放在另一个 Maven/Gradle 工程目录之下时可能解析成外层工程，这种布局先用 `java_status` 核对返回的 `repoRoot`。静态结果的 `indexView` 标明所用的索引视图（`workspaceId`、snapshot、新鲜度 `state`）。
 
 ### Worktree 规则
 
@@ -217,7 +217,7 @@ hook 行为：
 - 只校验当前 cwd 是否命中 `lspEnabled=true` 或 Git worktree family 继承。
 - 未启用、冲突、非 Java 语义提示时静默放行。
 - 只追加短提示，不直接启动 JDT LS，不阻断 shell/`rg`。
-- 提示 agent 每次调用显式传 `repoRoot`、直接调用目标工具（不必先调 `java_status`；daemon 只按入参的绝对 `repoRoot` 解析、不回退到其他仓库，静态结果的 `indexView` 标明所用视图与新鲜度）；普通仓库与 Git worktree 都按需启动 JDT。`started=false` 不代表静态查询不可用；未知位置先用 `java_symbol(operation=query)` 定位，或直接 `java_impact({symbol:"Type#method"})`；返回的 `symbolId` 可直接传回，`AMBIGUOUS` 时从候选选 `symbolId`。
+- 提示 agent 每次调用显式传 `repoRoot`、直接调用目标工具（不必先调 `java_status`；worktree 嵌在另一个 Maven/Gradle 工程目录下时，先用 `java_status` 核对解析出的 `repoRoot`；静态结果的 `indexView` 标明所用视图与新鲜度）；普通仓库与 Git worktree 都按需启动 JDT。`started=false` 不代表静态查询不可用；未知位置先用 `java_symbol(operation=query)` 定位，或直接 `java_impact({symbol:"Type#method"})`；返回的 `symbolId` 可直接传回，`AMBIGUOUS` 时从候选选 `symbolId`。
 - 全局 `AGENTS.md` 维护 Java 工具选择与证据核实策略；hook 补充当前仓库提示，具体参数以 MCP schema 为准。
 - 只有 cwd 已启用 **且** prompt 命中 Java 语义词（如 `java` / `Service` / `修复` / `影响面` / `排查`）才注入 `JAVA_LSP_ADVISOR`。纯「接口 / 接手计划」类 prompt 会静默放行，模型仍应自己调用工具。
 
