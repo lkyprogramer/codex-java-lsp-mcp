@@ -193,13 +193,7 @@ release rollback 使用 `daemonctl.sh rollback-release`。它会先验证前一 
 - `maven-reactor`
 - `generic-java`
 
-每次使用前先确认当前 repo 解析结果：
-
-```json
-{"tool":"java_status","arguments":{"repoRoot":"/absolute/current/worktree","start":false}}
-```
-
-只有返回的 `repoRoot` 等于当前 worktree，才继续信任 LSP 结果。
+每次调用都显式传当前 worktree 的绝对 `repoRoot`，不需要先调 `java_status`：daemon 只按入参的绝对 `repoRoot` 解析，不回退到 cwd 或其他仓库；静态结果的 `indexView` 标明所用的索引视图（`workspaceId`、snapshot、新鲜度 `state`）。
 
 ### Worktree 规则
 
@@ -223,7 +217,7 @@ hook 行为：
 - 只校验当前 cwd 是否命中 `lspEnabled=true` 或 Git worktree family 继承。
 - 未启用、冲突、非 Java 语义提示时静默放行。
 - 只追加短提示，不直接启动 JDT LS，不阻断 shell/`rg`。
-- 提示 agent 每次调用显式传 `repoRoot`、直接调用目标工具（不必先调 `java_status`），结果的 `indexView.workspaceId` 即核对；普通仓库与 Git worktree 都按需启动 JDT。`started=false` 不代表静态查询不可用；未知位置先用 `java_symbol(operation=query)` 定位，或直接 `java_impact({symbol:"Type#method"})`；返回的 `symbolId` 可直接传回，`AMBIGUOUS` 时从候选选 `symbolId`。
+- 提示 agent 每次调用显式传 `repoRoot`、直接调用目标工具（不必先调 `java_status`；daemon 只按入参的绝对 `repoRoot` 解析、不回退到其他仓库，静态结果的 `indexView` 标明所用视图与新鲜度）；普通仓库与 Git worktree 都按需启动 JDT。`started=false` 不代表静态查询不可用；未知位置先用 `java_symbol(operation=query)` 定位，或直接 `java_impact({symbol:"Type#method"})`；返回的 `symbolId` 可直接传回，`AMBIGUOUS` 时从候选选 `symbolId`。
 - 全局 `AGENTS.md` 维护 Java 工具选择与证据核实策略；hook 补充当前仓库提示，具体参数以 MCP schema 为准。
 - 只有 cwd 已启用 **且** prompt 命中 Java 语义词（如 `java` / `Service` / `修复` / `影响面` / `排查`）才注入 `JAVA_LSP_ADVISOR`。纯「接口 / 接手计划」类 prompt 会静默放行，模型仍应自己调用工具。
 
@@ -232,7 +226,7 @@ hook 行为：
 | Tool | 用途 | 是否要求 LSP |
 | --- | --- | --- |
 | `java_status` | 查看 server、repo、JDT LS、RepoChangeCoordinator、JavaIndex coverage/generation、lease 和 resource 摘要。`start=false` 仍会为该仓 create runtime（不拉 JDT）；repo 级请求预算 15s。`start=true` 才启动 JDT LS。`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
-| `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。目标三选一：`symbol`（`java_symbol` 返回的 `declaration.symbolId`，或 `Type#method` 这类名称；歧义返回 `status=AMBIGUOUS` 候选、不跑分析；ID 失效返回 `NOT_FOUND`/`REJECTED` 和重新定位提示）、`file`/`line`/`column` 或 `anchors[]`；参数错误附合法示例。**省略** `readPlanMaxItems`（最大 30）和 `deadlineMs`（最大 15000）；不要用旧记忆里的 80 / 120000。 | `semanticPolicy=fast` 不要求；`required` 要求 |
+| `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。目标三选一：`symbol`（`java_symbol` 返回的 `declaration.symbolId`，或 `Type#method`、`Type#method(ParamType, ...)` 这类名称；歧义返回 `status=AMBIGUOUS` 候选、不跑分析；ID 失效返回 `NOT_FOUND`/`REJECTED` 和重新定位提示）、`file`/`line`/`column` 或 `anchors[]`；参数错误附合法示例。**省略** `readPlanMaxItems`（最大 30）和 `deadlineMs`（最大 15000）；不要用旧记忆里的 80 / 120000。 | `semanticPolicy=fast` 不要求；`required` 要求 |
 | `java_symbol` | `operation=query`（默认，给了 query）走静态 discovery：消费磁盘 Java 索引（`java-discovery/v1`：显式 name、1-based UTF-16 locator、按 contentHash 校验的源码 preview），**不需要 JDT**；`backend=jdt` 保留旧 workspace-symbol 通道。`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references（两者始终走 JDT）。默认返回 repo-relative 位置、隐藏 raw URI/range。静态结果用 mac1 `symbolId`（workspace 身份 + 声明键，跨无关发布有效；局部/匿名声明只有 `stability=SNAPSHOT` 和 `evidenceHandle`）命名声明，可作为 `symbolId` 入参代替 `file`/`line`/`column`；`indexView.state` 是索引新鲜度（FRESH/STALE/NOT_READY），`scopeState` 为 PARTIAL/NOT_READY 时未命中不代表不存在。 | query 默认否（`backend=jdt`、position、references 是） |
 | `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
 | `java_runtime` | `action=restart` 重启当前 repo 的 JDT LS session（默认返回动作摘要，只有显式参数才清 cache）；`action=shutdown` 停止当前或全部（`all=true`）JDT LS 子进程，MCP server 保持存活。HTTP daemon 固定拒绝 `all=true`。 | restart 是；shutdown 否 |
@@ -241,10 +235,10 @@ hook 行为：
 
 静态查询仍默认使用一个共享只读 worker。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
 
-推荐默认调用顺序：
+推荐默认调用（直接调用目标工具；名称有歧义时从返回的候选里取 `symbolId` 再调用）：
 
 ```json
-{"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":false}}
+{"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","symbol":"demo.OrderService#create","semanticPolicy":"auto"}}
 {"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
 ```
 

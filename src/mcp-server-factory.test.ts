@@ -252,6 +252,12 @@ test("MAC11 public symbol freezes STALE labels, suppresses misses, then converge
     assert.equal(held.snapshotId, before.snapshotId);
     assert.equal(held.bindingVersion, before.bindingVersion);
     assert.ok(elapsedMs < 5000, `prepare must cap rather than wait for the held builder: ${elapsedMs}`);
+    // MAC-13: java_impact(symbol=) on the held STALE view cannot call the new method absent.
+    const staleImpact = await client!.callTool({ name: "java_impact", arguments: { repoRoot: root, symbol: "com.acme.Ready#addedMac11" } });
+    assert.notEqual(staleImpact.isError, true, toolText(staleImpact));
+    const staleMiss = toolJson(staleImpact) as { status?: string; indexView?: { state: string } };
+    assert.equal(staleMiss.status, "NOT_READY");
+    assert.equal(staleMiss.indexView?.state, "STALE");
     release(); hold = false;
     await until(() => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight
       && owner.store.binding(workspace.workspaceId)?.snapshotId !== before.snapshotId, "edit FRESH");
@@ -289,7 +295,9 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     "src/main/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/test/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n",
-    "src/main/java/com/acme/Jobs.java": "package com.acme; public class Jobs { public void run() { class LocalStep {} new LocalStep(); } }\n"
+    "src/main/java/com/acme/Jobs.java": "package com.acme; public class Jobs { public void run() { class LocalStep {} new LocalStep(); } }\n",
+    // A deep source path and a long signature: its mac1 symbolId passes 512 characters.
+    [`src/main/java/com/acme/${"deeply/nested/".repeat(12)}Deep.java`]: `package com.acme.${"deeply.nested.".repeat(12)}x; public class Deep { public void handle(${Array.from({ length: 8 }, (_, i) => `java.util.Map<java.lang.String, java.lang.Object> argument${i}`).join(", ")}) {} }\n`
   };
   for (const [relative, text] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
@@ -363,6 +371,16 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     assert.equal(dup.status, "AMBIGUOUS");
     assert.deepEqual((dup.candidates as Declaration[]).map(candidate => candidate.sourceRoot).sort(), ["src/main/java", "src/test/java"]);
     assert.equal((await ok("java_impact", { symbol: "com.acme.Missing" })).status, "NOT_FOUND");
+    // A parameter list picks one overload; simple and qualified type names both match the erased key.
+    for (const symbol of ["com.acme.Orders#place(int)", "com.acme.Orders#place(String s)", "com.acme.Orders#place(java.lang.String)"]) {
+      const picked = await ok("java_impact", { symbol, verbosity: "compact" });
+      assert.equal(picked.status, undefined, `${symbol}: ${JSON.stringify(picked).slice(0, 300)}`);
+    }
+    assert.equal((await ok("java_impact", { symbol: "com.acme.Orders#place(long)" })).status, "NOT_FOUND");
+    // A symbolId past 512 characters round-trips from java_symbol into java_impact.
+    const deep = ((await ok("java_symbol", { query: "Deep#handle", searchMode: "exact", preview: "none" })).candidates as Array<{ declaration: Declaration }>)[0]!.declaration;
+    assert.ok(deep.symbolId!.length > 512, String(deep.symbolId!.length));
+    assert.equal((await ok("java_impact", { symbol: deep.symbolId, verbosity: "compact" })).status, undefined);
     for (const symbol of ["com.acme.Orders#ship", ship.symbolId!]) {
       const ran = await ok("java_impact", { symbol, verbosity: "compact" });
       assert.equal(ran.status, undefined, JSON.stringify(ran).slice(0, 400));
@@ -377,6 +395,10 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
       assert.match(String(rejected.hint), /java_symbol/);
     }
     const [, , ws, key] = ship.symbolId!.split(":");
+    const handleAsId = await ok("java_symbol", { operation: "evidence", symbolId: local[0]!.declaration.evidenceHandle });
+    assert.equal(handleAsId.status, "REJECTED");
+    assert.equal(handleAsId.reason, "MALFORMED");
+    assert.match(String(handleAsId.hint), /evidence handle, not a symbolId/);
     const foreign = await ok("java_symbol", { operation: "evidence", symbolId: `jsym:mac1:${ws!.split("").reverse().join("")}x:${key}` });
     assert.equal(foreign.status, "REJECTED");
     assert.equal(foreign.reason, "WORKSPACE_MISMATCH");

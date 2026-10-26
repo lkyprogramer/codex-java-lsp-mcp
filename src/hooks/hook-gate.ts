@@ -43,7 +43,7 @@ try {
 function advisorMessage(lsp: LspEnablement, linkedWorktree: boolean): string {
   const root = lsp.effectiveRepoRoot;
   const worktree = linkedWorktree ? "，这是 Git worktree" : "";
-  return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})${worktree}。Java 语义任务按 AGENTS.md 的工具指引执行；每次调用显式传 repoRoot:"${root}" 直接调用目标工具，不必先调 java_status，结果的 indexView.workspaceId 即核对。未知位置先用 java_symbol(operation=query) 静态定位，或直接 java_impact({symbol:"Type#method"})；结果里的 symbolId 可直接传回，AMBIGUOUS 时从候选选一个 symbolId，不猜重载；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。`;
+  return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})${worktree}。Java 语义任务按 AGENTS.md 的工具指引执行；每次调用显式传 repoRoot:"${root}" 直接调用目标工具，不必先调 java_status（只按入参的绝对 repoRoot 解析、不回退到其他仓库，结果的 indexView 标明所用视图与新鲜度）。未知位置先用 java_symbol(operation=query) 静态定位，或直接 java_impact({symbol:"Type#method"})；结果里的 symbolId 可直接传回，AMBIGUOUS 时从候选选一个 symbolId，不猜重载；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。`;
 }
 
 function readPayload(): HookPayload {

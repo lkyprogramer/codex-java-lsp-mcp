@@ -33,7 +33,7 @@ export const IMPACT_SEMANTIC_POLICY_DESCRIPTION =
   "auto (default): live JDT only for service-profile anchors; controller/dto/mapper skip. fast: never. required: always, needs LSP. If semantic.used=false and you need exact implementations/references, retry with required or call java_symbol.";
 
 export const IMPACT_SYMBOL_DESCRIPTION =
-  "Instead of file/line/column: a symbolId from java_symbol, or a name (FQN, Type#method, Type#method(sig)). An ambiguous name returns candidates, never a guess.";
+  "Instead of file/line/column: a symbolId from java_symbol, or a name (FQN, Type#method, Type#method(ParamType, ...)). An ambiguous name returns candidates, never a guess.";
 export const IMPACT_TARGET_EXAMPLE =
   'Pass exactly one target, e.g. {"symbol":"com.example.OrderService#create"}, {"file":"src/main/java/com/example/OrderService.java","line":12,"column":15} or {"anchors":[{"file":"...","line":12,"column":15}]}.';
 
@@ -48,7 +48,7 @@ export const impactSchema = {
     role: z.string().optional(),
     anchorRole: z.string().optional()
   })).min(1).max(5).optional(),
-  symbol: z.string().min(1).max(512).optional().describe(IMPACT_SYMBOL_DESCRIPTION),
+  symbol: z.string().min(1).max(4096).optional().describe(IMPACT_SYMBOL_DESCRIPTION),
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
   column: z.number().int().positive().optional(),
