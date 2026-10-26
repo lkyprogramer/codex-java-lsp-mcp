@@ -9,6 +9,11 @@ export const DEFAULT_WAL_AUTOCHECKPOINT_PAGES = 1000;
 /** After a successful checkpoint, cap leftover WAL (bytes). */
 export const DEFAULT_JOURNAL_SIZE_LIMIT_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000;
+/**
+ * A new file's page size: APFS unshares a cloned file in 16 KiB units, so a delta's scattered 4 KiB page
+ * writes would each pay for four.
+ */
+export const DEFAULT_PAGE_SIZE_BYTES = 16384;
 
 /** node:sqlite compile-time SQLITE_MAX_VARIABLE_NUMBER. */
 export const SQLITE_MAX_VARIABLE_NUMBER = 32766;
@@ -79,6 +84,8 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
   db.exec(`PRAGMA busy_timeout=${DEFAULT_BUSY_TIMEOUT_MS}`);
   const cacheKb = resolveCacheKb(options.cacheKb);
   if (!options.readOnly) {
+    // page_size, like auto_vacuum, only takes on a file nothing has written yet; an existing file keeps its own.
+    db.exec(`PRAGMA page_size=${DEFAULT_PAGE_SIZE_BYTES}`);
     // auto_vacuum is a create-time file setting; applying WAL first freezes it at NONE.
     db.exec("PRAGMA auto_vacuum=INCREMENTAL");
     db.exec("PRAGMA journal_mode=WAL");

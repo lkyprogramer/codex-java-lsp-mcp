@@ -4,6 +4,7 @@
 // size and the page diff against the baseline; counts and bytes only, no paths, symbols or source.
 // env: BASELINE (baseline-db.json), PROBE_TMP (work dir), CLONE_ROOT (a root holding both), REPO (frozen input
 // worktree, read-only), DEPTH (k), CAP (changed Java files, default 200), OUT (json), PARALLELISM (parser grant).
+// FULL=1 builds the base fresh from HEAD first and reports its growth (the gate's denominator) and the ratio.
 // WAL=1 keeps every frame (no autocheckpoint) and, before the close folds it in, counts the distinct pages the job
 // wrote and how many of those end byte-identical to the baseline (a write that a clone still pays for).
 import { execFileSync } from "node:child_process";
@@ -27,6 +28,21 @@ try {
   for (const rel of git("ls-files", "-z").toString().split("\0").filter(Boolean)) {
     await mkdir(path.dirname(path.join(src, rel)), { recursive: true }); await copyFile(path.join(repo, rel), path.join(src, rel));
   }
+  // FULL=1: the base is a fresh full build of HEAD made here (as the gate's denominator), not the baseline clone.
+  let baseDb = baseline.db, full;
+  if (process.env.FULL === "1") {
+    baseDb = path.join(work, "full", "index.sqlite");
+    const before = await free(), started = performance.now(), cpu = process.cpuUsage();
+    const fdb = openIndexDb(baseDb);
+    try { ensureSchema(fdb); await applyBuilderJob({ repoRoot: src, db: fdb, job: { kind: "full", generation: 1 }, parallelism: Number(process.env.PARALLELISM ?? 2) }); } finally { close(fdb); }
+    const sealer = new DatabaseSync(baseDb);
+    try { sealer.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get(); sealer.prepare("PRAGMA journal_mode=DELETE").get(); } finally { sealer.close(); }
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const used = process.cpuUsage(cpu);
+    full = { growthMB: Math.round((before - await free()) / 1e5) / 10, dbMB: Math.round((await stat(baseDb)).size / 1e5) / 10,
+      ms: Math.round(performance.now() - started), cpuMs: Math.round((used.user + used.system) / 1000) };
+    await chmod(baseDb, 0o444);
+  }
   const from = git("rev-parse", `HEAD~${depth}`).toString().trim();
   const rows = git("diff", "--name-status", "-z", "--no-renames", "HEAD", from).toString().split("\0").filter(Boolean);
   const changed = [];
@@ -38,7 +54,7 @@ try {
   const dbPath = path.join(work, "index.sqlite"), steps = {};
   let mark = await free();
   const step = async name => { const now = await free(); steps[name] = mark - now; mark = now; };
-  await cloneSealedDatabase(baseline.db, dbPath, process.env.CLONE_ROOT);
+  await cloneSealedDatabase(baseDb, dbPath, process.env.CLONE_ROOT);
   await chmod(dbPath, 0o644);
   await step("clone");
   await warmFile(dbPath);
@@ -51,7 +67,7 @@ try {
     ensureSchema(db);
     if (process.env.WAL === "1") db.exec("PRAGMA wal_autocheckpoint=0");
     result = await applyBuilderJob({ repoRoot: src, db, job: { kind: "refresh", changed, deleted: [] }, escalation: "report", parallelism: Number(process.env.PARALLELISM ?? 2) });
-    if (process.env.WAL === "1") written = await walPages(`${dbPath}-wal`, baseline.db);
+    if (process.env.WAL === "1") written = await walPages(`${dbPath}-wal`, baseDb);
   } finally { close(db); clearInterval(sampler); }
   const walAfterJob = await stat(`${dbPath}-wal`).then(s => s.size, () => 0);
   walPeak = Math.max(walPeak, walAfterJob);
@@ -62,13 +78,13 @@ try {
   await step("checkpoint");
   // Space a closed WAL or journal held can come back after the unlink returns: read the volume again later.
   for (const wait of [5, 30]) { await new Promise(resolve => setTimeout(resolve, wait * 1000 - (wait === 30 ? 5000 : 0))); await step(`settle${wait}s`); }
-  const pages = await pageDiff(baseline.db, dbPath);
-  const moves = process.env.MOVES === "1" ? rowMoves(baseline.db, dbPath) : undefined;
+  const pages = await pageDiff(baseDb, dbPath);
+  const moves = process.env.MOVES === "1" ? rowMoves(baseDb, dbPath) : undefined;
   const MB = bytes => Math.round(bytes / 1e5) / 10;
   const report = { depth, changed: changed.length, ok: result.ok, escalation: result.escalation ?? null, rows: result.stages?.sql?.rows,
     freeDeltaMB: Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, MB(v)])), totalMB: MB(Object.values(steps).reduce((a, b) => a + b, 0)),
     walPeakMB: MB(walPeak), walAfterJobMB: MB(walAfterJob), pageSize: pages.pageSize, pagesBefore: pages.pagesBefore, pagesAfter: pages.pagesAfter,
-    ...(written ? { written } : {}), ...(moves ? { moves } : {}), changedPages: pages.changed, changedMB: MB(pages.changed * pages.pageSize), topTables: Object.entries(pages.byName ?? {}).slice(0, 30) };
+    ...(full ? { full, ratio: Math.round(Object.values(steps).reduce((a, b) => a + b, 0) / 1e5 / 10 / full.growthMB * 1000) / 1000 } : {}), ...(written ? { written } : {}), ...(moves ? { moves } : {}), changedPages: pages.changed, changedMB: MB(pages.changed * pages.pageSize), topTables: Object.entries(pages.byName ?? {}).slice(0, 30) };
   await writeFile(process.env.OUT, JSON.stringify(report, null, 1));
 } finally { await rm(work, { recursive: true, force: true }); }
 

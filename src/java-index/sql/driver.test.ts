@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
   bindChunks,
   close,
   compactWalFile,
   DEFAULT_JOURNAL_SIZE_LIMIT_BYTES,
+  DEFAULT_PAGE_SIZE_BYTES,
   DEFAULT_WAL_AUTOCHECKPOINT_PAGES,
   inClause,
   openIndexDb,
@@ -55,6 +57,7 @@ test("file database enables WAL and incremental auto_vacuum", () => {
   const db = openIndexDb(file);
   try {
     assert.equal(pragma(db, "journal_mode"), "wal");
+    assert.equal(pragma(db, "page_size"), DEFAULT_PAGE_SIZE_BYTES);
     assert.equal(pragma(db, "auto_vacuum"), 2);
     assert.equal(pragma(db, "synchronous"), 1);
     assert.equal(pragma(db, "cache_size"), -32768);
@@ -67,6 +70,32 @@ test("file database enables WAL and incremental auto_vacuum", () => {
     assert.equal(first, second);
   } finally {
     close(db);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an existing file keeps its page size; a new one gets the default", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-page-"));
+  const file = path.join(dir, "index.sqlite");
+  try {
+    const legacy = new DatabaseSync(file);
+    legacy.exec("PRAGMA page_size=4096; CREATE TABLE t(v TEXT); INSERT INTO t VALUES ('kept')");
+    legacy.close();
+    const db = openIndexDb(file);
+    try {
+      assert.equal(pragma(db, "page_size"), 4096);
+      assert.equal(db.prepare("SELECT v FROM t").get()?.v, "kept");
+    } finally {
+      close(db);
+    }
+    const fresh = openIndexDb(path.join(dir, "fresh.sqlite"));
+    try {
+      ensureSchema(fresh);
+      assert.equal(pragma(fresh, "page_size"), DEFAULT_PAGE_SIZE_BYTES);
+    } finally {
+      close(fresh);
+    }
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
