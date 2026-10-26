@@ -24,18 +24,26 @@ export type Stability = "STABLE" | "SNAPSHOT";
 export type RejectReason = "PRE_MAC1_FORMAT" | "MALFORMED" | "WORKSPACE_MISMATCH" | "NOT_STABLE";
 
 export type SymbolResolution =
-  | { status: "FOUND"; declarationKey: string; kind: DeclarationKind; relativePath: string }
+  | { status: "FOUND"; declarationKey: string; kind: DeclarationKind; relativePath: string; selection: { line: number; column: number } }
   | { status: "NOT_FOUND"; declarationKey: string; hint: { kind: DeclarationKind; name: string; sameNameCandidates: number; relocate: string } }
   | { status: "REJECTED"; reason: RejectReason };
 
+/**
+ * One declaration as one snapshot captured it. The capture is named by the snapshot's
+ * contentManifestId (the digest of the content it was built from): a capture attempt's own id
+ * is job-scoped and not kept with the published snapshot.
+ */
 export type EvidenceHandle = {
   snapshotId: string;
-  captureId: string;
+  contentManifestId: string;
   declarationKey: string;
   relativePath: string;
   sourceHash: string;
   range: SourceRange;
 };
+
+/** A declaration's public identities: a symbolId when its key is stable, and an evidence handle of one snapshot. */
+export type DeclarationIdentity = { stability: Stability; symbolId?: string; evidenceHandle?: string };
 
 export type EvidenceCheck =
   | { status: "VALID"; handle: EvidenceHandle }
@@ -90,11 +98,11 @@ export function parseSymbolId(symbolId: string):
   return { ok: true, workspaceId, declarationKey };
 }
 
-function declarationRow(db: IndexDatabase, kind: DeclarationKind, declarationKey: string): { relativePath: string } | undefined {
+function declarationRow(db: IndexDatabase, kind: DeclarationKind, declarationKey: string): { relativePath: string; facts: SQLOutputValue } | undefined {
   const sym = symId(db, declarationKey);
   if (sym === undefined) return undefined;
-  return prepareCached(db, `SELECT f.path AS relativePath FROM ${TABLE[kind]} d JOIN file f ON f.id=d.file_id WHERE d.sym=?`).get(sym) as
-    | { relativePath: string }
+  return prepareCached(db, `SELECT f.path AS relativePath, d.facts AS facts FROM ${TABLE[kind]} d JOIN file f ON f.id=d.file_id WHERE d.sym=?`).get(sym) as
+    | { relativePath: string; facts: SQLOutputValue }
     | undefined;
 }
 
@@ -125,7 +133,12 @@ export function resolveSymbolId(db: IndexDatabase, workspaceId: string, symbolId
   if (parsed.workspaceId !== workspaceId) return { status: "REJECTED", reason: "WORKSPACE_MISMATCH" };
   const kind = declarationKind(parsed.declarationKey)!;
   const row = declarationRow(db, kind, parsed.declarationKey);
-  if (row) return { status: "FOUND", declarationKey: parsed.declarationKey, kind, relativePath: row.relativePath };
+  if (row) {
+    // The name is the locator (an LSP selection), as discovery reports it.
+    const facts = decodeFacts<{ range?: SourceRange; nameRange?: SourceRange }>(row.facts);
+    const at = facts?.nameRange?.start ?? facts?.range?.start;
+    if (at) return { status: "FOUND", declarationKey: parsed.declarationKey, kind, relativePath: row.relativePath, selection: { line: at.line, column: at.column } };
+  }
   const name = memberName(kind, parsed.declarationKey);
   return {
     status: "NOT_FOUND",
@@ -151,12 +164,12 @@ const position = (value: unknown): boolean => Number.isSafeInteger(value) && (va
 function canonicalHandle(handle: EvidenceHandle): EvidenceHandle {
   const { start, end } = handle.range;
   if (![start.line, start.column, end.line, end.column].every(position)) throw new Error("evidence range must be non-negative safe integers");
-  for (const key of ["snapshotId", "captureId", "declarationKey", "relativePath", "sourceHash"] as const) {
+  for (const key of ["snapshotId", "contentManifestId", "declarationKey", "relativePath", "sourceHash"] as const) {
     if (typeof handle[key] !== "string") throw new Error(`evidence ${key} must be a string`);
   }
   return {
     snapshotId: handle.snapshotId,
-    captureId: handle.captureId,
+    contentManifestId: handle.contentManifestId,
     declarationKey: handle.declarationKey,
     relativePath: handle.relativePath,
     sourceHash: handle.sourceHash,
@@ -165,7 +178,7 @@ function canonicalHandle(handle: EvidenceHandle): EvidenceHandle {
 }
 
 export function formatEvidenceHandle(handle: EvidenceHandle): string {
-  if (!handle.snapshotId || !handle.captureId || !handle.sourceHash || !declarationKind(handle.declarationKey)) throw new Error("incomplete evidence handle");
+  if (!handle.snapshotId || !handle.contentManifestId || !handle.sourceHash || !declarationKind(handle.declarationKey)) throw new Error("incomplete evidence handle");
   return `${HANDLE_PREFIX}${encode(JSON.stringify(canonicalHandle(handle)))}`;
 }
 
@@ -180,8 +193,8 @@ export function parseEvidenceHandle(text: string): { ok: true; handle: EvidenceH
   }
 }
 
-/** Builds the handle for one declaration as captured by `snapshotId`/`captureId`. */
-export function captureEvidenceHandle(db: IndexDatabase, input: { snapshotId: string; captureId: string; declarationKey: string }): EvidenceHandle | undefined {
+/** Builds the handle for one declaration as captured by `snapshotId` (content `contentManifestId`). */
+export function captureEvidenceHandle(db: IndexDatabase, input: { snapshotId: string; contentManifestId: string; declarationKey: string }): EvidenceHandle | undefined {
   const kind = declarationKind(input.declarationKey);
   const sym = kind ? symId(db, input.declarationKey) : undefined;
   if (!kind || sym === undefined) return undefined;
@@ -191,7 +204,7 @@ export function captureEvidenceHandle(db: IndexDatabase, input: { snapshotId: st
   if (!row) return undefined;
   const range = decodeFacts<{ range?: SourceRange }>(row.facts).range;
   if (!range) return undefined;
-  return { snapshotId: input.snapshotId, captureId: input.captureId, declarationKey: input.declarationKey, relativePath: row.relativePath, sourceHash: row.sourceHash, range };
+  return { snapshotId: input.snapshotId, contentManifestId: input.contentManifestId, declarationKey: input.declarationKey, relativePath: row.relativePath, sourceHash: row.sourceHash, range };
 }
 
 /** An evidence handle serves exact-version reads: any snapshot or source change makes it stale. */

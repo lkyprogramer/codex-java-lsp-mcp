@@ -27,6 +27,7 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
+import type { DeclarationIdentity, SymbolResolution } from "../symbol-identity.js";
 import type { WorkspaceBinding } from "./binding.js";
 import type { IndexOwner, ViewState, WorkspaceIndex } from "./index-owner.js";
 import type { QueryOpName, QueryOps, QueryRequest, SnapshotIndexStatus } from "./query-ops.js";
@@ -385,6 +386,13 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
   }
   async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, options?: JavaIndexRequestOptions): Promise<EntityHit[]> {
     return this.run({ op: "entitySearch", args: { task, limit } }, options);
+  }
+  async resolveSymbolIds(workspaceId: string, symbolIds: string[], options?: JavaIndexRequestOptions): Promise<SymbolResolution[]> {
+    return symbolIds.length === 0 ? [] : this.run({ op: "resolveSymbols", args: { workspaceId, symbolIds } }, options);
+  }
+  async declarationIdentities(workspaceId: string, contentManifestId: string, declarationKeys: string[], options?: JavaIndexRequestOptions): Promise<DeclarationIdentity[]> {
+    if (declarationKeys.length === 0) return [];
+    return this.run({ op: "declarationIdentities", args: { workspaceId, snapshotId: this.snapshotId, contentManifestId, declarationKeys } }, options);
   }
   async queryRepositoryFactMarkers(importPrefixes: string[], annotationPrefixes: string[], options?: JavaIndexRequestOptions): Promise<{ importPrefixFound: boolean; annotationPrefixFound: boolean }> {
     return this.run({ op: "repositoryFactMarkers", args: { importPrefixes, annotationPrefixes } }, options);

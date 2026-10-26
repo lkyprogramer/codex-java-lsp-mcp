@@ -21,6 +21,7 @@ import type {
   StaticEdgeKind
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import type { DeclarationIdentity, SymbolResolution } from "./symbol-identity.js";
 
 export type JavaIndexOpenOptions = {
   leaseRoot?: string;
@@ -182,6 +183,14 @@ export interface JavaIndexClientApi {
     annotationPrefixes: string[],
     requestOptions?: JavaIndexRequestOptions
   ): Promise<{ importPrefixFound: boolean; annotationPrefixFound: boolean }>;
+  /** mac1 public identity (§2.8): only a snapshot view serves these; other clients leave them out. */
+  resolveSymbolIds?(workspaceId: string, symbolIds: string[], requestOptions?: JavaIndexRequestOptions): Promise<SymbolResolution[]>;
+  declarationIdentities?(
+    workspaceId: string,
+    contentManifestId: string,
+    declarationKeys: string[],
+    requestOptions?: JavaIndexRequestOptions
+  ): Promise<DeclarationIdentity[]>;
   close(): Promise<void>;
   localStatus(): JavaIndexStatus;
 }

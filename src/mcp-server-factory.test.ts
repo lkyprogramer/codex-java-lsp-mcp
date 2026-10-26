@@ -276,6 +276,133 @@ test("MAC11 public symbol freezes STALE labels, suppresses misses, then converge
   }
 });
 
+test("MAC13 public symbolId survives an unrelated publish, misses after a signature change, and never guesses", { timeout: 120000 }, async () => {
+  const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-public-identity-")));
+  const root = path.join(base, "repo");
+  const files: Record<string, string> = {
+    "src/main/java/com/acme/Orders.java": "package com.acme; public class Orders { public void place(int n) {} public void place(String s) {} public void ship() {} }\n",
+    "src/main/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
+    "src/test/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
+    "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n"
+  };
+  for (const [relative, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
+    await writeFile(path.join(root, relative), text);
+  }
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  const configPath = path.join(base, "projects.json");
+  await writeFile(configPath, JSON.stringify({ aliases: [] }));
+  let emit!: (flags: number, file: string) => void;
+  const owner = await IndexOwner.open({ cacheRoot: path.join(base, "cache"), roundDelayMs: 5,
+    trackerSource: () => async onSignal => {
+      emit = onSignal;
+      return { epoch: "b".repeat(32), fence: async () => {}, stop: async () => {}, closed: new Promise<void>(() => undefined) };
+    }
+  });
+  const application = new JavaLspApplication({ transportMode: "streamable_http", projectsConfigPath: configPath,
+    resolverOptions: { cwdFallback: "reject" }, index: async () => owner,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }) });
+  let client: Client | undefined;
+  const until = async (probe: () => boolean, label: string) => {
+    const end = Date.now() + 60000;
+    while (!probe()) { if (Date.now() > end) throw new Error(`Timed out: ${label}`); await delay(10); }
+  };
+  type Declaration = { symbolId?: string; stability?: string; evidenceHandle?: string; sourceRoot?: string; [key: string]: unknown };
+  try {
+    await application.initialize();
+    client = (await connect(application, "mac13-identity")).client;
+    const workspace = await owner.workspace(root);
+    const settled = () => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight;
+    await until(settled, "initial FRESH");
+    const call = async (name: string, args: Record<string, unknown>) => client!.callTool({ name, arguments: { repoRoot: root, ...args } });
+    const ok = async (name: string, args: Record<string, unknown>) => {
+      const result = await call(name, args);
+      assert.notEqual(result.isError, true, toolText(result));
+      return toolJson(result) as Record<string, unknown>;
+    };
+    const publish = async (relative: string, text: string) => {
+      const before = owner.store.binding(workspace.workspaceId)!.snapshotId;
+      await writeFile(path.join(root, relative), text);
+      emit(0x1000 | FSEVENT_FLAGS.ItemIsFile, path.join(root, relative));
+      await until(() => settled() && owner.store.binding(workspace.workspaceId)?.snapshotId !== before, `publish ${relative}`);
+    };
+
+    // Output: a named declaration carries its mac1 symbolId and an evidence handle; no internal key leaks.
+    const found = await ok("java_symbol", { query: "com.acme.Orders#ship", searchMode: "exact", preview: "none" });
+    const ship = (found.candidates as Array<{ declaration: Declaration }>)[0]!.declaration;
+    assert.equal(Object.hasOwn(ship, "id"), false);
+    assert.equal(ship.stability, "STABLE");
+    assert.match(ship.symbolId!, /^jsym:mac1:/);
+    assert.match(ship.evidenceHandle!, /^jev:mac1:/);
+    assert.equal(ship.symbolId!.split(":")[2], workspace.workspaceId);
+    const evidence = await ok("java_symbol", { operation: "evidence", symbolId: ship.symbolId });
+    const anchor = evidence.anchor as Declaration;
+    assert.equal(anchor.symbolId, ship.symbolId);
+    assert.equal(Object.hasOwn(anchor, "declarationId"), false);
+
+    // java_impact(symbol=): overloads and one FQN in two source roots list candidates; impact never runs on a guess.
+    const overloads = await ok("java_impact", { symbol: "com.acme.Orders#place" });
+    assert.equal(overloads.status, "AMBIGUOUS");
+    const overloadIds = (overloads.candidates as Declaration[]).map(candidate => candidate.symbolId);
+    assert.equal(overloadIds.length, 2);
+    assert.equal(new Set(overloadIds).size, 2);
+    for (const candidate of overloads.candidates as Declaration[]) assert.equal(Object.hasOwn(candidate, "id"), false);
+    const dup = await ok("java_impact", { symbol: "com.acme.Dup" });
+    assert.equal(dup.status, "AMBIGUOUS");
+    assert.deepEqual((dup.candidates as Declaration[]).map(candidate => candidate.sourceRoot).sort(), ["src/main/java", "src/test/java"]);
+    assert.equal((await ok("java_impact", { symbol: "com.acme.Missing" })).status, "NOT_FOUND");
+    for (const symbol of ["com.acme.Orders#ship", ship.symbolId!]) {
+      const ran = await ok("java_impact", { symbol, verbosity: "compact" });
+      assert.equal(ran.status, undefined, JSON.stringify(ran).slice(0, 400));
+      assert.equal((ran.indexView as { workspaceId: string }).workspaceId, workspace.workspaceId);
+    }
+
+    // Input: every pre-mac1 id shape and another workspace's id are rejected with a re-locate hint.
+    for (const old of ["type:v2:src/main/java/com/acme/Orders.java#com.acme.Orders", "type-local:x", "method:com.acme.Orders#ship()", "field:com.acme.Orders#n", "file:x", "jsym:v0:x", "jev:v0:x"]) {
+      const rejected = await ok("java_symbol", { operation: "evidence", symbolId: old });
+      assert.equal(rejected.status, "REJECTED", old);
+      assert.equal(rejected.reason, "PRE_MAC1_FORMAT", old);
+      assert.match(String(rejected.hint), /java_symbol/);
+    }
+    const [, , ws, key] = ship.symbolId!.split(":");
+    const foreign = await ok("java_symbol", { operation: "evidence", symbolId: `jsym:mac1:${ws!.split("").reverse().join("")}x:${key}` });
+    assert.equal(foreign.status, "REJECTED");
+    assert.equal(foreign.reason, "WORKSPACE_MISMATCH");
+
+    // Mutually exclusive targets fail with a valid example.
+    const both = await call("java_impact", { symbol: "com.acme.Orders#ship", file: "src/main/java/com/acme/Orders.java", line: 1, column: 1 });
+    assert.equal(both.isError, true);
+    assert.match(toolText(both), /"symbol":"com\.example\.OrderService#create"/);
+    const neither = await call("java_impact", {});
+    assert.equal(neither.isError, true);
+    assert.match(toolText(neither), /"symbol":"com\.example\.OrderService#create"/);
+    const mixed = await call("java_symbol", { operation: "evidence", symbolId: ship.symbolId, line: 1 });
+    assert.equal(mixed.isError, true);
+    assert.match(toolText(mixed), /"symbolId":"jsym:mac1:/);
+
+    // An unrelated publish keeps the id; a signature change makes it a miss with a re-locate hint, not a rebind.
+    await publish("src/main/java/com/acme/Other.java", "package com.acme; public class Other { int changed; }\n");
+    const kept = await ok("java_symbol", { operation: "evidence", symbolId: ship.symbolId });
+    assert.equal((kept.anchor as Declaration).symbolId, ship.symbolId);
+    await publish("src/main/java/com/acme/Orders.java", "package com.acme; public class Orders { public void place(int n) {} public void place(String s) {} public void ship(int n) {} }\n");
+    const changed = await ok("java_symbol", { operation: "evidence", symbolId: ship.symbolId });
+    assert.equal(changed.status, "NOT_FOUND");
+    assert.equal(changed.reason, "DECLARATION_CHANGED");
+    assert.match(String(changed.hint), /java_symbol/);
+    assert.equal((await ok("java_impact", { symbol: ship.symbolId })).status, "NOT_FOUND");
+  } finally {
+    await client?.close();
+    await application.close();
+    await owner.stop();
+    const writable = async (dir: string): Promise<void> => {
+      await chmod(dir, 0o755);
+      for (const entry of await readdir(dir, { withFileTypes: true })) if (entry.isDirectory()) await writable(path.join(dir, entry.name));
+    };
+    await writable(base);
+    await rm(base, { recursive: true, force: true });
+  }
+});
+
 async function connect(application: JavaLspApplication, name: string): Promise<{ client: Client }> {
   const server = createMcpServer(application, { transportMode: "streamable_http" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

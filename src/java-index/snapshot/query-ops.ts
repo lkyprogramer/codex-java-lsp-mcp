@@ -41,7 +41,7 @@ import {
   type SqlQueryDeps
 } from "../sql/sql-queries.js";
 import { readRangesFor } from "../sql/sql-read-ranges.js";
-import { formatSymbolId, resolveSymbolId, type SymbolResolution } from "../symbol-identity.js";
+import { captureEvidenceHandle, declarationStability, formatEvidenceHandle, formatSymbolId, resolveSymbolId, type DeclarationIdentity, type SymbolResolution } from "../symbol-identity.js";
 
 export type SnapshotIndexStatus = {
   indexedGeneration: number;
@@ -79,6 +79,9 @@ export type QueryOps = {
   repositoryFactMarkers: { args: { importPrefixes: string[]; annotationPrefixes: string[] }; result: { importPrefixFound: boolean; annotationPrefixFound: boolean } };
   evidenceSources: { args: { relativePath: string; line: number; column: number }; result: EvidenceSourcesResult };
   resolveSymbol: { args: { workspaceId: string; symbolId: string }; result: SymbolResolution };
+  resolveSymbols: { args: { workspaceId: string; symbolIds: string[] }; result: SymbolResolution[] };
+  /** Public identities of declaration keys: a symbolId when the key is stable, and an evidence handle of this snapshot. */
+  declarationIdentities: { args: { workspaceId: string; snapshotId: string; contentManifestId: string; declarationKeys: string[] }; result: DeclarationIdentity[] };
   symbolIdAt: { args: { workspaceId: string; relativePath: string; line: number; column: number }; result: string | undefined };
   /** The snapshot's captured content (path, kind, hash): the tracker's verification base. */
   contentEntries: { args: Record<string, never>; result: ContentEntry[] };
@@ -89,7 +92,7 @@ export type QueryRequest<K extends QueryOpName = QueryOpName> = { op: K; args: Q
 export const QUERY_OP_NAMES: readonly QueryOpName[] = [
   "status", "anchor", "type", "types", "implementers", "typeReferencers", "callers", "callees", "calleesBatch",
   "methodsWithParameterTypes", "files", "readRanges", "myBatisResource", "myBatisResourcesByNamespace", "graphDigest",
-  "graphReachable", "contextGraph", "entitySearch", "search", "repositoryFactMarkers", "evidenceSources", "resolveSymbol", "symbolIdAt", "contentEntries"
+  "graphReachable", "contextGraph", "entitySearch", "search", "repositoryFactMarkers", "evidenceSources", "resolveSymbol", "resolveSymbols", "declarationIdentities", "symbolIdAt", "contentEntries"
 ];
 
 /** One open sealed snapshot. Its facts never change, so per-connection caches are safe. */
@@ -253,6 +256,16 @@ const OPS: Impl = {
   repositoryFactMarkers: (conn, { importPrefixes, annotationPrefixes }) => conn.store.repositoryFactMarkers(importPrefixes, annotationPrefixes),
   evidenceSources: (conn, { relativePath, line, column }, remainingMs) => queryEvidenceSources(conn.db, relativePath, line, column, remainingMs),
   resolveSymbol: (conn, { workspaceId, symbolId }) => resolveSymbolId(conn.db, workspaceId, symbolId),
+  resolveSymbols: (conn, { workspaceId, symbolIds }) => symbolIds.map(symbolId => resolveSymbolId(conn.db, workspaceId, symbolId)),
+  declarationIdentities: (conn, { workspaceId, snapshotId, contentManifestId, declarationKeys }) => declarationKeys.map(declarationKey => {
+    const stability = declarationStability(declarationKey);
+    let symbolId: string | undefined;
+    if (stability === "STABLE") try { symbolId = formatSymbolId(workspaceId, declarationKey); } catch { symbolId = undefined; }
+    let evidenceHandle: string | undefined;
+    const handle = captureEvidenceHandle(conn.db, { snapshotId, contentManifestId, declarationKey });
+    if (handle) try { evidenceHandle = formatEvidenceHandle(handle); } catch { evidenceHandle = undefined; }
+    return { stability, ...(symbolId ? { symbolId } : {}), ...(evidenceHandle ? { evidenceHandle } : {}) };
+  }),
   symbolIdAt: (conn, { workspaceId, relativePath, line, column }) => {
     const anchor = conn.store.anchor(relativePath, line, column);
     if (!anchor || anchor.symbolKind === "FILE") return undefined;

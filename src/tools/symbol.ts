@@ -12,7 +12,9 @@ import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js"
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { RequestContext } from "../runtime/request-context.js";
+import { declarationStability, formatSymbolId, type DeclarationIdentity } from "../java-index/symbol-identity.js";
 import type { ToolContext } from "./context.js";
+import { isSymbolIdLike, locateSymbol } from "./symbol-target.js";
 import { compact, describeFile, describeLocation, detailSchema, isDiagnosticDetail, normalizeHover, symbolKindName, type ResponseDetail } from "./shared.js";
 
 // R07: the static query limit contract comes from the one discovery/SQL
@@ -28,6 +30,8 @@ export const symbolSchema = {
   repoRoot: z.string().min(1).optional(),
   operation: z.enum(["query", "position", "references", "evidence"]).optional(),
   query: z.string().min(1).max(512).optional(),
+  symbolId: z.string().min(1).max(4096).optional()
+    .describe("Instead of file/line/column for evidence/references/position: a declaration.symbolId from an earlier java_symbol query."),
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
   column: z.number().int().positive().optional(),
@@ -68,6 +72,20 @@ export async function javaSymbol(
   request?: SymbolRequest
 ): Promise<unknown> {
   const operation = args.operation ?? (args.query ? "query" : "position");
+  if (args.symbolId !== undefined) {
+    if (operation === "query" || args.file !== undefined || args.line !== undefined || args.column !== undefined) {
+      throw new JavaIntelligenceError("INVALID_INPUT",
+        'symbolId replaces file/line/column for operation=evidence|references|position, e.g. {"operation":"evidence","symbolId":"jsym:mac1:..."}; it does not combine with query or a position.');
+    }
+    if (!isSymbolIdLike(args.symbolId)) {
+      throw new JavaIntelligenceError("INVALID_INPUT", 'symbolId takes an id from java_symbol results; to look a name up use {"operation":"query","query":"OrderService#create"}.');
+    }
+    if (context.javaIndexClient) await waitStaticIndexReady(context.javaIndexClient, request?.budget);
+    const located = await locateSymbol(context, args.symbolId, request);
+    // A rejected, changed or deleted symbol is reported with a re-locate hint, never rebound.
+    if (!located.ok) return { ...located.miss, ...(context.indexView ? { indexView: context.indexView } : {}) };
+    return javaSymbol(context, { ...args, symbolId: undefined, operation, file: located.target.relativePath, line: located.target.line, column: located.target.column }, request);
+  }
   if (operation === "evidence") {
     if (!args.file || !args.line || !args.column) {
       throw new Error("java_symbol operation=evidence requires file/line/column of a located Java type or method.");
@@ -78,13 +96,13 @@ export async function javaSymbol(
     const client = context.javaIndexClient;
     if (!client) throw new Error("java_symbol operation=evidence requires the on-disk Java index.");
     await waitStaticIndexReady(client, request?.budget);
-    return staticResultForView(await runEvidenceUnit(client, {
+    return staticResultForView(await withPublicIdentity(await runEvidenceUnit(client, {
       repoRoot: context.repoRoot,
       file: args.file,
       line: args.line,
       column: args.column,
       budget: request?.budget
-    }), context, request);
+    }), context, request), context, request);
   }
   if (operation === "references") {
     return javaSymbolReferences(context, args, request);
@@ -106,7 +124,7 @@ export async function javaSymbol(
       // Static discovery consumes the shared index snapshot; it never touches
       // the LSP session, so no semantic timeout is projected onto it. The
       // request deadline (when present) bounds the query work instead.
-      return staticResultForView(await runStaticDiscovery(client, {
+      return staticResultForView(await withPublicIdentity(await runStaticDiscovery(client, {
         query: args.query,
         terms: args.terms,
         searchMode: args.searchMode,
@@ -117,7 +135,7 @@ export async function javaSymbol(
         repoRoot: context.repoRoot,
         repoHash: context.repoHash,
         budget: request ? { remainingMs: () => request.budget.remainingMs() } : undefined
-      }), context, request);
+      }), context, request), context, request);
     }
     const limit = clampLimit(args.limit);
     const result = await context.session.workspaceSymbols(args.query, limit, request?.budget ?? args.semanticTimeoutMs);
@@ -163,6 +181,40 @@ export async function javaSymbol(
   };
 }
 
+/**
+ * Public identity (§2.8): a declaration key never leaves the server. A named declaration is
+ * returned as its workspace-bound mac1 symbolId; a position-keyed one only as stability=SNAPSHOT.
+ * Either gets an evidence handle of the held snapshot when the view can mint it.
+ */
+async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult>(result: T, context: ToolContext, request?: SymbolRequest): Promise<T> {
+  const view = context.indexView;
+  const keys = "units" in result ? (result.anchor ? [result.anchor.declarationId] : []) : result.candidates.map(candidate => candidate.declaration.id);
+  let minted: DeclarationIdentity[] | undefined;
+  if (keys.length > 0 && view?.workspaceId && view.contentManifestId && context.javaIndexClient?.declarationIdentities) {
+    minted = await context.javaIndexClient.declarationIdentities(view.workspaceId, view.contentManifestId, keys, request ? { budget: request.budget } : undefined)
+      .catch(() => undefined);
+  }
+  const identity = (key: string, index: number): DeclarationIdentity => {
+    if (minted?.[index]) return minted[index]!;
+    const stability = declarationStability(key);
+    if (stability !== "STABLE" || !view?.workspaceId) return { stability };
+    try { return { stability, symbolId: formatSymbolId(view.workspaceId, key) }; } catch { return { stability }; }
+  };
+  if ("units" in result) {
+    if (!result.anchor) return result;
+    const { declarationId, ...anchor } = result.anchor;
+    return { ...result, anchor: { ...anchor, ...identity(declarationId, 0) } } as unknown as T;
+  }
+  // Same result shape for the view labeling below; only the declaration's id is swapped.
+  return {
+    ...result,
+    candidates: result.candidates.map((candidate, index) => {
+      const { id, ...declaration } = candidate.declaration;
+      return { ...candidate, declaration: { ...declaration, ...identity(id, index) } };
+    })
+  } as unknown as T;
+}
+
 /** Snapshot coverage describes its build; freshness belongs to this request's held view. */
 function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, context: ToolContext, request?: SymbolRequest): unknown {
   const view = context.indexView;
@@ -190,7 +242,7 @@ function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {
   }
 }
 
-async function waitStaticIndexReady(client: JavaIndexClientApi, budget?: DeadlineBudget): Promise<void> {
+export async function waitStaticIndexReady(client: JavaIndexClientApi, budget?: DeadlineBudget): Promise<void> {
   try {
     const status = await client.status();
     if (status.state !== "BUILDING") return; // READY/DEGRADED serve the current snapshot; discovery reports its coverage

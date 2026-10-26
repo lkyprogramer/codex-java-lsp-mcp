@@ -62,7 +62,10 @@ test("a named symbolId survives body edits, line shifts and a full rebuild", asy
   await writeFile(service, original.replace("@Service", "\n\n// moved down\n@Service").replace("repository.save", "repository.save /* body */"));
   await refresh(repo, db, 2, [serviceRel]);
   assert.equal(methodKey(db, serviceRel, "create"), key);
-  assert.deepEqual(resolveSymbolId(db, WORKSPACE, symbolId), { status: "FOUND", declarationKey: key, kind: "method", relativePath: serviceRel });
+  const found = resolveSymbolId(db, WORKSPACE, symbolId);
+  assert.deepEqual(found.status === "FOUND" && { ...found, selection: undefined }, { status: "FOUND", declarationKey: key, kind: "method", relativePath: serviceRel, selection: undefined });
+  // The selection is the declaration's name, where java_impact anchors.
+  assert.ok(found.status === "FOUND" && found.selection.line > 0);
 
   const rebuilt = openIndexDb(":memory:");
   try {
@@ -127,7 +130,7 @@ test("a local declaration only gets a snapshot evidence handle that goes stale w
   assert.equal(declarationStability(local.key), "SNAPSHOT");
   assert.throws(() => formatSymbolId(WORKSPACE, local.key), /evidence handle/);
 
-  const handle = captureEvidenceHandle(db, { snapshotId: "snap-1", captureId: "cap-1", declarationKey: local.key });
+  const handle = captureEvidenceHandle(db, { snapshotId: "snap-1", contentManifestId: "c".repeat(64), declarationKey: local.key });
   assert.ok(handle);
   assert.equal(handle.relativePath, localRel);
   const text = formatEvidenceHandle(handle);
@@ -135,7 +138,7 @@ test("a local declaration only gets a snapshot evidence handle that goes stale w
   assert.equal(checkEvidenceHandle(db, "snap-1", text).status, "VALID");
   assert.deepEqual(checkEvidenceHandle(db, "snap-2", text), { status: "STALE", reason: "SNAPSHOT_CHANGED", handle });
 
-  const named = captureEvidenceHandle(db, { snapshotId: "snap-1", captureId: "cap-2", declarationKey: methodKey(db, serviceRel, "create") })!;
+  const named = captureEvidenceHandle(db, { snapshotId: "snap-1", contentManifestId: "d".repeat(64), declarationKey: methodKey(db, serviceRel, "create") })!;
   const namedText = formatEvidenceHandle(named);
   const service = path.join(repo, serviceRel);
   await writeFile(service, (await readFile(service, "utf8")).replace("repository.save", "repository.save /* edit */"));
@@ -154,7 +157,7 @@ test("forged keys and malformed evidence ranges are refused without throwing", a
   const { db } = await fixture(t);
   const forged = `jsym:mac1:${WORKSPACE}:${Buffer.from("type:v2:x#%ZZ").toString("base64url")}`;
   assert.equal(resolveSymbolId(db, WORKSPACE, forged).status, "NOT_FOUND");
-  const handle = captureEvidenceHandle(db, { snapshotId: "snap-1", captureId: "cap-1", declarationKey: methodKey(db, serviceRel, "create") })!;
+  const handle = captureEvidenceHandle(db, { snapshotId: "snap-1", contentManifestId: "c".repeat(64), declarationKey: methodKey(db, serviceRel, "create") })!;
   const bad = `jev:mac1:${Buffer.from(JSON.stringify({ ...handle, range: { start: { line: "x", column: 0 }, end: handle.range.end } })).toString("base64url")}`;
   assert.deepEqual(parseEvidenceHandle(bad), { ok: false, reason: "MALFORMED" });
   assert.throws(() => formatEvidenceHandle({ ...handle, range: { ...handle.range, start: { line: -1, column: 0 } } }), /non-negative/);

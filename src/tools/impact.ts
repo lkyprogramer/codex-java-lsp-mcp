@@ -6,7 +6,10 @@ import { withConvergedCostV6 } from "../agent-router/output-v6.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
 import type { ViewLabels } from "../java-index/snapshot/request-view.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { ToolContext } from "./context.js";
+import { waitStaticIndexReady } from "./symbol.js";
+import { locateSymbol } from "./symbol-target.js";
 import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
 
 // Iteration A adapter: JDT calls still take a plain timeout, so the request-level
@@ -29,6 +32,11 @@ export const JAVA_IMPACT_TOOL_DESCRIPTION =
 export const IMPACT_SEMANTIC_POLICY_DESCRIPTION =
   "auto (default): live JDT only for service-profile anchors; controller/dto/mapper skip. fast: never. required: always, needs LSP. If semantic.used=false and you need exact implementations/references, retry with required or call java_symbol.";
 
+export const IMPACT_SYMBOL_DESCRIPTION =
+  "Instead of file/line/column: a symbolId from java_symbol, or a name (FQN, Type#method, Type#method(sig)). An ambiguous name returns candidates, never a guess.";
+export const IMPACT_TARGET_EXAMPLE =
+  'Pass exactly one target, e.g. {"symbol":"com.example.OrderService#create"}, {"file":"src/main/java/com/example/OrderService.java","line":12,"column":15} or {"anchors":[{"file":"...","line":12,"column":15}]}.';
+
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
@@ -40,6 +48,7 @@ export const impactSchema = {
     role: z.string().optional(),
     anchorRole: z.string().optional()
   })).min(1).max(5).optional(),
+  symbol: z.string().min(1).max(512).optional().describe(IMPACT_SYMBOL_DESCRIPTION),
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
   column: z.number().int().positive().optional(),
@@ -76,7 +85,19 @@ export async function javaImpact(
     throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
   }
   const semanticPolicy = context.lsp?.enabled ? parsed.semanticPolicy : "fast";
-  const anchors = normalizeAnchors(parsed);
+  let anchors: ImpactAnchorInput[];
+  if (parsed.symbol !== undefined) {
+    if (parsed.anchors?.length || parsed.file !== undefined || parsed.line !== undefined || parsed.column !== undefined) {
+      throw new JavaIntelligenceError("INVALID_INPUT", `java_impact takes symbol or anchors/file, not both. ${IMPACT_TARGET_EXAMPLE}`);
+    }
+    if (context.javaIndexClient) await waitStaticIndexReady(context.javaIndexClient, request?.budget);
+    const located = await locateSymbol(context, parsed.symbol, request);
+    // No single declaration: report it with the candidates; impact never runs on a guess.
+    if (!located.ok) return { ...located.miss, ...(context.indexView ? { indexView: context.indexView } : {}) };
+    anchors = [{ file: located.target.relativePath, line: located.target.line, column: located.target.column, role: parsed.anchorRole }];
+  } else {
+    anchors = normalizeAnchors(parsed);
+  }
   // The runtime manager's freshness barrier owns the request budget and
   // generation. Fall back to a local budget only when called without one.
   const budget = request?.budget ?? DeadlineBudget.fromTimeout(Math.min(
@@ -114,7 +135,7 @@ function normalizeAnchors(args: Pick<ImpactArgs, "anchors" | "file" | "line" | "
   if (args.file && args.line && args.column) {
     return [{ file: args.file, line: args.line, column: args.column, role: args.anchorRole }];
   }
-  throw new Error("java_impact requires anchors[] or file/line/column.");
+  throw new JavaIntelligenceError("INVALID_INPUT", `java_impact requires symbol, anchors[] or file/line/column. ${IMPACT_TARGET_EXAMPLE}`);
 }
 
 function mergePhaseMs(target: Record<string, number>, source: Record<string, number>): void {
