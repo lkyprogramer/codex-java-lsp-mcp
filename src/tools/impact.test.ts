@@ -103,6 +103,16 @@ test("java_impact wrapper respects verbosity when adding phase metrics", async (
   assert.equal(diagnostic.cost.resultBytes, Buffer.byteLength(JSON.stringify(diagnostic), "utf8"));
 });
 
+test("java_impact carries the request's held view labels, counted in resultBytes", async () => {
+  const indexView = { state: "STALE" as const, workspaceId: "w-demo", snapshotId: "s-held", contentManifestId: "a".repeat(64), bindingVersion: 4, coveredThroughSeq: 9 };
+  const context = { ...contextFor("standard"), indexView };
+  const out = await javaImpact(context, args("standard")) as ImpactResult & { indexView?: unknown };
+  assert.deepEqual(out.indexView, indexView);
+  assert.equal(out.cost.resultBytes, Buffer.byteLength(JSON.stringify(out), "utf8"));
+  const bare = await javaImpact(contextFor("standard"), args("standard")) as ImpactResult & { indexView?: unknown };
+  assert.equal(Object.hasOwn(bare, "indexView"), false, "no view, no labels");
+});
+
 function capturingContext(seen: ImpactOptions[]): ToolContext {
   return {
     repoRoot: "/tmp/demo",

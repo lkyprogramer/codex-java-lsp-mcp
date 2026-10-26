@@ -5,6 +5,7 @@ import { z } from "zod";
 import { withConvergedCostV6 } from "../agent-router/output-v6.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
+import type { ViewLabels } from "../java-index/snapshot/request-view.js";
 import type { ToolContext } from "./context.js";
 import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
 
@@ -100,7 +101,7 @@ export async function javaImpact(
   };
   const result = await context.router.impact(options, request);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
-  return withPhaseMs(result, phaseMs, parsed.verbosity);
+  return withPhaseMs(result, phaseMs, parsed.verbosity, context.indexView);
 }
 
 function normalizeAnchors(args: Pick<ImpactArgs, "anchors" | "file" | "line" | "column" | "anchorRole">): ImpactAnchorInput[] {
@@ -127,11 +128,13 @@ function mergePhaseMs(target: Record<string, number>, source: Record<string, num
  * from the same args the caller already validated, rather than read back out
  * of the result the way the pre-V6 wrapper did.
  */
-function withPhaseMs(result: unknown, phases: Record<string, number>, verbosity: ImpactVerbosity): unknown {
+function withPhaseMs(result: unknown, phases: Record<string, number>, verbosity: ImpactVerbosity, indexView?: ViewLabels): unknown {
   if (!result || typeof result !== "object") {
     return result;
   }
-  const payload = result as ImpactResult & { metrics?: { phaseMs?: Record<string, number> } };
+  // The labels this request's one snapshot acquire froze (§2.7): identity and indexFreshness (state).
+  // Added before the cost converges, so resultBytes counts them.
+  const payload = (indexView ? { ...result, indexView } : result) as ImpactResult & { metrics?: { phaseMs?: Record<string, number> } };
   if (verbosity === "diagnostic" && payload.metrics && Object.keys(phases).length > 0) {
     const existingPhaseMs = payload.metrics.phaseMs ?? {};
     payload.metrics = {

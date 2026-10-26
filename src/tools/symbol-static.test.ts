@@ -188,7 +188,7 @@ test("MAC11 stale view cannot return a confident static miss", async () => {
     assert.equal(incomplete.exact, undefined);
     context.indexView = { state: "NOT_READY" };
     const cold = await javaSymbol(context, query) as Record<string, unknown>;
-    assert.equal(cold.scopeState, "PARTIAL");
+    assert.equal(cold.scopeState, "NOT_READY", "no verified binding is reported as such, not as a partial answer");
     assert.equal(cold.exact, undefined);
     assert.equal(cold.stopReason, "index_partial");
     assert.deepEqual(stale.indexView, held, "later bindings cannot relabel an earlier response");

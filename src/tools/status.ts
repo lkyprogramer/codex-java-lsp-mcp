@@ -226,7 +226,8 @@ export function javaStatusFromMemory(
 }
 
 function summarizeView(view: ViewLabels): Record<string, unknown> {
-  return compact({ state: view.state, snapshotId: view.snapshotId, bindingVersion: view.bindingVersion, coveredThroughSeq: view.coveredThroughSeq });
+  return compact({ state: view.state, workspaceId: view.workspaceId, snapshotId: view.snapshotId, contentManifestId: view.contentManifestId,
+    bindingVersion: view.bindingVersion, coveredThroughSeq: view.coveredThroughSeq });
 }
 
 function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {

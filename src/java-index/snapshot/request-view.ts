@@ -72,6 +72,8 @@ export type ViewLabels = {
   state: ViewState;
   workspaceId?: string;
   snapshotId?: string;
+  /** Digest of the sorted paths and content hashes the held snapshot was built from (§2.9). */
+  contentManifestId?: string;
   bindingVersion?: number;
   coveredThroughSeq?: number;
   trackerEpoch?: string;
@@ -99,7 +101,7 @@ export class RequestView {
     const state = workspace.viewState(held?.binding);
     const binding = held?.binding;
     const labels: ViewLabels = Object.freeze({ state, workspaceId: workspace.workspaceId,
-      ...(binding ? { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, coveredThroughSeq: binding.coveredThroughSeq, trackerEpoch: binding.trackerEpoch } : {}) });
+      ...(binding ? { snapshotId: binding.snapshotId, contentManifestId: binding.contentManifestId, bindingVersion: binding.bindingVersion, coveredThroughSeq: binding.coveredThroughSeq, trackerEpoch: binding.trackerEpoch } : {}) });
     return new RequestView(owner, workspace.canonicalRoot, labels, budget, signal, held?.lease, binding);
   }
 

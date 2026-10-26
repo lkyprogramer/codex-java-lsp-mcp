@@ -168,9 +168,11 @@ function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, conte
   const view = context.indexView;
   const labels = view ? { indexView: view } : {};
   if ((!view || view.state === "FRESH") && request?.negativeLookupAllowed !== false) return { ...result, ...labels };
+  // No verified binding of this workspace: say so instead of a partial answer.
+  const scopeState = view?.state === "NOT_READY" ? "NOT_READY" : "PARTIAL";
   if ("units" in result) {
     const reason = view && view.state !== "FRESH" ? `INDEX_VIEW_${view.state}` : "INDEX_COVERAGE_INCOMPLETE";
-    return { ...result, ...labels, scopeState: "PARTIAL", reasons: [...new Set([...result.reasons, reason])] };
+    return { ...result, ...labels, scopeState, reasons: [...new Set([...result.reasons, reason])] };
   }
   // Positive locators remain useful after their source hash check. A miss or an
   // empty vocabulary cannot establish absence while the workspace is changing.
@@ -178,7 +180,7 @@ function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, conte
   // that disallows negatives has no complete coverage (index_partial).
   const { exact, emptyReason: _emptyReason, ...rest } = result;
   const stopReason = result.stopReason ?? (view?.state === "STALE" ? "source_changed" : "index_partial");
-  return { ...rest, ...labels, scopeState: "PARTIAL", stopReason, ...(exact && exact !== "miss" ? { exact } : {}) };
+  return { ...rest, ...labels, scopeState, stopReason, ...(exact && exact !== "miss" ? { exact } : {}) };
 }
 
 function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {

@@ -180,6 +180,7 @@ test("nonzero-deadline-bounds-all-stages", { timeout: 240_000 }, async t => {
   assert.ok(preparedElapsed < 2000, `prepare took ${preparedElapsed} ms`);
   assert.equal(prepared.ok && prepared.value.labels.state, "STALE");
   assert.equal(prepared.ok && prepared.value.labels.snapshotId, binding.snapshotId);
+  assert.equal(prepared.ok && prepared.value.labels.contentManifestId, binding.contentManifestId, "the view names the content it serves");
   assert.equal(prepared.ok && prepared.value.hits.state, "RESOLVED");
   const shortPrepare = await settledWithin(request(ctx, ctx.repo, 300, async view => view.labels.state), "prepare-stall-short");
   assert.equal(shortPrepare.ok && shortPrepare.value, "STALE", "a short request keeps time to answer from its binding");
