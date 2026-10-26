@@ -12,6 +12,7 @@
 - `runtime.ts` | `java_runtime`（action=restart\|shutdown）。
 - `shared.ts` | repo-relative、JSON-safe 的 location/hover/symbol formatter。
 - `status.ts` | `java_status`；汇总 runtime、RepoChangeCoordinator、JavaIndex coverage/generation、lease 与 cache 状态。
-- `symbol.ts` | `java_symbol`（operation=query\|position\|references）。
+- `symbol.ts` | `java_symbol`（operation=query\|position\|references\|evidence；公开 mac1 symbolId/evidenceHandle，`symbolId` 入参）。
+- `symbol-target.ts` | `java_impact(symbol=)` 与 `java_symbol(symbolId=)` 共用的定位：symbolId 或名称 → 唯一声明，或 REJECTED/NOT_FOUND/AMBIGUOUS/NOT_READY（不猜）。
 
 目录内容变化时必须同步更新本文件。

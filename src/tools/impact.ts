@@ -26,7 +26,7 @@ export const IMPACT_READ_PLAN_MAX_ITEMS_ERROR =
 
 /** Agent-facing tools/list text. Does not change java_impact result bytes. */
 export const JAVA_IMPACT_TOOL_DESCRIPTION =
-  "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan. Omit readPlanMaxItems (max 30) and deadlineMs (max 15000); do not reuse older values such as 80 or 120000. semanticPolicy=auto (default) uses live JDT only for service-profile anchors; pass required for exact implementations/references, or call java_symbol for a single position.";
+  "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan. Target: symbol (a java_symbol declaration.symbolId, or a name such as Type#method; an ambiguous name returns status=AMBIGUOUS candidates and runs nothing), file/line/column, or anchors[]. indexView.state is the index freshness (FRESH|STALE|NOT_READY). Omit readPlanMaxItems (max 30) and deadlineMs (max 15000); do not reuse older values such as 80 or 120000. semanticPolicy=auto (default) uses live JDT only for service-profile anchors; pass required for exact implementations/references, or call java_symbol for a single position.";
 
 /** Field hint for tools/list. Compact output only has semantic.used; this names the retry lever. */
 export const IMPACT_SEMANTIC_POLICY_DESCRIPTION =

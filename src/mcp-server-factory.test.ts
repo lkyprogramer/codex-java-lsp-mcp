@@ -72,6 +72,11 @@ test("java_impact tools/list teaches auto-skip and the required/java_symbol retr
     assert.match(impact?.description ?? "", /semanticPolicy=auto/);
     assert.match(symbol?.description ?? "", /static discovery over the on-disk index/);
     assert.match(symbol?.description ?? "", /backend=jdt/);
+    // MAC-13: every input the descriptions teach exists in the schema.
+    assert.match(impact?.description ?? "", /symbol/);
+    assert.ok(impact?.inputSchema?.properties?.symbol, "java_impact schema has symbol");
+    assert.match(symbol?.description ?? "", /symbolId/);
+    assert.ok(symbol?.inputSchema?.properties?.symbolId, "java_symbol schema has symbolId");
     const policy = JSON.stringify(impact?.inputSchema?.properties?.semanticPolicy ?? {});
     assert.match(policy, /service-profile/);
     assert.match(policy, /semantic\.used=false/);

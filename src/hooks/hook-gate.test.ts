@@ -33,12 +33,15 @@ test("hook advice keeps enabled projects static-first and starts JDT on demand",
   }));
 
   const advice = runHook(config, root, "排查 Java service 调用链");
-  assert.match(advice, /start:false/);
+  // MAC-13 D09: no java_status precondition; the target tool's own result verifies repoRoot.
+  assert.doesNotMatch(advice, /start:false/);
+  assert.match(advice, /不必先调 java_status/);
+  assert.match(advice, /symbolId/);
   assert.match(advice, /started=false/);
   assert.doesNotMatch(advice, /start:true|必须立即/);
   assert.match(advice, /静态查询不需要 JDT/);
   assert.match(advice, /未知位置先用 java_symbol\(operation=query\)/);
-  assert.match(advice, /真实锚点调用 java_impact/);
+  assert.match(advice, /java_impact\(\{symbol:/);
   assert.match(advice, /按需启动 JDT/);
   assert.match(advice, /semanticPolicy=auto/);
   assert.match(advice, /semanticPolicy=required/);
@@ -56,7 +59,7 @@ test("hook does not prestart JDT on a linked Git worktree", { skip: !hasGit() },
 
   const worktreeAdvice = runHook(config, family.linked, "排查 Java service 调用链");
   assert.match(worktreeAdvice, /Git worktree/);
-  assert.match(worktreeAdvice, /start:false/);
+  assert.doesNotMatch(worktreeAdvice, /start:false/);
   assert.doesNotMatch(worktreeAdvice, /start:true/);
   assert.match(worktreeAdvice, /java_impact/);
   assert.match(worktreeAdvice, /java_symbol/);
