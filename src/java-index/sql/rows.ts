@@ -367,6 +367,7 @@ function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly Stat
     }
   }
   const update = prepareCached(db, "UPDATE edge SET confidence=?, res_kind_sym=?, res_strategy_sym=?, generation=? WHERE id=?");
+  const unmatched: Array<{ edge: StaticEdge; key: [number, number, number, number, number, number, number]; resKind: number; resStrategy: number | null }> = [];
   for (const edge of edges) {
     const [sl, sc, el, ec] = rangeColumns(edge.range);
     const kindSym = internSym(db, edge.kind);
@@ -384,11 +385,34 @@ function syncStaticEdges(db: IndexDatabase, fileId: number, edges: readonly Stat
       }
       continue;
     }
+    unmatched.push({ edge, key: [kindSym, fromSym, toSym, sl, sc, el, ec], resKind, resStrategy });
+  }
+  // An edit above an edge only shifts its range: the row keeps its id, so the endpoint and file
+  // indexes are left alone and only the range index moves. Pairs keep both sides' order.
+  const movable = new Map<string, number[]>();
+  for (const [key, old] of stale) {
+    const loose = key.split(":", 3).join(":");
+    movable.set(loose, [...(movable.get(loose) ?? []), old.id]);
+  }
+  const taken = prepareCached(db, "SELECT 1 AS hit FROM edge WHERE kind_sym=? AND from_sym=? AND to_sym=? AND sl=? AND sc=? AND el=? AND ec=?");
+  const move = prepareCached(db, "UPDATE edge SET sl=?, sc=?, el=?, ec=?, confidence=?, res_kind_sym=?, res_strategy_sym=?, generation=? WHERE id=?");
+  const moved = new Set<number>();
+  for (const { edge, key, resKind, resStrategy } of unmatched) {
+    const candidates = movable.get(key.slice(0, 3).join(":"));
+    // The range is free unless another file holds it (duplicate FQNs) or a duplicate edge here took it: then upsert as before.
+    if (candidates?.length && !taken.get(...key)) {
+      const id = candidates.shift()!;
+      move.run(key[3], key[4], key[5], key[6], edge.confidence, resKind, resStrategy, edge.generation, id);
+      moved.add(id);
+      changed = true;
+      continue;
+    }
     // The upsert takes over a row another file wrote (duplicate FQNs): that file's kept bundle is stale.
-    if (memos.has(db)) forgetEdgeHolder(db, [kindSym, fromSym, toSym, sl, sc, el, ec], fileId);
+    if (memos.has(db)) forgetEdgeHolder(db, key, fileId);
     insertStaticEdge(db, edge, fileId);
     changed = true;
   }
+  for (const [key, old] of [...stale]) if (moved.has(old.id)) stale.delete(key);
   const drop = prepareCached(db, "DELETE FROM edge WHERE id=?");
   for (const old of stale.values()) drop.run(old.id);
   return changed || stale.size > 0;

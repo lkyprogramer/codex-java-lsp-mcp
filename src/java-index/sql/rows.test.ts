@@ -261,6 +261,43 @@ test("a kept bundle is read again once a write touches its file row, edges or me
   }
 });
 
+test("an edge whose range only shifted keeps its row; a range another file holds still moves that row here", async () => {
+  const bundles = await parseFixtures();
+  const first = bundles.find(bundle => bundle.types.length > 0)!;
+  const other = bundles.find(bundle => bundle !== first)!;
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    for (const bundle of bundles) writeBundle(db, bundle);
+    const path0 = first.file.relativePath, typeId = first.types[0]!.typeId;
+    const at = (line: number) => ({ start: { line, column: 1 }, end: { line, column: 9 } });
+    const edge = (line: number, confidence = 1) => ({ edgeId: "", fromId: typeId, toId: typeId, kind: "DECLARES" as const, confidence, range: at(line),
+      sourceFile: path0, generation: 7, resolution: { kind: "AST_EXPLICIT" as const } });
+    const rows = () => db.prepare("SELECT id, sl, confidence, generation FROM edge WHERE file_id=(SELECT id FROM file WHERE path=?) ORDER BY id").all(path0)
+      .map(row => [Number(row.id), Number(row.sl), Number(row.confidence), Number(row.generation)]);
+    replaceBundleEdges(db, path0, [edge(10), edge(20), edge(30)]);
+    const ids = rows().map(row => row[0]);
+
+    // Two lines inserted above: every range shifts, no row is replaced.
+    replaceBundleEdges(db, path0, [edge(12), edge(22, 0.5), edge(32)].map(e => ({ ...e, generation: 8 })));
+    assert.deepEqual(rows(), [[ids[0], 12, 1, 8], [ids[1], 22, 0.5, 8], [ids[2], 32, 1, 8]]);
+    assert.deepEqual(readBundle(db, path0)!.edges.map(e => e.range?.start.line), [12, 22, 32]);
+
+    // One edge kept, one removed, one new range: the leftover row takes the new range.
+    replaceBundleEdges(db, path0, [edge(12), edge(40)]);
+    assert.deepEqual(rows().map(row => row.slice(0, 2)), [[ids[0], 12], [ids[1], 40]]);
+
+    // The target range belongs to another file (duplicate FQNs): that row moves here, as an insert did before.
+    replaceBundleEdges(db, other.file.relativePath, [{ ...edge(50), sourceFile: other.file.relativePath }]);
+    replaceBundleEdges(db, path0, [edge(12), edge(50)]);
+    assert.deepEqual(readBundle(db, path0)!.edges.map(e => e.range?.start.line).sort(), [12, 50]);
+    assert.deepEqual(readBundle(db, other.file.relativePath)!.edges.filter(e => e.fromId === typeId), []);
+    assert.equal(rows().length, 2);
+  } finally {
+    close(db);
+  }
+});
+
 const NO_FACTS_TABLES = ["edge", "kg_node", "kg_edge", "entity"] as const;
 const TEXT_BLOB_ALLOW = new Set([
   "meta.key", "meta.value",
