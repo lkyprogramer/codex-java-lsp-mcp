@@ -1,6 +1,19 @@
 # MAC-12 / G12
 
-**IN_PROGRESS。** G11 已通过并本地提交 `4cfa0402`。最近一次 G12 Tier-1 尝试（候选 `f6a73539`）**FAIL**：硬门全过，但主测中两档 seed 未达绝对门，`performanceReady=false`。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)；本次尝试未重新生成 task-result，见下节。
+**IN_PROGRESS。** G11 已通过并本地提交 `4cfa0402`。最近一次 G12 Tier-1 尝试（候选 `e5faa371`）**FAIL**：硬门全过，主测全部性能项 PASS，但独立复跑的 200 文件物理成本 0.3054 超过 0.3，`performanceReady=false`。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)；本次尝试未重新生成 task-result，见下节。
+
+## G12 Tier-1 尝试：候选 `e5faa371`（2026-10-26）
+
+本轮 builder CPU 优化提交：`72c4228a`（resolve 结果不变时跳过重写、文件级名字解析缓存、facts 解码缓存、按类型分的 LRU）、`e267f470`（提取 facts 不再整树 marshal，错误计数按 hasError 剪枝）、`e5faa371`（tracker 全量哈希省掉每文件的根 realpath 和 fd stat）。Tier-0 交替对比：相对 `503b60b1`，seed delta 进程 CPU −26.5%、墙钟 −24.5%。
+
+| 运行 | 测试 | 硬门 | seedLe20 p95（≤5000ms） | seedTo200 p95（≤15000ms） | 200 文件物理成本（≤0.3） | 其余性能项 | 窗口 load1 |
+|---|---|---|---|---|---|---|---|
+| final-g12（主测） | 156/156 | 5/5 PASS | 3676 PASS | 12262 PASS | 0.250 PASS | 全 PASS | 3.4–18.2 |
+| rerun-g12（新构建，独立复跑） | 156/156 | 5/5 PASS | 3426 PASS | 8641 PASS | **0.3054 FAIL**（3 个全有效） | 全 PASS | 2.8–8.4 |
+
+回归：dist 1582/1582，scripts 638 PASS、10 skip。独立只读评审 PASS，无 P1/P2；3 条 P3：一处注释写反了 MISSING 节点的 hasError、新解码缓存和 LRU 的 builder 内存峰值尚未实测、parse-pool 失败时有意等待在途解析结束。收尾 PASS：资源全部退出，raw 已归档并物理校验。
+
+**判定：** 复跑的 3 个样本都有效且都超限，按规则 FAIL 保留，不用主测的 PASS 替代，也不并入主测样本。两次运行的源码摘要相同，200 文件档的 pageRatio 都约 0.098，delta 增长 155–182 MB；差异主要来自分母（主测 fresh full 增长 656 MB，复跑 587 MB）。delta 实际分配的空间约为其写入页的 3 倍，这是下一步要查的热点。
 
 ## G12 Tier-1 尝试：候选 `f6a73539`（2026-10-24）
 
