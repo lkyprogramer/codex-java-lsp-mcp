@@ -115,7 +115,7 @@ export function parametersFit(method: MethodFacts, wanted: string[], types: read
   return fit;
 }
 
-function typeFits(type: JavaTypeRef, wanted: string, method: MethodFacts, types: readonly Pick<JavaTypeFacts, "typeId" | "enclosingTypeId" | "typeParameters">[]): Fit {
+function typeFits(type: JavaTypeRef, wanted: string, method: MethodFacts, types: readonly Pick<JavaTypeFacts, "typeId" | "enclosingTypeId" | "typeParameters">[], hops = 0): Fit {
   const dimensions = /(\[\])*$/.exec(wanted)![0].length / 2;
   if (dimensions !== type.arrayDepth) return "no";
   const name = wanted.slice(0, wanted.length - dimensions * 2);
@@ -126,17 +126,31 @@ function typeFits(type: JavaTypeRef, wanted: string, method: MethodFacts, types:
     if (!variable) return "maybe";
     const bound = variable.bounds[0];
     if (!bound) return name === "Object" || name === "java.lang.Object" ? "yes" : "no";
-    return bound.resolution.state === "TYPE_VARIABLE" ? "maybe" : typeFits({ ...bound, arrayDepth: dimensions }, wanted, method, types);
+    // <U extends T>: a bound that is itself a type variable erases through that variable.
+    const chained = bound.resolution.state === "TYPE_VARIABLE" ? bound.resolution.name
+      : bound.text !== type.resolution.name && typeVariable(bound.text, method, types) ? bound.text : undefined;
+    if (chained !== undefined) {
+      return hops >= 8 || chained === type.resolution.name ? "maybe"
+        : typeFits({ ...type, resolution: { state: "TYPE_VARIABLE", name: chained } }, wanted, method, types, hops + 1);
+    }
+    return typeFits({ ...bound, arrayDepth: dimensions }, wanted, method, types);
   }
   const simple = (text: string) => text.slice(text.lastIndexOf(".") + 1);
   const declaredSimple = type.simpleName.replace(/\$/g, ".");
   if (simple(declaredSimple) !== simple(name)) return "no";
   if (!name.includes(".")) return "yes";
-  const qualified = type.qualifiedName || (type.resolution.state === "EXTERNAL" ? type.resolution.qualifiedName
-    : type.resolution.state === "RESOLVED_REPO" ? fqnOfNamedTypeId(type.resolution.typeId) : undefined);
   const nested = (outer: string, inner: string) => outer === inner || outer.endsWith(`.${inner}`);
-  if (qualified) return nested(qualified.replace(/\$/g, "."), name) ? "yes" : "no";
-  // Unresolved: only the source spelling is known.
+  const resolution = type.resolution;
+  // Only an import, java.lang, the enclosing scope or a repo match proves the FQN. An EXTERNAL "QUALIFIED"
+  // name is the source spelling ("Map.Entry" under an import of Map), and a wildcard or repo-unique pick is a guess.
+  const proven = resolution.state === "EXTERNAL" ? (resolution.strategy !== "QUALIFIED" ? resolution.qualifiedName : undefined)
+    : resolution.state === "RESOLVED_REPO" ? fqnOfNamedTypeId(resolution.typeId) : undefined;
+  if (proven) {
+    if (nested(proven.replace(/\$/g, "."), name)) return "yes";
+    const guessed = resolution.state === "RESOLVED_REPO" && (resolution.strategy === "WILDCARD_IMPORT" || resolution.strategy === "REPO_UNIQUE_SIMPLE_NAME");
+    return guessed ? "maybe" : "no";
+  }
+  // Otherwise only the source spelling is known.
   const source = type.text.split("<")[0]!.replace(/\[\s*\]|\s+/g, "").replace(/\$/g, ".");
   return nested(source, name) ? "yes" : nested(name, source) ? "maybe" : "no";
 }
@@ -201,7 +215,8 @@ export async function locateSymbol(
     repoHash: context.repoHash,
     budget: request ? { remainingMs: () => request.budget.remainingMs() } : undefined
   });
-  const fits = signature ? await signatureFits(context, result.candidates, signature.parameters, request) : result.candidates.map((): Fit => "yes");
+  const { fits, unread } = signature ? await signatureFits(context, result.candidates, signature.parameters, request)
+    : { fits: result.candidates.map((): Fit => "yes"), unread: false };
   const matched = result.candidates.filter((_, index) => fits[index] !== "no");
   const uncertain = result.candidates.some((_, index) => fits[index] === "maybe");
   const limited = result.selectionLimited === true || result.candidates.length >= SYMBOL_CANDIDATE_LIMIT;
@@ -215,30 +230,37 @@ export async function locateSymbol(
   }
   if (candidates.length > 0) {
     return { ok: false, miss: { status: "AMBIGUOUS", symbol, candidates, ...(limited ? { truncated: true as const } : {}),
-      hint: uncertain ? "The parameter types could not be compared exactly against these declarations; pass one candidate's symbolId instead. Nothing was guessed."
+      hint: unread ? "The parameter facts of these declarations could not be read (budget or index); retry, or pass one candidate's symbolId instead. Nothing was guessed."
+        : uncertain ? "The parameter types could not be compared exactly against these declarations; pass one candidate's symbolId instead. Nothing was guessed."
         : "Several declarations match; pass one candidate's symbolId (or Type#method(ParamType, ...)) instead. Nothing was guessed." } };
   }
   const partial = result.scopeState !== "READY" || result.stopReason !== undefined || !absenceProvable(context, request) || (signature !== undefined && limited);
   return { ok: false, miss: { status: partial ? "NOT_READY" : "NOT_FOUND", symbol, ...(result.stopReason ? { reason: result.stopReason } : {}),
-    hint: partial ? NOT_SETTLED : "No indexed declaration has this name. Use java_symbol operation=query with a text query to search." } };
+    hint: partial ? NOT_SETTLED : result.candidates.length > 0
+      ? "Declarations with this name exist, but none has this parameter list; drop the list to see them as candidates."
+      : "No indexed declaration has this name. Use java_symbol operation=query with a text query to search." } };
 }
 
 /** Each candidate against the wanted parameter list, from the parsed method facts of its file (one batched read). */
-async function signatureFits(context: ToolContext, candidates: readonly DiscoveryCandidate[], wanted: string[], request: LocateRequest | undefined): Promise<Fit[]> {
+async function signatureFits(context: ToolContext, candidates: readonly DiscoveryCandidate[], wanted: string[], request: LocateRequest | undefined): Promise<{ fits: Fit[]; unread: boolean }> {
   const methods = candidates.filter(candidate => candidate.declaration.id.startsWith("method:"));
   const files = [...new Set(methods.map(candidate => candidate.declaration.relativePath))];
+  let unread = false;
   let bundles: Awaited<ReturnType<NonNullable<ToolContext["javaIndexClient"]>["queryFiles"]>> = [];
   try {
     if (files.length > 0) bundles = await context.javaIndexClient!.queryFiles(files.map(file => path.join(context.repoRoot, file)), request ? { budget: request.budget } : undefined);
   } catch {
     // Unreadable facts decide nothing: those candidates stay listed, never picked.
+    unread = true;
   }
-  return candidates.map(candidate => {
+  const fits = candidates.map((candidate): Fit => {
     if (!candidate.declaration.id.startsWith("method:")) return "no";
     const bundle = bundles.find(entry => entry.methods.some(method => method.methodId === candidate.declaration.id));
     const method = bundle?.methods.find(entry => entry.methodId === candidate.declaration.id);
+    if (!method) unread = true;
     return method ? parametersFit(method, wanted, bundle!.types) : "maybe";
   });
+  return { fits, unread };
 }
 
 function fromResolution(symbol: string, resolution: SymbolResolution | undefined): { ok: true; target: SymbolTarget } | { ok: false; miss: SymbolMiss } {

@@ -51,6 +51,16 @@ test("parametersFit qualifies names only as far as the facts prove", () => {
   assert.equal(fit([ref("Line", 0)], "demo.Line"), "maybe", "an unresolved simple source name cannot prove a qualifier");
   assert.equal(fit([ref("a.Line", 0)], "b.Line"), "no");
   assert.equal(fit([ref("int", 0)], "long"), "no");
+  // "Map.Entry" under an import of Map resolves EXTERNAL/QUALIFIED with the source spelling, not a proven FQN.
+  const partial = ref("Map.Entry<K, V>", 0, { state: "EXTERNAL", qualifiedName: "Map.Entry", strategy: "QUALIFIED" }, { qualifiedName: "Map.Entry" });
+  assert.equal(fit([partial], "Map.Entry"), "yes");
+  assert.equal(fit([partial], "Entry"), "yes");
+  assert.equal(fit([partial], "java.util.Map.Entry"), "maybe", "never a false absence");
+  assert.equal(fit([partial], "java.util.Map$Entry"), "maybe");
+  assert.equal(fit([partial], "Other.Entry"), "no");
+  const guessed = ref("Line", 0, { state: "RESOLVED_REPO", typeId: `type:v2:${encodeURIComponent("src/main/java/a/Line.java")}#a.Line`, strategy: "REPO_UNIQUE_SIMPLE_NAME" });
+  assert.equal(fit([guessed], "a.Line"), "yes");
+  assert.equal(fit([guessed], "b.Line"), "maybe", "a repo-unique pick is a guess, not proof");
 });
 
 test("parametersFit erases a type variable to its first bound", () => {
@@ -63,6 +73,13 @@ test("parametersFit erases a type variable to its first bound", () => {
   assert.equal(fit([variable("T")], "Object", [{ name: "T", bounds: [number] }]), "no");
   assert.equal(fit([variable("T")], "Object"), "maybe", "a type variable declared out of reach decides nothing");
   assert.equal(fit([variable("T"), ref("int", 0)], "Object, long", [{ name: "T", bounds: [] }]), "no");
+  // <T, U extends T>: U erases through T.
+  const chain = [{ name: "T", bounds: [] }, { name: "U", bounds: [variable("T")] }];
+  assert.equal(fit([variable("U")], "Object", chain), "yes");
+  const unresolvedChain = [{ name: "T", bounds: [number] }, { name: "U", bounds: [ref("T", 0)] }];
+  assert.equal(fit([variable("U")], "Number", unresolvedChain), "yes", "a bound spelled as an in-scope type variable");
+  assert.equal(fit([variable("U")], "Object", unresolvedChain), "no");
+  assert.equal(fit([variable("U")], "Object", [{ name: "U", bounds: [variable("U")] }]), "maybe", "a cycle decides nothing");
 });
 
 test("isSymbolIdLike routes ids, not names", () => {

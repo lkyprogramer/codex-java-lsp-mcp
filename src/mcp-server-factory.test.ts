@@ -304,6 +304,7 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     "src/main/java/com/acme/Orders.java": "package com.acme; public class Orders { public void place(int n) {} public void place(String s) {} public void ship() {}"
       + " public void fill(String[] a) {} public void fill(String[][] a) {} public void log(String... lines) {}"
       + " public <T extends Number> void pick(T value) {} public void nest(Orders.Line line) {} public static class Line {} }\n",
+    "src/main/java/com/acme/Maps.java": "package com.acme; import java.util.Map; public class Maps { public <T, U extends T> void entry(Map.Entry<String, String> e, U u) {} }\n",
     "src/main/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/test/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n",
@@ -388,7 +389,9 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
       const picked = await ok("java_impact", { symbol, verbosity: "compact" });
       assert.equal(picked.status, undefined, `${symbol}: ${JSON.stringify(picked).slice(0, 300)}`);
     }
-    assert.equal((await ok("java_impact", { symbol: "com.acme.Orders#place(long)" })).status, "NOT_FOUND");
+    const noOverload = await ok("java_impact", { symbol: "com.acme.Orders#place(long)" });
+    assert.equal(noOverload.status, "NOT_FOUND");
+    assert.match(String(noOverload.hint), /none has this parameter list/);
     // Arrays, varargs, a bounded type variable, nesting and annotation arguments are read from the parsed parameters.
     const fills = ((await ok("java_impact", { symbol: "com.acme.Orders#fill" })).candidates as Declaration[]).map(candidate => candidate.symbolId);
     assert.equal(fills.length, 2);
@@ -401,6 +404,11 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     for (const symbol of ["com.acme.Orders#fill(String[][][])", "com.acme.Orders#log(String)", "com.acme.Orders#pick(Object)", "com.acme.Orders#nest(com.other.Line)"]) {
       assert.equal((await ok("java_impact", { symbol })).status, "NOT_FOUND", symbol);
     }
+    // A partially qualified external type proves only its source spelling: a fuller name lists, never calls it absent.
+    assert.equal((await ok("java_impact", { symbol: "com.acme.Maps#entry(Map.Entry, Object)", verbosity: "compact" })).status, undefined);
+    const fuller = await ok("java_impact", { symbol: "com.acme.Maps#entry(java.util.Map.Entry, Object)" });
+    assert.equal(fuller.status, "AMBIGUOUS", JSON.stringify(fuller).slice(0, 300));
+    assert.equal((fuller.candidates as Declaration[]).length, 1);
     // A symbolId past 512 characters round-trips from java_symbol into java_impact.
     const deep = ((await ok("java_symbol", { query: "Deep#handle", searchMode: "exact", preview: "none" })).candidates as Array<{ declaration: Declaration }>)[0]!.declaration;
     assert.ok(deep.symbolId!.length > 512, String(deep.symbolId!.length));
