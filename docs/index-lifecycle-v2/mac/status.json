@@ -174,7 +174,8 @@
     {
       "gateId": "G13",
       "taskId": "MAC-13",
-      "status": "PLAN"
+      "status": "PASS",
+      "result": "mac-13/task-result.json"
     },
     {
       "gateId": "G14",
