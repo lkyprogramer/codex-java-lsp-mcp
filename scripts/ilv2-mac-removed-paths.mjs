@@ -21,7 +21,7 @@ const SCANNED = /^(src\/|scripts\/|native\/|package\.json$|install-runtime\.sh$)
  * `error-text` may sit in production-reachable code: they name the old path without calling it.
  */
 export const KINDS = Object.freeze({
-  "comment": "history note in a comment; no code path",
+  "comment": "history note in a comment or contract description text; no code path",
   "negative-assertion": "a test or guard that asserts the old path is absent or rejected",
   "error-text": "matches an old error message so historical telemetry still classifies; calls nothing",
   "offline-driver": "offline benchmark/replay/diagnostic tool or its test, run by hand on frozen inputs, never installed as a runtime path",
@@ -34,7 +34,7 @@ const PRODUCTION_SAFE = new Set(["comment", "negative-assertion", "error-text"])
 export const LEDGER = [
   { id: "D01", type: "CODE", owner: "MAC-07, MAC-08", names: ["findSiblingDb", "scanFamilySiblingIndex", "siblingDbPath", "copySibling", "retargetCopiedDb", "copiedSchemaMatches", "vacuum-into", /VACUUM\s+INTO/i],
     replacement: "sealed snapshot candidates with manifest and lease (snapshot-store.ts, index-owner.ts seedCandidates)",
-    explain: { "src/telemetry/impact-telemetry.ts": "error-text" } },
+    explain: { "src/telemetry/impact-telemetry.ts": "error-text", "scripts/release-k-contract-matrix.json": "comment" } },
   { id: "D02", type: "CODE", owner: "MAC-05", names: [/\brecovering\b/], replacement: "explicit FullPlan/DeltaPlan builder jobs (incremental.ts BuilderJob kinds full/refresh)" },
   { id: "D03", type: "CODE", owner: "MAC-03, MAC-05", names: [], replacement: "search text derived from the parsed bytes; preview checks the captured hash",
     evidence: ["G03 parse-then-edit injection", "G05 delta/full logical equality", "K20 publish-does-not-upgrade-held-view (sourceChanged gap)"] },
@@ -42,7 +42,7 @@ export const LEDGER = [
     replacement: "one scheduler in IndexOwner; builders only via build-process.ts under the owner",
     explain: {
       "src/java-index/local-builder.ts": "test-only", "src/java-index/local-index.ts": "test-only", "src/java-index/sql/sql-client.ts": "test-only",
-      "src/README.md": "comment"
+      "src/README.md": "comment", "scripts/release-k-contract-matrix.json": "comment"
     },
     explainPattern: [[/^src\/benchmark\//, "offline-driver"], [/^scripts\/(run-jin-|run-fsr|run-memory-benchmark|attribute-impact-payload|diff-index-impl|replay-entity-entry|verify-facts-digest)/, "offline-driver"]] },
   { id: "D05", type: "CODE", owner: "MAC-08, MAC-17", names: ["extract-stdio-project-jdk-env", "verify-stdio-ownership-handoff"],
