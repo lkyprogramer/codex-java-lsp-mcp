@@ -190,7 +190,7 @@ export async function locateSymbol(
     const parsed = parseSymbolId(symbol);
     if (!parsed.ok) {
       const hint = parsed.reason === "PRE_MAC1_FORMAT" ? `Ids issued before mac1 are no longer accepted. ${RELOCATE}`
-        : parsed.reason === "NOT_STABLE" ? `A local or anonymous declaration has no lasting symbolId. ${RELOCATE}` : `Not a mac1 symbolId. ${RELOCATE}`;
+        : parsed.reason === "NOT_STABLE" ? `A local or anonymous declaration has no lasting symbolId. ${RELOCATE}` : `Malformed or obsolete declaration key in symbolId. ${RELOCATE}`;
       return { ok: false, miss: { status: "REJECTED", symbol, reason: parsed.reason, hint } };
     }
     if (!view?.workspaceId || !client.resolveSymbolIds) {

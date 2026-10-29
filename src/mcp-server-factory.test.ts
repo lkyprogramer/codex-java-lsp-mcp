@@ -261,7 +261,7 @@ test("MAC11 public symbol freezes STALE labels, suppresses misses, then converge
     // The same for a symbolId minted by the newer snapshot: the held view misses it without proving it gone.
     const readyId = String(((ready.candidates as Array<{ declaration: { symbolId: string } }>)[0]!).declaration.symbolId);
     const [, , ws, encodedType] = readyId.split(":");
-    const methodKey = `method:${Buffer.from(encodedType!, "base64url").toString("utf8")}#addedMac11()`;
+    const methodKey = `method:v3:${Buffer.from(encodedType!, "base64url").toString("utf8")}#addedMac11()`;
     const newerId = `jsym:mac1:${ws}:${Buffer.from(methodKey, "utf8").toString("base64url")}`;
     const staleById = toolJson(await client!.callTool({ name: "java_impact", arguments: { repoRoot: root, symbol: newerId } })) as { status?: string; indexView?: { state: string } };
     assert.equal(staleById.status, "NOT_READY", JSON.stringify(staleById).slice(0, 400));
@@ -395,6 +395,15 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     // Arrays, varargs, a bounded type variable, nesting and annotation arguments are read from the parsed parameters.
     const fills = ((await ok("java_impact", { symbol: "com.acme.Orders#fill" })).candidates as Declaration[]).map(candidate => candidate.symbolId);
     assert.equal(fills.length, 2);
+    const legacyArrayKey = Buffer.from(fills[0]!.split(":")[3]!, "base64url").toString("utf8")
+      .replace(/^method:v3:/, "method:").replace(/#fill\(.*\)$/, "#fill(String[][])");
+    const legacyArrayId = `jsym:mac1:${workspace.workspaceId}:${Buffer.from(legacyArrayKey).toString("base64url")}`;
+    for (const [tool, args] of [["java_symbol", { operation: "evidence", symbolId: legacyArrayId }], ["java_impact", { symbol: legacyArrayId }]] as const) {
+      const obsolete = await ok(tool, args);
+      assert.equal(obsolete.status, "REJECTED");
+      assert.equal(obsolete.reason, "MALFORMED");
+      assert.match(String(obsolete.hint), /java_symbol/);
+    }
     for (const symbol of ["com.acme.Orders#fill(String[])", "com.acme.Orders#fill(java.lang.String[][] grid)", "com.acme.Orders#log(String[])",
       "com.acme.Orders#log(@SuppressWarnings({\"a\", \"b\"}) String... lines)", "com.acme.Orders#pick(T)", "com.acme.Orders#pick(Number)",
       "com.acme.Orders#nest(Orders.Line)", "com.acme.Orders#nest(Orders$Line)", "com.acme.Orders#nest(com.acme.Orders.Line)"]) {

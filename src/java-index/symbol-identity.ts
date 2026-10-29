@@ -3,9 +3,10 @@ import type { SourceRange } from "../runtime/source-range.js";
 import { prepareCached, type IndexDatabase } from "./sql/driver.js";
 import { decodeFacts } from "./sql/rows.js";
 import { symId } from "./sql/sym.js";
+import { METHOD_ID_PREFIX } from "./stable-id.js";
 
 // §2.8 identity boundary. The shared facts database stores only
-// workspace-independent declaration keys (the v2 stable ids: normalized
+// workspace-independent declaration keys (v2 types/fields, v3 methods: normalized
 // relative path + FQN, owner + erased signature, owner + field name). The
 // external symbolId binds such a key to one workspace at the API edge; it
 // carries no snapshot, generation, line or rowid, so it survives body edits,
@@ -54,7 +55,9 @@ const TABLE: Record<DeclarationKind, "type" | "method" | "field"> = { type: "typ
 
 export function declarationKind(declarationKey: string): DeclarationKind | undefined {
   if (declarationKey.startsWith("type:v2:") || declarationKey.startsWith("type-local:")) return "type";
-  if (declarationKey.startsWith("method:")) return "method";
+  // Pre-v3 signatures double-counted array dimensions or lost declarator
+  // dimensions. Accepting those keys after normalization could rebind an ID.
+  if (declarationKey.startsWith(METHOD_ID_PREFIX)) return "method";
   if (declarationKey.startsWith("field:")) return "field";
   return undefined;
 }

@@ -20,7 +20,7 @@ import {
   relativePathOfLocalTypeId,
   relativePathOfNamedTypeId
 } from "./framework-index-view.js";
-import { javaParameterId } from "./stable-id.js";
+import { javaMethodId, javaParameterId } from "./stable-id.js";
 
 const RANGE = { start: { line: 1, column: 1 }, end: { line: 1, column: 5 } };
 
@@ -92,22 +92,23 @@ test("T02: v2 source-scoped ids parse through the # separator in owner/fqn looku
   const owner = `type:v2:${encodeURIComponent("modules/a/src/main/java/demo/Shared.java")}#demo.Shared`;
   assert.equal(ownerTypeIdOf(owner), owner, "a v2 type id is its own owner");
   assert.equal(fqnOfTypeId(owner), "demo.Shared", "fqnOfTypeId must decode the v2 fqn segment");
-  assert.equal(ownerTypeIdOf(`method:${owner}#save(java.lang.String,int)`), owner);
+  assert.equal(ownerTypeIdOf(javaMethodId(owner, "save(java.lang.String,int)")), owner);
+  assert.equal(ownerTypeIdOf(`method:${owner}#save(java.lang.String,int)`), undefined, "pre-v3 method keys are not aliases");
   assert.equal(ownerTypeIdOf(`field:${owner}#count`), owner);
-  assert.equal(ownerTypeIdOf(javaParameterId(`method:${owner}#save()`, 0)), undefined, "v2 parameter ids stay unresolved");
+  assert.equal(ownerTypeIdOf(javaParameterId(javaMethodId(owner, "save()"), 0)), undefined, "v2 parameter ids stay unresolved");
   const tricky = `type:v2:${encodeURIComponent("a #b/Shared.java")}#demo.Shared`;
   assert.equal(fqnOfTypeId(tricky), "demo.Shared");
-  assert.equal(ownerTypeIdOf(`method:${tricky}#run()`), tricky);
+  assert.equal(ownerTypeIdOf(javaMethodId(tricky, "run()")), tricky);
 });
 
 test("ownerTypeIdOf: type-local ids are their own owner, field/method ids split at their owner; pre-v2 owners name nothing", () => {
   const local = "type-local:src/main/java/demo/W.java:3:1";
   assert.equal(ownerTypeIdOf(local), local);
   assert.equal(ownerTypeIdOf(`field:${local}#name`), local);
-  assert.equal(ownerTypeIdOf(`method:${local}#run()`), local);
+  assert.equal(ownerTypeIdOf(javaMethodId(local, "run()")), local);
   // A parameter id (method:...#sig#pN) is deliberately not resolved - parameters
   // are reached through their owning method's own declaration, not standalone.
-  assert.equal(ownerTypeIdOf(javaParameterId(`method:${local}#run()`, 0)), undefined);
+  assert.equal(ownerTypeIdOf(javaParameterId(javaMethodId(local, "run()"), 0)), undefined);
   assert.equal(ownerTypeIdOf("type:demo.Widget"), undefined);
   assert.equal(ownerTypeIdOf("field:type:demo.Widget#name"), undefined);
   assert.equal(ownerTypeIdOf("method:type:demo.Widget#run()"), undefined);

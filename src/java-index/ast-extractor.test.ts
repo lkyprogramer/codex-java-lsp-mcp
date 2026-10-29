@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJavaParserBackend, type JavaSyntaxNode } from "./java-parser-backend.js";
 import { extractJavaFile, type ExtractJavaInput } from "./ast-extractor.js";
+import { javaMethodId } from "./stable-id.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
@@ -154,6 +155,120 @@ test("extractJavaFile extracts parameter annotations, including on a varargs par
   assert.deepEqual(handle.parameters[1]!.annotations.map(a => a.name), ["NonNull"]);
 });
 
+test("array parameter signatures count type-side brackets exactly once", async () => {
+  const backend = await createJavaParserBackend();
+  const content = "package demo; class Arrays { void consume(String[] values) {} }";
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/Arrays.java" }), backend);
+  const method = result.methods[0]!;
+
+  assert.equal(result.file.parseState, "COMPLETE");
+  assert.equal(method.parameters[0]!.type.text, "String[]");
+  assert.equal(method.parameters[0]!.type.arrayDepth, 1);
+  assert.equal(method.signatureKey, "consume(String[])");
+});
+
+test("array parameter dimensions include declarator brackets and mixed bracket positions", async () => {
+  const backend = await createJavaParserBackend();
+  const declarations = [
+    { parameter: "String[] values", text: "String[]", depth: 1 },
+    { parameter: "String values[]", text: "String", depth: 1 },
+    { parameter: "String[][] values", text: "String[][]", depth: 2 },
+    { parameter: "String values[][]", text: "String", depth: 2 },
+    { parameter: "String[] values[]", text: "String[]", depth: 2 },
+    { parameter: "String[][] values[]", text: "String[][]", depth: 3 }
+  ];
+  const methods = declarations.map(({ parameter }, index) => `void consume${index}(${parameter}) {}`).join("\n");
+  const content = `package demo; class Arrays {\n${methods}\n}`;
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/Arrays.java" }), backend);
+
+  assert.equal(result.file.parseState, "COMPLETE");
+  declarations.forEach(({ parameter, text, depth }, index) => {
+    const method = result.methods.find(candidate => candidate.name === `consume${index}`)!;
+    const type = method.parameters[0]!.type;
+    assert.equal(type.text, text, parameter);
+    assert.equal(type.simpleName, "String", parameter);
+    assert.equal(type.arrayDepth, depth, parameter);
+    assert.equal(method.signatureKey, `consume${index}(String${"[]".repeat(depth)})`, parameter);
+  });
+});
+
+test("varargs parameter signatures include the spread dimension and ignore declaration annotations", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "class Arrays {",
+    "  void plain(String... values) {}",
+    "  void annotated(@NonNull String... values) {}",
+    "  void nested(String[]... values) {}",
+    "  void annotatedNested(@NonNull String[]... values) {}",
+    "}"
+  ].join("\n");
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/Arrays.java" }), backend);
+
+  assert.equal(result.file.parseState, "COMPLETE");
+  for (const [name, text, depth, annotations] of [
+    ["plain", "String", 1, []],
+    ["annotated", "String", 1, ["NonNull"]],
+    ["nested", "String[]", 2, []],
+    ["annotatedNested", "String[]", 2, ["NonNull"]]
+  ] as const) {
+    const method = result.methods.find(candidate => candidate.name === name)!;
+    const parameter = method.parameters[0]!;
+    assert.equal(parameter.name, "values", name);
+    assert.equal(parameter.varargs, true, name);
+    assert.equal(parameter.type.text, text, name);
+    assert.equal(parameter.type.simpleName, "String", name);
+    assert.equal(parameter.type.arrayDepth, depth, name);
+    assert.deepEqual(parameter.annotations.map(annotation => annotation.name), [...annotations], name);
+    assert.equal(method.signatureKey, `${name}(String${"[]".repeat(depth)})`, name);
+  }
+});
+
+test("scalar and declarator-array overloads have distinct method IDs with equivalent array spellings", async () => {
+  const backend = await createJavaParserBackend();
+  const extract = (arrayParameter: string) => extractJavaFile(baseInput({
+    content: `package demo; class Arrays { void f(String value) {} void f(${arrayParameter}) {} }`,
+    relativePath: "src/main/java/demo/Arrays.java"
+  }), backend);
+  const declaratorArray = extract("String values[]");
+  const typeArray = extract("String[] values");
+
+  assert.equal(declaratorArray.file.parseState, "COMPLETE");
+  assert.equal(typeArray.file.parseState, "COMPLETE");
+  assert.deepEqual(declaratorArray.methods.map(method => method.signatureKey), ["f(String)", "f(String[])"]);
+  assert.equal(new Set(declaratorArray.methods.map(method => method.methodId)).size, 2);
+  assert.deepEqual(
+    declaratorArray.methods.map(method => method.methodId),
+    typeArray.methods.map(method => method.methodId)
+  );
+});
+
+test("array signatures ignore bracket text inside dimension annotations and comments", async () => {
+  const backend = await createJavaParserBackend();
+  const extract = (parameter: string) => extractJavaFile(baseInput({
+    content: `package demo; class Arrays { void f(${parameter}) {} void f(String[][] values) {} }`,
+    relativePath: "src/main/java/demo/Arrays.java"
+  }), backend);
+  const baseline = extract("String[] values");
+
+  assert.equal(baseline.file.parseState, "COMPLETE");
+  for (const parameter of [
+    'String values @A("[") []',
+    "String[/*c*/] values",
+    "String @A [] values"
+  ]) {
+    const result = extract(parameter);
+    assert.equal(result.file.parseState, "COMPLETE", parameter);
+    const arrayMethod = result.methods[0]!;
+    const matrixMethod = result.methods[1]!;
+    assert.equal(arrayMethod.parameters[0]!.type.arrayDepth, 1, parameter);
+    assert.equal(arrayMethod.signatureKey, "f(String[])", parameter);
+    assert.equal(arrayMethod.methodId, baseline.methods[0]!.methodId, parameter);
+    assert.equal(matrixMethod.signatureKey, "f(String[][])", parameter);
+    assert.notEqual(arrayMethod.methodId, matrixMethod.methodId, parameter);
+  }
+});
+
 test("a leading block comment in an argument list does not shift arity or argumentTypeHints out of position", async () => {
   const backend = await createJavaParserBackend();
   const content = [
@@ -298,7 +413,7 @@ test("local declarations have distinct source identities and own their method ca
   const ctor = result.methods.find(method => method.constructor)!;
   assert.equal(ctor.ownerTypeId, locals[0]!.typeId);
   assert.equal(ctor.signatureKey, "<init>()");
-  assert.ok(ctor.methodId.startsWith(`method:${locals[0]!.typeId}#`));
+  assert.equal(ctor.methodId, javaMethodId(locals[0]!.typeId, "<init>()"));
   const start = lineColToIndex(content, locals[0]!.nameRange!.start);
   const end = lineColToIndex(content, locals[0]!.nameRange!.end);
   assert.equal(content.slice(start, end), "Local");

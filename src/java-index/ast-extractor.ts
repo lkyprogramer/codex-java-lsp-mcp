@@ -318,7 +318,7 @@ function buildFields(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId:
       const nameNode = decl.childForFieldName("name") ?? decl.namedChildren[0];
       const name = nameNode ? textOf(nameNode, context.source) : "";
       const dimsNode = decl.childForFieldName("dimensions");
-      const extraDepth = dimsNode ? countBrackets(textOf(dimsNode, context.source)) : 0;
+      const extraDepth = dimsNode ? countDimensions(dimsNode) : 0;
       const type: JavaTypeRef = extraDepth > 0
         ? { ...baseType, arrayDepth: baseType.arrayDepth + extraDepth }
         : baseType;
@@ -378,15 +378,15 @@ function buildMethod(
   const throwsNode = findChildOfType(node, "throws");
   const bodyNode = node.childForFieldName("body");
 
-  const parameters = parametersNode
+  const parameterNodes = parametersNode
     ? parametersNode.namedChildren
         .filter(p => p.type === "formal_parameter" || p.type === "spread_parameter")
-        .map(p => buildParameter(p, context.source))
     : [];
+  const parameters = parameterNodes.map(p => buildParameter(p, context.source));
   const varargs = parameters.length > 0 && parameters[parameters.length - 1]!.varargs;
   const signatureKey = erasedSignatureKey({
     name: isConstructor ? "<init>" : name,
-    parameterTypeTexts: parameters.map(p => erasedTypeText(p.type)),
+    parameterTypeTexts: parameters.map((p, index) => erasedTypeText(p.type, parameterNodes[index]!, context.source)),
     varargs
   });
   const methodId = javaMethodId(ownerTypeId, signatureKey);
@@ -433,8 +433,8 @@ function buildParameter(
 ): { name: string; type: JavaTypeRef; varargs: boolean; annotations: JavaAnnotationFact[]; range: SourceRange } {
   const modifiersNode = findChildOfType(node, "modifiers");
   const annotations = extractAnnotations(modifiersNode, source);
+  const typeNode = parameterTypeNode(node);
   if (node.type === "spread_parameter") {
-    const typeNode = node.namedChildren[0];
     const declaratorNode = findChildOfType(node, "variable_declarator");
     const nameNode = declaratorNode?.childForFieldName("name") ?? declaratorNode?.namedChildren[0];
     const name = nameNode ? textOf(nameNode, source) : "";
@@ -447,15 +447,27 @@ function buildParameter(
       range: rangeOf(node)
     };
   }
-  const typeNode = node.childForFieldName("type");
   const nameNode = node.childForFieldName("name");
   const name = nameNode ? textOf(nameNode, source) : "";
-  const type = typeNode ? buildTypeRef(typeNode, source) : unknownTypeRef(rangeOf(node));
+  const baseType = typeNode ? buildTypeRef(typeNode, source) : unknownTypeRef(rangeOf(node));
+  const dimensionsNode = node.childForFieldName("dimensions");
+  const extraDepth = dimensionsNode ? countDimensions(dimensionsNode) : 0;
+  const type = extraDepth > 0 ? { ...baseType, arrayDepth: baseType.arrayDepth + extraDepth } : baseType;
   return { name, type, varargs: false, annotations, range: rangeOf(node) };
 }
 
-function erasedTypeText(type: JavaTypeRef): string {
-  const base = type.text.split("<")[0]!.trim();
+function parameterTypeNode(node: JavaSyntaxNode): JavaSyntaxNode | undefined {
+  if (node.type !== "spread_parameter") return node.childForFieldName("type") ?? undefined;
+  // The spread type has no grammar field; it precedes the ellipsis and declarator.
+  return node.namedChildren.find(child =>
+    child.type !== "modifiers" && child.type !== "line_comment" && child.type !== "block_comment"
+  );
+}
+
+function erasedTypeText(type: JavaTypeRef, parameterNode: JavaSyntaxNode, source: string): string {
+  let elementNode = parameterTypeNode(parameterNode);
+  while (elementNode?.type === "array_type") elementNode = elementNode.childForFieldName("element") ?? undefined;
+  const base = (elementNode ? textOf(elementNode, source) : type.text).split("<")[0]!.trim();
   return `${base}${"[]".repeat(type.arrayDepth)}`;
 }
 
@@ -495,12 +507,12 @@ function buildTypeRef(node: JavaSyntaxNode, source: string): JavaTypeRef {
       return { ...base, text: textOf(node, source), typeArguments, range: rangeOf(node) };
     }
     case "array_type": {
-      const elementNode = node.namedChildren[0];
-      const dimensionsNode = node.namedChildren[1];
+      const elementNode = node.childForFieldName("element");
+      const dimensionsNode = node.childForFieldName("dimensions");
       const element = elementNode
         ? buildTypeRef(elementNode, source)
         : baseRef(textOf(node, source), textOf(node, source), [], 0, rangeOf(node));
-      const extraDepth = dimensionsNode ? countBrackets(textOf(dimensionsNode, source)) : 1;
+      const extraDepth = dimensionsNode ? countDimensions(dimensionsNode) : 1;
       return {
         ...element,
         text: textOf(node, source),
@@ -717,8 +729,8 @@ function findChildOfType(node: JavaSyntaxNode, type: string): JavaSyntaxNode | u
   return node.namedChildren.find(c => c.type === type);
 }
 
-function countBrackets(text: string): number {
-  return (text.match(/\[/g) ?? []).length;
+function countDimensions(node: JavaSyntaxNode): number {
+  return node.children.filter(child => child.type === "[").length;
 }
 
 function simpleNameOf(dotted: string): string {

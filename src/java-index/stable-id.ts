@@ -4,7 +4,10 @@ import type { SourceRange } from "../runtime/source-range.js";
 // path, not by the FQN alone. Two declarations sharing an FQN in different
 // files (same module duplicate, or the same FQN in different source roots)
 // are distinct identities; the FQN remains a multi-valued search attribute.
-export const STABLE_ID_VERSION = 2;
+// v3 gives normalized method signatures a new key namespace. Old array keys
+// must never resolve to a different overload after rebuilding the facts.
+export const STABLE_ID_VERSION = 3;
+export const METHOD_ID_PREFIX = "method:v3:";
 
 export function normalizeStableRelativePath(relativePath: string): string {
   const normalized = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -49,7 +52,7 @@ export function javaMethodId(ownerTypeId: string, erasedSignature: string): stri
   if (!ownerTypeId.startsWith("type:") && !ownerTypeId.startsWith("type-local:")) {
     throw new Error(`invalid owner type id: ${ownerTypeId}`);
   }
-  return `method:${ownerTypeId}#${erasedSignature}`;
+  return `${METHOD_ID_PREFIX}${ownerTypeId}#${erasedSignature}`;
 }
 
 export function javaFieldId(ownerTypeId: string, fieldName: string): string {

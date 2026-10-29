@@ -31,7 +31,9 @@ export const BUILD_MARKER_RELATIVE_PATHS: readonly string[] = [
 // Revision 4: type/method facts carry nameRange, the declaration name the
 // discovery locator points at (range starts at the first annotation).
 // Revision 5: local types/compact record constructors and concrete/super call resolution.
-export const JAVA_FACTS_REVISION = 5;
+// Revision 6: parameter arrays count declaration/type brackets once, annotated
+// varargs retain their element type, and method keys use the v3 namespace.
+export const JAVA_FACTS_REVISION = 6;
 
 // Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION
 // bumps still invalidate snapshots; daemon gitSha does not.

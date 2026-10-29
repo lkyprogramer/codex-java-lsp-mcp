@@ -394,7 +394,7 @@ test("T02: overloaded methods keep distinct owner-scoped IDs under one v2 owner"
     const owner = bundle.types[0]!.typeId;
     assert.ok(owner.startsWith("type:v2:"), "owner is a v2 source-scoped id");
     for (const id of ids) {
-      assert.ok(id.startsWith(`method:${owner}#`), `method id ${id} is scoped under owner ${owner}`);
+      assert.ok(id.startsWith(`method:v3:${owner}#`), `method id ${id} is scoped under owner ${owner}`);
     }
     const db = openIndexDb(":memory:");
     try {

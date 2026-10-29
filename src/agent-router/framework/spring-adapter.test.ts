@@ -229,7 +229,7 @@ test("fixture facts: OrderController.create resolves a unique CALLS edge to Orde
     assert.equal(truncated, false);
     assert.equal(callsEdges.length, 1, "OrderController.create must resolve exactly one CALLS edge");
     // v2: edge targets carry source-scoped declaration ids; the FQN stays embedded after the final "#".
-    assert.match(callsEdges[0]!.targetId, /^method:type:v2:.+#demo\.OrderService#create\(OrderRequest\)$/);
+    assert.match(callsEdges[0]!.targetId, /^method:v3:type:v2:.+#demo\.OrderService#create\(OrderRequest\)$/);
 
     const declarations = await router.declarationsById([callsEdges[0]!.targetId]);
     assert.equal(declarations.methods[0]!.name, "create");

@@ -15,7 +15,7 @@ import type {
   StaticEdge,
   StaticEdgeKind
 } from "../index-types.js";
-import { javaFileId, splitOwnerMemberKey } from "../stable-id.js";
+import { javaFileId, javaMethodId, splitOwnerMemberKey } from "../stable-id.js";
 import { JavaNameResolver, locationOfFile, type DeclarationLocation, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
@@ -217,14 +217,14 @@ export class SqlFactsStore {
   }
 
   /** methodsOfOwner(typeId) named `name`, in order. Method ids are
-   * `method:<owner>#<name>(...)` (`<init>` for constructors), so only those
+   * `method:v3:<owner>#<name>(...)` (`<init>` for constructors), so only those
    * facts are decoded. */
   methodsNamed(typeId: string, name: string): JavaMethodFacts[] {
     const type = this.typesById.get(typeId);
     if (!type) return [];
     // Every id in type.methodIds already belongs to this type. Comparing its
     // long path/owner prefix again at every call site dominated edge building.
-    const memberOffset = `method:${typeId}#`.length;
+    const memberOffset = javaMethodId(typeId, "").length;
     const named = `${name}(`, constructors = "<init>(";
     const methods: JavaMethodFacts[] = [];
     for (const methodId of type.methodIds) {

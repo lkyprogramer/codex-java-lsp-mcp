@@ -18,7 +18,7 @@ import type {
   TypeResolutionStrategy
 } from "../java-index/index-types.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
-import { javaParameterId, splitOwnerMemberKey } from "../java-index/stable-id.js";
+import { javaParameterId, METHOD_ID_PREFIX, splitOwnerMemberKey } from "../java-index/stable-id.js";
 
 export type FrameworkAnnotation = {
   name: string;
@@ -206,7 +206,7 @@ export const MAX_DECLARATION_IDS_PER_CALL = 64;
 /** The owning type id embedded in a "type:v2:"/"type-local:" id (itself) or a "field:"/"method:" id (the owner prefix before the member separator). v2 owner ids ("type:v2:<path>#<fqn>") embed one "#", so a member id carries a second "#" before its signature/name. undefined for anything else, including a pre-v2 "type:<fqn>" owner and a parameter id (declarationsById does not resolve those; parameters are reached via their owning method). */
 export function ownerTypeIdOf(id: string): string | undefined {
   if (id.startsWith("type:v2:") || id.startsWith("type-local:")) return id;
-  for (const prefix of ["field:", "method:"]) {
+  for (const prefix of ["field:", METHOD_ID_PREFIX]) {
     if (!id.startsWith(prefix)) continue;
     const split = splitOwnerMemberKey(id.slice(prefix.length));
     // A parameter id (method:<owner>#<sig>#p<N>, see javaParameterId) has a

@@ -8,6 +8,7 @@ import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { applyBuilderJob } from "../index-builder/incremental.js";
 import { close, openIndexDb, type IndexDatabase } from "./sql/driver.js";
 import { ensureSchema } from "./sql/schema.js";
+import { scopedNamedTypeId } from "./stable-id.js";
 import {
   captureEvidenceHandle,
   checkEvidenceHandle,
@@ -107,6 +108,45 @@ test("signature, path or deletion changes report NOT_FOUND with a hint and never
   await rm(path.join(repo, moved));
   await refresh(repo, db, 5, [], [moved]);
   assert.equal(resolveSymbolId(db, WORKSPACE, symbolId).status, "NOT_FOUND");
+});
+
+test("legacy array method symbolIds are rejected instead of binding a different overload", async t => {
+  const { repo, db } = await fixture(t);
+  const relative = "src/main/java/demospring/Arrays.java";
+  await writeFile(path.join(repo, relative), "package demospring; class Arrays { void pick(String[] a) {} void pick(String[][] a) {} }\n");
+  await refresh(repo, db, 2, [relative]);
+  const owner = scopedNamedTypeId(relative, "demospring.Arrays");
+  // Before the fix, String[] was encoded as String[][]; after normalization
+  // that spelling belongs to the other overload. Never look up this old key.
+  const legacyKey = `method:${owner}#pick(String[][])`;
+  const legacyId = `jsym:mac1:${WORKSPACE}:${Buffer.from(legacyKey).toString("base64url")}`;
+  assert.deepEqual(resolveSymbolId(db, WORKSPACE, legacyId), { status: "REJECTED", reason: "MALFORMED" });
+});
+
+test("array overloads survive SQL writes, equivalent spelling edits and cold rebuilds", async t => {
+  const { repo, db } = await fixture(t);
+  const relative = "src/main/java/demospring/Arrays.java";
+  const content = "package demospring; class Arrays { String field; void pick(String a) {} void pick(String a[]) {} void pick(String[][] a) {} }\n";
+  await writeFile(path.join(repo, relative), content);
+  await refresh(repo, db, 2, [relative]);
+  const keys = (conn: IndexDatabase) => (conn.prepare("SELECT s.text AS key FROM method m JOIN sym s ON s.id=m.sym JOIN file f ON f.id=m.file_id WHERE f.path=? ORDER BY s.text").all(relative) as { key: string }[]).map(row => row.key);
+  const before = keys(db);
+  assert.equal(before.length, 3, "scalar, one-dimensional and two-dimensional overloads must not overwrite one another");
+  const ids = before.map(key => formatSymbolId(WORKSPACE, key));
+  for (const id of ids) assert.equal(resolveSymbolId(db, WORKSPACE, id).status, "FOUND");
+  const owner = scopedNamedTypeId(relative, "demospring.Arrays");
+  const unchangedIds = [owner, `field:${owner}#field`].map(key => `jsym:mac1:${WORKSPACE}:${Buffer.from(key).toString("base64url")}`);
+  for (const id of unchangedIds) assert.equal(resolveSymbolId(db, WORKSPACE, id).status, "FOUND");
+  await writeFile(path.join(repo, relative), content.replace("String a[]", "String[] a").replace("void pick(String a) {}", "void pick(String a) { int bodyEdit = 1; }"));
+  await refresh(repo, db, 3, [relative]);
+  assert.deepEqual(keys(db), before);
+  const cold = openIndexDb(":memory:");
+  try {
+    ensureSchema(cold);
+    await runSqlColdBuild({ repoRoot: repo, db: cold, generation: 9 });
+    assert.deepEqual(keys(cold), before);
+    for (const id of [...ids, ...unchangedIds]) assert.equal(resolveSymbolId(cold, WORKSPACE, id).status, "FOUND");
+  } finally { close(cold); }
 });
 
 test("another workspace, pre-mac1 ids and forged encodings are rejected", async t => {

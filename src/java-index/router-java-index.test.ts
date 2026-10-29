@@ -16,7 +16,7 @@ import { MAX_FRAMEWORK_FACT_FILES } from "./framework-index-view.js";
 import { MAX_FACTS_FOR_FILES } from "./router-facts.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 import { localRouterIndex } from "./local-index.js";
-import { scopedNamedTypeId } from "./stable-id.js";
+import { javaMethodId, scopedNamedTypeId } from "./stable-id.js";
 
 function write(root: string, relativePath: string, content: string): void {
   const absolutePath = path.join(root, relativePath);
@@ -601,10 +601,10 @@ test("declarationsById hydrates a method/field/type id across two files from the
   const router = await readyRouter(repoRoot);
   try {
     const ownerA = scopedNamedTypeId("src/main/java/demo/A.java", "demo.A");
-    const methodId = `method:${ownerA}#run()`;
+    const methodId = javaMethodId(ownerA, "run()");
     const fieldId = `field:${ownerA}#name`;
     const typeId = scopedNamedTypeId("src/main/java/demo/B.java", "demo.B");
-    const absent = `method:${scopedNamedTypeId("src/main/java/demo/Missing.java", "demo.Missing")}#gone()`;
+    const absent = javaMethodId(scopedNamedTypeId("src/main/java/demo/Missing.java", "demo.Missing"), "gone()");
 
     const result = await router.declarationsById([methodId, fieldId, typeId, "method:type:demo.A#run()", absent]);
 
@@ -691,7 +691,7 @@ test("declarationsById caps an oversized id list rather than issuing an unbounde
   write(repoRoot, "src/main/java/demo/Only.java", "package demo;\nclass Only {\n  void run() {}\n}\n");
   const router = await readyRouter(repoRoot);
   try {
-    const realId = `method:${scopedNamedTypeId("src/main/java/demo/Only.java", "demo.Only")}#run()`;
+    const realId = javaMethodId(scopedNamedTypeId("src/main/java/demo/Only.java", "demo.Only"), "run()");
     // 70 > MAX_DECLARATION_IDS (64) - the excess must never even be looked up.
     const oversizedIds = Array.from({ length: 70 }, (_, i) => `field:${scopedNamedTypeId(`src/main/java/demo/Fake${i}.java`, `demo.Fake${i}`)}#x`);
     oversizedIds[0] = realId;
@@ -718,7 +718,7 @@ test("resolvedCallees returns the real CALLS edge with truncated=false for an or
     const { callees, truncated } = await router.resolvedCallees(callerMethodId, 80);
 
     assert.equal(truncated, false);
-    assert.ok(callees.some(c => c.kind === "CALLS" && /^method:type:v2:.+#demo\.Caller#target\(\)$/.test(c.targetId)));
+    assert.ok(callees.some(c => c.kind === "CALLS" && /^method:v3:type:v2:.+#demo\.Caller#target\(\)$/.test(c.targetId)));
   } finally {
     await router.close();
   }
