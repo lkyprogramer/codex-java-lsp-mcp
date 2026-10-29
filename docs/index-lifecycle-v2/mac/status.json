@@ -168,7 +168,7 @@
     {
       "gateId": "G12",
       "taskId": "MAC-12",
-      "status": "IN_PROGRESS",
+      "status": "PASS",
       "result": "mac-12/task-result.json"
     },
     {
@@ -283,6 +283,6 @@
     }
   ],
   "next": [
-    "MAC-12"
+    "MAC-14"
   ]
 }

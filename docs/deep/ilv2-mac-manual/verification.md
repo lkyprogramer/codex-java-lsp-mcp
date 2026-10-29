@@ -113,6 +113,10 @@ start 拒绝占用端口并只关闭自己启动的实例。attach 必须核对 
 | 资源 | 当前 owner/build/query/parser 数、各类 lease、队列、tmp/retired 数和物理占用；Gradle home/version/PID/PGID与实际退出单列；取消/故障前后有配对快照 |
 | 判定 | gateId、PASS/FAIL/BLOCKED、n/分母、完整样本引用、阈值、实测值、输入有效性、未覆盖项 |
 
+普通性能运行保留 lifecycle、阶段耗时、RSS/CPU/GC/event-loop 和 heartbeat 遥测，但不启用滚动 V8 CPU profiler。需要 CPU 栈诊断时，在 owner 环境显式设置 `JAVA_LSP_OWNER_CPU_PROFILE=1`；该运行计时只作 `NOT_GATED` 诊断，不能并入正式性能样本。Profiler 在大堆上重启本身会造成数百毫秒停顿，不能把观测器开销误判成查询路径成本；已有 FAIL/INVALID 记录保持原判。
+
+租约持续时间以同一 owner 的同一 unbound snapshotId 连续被保留为依据，保持 120 秒阈值、既有在途排除及最后一次 sweep 的 snapshot 残留检查；不同 snapshot 不接续计时。workspace 可能等待另一工作区对共享快照的合法租约，不套绝对 120 秒寿命，仍须证明持租约不删除、最后释放后≤2个 GC 周期回收及真实退出。非零 leased 记录缺少对象身份或计数不一致时属于证据不足，resources 不得 PASS；不能用后续清零或新短测改写历史 FAIL。
+
 分位数固定 nearest-rank：排序后第 `ceil(p × n)` 个；p50/p95/p99 同时报 n、max 和原始样本。失败/未完成 slot 不伪造零耗时；门判断同时检查完成率，缺一个必需样本即不满足门。模型重复按任务聚类；工程重复报告独立 run 和条件，不人为增加样本独立性。
 
 G11 各组最少样本数按有效样本计数，保留全部尝试及其引用，分别报告 attemptedN、validN、invalidN 和缺证数量。证据完整但窗口边缘已知 load1≥20 的计时，以及有完整测量记录但物理噪声超限的轮次，保留为 INVALID_EXPERIMENT；已有足量有效样本时，以全部有效样本统计，不挑选较快轮次。缺负载、失败、未闭合或右删失记录仍阻止测量完成，不能归入环境噪声排除。各 seed 档、Java/XML 编辑、full 和物理档分别满足原定数量；无效样本不足的组只补缺口。请求截止与正确性硬门始终检查全部调用，不能因负载排除违规。此聚合口径仅用于新候选，历史结论不改写。

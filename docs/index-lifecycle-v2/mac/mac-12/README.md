@@ -1,6 +1,56 @@
 # MAC-12 / G12
 
-**IN_PROGRESS（暂停，先做 MAC-13）。** G11 已通过并本地提交 `4cfa0402`。最近一次 G12 Tier-1 尝试（候选 `5e852e0c`）**FAIL**：硬门全过，200 文件物理成本降到 0.234 / 0.150，但 status(start=false) p99 主测 248 ms、复跑 232 ms，超过 200 ms；复跑的 seedTo200 p95 15735 ms 也超限；`performanceReady=false`。按用户 2026-10-26 的决定，MAC-12 在此暂停，先推进可并行的 MAC-13；进入 MAC-14 前再做 G12 最终验证。门状态见 [task-result.json](task-result.json)、[status.json](../status.json)；本次尝试未重新生成 task-result，见下节。
+**G12 PASS（2026-10-29）。** 候选为本次提交的源码 `413de8ad…`（基于 `39d17574`），`performanceReady=true`。唯一结果见 [task-result.json](task-result.json)，状态由 [status.json](../status.json) 汇总；运行根 `runs/mac-12/20261028T081900Z`（私有）。查询非退化按用户决定 **D1-a** 判定（见下），不满足原 1.1 倍口径；历史 FAIL 全部保留。
+
+## 最终结果
+
+| 项 | 结果 |
+|---|---|
+| §6 绝对门 | 三个独立 cohort 各 12 项 PASS（full、seed ≤20 与 21–200、公平性排队/交接、单文件 build、edit→first-correct、heartbeat、status p99、物理 0/20/200），组间不混样本 |
+| 硬门 | 正确性（含重启）、隔离、截止、资源、饥饿在 cohort 1 主测（源码 `38207a`，448 个编译 JS 与 `413de8ad` 字节相同）证明一次；cohort 2/3 只证明性能项 |
+| 目标成本（seed 发布，相对 MAC-11 同输入） | 三对比值 0.0033–0.0036（47 s → 0.16 s）；计入候选后台全库校验约 0.15，端到端 seed 3.2 s 对 55.5 s |
+| 编辑可见 p95 比 | 0.012–0.015 |
+| 查询固定探针 p95（基线 → 候选，上限） | 第 1 对 13.39 → 21.44 ms（23.39），第 2 对 24.06 → 18.38 ms（34.06），第 3 对 14.06 → 21.44 ms（24.06），三对 PASS |
+| 回归（同一冻结构建） | dist 1605/1605，scripts 644 通过、10 跳过、0 失败 |
+| 独立评审 | PASS，无 P1/P2，8 条 P3 已披露 |
+| closeout | PASS，raw 归档 1932 个文件，sha `b03db555…` |
+
+**D1-a：** 每对中候选查询 p95 ≤ max(1.1 × 基线, 基线 + 10 ms)。原 1.1 倍口径下首对比值 1.60 为正式 FAIL 并保留；第 1、3 对比值 1.60、1.52，只靠 +10 ms 容差通过。约 8 ms 的 p95 增量集中在编辑阶段，与 E 核调度及方案 B 后台全库校验有相关性，未证明因果。该决定已写入 [MAC-12 卡](../../../deep/ilv2-mac-manual/cards/MAC-12.md)。
+
+**披露：** 第 2 对首个基线臂（MAC-11 旧产品）因主机负载使其 seed delta 超过自身 60 s 构建截止而未完成，按同一计划重跑一次，原记录保留、不合并样本；候选对最低基线（13.39 ms）也通过。测量驱动 v5→v7 只改比较口径（D1-a）、calls 按 requestId 比对和该臂重跑命名，样本数与阈值不变。system-loop 泄漏判定不再对 workspace 租约计时，workspace 释放后回收只由单测证明。closeout 前从清单剔除了 8 个已被无关进程复用的 PID（进程启动晚于记录文件写入），原清单随 raw 归档。
+
+## 最终候选的形成过程（2026-10-28/29）
+
+以下为前一执行者的记录，保留原文。
+
+
+当前方法身份修复使用 `method:v3:<owner>#signature`、`identityVersion=3`、`factsRevision=6`，外层 `jsym:mac1` 不变，type/field ID 保留。参数类型与声明符数组维度、带注解 varargs 已纳入修复；旧 method key（含 mac1 包裹）拒绝并提示重新定位，其中 mac1 包裹的旧键返回 `REJECTED` / `MALFORMED`；不设别名。旧库和缓存通过现有版本机制重建。Tier-0 已实际复现原缺陷（23 项中 6 个预期失败），首轮修复的 154 项受影响测试通过；独立评审指出的维度注解文本误计数另以单测复现，改用 AST 直接 token 后，最后一组 34 项定向测试全部通过、0 skip，独立源码复核无未决 P1/P2。这些开发结果不替代 G12 正式证据。
+
+最终流程为一次正式构建、一次定向集，复用同一冻结产物完成三次必要性能测量，再做独立评审、必要的最窄复验和统一 closeout，不重复三次无关全量回归。有效样本边界为 `load1 < 20`；`load1 < 10` 仅为起跑安静条件，不排除 10–20 的慢样本。收益相对 MAC-11 同输入基线计算，不要求相对上一小候选再次改善 20%。
+
+前一冻结源码 `e523a7ff` 的正式受影响定向测试 **175/175 PASS、0 skip**。首个产品质量命令因外部绝对脚本路径在执行前被 broker 拒绝（commandCount=0），原 FAIL 保留；已将字节相同、单独登记哈希的私有验证脚本放入候选 `envchecks/` 并改用相对路径，复用原构建和 175 项结果，仅继续未运行项。产品质量复验 **50/50 PASS、6 pilot PASS**，dev/holdout recall 与证据覆盖均和 G13 持平。首轮五个硬门 PASS，但 status p99 **309.384ms > 200ms** 为有效 FAIL；seedLe20 有效样本 19/20、physical20 为 2/3，均不算 PASS。该候选后两轮未启动，最终独立复核与收尾未完成。
+
+本轮定位到每 5 秒滚动 CPU profiler 重启的观测开销：88 个有效慢 status 中 78 个紧邻 process 遥测；短诊断中实际 profiler 在约 377MiB 合成堆上每次 start 耗时 295–339ms，timer lag 最大 334ms，而 memoryUsage <0.1ms。此诊断为 NOT_GATED，不改写首轮失败。修复仅将滚动 CPU profiling 改为 owner 显式 `JAVA_LSP_OWNER_CPU_PROFILE=1`，普通生命周期、RSS/CPU/GC/loop/heartbeat 保留；新增定向 RED 已复现，GREEN 3/3 PASS。独立源码及产物核验通过：448 个 JS 中只有遥测及其测试两个文件变化，其余 446 个、scripts/fixtures/golden、native/runtime/dependencies 均一致；质量 driver 不启遥测。因此保留旧身份复用上述 175 项和 50 个 slot 结果，当前候选只补正式遥测定向证明及必要性能测量。执行计划为私有运行根的 `execution-plan-no-profile.json`，最终门仍未通过。
+
+PGAB 已有 A1 / B1 / B2 的 status 数值为 60.876 / 52.426 / 46.784 ms，仅是 Tier-0 诊断；不覆盖 seed 物理成本和重启，A2 尚未见结果，不能据此关闭 G12。
+
+`0cb54ac3` 的正式遥测定向测试 **3/3 PASS、0 skip**；`no-profile-performance-1` 于北京时间 19:34 结束并保留 **FAIL**，后两轮未启动。18:06 合盖睡眠、19:05 唤醒污染了部分窗口，但不能解释所有失败：睡眠前 seedLe20 的 26 个样本均有效，p95 **5560.856ms > 5000ms**；status p99 为 **100.102ms**。否定查询的 31 次尝试始终 `PARTIAL/STALE`、无确定性 miss，仍未取得所需可靠否定证明。一次 deadline 跨睡眠，另一条发生在唤醒后约 9 秒；后者不能只按高负载豁免。资源门的两段 120 秒告警发生在清醒期间，现有 `kept.leased` 混合 workspace/snapshot 回收拒绝计数，尚缺对象级归因。所有租约最终清零，bootout=0、groupsGone=true、无 fallback，已登记 driver/broker/owner 均确认退出；这些不撤销门失败。原始哈希与独立裁决见私有 `no-profile-attempt-summary.json`。
+
+一次四轮只读 tracker 分段诊断为 **NOT_GATED**：实际 full-hash 各读取 5891 文件，内容摘要一致，耗时 562/530/464/500ms，load1 16.9–17.0，所有 handle 关闭。未复现长测的 2 秒 verify，不能据此断言 I/O 根因或删除路径/内容校验。源库在 APFS seed 克隆准备阶段出现全量 noop hash，但已核实没有直接重叠所查四个 seed 的计时窗口；后台校验竞争同样只是线索。下一步仅补现有 sweep 的被 lease 保留目标 ID、验证直接行为，再据证据选择最窄后续验证；不盲重跑全矩阵。
+
+该身份补证已完成：`SweepReport.leasedTargets` 记录实际被拒绝回收的 `{workspaceId}` / `{snapshotId}`，不从事后 binding 推断身份，不改变回收逻辑、计数或阈值。两条直接用例已 RED→正式 **2/2 PASS、0 skip**，独立源码复核通过。候选 `8fd1dd8d`（`Cyye4G`）仅 store 及其测试两个 JS 相对 `0cb54ac3` 变化，其余 446 个 JS、native/runtime/dependencies 一致。窄诊断于 20:57–21:02 实际完成：一个初始化 full、六个 seed、TAP **1/1 PASS**；44 次 sweep 的 leasedTargets 均为空，真实 worker/owner 退出。le20 五个样本最大 3360ms，200 档单样本 7827ms；样本不足，保持 **NOT_GATED**，不能撤销旧 FAIL。
+
+独立对照发现实际 seed 基底不同：旧 s0021–23 前，HEAD~5 候选排第 18–20 位，被升序前 16 个候选截断，始终选排名 10 的 HEAD~3，resolve 86 文件、SQL 8421 行；短诊断可选 HEAD~5，resolve 32 文件、SQL 1860 行。当前只改为时间前缀 snapshot ID 降序的局部性启发，保留 16 上限、同 buildKey、FAILED 排除、hash 判定与 lease；不承诺时钟回拨时的严格年龄排序。真实 owner 的 17 候选测试先复现错误增量构建，再证明最新精确副本零构建绑定。它解释部分 build 成本，尚不能证明消除旧 verify 尖峰。
+
+资源判定修正为同 owner、同 unbound snapshotId 的连续租约时间，保留 120 秒、在途排除和末次 snapshot 检查；不同对象不能接续累计。共享 bound snapshot 可合法阻止 retired workspace 回收，workspaceId 不套无条件 120 秒寿命；实际“持租约不删、释放后两 GC 内回收”仍有真实定向证明。旧报告非零但缺对象 ID、数量不符或重复目标均不能判 resources PASS，原 FAIL 不改写。GC 删除条件未改。此次 RED 为三项预期失败、共享合同一项通过；正式 23 项全部通过，独立源码评审无阻断。相对 `8fd1dd8d` 只有 store、store test、owner-seed test 三个 JS 变化，其余 445 个一致；脚本只变 system-loop 及其测试，native 二进制/runtime/dependencies 不变。登记 `execution-plan-seed-locality.json` 顺序完成三轮必要性能及原始 proof，任一失败即停；不再重复六 seed 小诊断，也不重复无关全量测试。收益比较、最终独立复验和统一收尾仍待完成。
+
+`seed-locality-performance-1` 于 2026-10-28 23:38（北京时间）结束，五硬门 PASS，6752 次调用无 unbounded，真实退出 bootout=0、groupsGone=true、无 fallback。主机全程接电且无真实睡眠，load1 范围 4.787–67.621。原始 TAP 唯一失败为测量不完整：full 有效 1/3、seedTo200 7/20、公平性排队与交接各 0/1、单文件 build 2/20、编辑 Java 2/20 与 XML 0/10、physical200 0/3，均为 INVALID。已足量项 seedLe20 p95=3410.722ms（30 个有效）、status p99=49.396ms（2085 个有效）、heartbeat 最大 1359ms、physicalZero 与 physical20 均 PASS；有效慢值和所有 INVALID 保留。475 次 sweep 身份完整，22 个 snapshot 目标及 3 个 workspace 目标各只在一次 sweep 出现，不能声称证明了长期 workspace 租约。原始证据经独立只读复核，记录为 `seed-locality-attempt-summary.json`，不撤销旧候选失败。
+
+2026-10-29 续办复用同一候选和已通过项。`cohort-continuation-plan.json` 登记一次有限流水线：第一组只补 HEAD~12 十次、exact200 三次、Java 编辑十八次及 XML 十次；main/worktrees/edits 初始化为公平性必需，因此保留其连带 full，省略独立 faults/daemon/restart 阶段。第一组仅合并自身原始运行与补测并逐项判门；通过后分别执行第二、第三组原定性能 scope，再统一证明。每组的慢值/INVALID 全部保留，不跨组填样本。起跑在后台等待 AC/load1<10、每段最多六小时，测试失败即停，无自动测试重试；定时任务只读简短状态。候选 src/scripts 不变，不重复构建、23 项定向或旧 175/质量/遥测验证。MAC-11 同输入收益、严格 query 非退化、最终独立评审/复验和收尾仍未完成；旧 calls 缺 operation，只能比较 java_symbol 工具级 p95，不能冒称 query-only PASS。
+
+## 历史性能与诊断记录
+
+以下保留各候选当时的测量、裁决与后续建议；历史 PASS/FAIL 不表示当前身份修复已验收，历史重复全链与候选间 20% 要求不作为当前流程。
 
 ## G12 Tier-1 尝试：候选 `5e852e0c`（2026-10-26）
 
@@ -13,7 +63,7 @@
 
 回归：dist 1584/1584，scripts 638 PASS、10 skip。独立只读评审 PASS，无 P1/P2；3 条 P3：syncStaticEdges 注释过时、平移候选表的构建是 O(k²)（这两条已在本轮收尾时修正），以及 `wal_autocheckpoint=1000` 按页计、16 KiB 文件上每次 checkpoint 约 16 MiB（待配对实测）。收尾 PASS：资源全部退出，raw 已归档并物理校验。
 
-**判定：** FAIL 保留。前四次运行的 status p99 为 112–120 ms。主测超 200 ms 的 58 个样本中有 46 个在 fairness 阶段：同一窗口 owner 事件循环阻塞最长 677 ms，但 owner CPU 不高，像是在等同步 I/O。评审从代码排除了 checkpoint 直接阻塞 owner（只有 builder 子进程持有写连接），并发现同一窗口主机争用明显：fairness load1 中位 9.0（以前 4.7–6.7），不碰 SQLite 的 parse/resolve 慢了 30–40%。复跑负载更高，慢样本分散在 seed、worktrees、fairness 各阶段。两次运行区分不了"主机争用"和"16 KiB 页带来的额外 I/O"，所以这一项记为未定。下一步（MAC-14 之前）：先做一次同主机、page_size 4096 对 16384 的配对 Tier-0，在 fairness 负载下比较 owner 事件循环阻塞、status p99 和 builder WAL 写入量；必要时把 checkpoint 阈值改成按字节计。然后在安静主机上连续跑 3 条 Tier-1，满足卡片"重复 ≥ 3 次"的要求。
+**判定：** FAIL 保留。前四次运行的 status p99 为 112–120 ms。主测超 200 ms 的 58 个样本中有 46 个在 fairness 阶段：同一窗口 owner 事件循环阻塞最长 677 ms，但 owner CPU 不高，像是在等同步 I/O。评审从代码排除了 checkpoint 直接阻塞 owner（只有 builder 子进程持有写连接），并发现同一窗口主机争用明显：fairness load1 中位 9.0（以前 4.7–6.7），不碰 SQLite 的 parse/resolve 慢了 30–40%。复跑负载更高，慢样本分散在 seed、worktrees、fairness 各阶段。两次运行区分不了"主机争用"和"16 KiB 页带来的额外 I/O"，所以这一项记为未定。当时的后续建议（已由上文当前流程接替）：先做一次同主机、page_size 4096 对 16384 的配对 Tier-0，在 fairness 负载下比较 owner 事件循环阻塞、status p99 和 builder WAL 写入量；必要时把 checkpoint 阈值改成按字节计。然后在安静主机上连续跑 3 条 Tier-1，满足卡片"重复 ≥ 3 次"的要求。
 
 ## G12 Tier-1 尝试：候选 `e5faa371`（2026-10-26）
 
@@ -39,7 +89,7 @@
 
 回归：dist 1577/1577，scripts 638 PASS、10 skip。独立只读评审 PASS，无未决问题；3 条低严重度备注留给下一轮。收尾 PASS：资源全部退出，raw 已归档并物理校验。
 
-**判定：** 主测样本满足计时有效性规则，FAIL 保留；rerun 的 PASS 只作对照，不替代主测。两次运行的闭包和代码路径相同，差异来自 CPU 阶段：resolve 6.1–7.6s 对 4.2–4.5s，graph 2.8–4.6s 对 1.8–2.7s。推断原因是主机为 8 个性能核 + 2 个能效核，load1 约 8 以上时性能核饱和；另一个未验证假设是未设置 ProcessType 的 launchd job 会受轻度 CPU/IO 限制。下一步按用户 2026-10-24 的选择，压缩 builder CPU（resolve、graph、实体与搜索文档），让 seed 在 load1 约 10 时仍过门，然后再跑一条新的 Tier-1 链。
+**判定：** 主测样本满足计时有效性规则，FAIL 保留；rerun 的 PASS 只作对照，不替代主测。两次运行的闭包和代码路径相同，差异来自 CPU 阶段：resolve 6.1–7.6s 对 4.2–4.5s，graph 2.8–4.6s 对 1.8–2.7s。推断原因是主机为 8 个性能核 + 2 个能效核，load1 约 8 以上时性能核饱和；另一个未验证假设是未设置 ProcessType 的 launchd job 会受轻度 CPU/IO 限制。当时按用户 2026-10-24 的选择，压缩 builder CPU（resolve、graph、实体与搜索文档），让 seed 在 load1 约 10 时仍过门，然后再跑一条新的 Tier-1 链。
 
 ## 方案B：发布前增量检查，全库校验放后台（2026-10-22，按用户要求）
 
@@ -93,9 +143,9 @@
 
 [facts 验证继承提案](facts-validation-proposal.md)已被方案B取代，不再实施。
 
-当前封存候选删除无生产消费者的 manifest 全库逻辑摘要，格式明确升为 `ilv2-snapshot-manifest/mac2`，严格拒绝旧格式，不增加兼容分支。旧绑定恢复时隔离，待验证发布替换。原摘要隐含的孤立引用、标量安全整数、facts BLOB/deflate/JSON 检查留在 seal verify；SQLite integrity、外键、census、绑定 CAS、原子发布和 lease/GC 保留。独立 full/delta `logicalDigest` oracle 的算法与校验要求不变。
+方案 B 之前的封存候选删除无生产消费者的 manifest 全库逻辑摘要，格式明确升为 `ilv2-snapshot-manifest/mac2`，严格拒绝旧格式，不增加兼容分支。旧绑定恢复时隔离，待验证发布替换。原摘要隐含的孤立引用、标量安全整数、facts BLOB/deflate/JSON 检查留在 seal verify；SQLite integrity、外键、census、绑定 CAS、原子发布和 lease/GC 保留。独立 full/delta `logicalDigest` oracle 的算法与校验要求不变。
 
-已完成的同库交替测量如下，每项均为三组、六次有效样本，起止 `load1 < 20`，数据库字节不变，全部原始慢值和无效记录保留。成本范围不同，不能跨行直接比较。
+以下为方案 B 之前已完成的同库交替测量，每项均为三组、六次有效样本，起止 `load1 < 20`，数据库字节不变，全部原始慢值和无效记录保留。成本范围不同，不能跨行直接比较。
 
 | 方案 | 成本范围 | 原有 → 候选中位数 | 改善 | 裁决 |
 | --- | --- | --- | --- | --- |
@@ -148,6 +198,6 @@ facts 严格 JSON 语法检查试验保持四 worker 及原调度顺序，只减
 
 只读可行性核对也排除了直接按 `factsMoved` 免检：该集合只覆盖部分解析闭包，未涵盖先前的 `writeBundle`、XML、删除和 full 路径。`BuildJob` 没有传给 seal 的基线验证凭据或完整行写集合；输入 content/build 身份不能证明候选 BLOB 未变。直接跳检会绕过坏压缩或坏 JSON 不得替换旧绑定的保护，因此未实施。后续先核对物理布局，暂不继续调 worker 数量、任务顺序或重复测量；不将现有耗时误称为已经证明的理论下限。
 
-一次只读 dbstat 核对已完成，原库 SHA 前后一致、进程实际退出：572,321,792B 数据库没有空闲页，压缩 facts 共 114,376,836B，约占 20%；sym 表约 100.86MB，entity_token 及其 lookup 索引约 77.62MB。这只说明物理分布，没有布局或 codec 优化收益证据。新的[受限 facts 验证继承提案](facts-validation-proposal.md)已经独立只读评审，但涉及 clone/base lease/seal 验证合同，等待用户决定；未实施、未启动新一批测试，G12 保持 IN_PROGRESS。
+一次只读 dbstat 核对已完成，原库 SHA 前后一致、进程实际退出：572,321,792B 数据库没有空闲页，压缩 facts 共 114,376,836B，约占 20%；sym 表约 100.86MB，entity_token 及其 lookup 索引约 77.62MB。这只说明物理分布，没有布局或 codec 优化收益证据。当时的[受限 facts 验证继承提案](facts-validation-proposal.md)经独立只读评审后等待用户决定；该提案后来已由用户接受的方案 B（`733ea9f4`）取代，不再等待批准或实施。G12 当前状态见本文首段。
 
 首个完整封存比较在计时前准备克隆时失败：固定 Node 的 `copyFile(COPYFILE_FICLONE_FORCE)` 返回 `ENOSYS`，未取得任何 seal 耗时；原始 FAIL 保留。只修测试准备步骤，改调产品已有的原生 `cloneSealedDatabase`，没有普通复制 fallback。补跑前重新冻结 helper；全部 dist JS、runtime 和 native 身份相同才复用上述 38 项证据，只补失败比较。

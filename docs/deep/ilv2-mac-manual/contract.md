@@ -111,7 +111,7 @@ GC 仅处理无绑定、无任何 lease、无有效在途发布/进程的快照�
 
 - 新 schema 使用安全小整数 surrogate PK；所有 Node number 读取必须满足正整数和 `Number.isSafeInteger`。hash 用固定长度 BLOB 做查找辅助并比较原文，碰撞不可合并两个实体；不把任意 int64 hash 当 number 主键。
 - file/owner/kind 等重复身份正规化；对外ID与快照内部surrogate key分离。共享事实库只保存workspace无关的`declarationKey`（规范化相对路径/kind/owner/signature），对外`symbolId`在目标workspace绑定处组合workspaceId与该key，不把root/workspace前缀写进共享DB。对命名符号，`symbolId`由workspace身份、相对源码路径、声明kind、qualified owner/name及擦除后的成员签名派生，不含snapshotId、generation、行号或数据库行号；跨full/delta/noop及无关发布保持稳定。可编码规范化身份或hash并校验原文，不能以hash碰撞合并实体。多源根同FQN仍按源码路径区分。
-- “旧ID拒绝”只指mac1之前的格式；mac1符号ID在当前view解析，签名/名称/源路径改变或符号删除才失效，返回NOT_FOUND/AMBIGUOUS并给出重新定位提示，不猜测重绑定。root同路径重建生成新workspace身份，旧workspace ID明确拒绝。方法体、注释、行位移不改变命名符号ID，但sourceHash/range随新snapshot更新。匿名/局部符号若没有可证明的结构身份，显式返回`stability=SNAPSHOT`的evidence handle，不能混称长期symbolId。
+- 方法声明键为 `method:v3:<owner>#signature`，`identityVersion=3`、`factsRevision=6`，外层 `jsym:mac1` 不变；type/field ID 保留。参数签名计入参数类型与声明符上的数组维度，并正确处理带注解 varargs。旧 method key（包括 mac1 包裹）返回 `REJECTED`，其中 mac1 包裹的旧键为 `reason=MALFORMED`，给出重新定位提示，不保留别名；mac1 之前的 ID 格式也拒绝。旧库和缓存按现有版本机制重建。当前格式的 mac1 符号ID在当前view解析，签名/名称/源路径改变或符号删除才失效，返回NOT_FOUND/AMBIGUOUS并给出重新定位提示，不猜测重绑定。root同路径重建生成新workspace身份，旧workspace ID明确拒绝。方法体、注释、行位移不改变命名符号ID，但sourceHash/range随新snapshot更新。匿名/局部符号若没有可证明的结构身份，显式返回`stability=SNAPSHOT`的evidence handle，不能混称长期symbolId。
 - `evidenceHandle`才包含snapshot/capture/sourceHash与range，服务精确版本读取；它与跨请求symbolId是两种用途，不为每次发布重造符号ID。索引组织按真实查询计划验证。
 - 当前 facts 已使用 deflate 压缩。字典编码不是预定必做项；先测重复列、索引和压缩 BLOB 的物理占比，再决定 MAC-12 的收益项。同一候选只读一个正式schema，内部试验缓存可重建；若选择提前发布，后续schema变更的重建成本按§3.1披露，不保留旧格式兼容读取。
 - JDT session 以 workspace/root/environment 绑定，独立文档 URI/状态；禁止一个 family 的同 URI didOpen overlay 在 worktree 间切换共享。独立语义会话使用全局配额与 idle 回收。
