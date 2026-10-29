@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { assertIsolationOracle, assertReferenceOracle, assertSharedOracle, fixtureSources, isolationSources, prepareFixture } from './release-jdt-contracts.mjs';
+import { INTERLEAVED_ROUNDS, assertInterleavedIsolation, assertIsolationOracle, assertReferenceOracle, assertSharedOracle, fixtureSources, isolationSources, prepareFixture } from './release-jdt-contracts.mjs';
 
 // Gateway counters are cumulative in the owner; the oracle judges deltas from the base read.
 const base = { inflight: 0, sharedJoins: 3, abortedNoWaiters: 1, completeWrites: 7 };
@@ -37,6 +37,17 @@ test('fixture is dependency-free Maven source with stable selection positions', 
     assert.equal(fixtureSources['src/main/java/probe/Caller.java'].split('\n')[4].slice(22, 29), 'compute');
     assert.ok(!fixtureSources['pom.xml'].includes('<dependencies>'));
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('interleaved isolation needs every round, both issue orders, both files and no crosstalk', () => {
+  const a = { hover: 'compute(int value)' }, b = { hover: 'compute(long value)' };
+  const rounds = Array.from({ length: INTERLEAVED_ROUNDS }, (_, round) => ({ round, order: round % 2 ? ['b', 'a'] : ['a', 'b'],
+    file: round % 4 < 2 ? 'src/main/java/probe/Target.java' : 'src/main/java/probe/Caller.java', a, b }));
+  assertInterleavedIsolation({ rounds, crosstalk: 0 });
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.slice(1), crosstalk: 0 }), 'a missing round');
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.map(round => ({ ...round, order: ['a', 'b'] })), crosstalk: 0 }), 'one issue order only');
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.map(round => ({ ...round, file: 'src/main/java/probe/Target.java' })), crosstalk: 0 }), 'declaration only');
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.map((round, i) => i === 5 ? { ...round, a: b } : round), crosstalk: 0 }), 'a round answered from the other worktree');
+  assert.throws(() => assertInterleavedIsolation({ rounds, crosstalk: 1 }));
 });
 test('same-URI isolation oracle requires each worktree to answer from its own content', () => {
   const a = { hover: 'static int compute(int value)' }, b = { hover: 'static int compute(long value)' };

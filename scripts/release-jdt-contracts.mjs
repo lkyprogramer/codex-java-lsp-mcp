@@ -56,6 +56,16 @@ export function assertIsolationOracle({ a, b }) {
   assert.match(hoverText(a), /compute\(int value\)/); assert.doesNotMatch(hoverText(a), /compute\(long value\)/);
   assert.match(hoverText(b), /compute\(long value\)/); assert.doesNotMatch(hoverText(b), /compute\(int value\)/);
 }
+export const INTERLEAVED_ROUNDS = 12;
+/** G16: every interleaved round answered each worktree from its own content, in both issue orders and at both
+ * the declaration and the call site. */
+export function assertInterleavedIsolation(interleaved) {
+  assert.equal(interleaved?.rounds?.length, INTERLEAVED_ROUNDS, 'every interleaved round is recorded');
+  assert.deepEqual(new Set(interleaved.rounds.map(round => round.order.join())), new Set(['a,b', 'b,a']), 'both issue orders ran');
+  assert.deepEqual(new Set(interleaved.rounds.map(round => round.file)), new Set([TARGET, CALLER]), 'declaration and call site both ran');
+  for (const round of interleaved.rounds) assertIsolationOracle(round);
+  assert.equal(interleaved.crosstalk, 0);
+}
 
 async function frozenToolchain() {
   const file = process.env.ILV2_TOOLCHAINS;
@@ -170,6 +180,19 @@ async function contracts(repo) {
       b: { hover: hoverText(pb).slice(0, 400), definitions: pb.definitions, sha256: sha(isolationSources[TARGET]) }, references: { a: ra, b: rb },
       sessions: { a: await clients.a.call('java_status', { start: false }), b: await clients.b.call('java_status', { start: false }) } };
     assert.notEqual(isolation.sessions.a.repoHash, isolation.sessions.b.repoHash, 'each worktree has its own session');
+    // G16: interleaved same-URI requests, both issue orders, declaration and call site, distinct request keys.
+    const rounds = [];
+    for (let round = 0; round < INTERLEAVED_ROUNDS; round += 1) {
+      const order = round % 2 ? ['b', 'a'] : ['a', 'b'];
+      const file = round % 4 < 2 ? TARGET : CALLER;
+      const column = 23 + (round % 6);
+      const answers = await Promise.all(order.map(name => clients[name].call('java_symbol', { operation: 'position', file, line: 5, column, semanticTimeoutMs: 10_000 })));
+      const by = Object.fromEntries(order.map((name, index) => [name, answers[index]]));
+      rounds.push({ round, order, file, column, a: { hover: hoverText(by.a).slice(0, 400) }, b: { hover: hoverText(by.b).slice(0, 400) } });
+    }
+    const crosstalk = rounds.filter(round => { try { assertIsolationOracle(round); return false; } catch { return true; } }).length;
+    isolation.interleaved = { rounds, crosstalk };
+    assertInterleavedIsolation(isolation.interleaved);
 
     const enabled = { locator, references: enabledReferences, status: await a.call('java_status', {}), isolation };
     return { K26: { status: 'PASS', evidence: { disabled, enabled } }, K28: { status: 'PASS', evidence: k28 },

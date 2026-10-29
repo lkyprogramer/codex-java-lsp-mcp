@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CONTRACT_TESTS, JDT_EVIDENCE_SCHEMA, K_CONTRACT_VERSION, K29_REQUEST_PROTOCOL, acceptJdtEvidence, combinedEvidence, contractOutcome, loadEvidenceGate, testEvidence } from "./run-release-contracts.mjs";
-import { fixtureDigest } from "./release-jdt-contracts.mjs";
+import { INTERLEAVED_ROUNDS, fixtureDigest } from "./release-jdt-contracts.mjs";
 import { REQUEST_LOAD_PROTOCOL } from "../dist/benchmark/measure-request-load.js";
 
 const tap = (result, directive = "") => `# Subtest: K01: real contract\n${result} 1 - K01: real contract${directive}\n`;
@@ -77,7 +77,9 @@ test("release JDT gate accepts only owner-path v2 evidence for this candidate, n
   const k26 = {
     disabled: { isError: true, message: "start with --enable-lsp", status: { lsp: { enabled: false }, started: false } },
     enabled: { locator: { summary: { candidates: 1, errors: 0, selectionResolvesDeclaration: 1 } }, references: refs,
-      isolation: { a: { hover: "compute(int value)" }, b: { hover: "compute(long value)" }, references: { a: refs, b: refs }, sessions: { a: { repoHash: "x" }, b: { repoHash: "y" } } } }
+      isolation: { a: { hover: "compute(int value)" }, b: { hover: "compute(long value)" }, references: { a: refs, b: refs }, sessions: { a: { repoHash: "x" }, b: { repoHash: "y" } },
+        interleaved: { crosstalk: 0, rounds: Array.from({ length: INTERLEAVED_ROUNDS }, (_, round) => ({ round, order: round % 2 ? ["b", "a"] : ["a", "b"],
+          file: round % 4 < 2 ? "src/main/java/probe/Target.java" : "src/main/java/probe/Caller.java", a: { hover: "compute(int value)" }, b: { hover: "compute(long value)" } })) } } }
   };
   const payload = { schema: JDT_EVIDENCE_SCHEMA, candidateIdentity: identity, nativeBinarySha256: native.binarySha256, nativeSourceDigest: native.sourceDigest, fixtureDigest,
     K26: { status: "PASS", evidence: k26 }, K28: { status: "PASS", evidence: k28 } };
@@ -94,6 +96,11 @@ test("release JDT gate accepts only owner-path v2 evidence for this candidate, n
   assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: { ...k26, enabled: { ...k26.enabled, isolation: swapped } } } }, "K26"), "FAIL", "cross-worktree content");
   const shared = { ...k26.enabled.isolation, sessions: { a: { repoHash: "x" }, b: { repoHash: "x" } } };
   assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: { ...k26, enabled: { ...k26.enabled, isolation: shared } } } }, "K26"), "FAIL", "shared session");
+  const leaked = structuredClone(k26.enabled.isolation);
+  leaked.interleaved.rounds[7].b = leaked.interleaved.rounds[7].a;
+  assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: { ...k26, enabled: { ...k26.enabled, isolation: leaked } } } }, "K26"), "FAIL", "one interleaved round answered from the other worktree");
+  const { interleaved: _, ...noInterleaving } = k26.enabled.isolation;
+  assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: { ...k26, enabled: { ...k26.enabled, isolation: noInterleaving } } } }, "K26"), "FAIL", "interleaving is required");
 });
 
 test("a multi-entry contract passes only when every entry selected and passed its tests", () => {

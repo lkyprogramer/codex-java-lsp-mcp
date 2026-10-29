@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectedSubtests } from "./task36-tap-evidence.mjs";
 import { verifyRuntime } from "./ilv2-mac-contracts.mjs";
-import { assertIsolationOracle, assertReferenceOracle, assertSharedOracle, fixtureDigest } from "./release-jdt-contracts.mjs";
+import { assertInterleavedIsolation, assertIsolationOracle, assertReferenceOracle, assertSharedOracle, fixtureDigest } from "./release-jdt-contracts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sha = value => createHash("sha256").update(value).digest("hex");
@@ -157,6 +157,7 @@ export function acceptJdtEvidence(payload, identity, id, native = nativeIdentity
       assertIsolationOracle({ a: isolation?.a ?? {}, b: isolation?.b ?? {} });
       assertReferenceOracle(isolation.references?.a ?? {}); assertReferenceOracle(isolation.references?.b ?? {});
       if (!isolation.sessions?.a?.repoHash || isolation.sessions.a.repoHash === isolation.sessions.b?.repoHash) throw new Error("worktrees share a JDT session");
+      assertInterleavedIsolation(isolation.interleaved);
     }
     if (id === "K28") assertSharedOracle(e);
   } catch (error) {
