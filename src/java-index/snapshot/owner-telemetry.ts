@@ -1,8 +1,8 @@
 // input: IndexOwner lifecycle events (rounds, scheduler, pool, GC, builder liveness).
 // output: one JSONL record per event, stamped with epoch and monotonic ms and the owner pid, plus a
 //         `process` record every PROCESS_SAMPLE_MS (RSS/heap, process CPU, GC pauses and the event loop's
-//         delay over that window); a window whose loop stalled past STALL_PROFILE_MS also leaves its CPU
-//         profile next to the telemetry file.
+//         delay over that window). Optional diagnostic CPU profiling leaves a stalled window's profile
+//         next to the telemetry file; it is not enabled during ordinary performance measurements.
 // pos: MAC-11 lifecycle telemetry (§5.3 jobs/timeline). Isolated validation only: the file is named by
 //      JAVA_LSP_OWNER_TELEMETRY and honoured only under JAVA_LSP_ISOLATED_VALIDATION=1.
 import { createWriteStream, writeFile, type WriteStream } from "node:fs";
@@ -50,7 +50,9 @@ export function ownerTelemetrySink(env: NodeJS.ProcessEnv = process.env): ((even
     }
   });
   observer.observe({ entryTypes: ["gc"] });
-  const profiler = stallProfiler(file, write);
+  // Restarting V8's profiler on a large heap can itself stall the owner for hundreds of ms.
+  // Keep the ordinary counters cheap; explicit profiling runs are diagnostic, not timing evidence.
+  const profiler = env.JAVA_LSP_OWNER_CPU_PROFILE === "1" ? stallProfiler(file, write) : undefined;
   const ms = (nanos: number) => Math.round(nanos / 1e4) / 100;
   const round = (value: number) => Math.round(value * 100) / 100;
   let cpu = process.cpuUsage();
