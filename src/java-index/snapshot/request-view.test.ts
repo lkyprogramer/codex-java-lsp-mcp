@@ -418,6 +418,48 @@ test("a snapshot with a broken file reports non-COMPLETE coverage, not a confide
   assert.equal(outcome.missing.state === "UNRESOLVED" && outcome.missing.coverage, "DEGRADED");
 });
 
+test("K24: a FAILED/RECOVERED Java file and a normal update publish together; affected negatives keep a gap until the repair", { timeout: 240_000 }, async t => {
+  const ctx = await setup(t);
+  const { workspace } = await bound(ctx);
+  const brokenRel = "src/main/java/demospring/Broken.java";
+  const ask = () => request(ctx, ctx.repo, 10_000, async view => ({ labels: view.labels, status: await view.snapshotStatus(),
+    added: await view.query({ op: "search", args: { task: "addedWithBroken", limit: 5, mode: "exact" } }),
+    missing: await view.query({ op: "type", args: { typeText: "demospring.DoesNotExist" } }) })).run;
+  type Answer = Awaited<ReturnType<typeof ask>>;
+  const settle = async (accept: (answer: Answer) => boolean, label: string) => {
+    const deadline = performance.now() + 120_000;
+    for (;;) {
+      const answer = await ask();
+      if (answer.labels.state === "FRESH" && !workspace.status().roundInFlight && accept(answer)) return answer;
+      if (performance.now() >= deadline) throw new Error(`Timed out: ${label} ${JSON.stringify(answer.status.coverage)}`);
+      await delay(20);
+    }
+  };
+  const complete = (answer: Answer) => answer.status.coverage.every(entry => entry.state === "COMPLETE" && !entry.failedFiles);
+  const missingCoverage = (answer: Answer) => answer.missing.state === "UNRESOLVED" ? answer.missing.coverage : answer.missing.state;
+  const clean = await settle(complete, "clean");
+  assert.equal(missingCoverage(clean), "COMPLETE");
+  assert.equal(clean.added.hits.length, 0);
+
+  // One broken Java file and one normal update land together.
+  await writeFile(path.join(ctx.repo, brokenRel), "package demospring;\nclass Broken {\n  void open( {\n");
+  await writeFile(path.join(ctx.repo, serviceRel), (await readFile(path.join(ctx.repo, serviceRel), "utf8")).replace("class OrderService {", "class OrderService {\n  void addedWithBroken() {}"));
+  ctx.sources.emit(ctx.repo, brokenRel); ctx.sources.emit(ctx.repo, serviceRel);
+  const degraded = await settle(answer => answer.added.hits.length > 0 && !complete(answer), "broken + normal update");
+  assert.notEqual(degraded.labels.snapshotId, clean.labels.snapshotId);
+  assert.ok(degraded.added.hits.length > 0, "the normal update is visible beside the broken file");
+  assert.equal(missingCoverage(degraded), "DEGRADED", "a negative that depends on the broken root keeps a gap");
+
+  // The repair makes the same negative complete again; the update stays.
+  await writeFile(path.join(ctx.repo, brokenRel), "package demospring;\nclass Broken {\n  void open() {}\n}\n");
+  ctx.sources.emit(ctx.repo, brokenRel);
+  const repaired = await settle(complete, "repair");
+  assert.notEqual(repaired.labels.snapshotId, degraded.labels.snapshotId);
+  assert.equal(missingCoverage(repaired), "COMPLETE");
+  assert.ok(repaired.added.hits.length > 0);
+  evidence.push({ test: "K24", snapshots: [clean, degraded, repaired].map(answer => answer.labels.snapshotId), degradedCoverage: degraded.status.coverage });
+});
+
 test("a per-call budget or signal only narrows the request's own", { timeout: 180_000 }, async t => {
   let block = false;
   const ctx = await setup(t, { queryTestBlockMs: request => block && request.op === "type" ? 8_000 : undefined });

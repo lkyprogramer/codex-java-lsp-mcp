@@ -187,6 +187,58 @@ test("a mapper XML edit is a path delta of that file, not a census rescan, and e
   assert.equal(digestOf(ctx.owner, published.snapshotId), digestOf(independent.owner, full.binding.snapshotId));
 });
 
+test("K21: after a sealed seed, an XML-only edit and delete in the twin serve the twin's own content", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const twin = await repo(dir, "twin");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  const seeded = await bound(ctx, twin);
+  assert.equal(seeded.binding.snapshotId, first.binding.snapshotId, "the twin starts from the sibling's sealed snapshot");
+  assert.deepEqual(ctx.jobsFor(twin), []);
+  const xmlRel = "src/main/resources/mapper/ItemMapper.xml";
+  const resourceHash = (snapshotId: string) => {
+    const db = openImmutableIndexDb(ctx.owner.store.snapshotPath(snapshotId));
+    try { return (db.prepare("SELECT content_hash AS hash FROM mybatis_resource WHERE path=?").get(xmlRel) as { hash: string } | undefined)?.hash; }
+    finally { close(db); }
+  };
+  const mainHash = resourceHash(first.binding.snapshotId);
+  assert.ok(mainHash);
+  const twinRounds = () => rounds(ctx, seeded.workspace.workspaceId).filter(round => round.outcome === "published");
+  const sameAsOwnFull = async (label: string) => {
+    const published = ctx.owner.store.binding(seeded.workspace.workspaceId)!;
+    const independent = await openOwner(t, path.join(dir, `cache-full-${label}`));
+    const full = await bound(independent, twin);
+    assert.equal(published.contentManifestId, full.binding.contentManifestId, `${label}: the twin's capture`);
+    assert.equal(digestOf(ctx.owner, published.snapshotId), digestOf(independent.owner, full.binding.snapshotId), `${label}: equals the twin's own full`);
+    await independent.owner.stop();
+    return published;
+  };
+
+  // Modify: only the XML changes; the Java of both worktrees stays identical.
+  const file = path.join(twin, xmlRel);
+  const text = (await readFile(file, "utf8")).replace("</mapper>", `  <select id="findTwinOnly" resultType="demomybatis.ItemEntity">select * from items where twin</select>\n</mapper>`);
+  await writeFile(file, text);
+  ctx.sources.emit(twin, xmlRel);
+  await until(() => twinRounds().length === 1 && !seeded.workspace.status().roundInFlight, "xml modify");
+  assert.deepEqual(ctx.jobsFor(twin), [{ kind: "refresh", generation: 2, changed: [xmlRel], deleted: [], buildKey: first.binding.buildKey }]);
+  const modified = await sameAsOwnFull("modify");
+  assert.notEqual(modified.snapshotId, first.binding.snapshotId);
+  assert.equal(resourceHash(modified.snapshotId), createHash("sha256").update(text).digest("hex"), "the twin's XML, not the sibling's");
+
+  // Delete the XML.
+  await rm(file);
+  ctx.sources.emit(twin, xmlRel);
+  await until(() => twinRounds().length === 2 && !seeded.workspace.status().roundInFlight, "xml delete");
+  assert.deepEqual(ctx.jobsFor(twin).at(-1), { kind: "refresh", generation: 3, changed: [], deleted: [xmlRel], buildKey: first.binding.buildKey });
+  const deleted = await sameAsOwnFull("delete");
+  assert.equal(resourceHash(deleted.snapshotId), undefined);
+
+  // The sibling keeps its own binding and content throughout.
+  assert.equal(ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId, first.binding.snapshotId);
+  assert.equal(resourceHash(first.binding.snapshotId), mainHash);
+});
+
 test("a sibling under another buildKey is never a seed base: the worktree builds its own full", async t => {
   const dir = await base(t);
   const main = await repo(dir, "main");

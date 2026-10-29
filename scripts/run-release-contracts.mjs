@@ -9,31 +9,60 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectedSubtests } from "./task36-tap-evidence.mjs";
 import { verifyRuntime } from "./ilv2-mac-contracts.mjs";
+import { assertIsolationOracle, assertReferenceOracle, assertSharedOracle, fixtureDigest } from "./release-jdt-contracts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sha = value => createHash("sha256").update(value).digest("hex");
-const matrix = JSON.parse(readFileSync(path.join(root, "docs/java-specialist-release-audit-v1.1/contracts/runtime-matrix.json"), "utf8"));
+const MATRIX_PATH = "docs/java-specialist-release-audit-v1.1/contracts/runtime-matrix.json";
+const CURRENT_PATH = "scripts/release-k-contract-matrix.json";
+const matrixBytes = readFileSync(path.join(root, MATRIX_PATH));
+const matrix = JSON.parse(matrixBytes.toString("utf8"));
+// The frozen v1.1 matrix keeps K01–K32; the current overlay names the contract version (MAC-14).
+const currentBytes = readFileSync(path.join(root, CURRENT_PATH));
+const current = JSON.parse(currentBytes.toString("utf8"));
+if (current.baseMatrix?.path !== MATRIX_PATH || current.baseMatrix.sha256 !== sha(matrixBytes)) throw new Error("current K contract matrix is not based on the frozen runtime matrix");
 const source = "dist/benchmark/release-source-contracts.test.js";
-const index = "dist/benchmark/release-index-contracts.test.js";
 const mcp = "scripts/release-mcp-contracts.test.mjs";
+const view = "dist/java-index/snapshot/request-view.test.js";
+const store = "dist/java-index/snapshot/snapshot-store.test.js";
+const seed = "dist/java-index/snapshot/owner-seed.test.js";
+const gc = "dist/java-index/snapshot/owner-gc.test.js";
+const pool = "dist/java-index/snapshot/query-pool.test.js";
+const exact = name => "^" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$";
+/** Contract version of the K setup/oracles (MAC-14, verification §6.2); recorded in every result. */
+export const K_CONTRACT_VERSION = current.contractVersion;
+/**
+ * Each contract runs one or more [test file, name pattern] entries and passes only when every entry
+ * selected at least one passing test. MAC-14 moved K03/K06/K11/K20/K21/K24/K30 and K12 onto the owner
+ * path: MCP through the owner daemon, or the real IndexOwner with sealed snapshots and query workers.
+ */
 export const CONTRACT_TESTS = Object.freeze({
-  K01: ["dist/java-index/sql/rows.test.js", "^T02: parser-produced same-FQN"],
-  K02: ["dist/java-index/sql/rows.test.js", "^T02: AB and BA write orders"],
-  K03: [index, "^K03:"], K04: [source, "^K04:"], K05: [mcp, "^K05:"],
-  K06: [index, "^K06:"], K07: [source, "^K07:"], K08: [source, "^K08:"],
-  K09: [source, "^K09:"], K10: [source, "^K10:"], K11: [index, "^K11:"],
-  K12: [mcp, "^K12:"],
-  K13: ["dist/java-index/sql/entity-search-intent.test.js", "^T04: a mixed query"],
-  K14: ["dist/java-index/sql/entity-search-bounded.test.js", "^R07: (an exact miss|exact match)"],
-  K15: [mcp, "^K15:"],
-  K16: ["dist/java-index/builder/r08-evidence.test.js", "^K16/P01:"],
-  K17: [mcp, "^K17:"],
-  K18: ["dist/java-index/sql/search-docs.test.js", "^K18:"],
-  K19: [mcp, "^K19:"], K20: [index, "^K20:"], K21: [index, "^K21:"],
-  K22: [source, "^K22:"], K23: [source, "^K23:"],
-  K24: ["dist/index-builder/integrity.test.js", "^K24:"],
-  K25: [mcp, "^K25:"], K27: [mcp, "^K27:"], K30: [index, "^K30:"],
-  K31: [source, "^K31:"], K32: [source, "^K32:"]
+  K01: [["dist/java-index/sql/rows.test.js", "^T02: parser-produced same-FQN"]],
+  K02: [["dist/java-index/sql/rows.test.js", "^T02: AB and BA write orders"]],
+  K03: [[mcp, "^K03:"]],
+  K04: [[source, "^K04:"]], K05: [[mcp, "^K05:"]],
+  K06: [[mcp, "^K06:"], [view, exact("a workspace without its own verified binding is NOT_READY, never a sibling")]],
+  K07: [[source, "^K07:"]], K08: [[source, "^K08:"]],
+  K09: [[source, "^K09:"]], K10: [[source, "^K10:"]], K11: [[mcp, "^K11:"]],
+  K12: [[mcp, "^K12:"], [view, exact("nonzero-deadline-bounds-all-stages")], [view, exact("a handler that outlives its deadline loses its view and its snapshot lease")]],
+  K13: [["dist/java-index/sql/entity-search-intent.test.js", "^T04: a mixed query"]],
+  K14: [["dist/java-index/sql/entity-search-bounded.test.js", "^R07: (an exact miss|exact match)"]],
+  K15: [[mcp, "^K15:"]],
+  K16: [["dist/java-index/builder/r08-evidence.test.js", "^K16/P01:"]],
+  K17: [[mcp, "^K17:"]],
+  K18: [["dist/java-index/sql/search-docs.test.js", "^K18:"]],
+  K19: [[mcp, "^K19:"]],
+  K20: [[view, exact("publish-does-not-upgrade-held-view")], [gc, exact("a superseded snapshot under a held lease survives every cycle and goes within two cycles of the release")]],
+  K21: [[seed, "^K21:"]],
+  K22: [[source, "^K22:"]], K23: [[source, "^K23:"]],
+  K24: [["dist/index-builder/integrity.test.js", "^K24:"], [view, "^K24:"]],
+  K25: [[mcp, "^K25:"]], K27: [[mcp, "^K27:"]],
+  K30: [[store, exact("a snapshot with a WAL, SHM or journal sidecar is not a sealed snapshot")],
+    [store, exact("a sealed candidate is in flight until finished, and a reader lease keeps its view across publishes")],
+    [store, exact("no lease of any purpose loses its snapshot to a sweep; the last release makes it reclaimable")],
+    [pool, exact("a worker's leases follow the connections it reports open")],
+    [gc, exact("a superseded snapshot under a held lease survives every cycle and goes within two cycles of the release")]],
+  K31: [[source, "^K31:"]], K32: [[source, "^K32:"]]
 });
 
 export function candidateIdentity(cwd = root) {
@@ -46,6 +75,12 @@ export function candidateIdentity(cwd = root) {
     .filter(file => /^(src\/|scripts\/|fixtures\/|native\/|package(?:-lock)?\.json$|tsconfig\.json$|install-runtime\.sh$)/.test(file)).sort();
   const hashes = files.map(file => [file, existsSync(path.join(cwd, file)) ? sha(readFileSync(path.join(cwd, file))) : "DELETED"]);
   return { baseSha: git(["rev-parse", "HEAD"]).trim(), sourceDigest: sha(JSON.stringify(hashes)), files: hashes.length, dirty: git(["status", "--porcelain"]).trim().length > 0, lockfileHash: sha(readFileSync(path.join(cwd, "package-lock.json"))) };
+}
+
+/** A contract with several entries passes only when every entry passed; each entry stays visible. */
+export function combinedEvidence(parts) {
+  const status = parts.length > 0 && parts.every(part => part.status === "PASS") ? "PASS" : "FAIL";
+  return parts.length === 1 ? parts[0] : { status, parts, selected: parts.flatMap(part => part.selected) };
 }
 
 export function testEvidence(result, pattern) {
@@ -98,26 +133,48 @@ export function contractOutcome(rows, selected, candidateDrift = false) {
   };
 }
 
-export function acceptJdtEvidence(payload, identity, id) {
-  if (payload?.candidateIdentity?.sourceDigest !== identity.sourceDigest) return { status: "FAIL", reason: "real JDT evidence candidate mismatch" };
+export const JDT_EVIDENCE_SCHEMA = "release-real-jdt-evidence/v2";
+
+/**
+ * MAC-14: real JDT evidence is accepted only from the owner path (schema v2) for this exact candidate,
+ * native binary and fixture; the oracles are the ones the producer asserted, re-checked here.
+ */
+export function acceptJdtEvidence(payload, identity, id, native = nativeIdentity()) {
+  if (payload?.schema !== JDT_EVIDENCE_SCHEMA) return { status: "FAIL", reason: "real JDT evidence is not owner-path " + JDT_EVIDENCE_SCHEMA };
+  if (payload.candidateIdentity?.sourceDigest !== identity.sourceDigest) return { status: "FAIL", reason: "real JDT evidence candidate mismatch" };
+  if (payload.nativeBinarySha256 !== native.binarySha256 || payload.nativeSourceDigest !== native.sourceDigest) return { status: "FAIL", reason: "real JDT evidence native mismatch" };
+  if (payload.fixtureDigest !== fixtureDigest) return { status: "FAIL", reason: "real JDT evidence fixture mismatch" };
   const row = payload[id];
   if (row?.status !== "PASS" || !row.evidence) return { status: "FAIL", reason: "missing real JDT result" };
   const e = row.evidence;
-  if (id === "K26" && !(e.disabled?.isError === true && e.disabled.status?.lsp?.enabled === false &&
-      e.disabled.status?.started === false && e.enabled?.locator?.summary?.candidates > 0 &&
-      e.enabled.locator.summary.errors === 0 &&
-      e.enabled.locator.summary.selectionResolvesDeclaration === e.enabled.locator.summary.candidates &&
-      e.enabled.references?.groups?.flatMap(group => group.files ?? []).some(file =>
-        file.path === "src/main/java/probe/Caller.java" && file.positions?.some(p => p.line === 5 && p.column === 23)))) {
-    return { status: "FAIL", reason: "real definition/reference or enablement oracle missing" };
-  }
-  if (id === "K28" && !(e.shortCode === "DEADLINE_EXCEEDED" && e.backendCalls === 1 &&
-      e.whileShortExited?.inflight === 1 && e.whileShortExited.sharedJoins === 1 &&
-      e.whileShortExited.abortedNoWaiters === 0 && e.longOutcome?.completion === "COMPLETE" &&
-      e.settled?.inflight === 0 && e.settled.completeWrites === 1 && e.settled.abortedNoWaiters === 0)) {
-    return { status: "FAIL", reason: "shared real JDT waiter oracle missing" };
+  try {
+    if (id === "K26") {
+      const summary = e.enabled?.locator?.summary;
+      if (!(e.disabled?.isError === true && /--enable-lsp/.test(e.disabled.message ?? "") && e.disabled.status?.lsp?.enabled === false && e.disabled.status?.started === false &&
+        summary?.candidates > 0 && summary.errors === 0 && summary.selectionResolvesDeclaration === summary.candidates)) throw new Error("enablement or locator oracle missing");
+      assertReferenceOracle(e.enabled.references);
+      const isolation = e.enabled.isolation;
+      assertIsolationOracle({ a: isolation?.a ?? {}, b: isolation?.b ?? {} });
+      assertReferenceOracle(isolation.references?.a ?? {}); assertReferenceOracle(isolation.references?.b ?? {});
+      if (!isolation.sessions?.a?.repoHash || isolation.sessions.a.repoHash === isolation.sessions.b?.repoHash) throw new Error("worktrees share a JDT session");
+    }
+    if (id === "K28") assertSharedOracle(e);
+  } catch (error) {
+    return { status: "FAIL", reason: (id === "K26" ? "real definition/reference, enablement or isolation oracle: " : "shared real JDT waiter oracle: ") + error.message };
   }
   return { status: "PASS", observed: row.evidence };
+}
+
+/** Digest of every driver this runner executes: itself, each contract test file, the JDT and load drivers. */
+export function driverDigests(cwd = root) {
+  const files = [...new Set(["scripts/run-release-contracts.mjs", "scripts/release-jdt-contracts.mjs", "scripts/run-isolated-jdt-benchmark.mjs", "dist/benchmark/measure-request-load.js",
+    ...Object.values(CONTRACT_TESTS).flatMap(entries => entries.map(([file]) => file))])].sort();
+  return Object.fromEntries(files.map(file => [file, existsSync(path.join(cwd, file)) ? sha(readFileSync(path.join(cwd, file))) : "MISSING"]));
+}
+
+export function nativeIdentity(cwd = root) {
+  const manifest = JSON.parse(readFileSync(path.join(cwd, "dist/native/manifest.json"), "utf8"));
+  return { binarySha256: manifest.binarySha256, sourceDigest: manifest.sourceDigest };
 }
 
 function execute(args, timeoutMs = 90000) {
@@ -155,11 +212,15 @@ async function main(argv) {
     const row = { id: contract.id, level: contract.requiredLevel, expected: contract.oracle, status: "NOT_RUN", evidence: [] };
     if (!selected.includes(contract.id)) { rows.push(row); continue; }
     if (CONTRACT_TESTS[contract.id]) {
-      const [file, pattern] = CONTRACT_TESTS[contract.id];
-      const args = ["--test", "--test-concurrency=1", "--test-name-pattern=" + pattern, file];
-      const result = await execute(args);
-      Object.assign(row, testEvidence(result, pattern), { command: [process.execPath, ...args] });
-      row.evidence.push(evidence(`raw/${row.id}.stdout.log`, result.stdout), evidence(`raw/${row.id}.stderr.log`, result.stderr));
+      const parts = [];
+      for (const [index, [file, pattern]] of CONTRACT_TESTS[contract.id].entries()) {
+        const args = ["--test", "--test-concurrency=1", "--test-name-pattern=" + pattern, file];
+        const result = await execute(args, 300000);
+        const suffix = CONTRACT_TESTS[contract.id].length > 1 ? `.${index + 1}` : "";
+        parts.push({ file, pattern, ...testEvidence(result, pattern), command: [process.execPath, ...args] });
+        row.evidence.push(evidence(`raw/${row.id}${suffix}.stdout.log`, result.stdout), evidence(`raw/${row.id}${suffix}.stderr.log`, result.stderr));
+      }
+      Object.assign(row, combinedEvidence(parts));
       if (row.id === "K27") row.scope = "disabled production integration: lexical remains usable, zero fetches; no nonexistent automatic dense fallback is claimed";
     } else if (contract.id === "K29") {
       const out = path.join(output, "raw", "load");
@@ -177,6 +238,7 @@ async function main(argv) {
     } else if (contract.id === "K26" || contract.id === "K28") {
       const input = value("--jdt-evidence");
       if (!input) { row.status = "BLOCKED_ENV"; row.reason = "real JDT evidence not provided"; }
+      else if (!existsSync(input)) { row.status = "BLOCKED_ENV"; row.reason = "real JDT evidence file missing: " + input; }
       else {
         const raw = readFileSync(input);
         Object.assign(row, acceptJdtEvidence(JSON.parse(raw), before, contract.id));
@@ -189,7 +251,8 @@ async function main(argv) {
   const after = candidateIdentity();
   const candidateDrift = before.sourceDigest !== after.sourceDigest;
   const outcome = contractOutcome(rows, selected, candidateDrift);
-  const result = { schema: "java-specialist-k-contract-results/v1", candidateIdentity: before, candidateDrift, generatedAt: new Date().toISOString(), contracts: rows, summary: outcome.summary };
+  const result = { schema: "java-specialist-k-contract-results/v2", contractVersion: K_CONTRACT_VERSION, candidateIdentity: before, native: nativeIdentity(),
+    matrix: { path: MATRIX_PATH, sha256: sha(matrixBytes) }, currentMatrix: { path: CURRENT_PATH, sha256: sha(currentBytes) }, drivers: driverDigests(), candidateDrift, generatedAt: new Date().toISOString(), contracts: rows, summary: outcome.summary };
   writeFileSync(path.join(output, "k-contract-results.json"), JSON.stringify(result, null, 2) + "\n");
   process.exitCode = outcome.exitCode;
 }

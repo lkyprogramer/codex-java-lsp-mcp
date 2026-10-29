@@ -2,8 +2,9 @@
 // input: A source Java repository, an exact revision, and a benchmark command containing optional {repo} placeholders.
 // output: The command executed against a detached Java local clone with private JDT/cache/config/temp state.
 // pos: Mandatory second isolation boundary for any validation that starts a real JDT process.
+//      --export NAME=DEST copies a state file out before the private root is removed (MAC-14 evidence).
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -150,6 +151,23 @@ export function bindCommandToIsolatedRepository(values, repoRoot, isolationRoot 
   return command;
 }
 
+/**
+ * Resolves --export NAME=DEST: NAME is relative to the private state root, DEST an absolute path
+ * outside it (so it survives cleanup) and not yet existing (evidence is never overwritten).
+ */
+export function resolveExports(exports, isolationRoot) {
+  return exports.map(entry => {
+    const equals = entry.indexOf("=");
+    if (equals <= 0) throw new Error("--export requires NAME=DEST");
+    const name = entry.slice(0, equals), dest = entry.slice(equals + 1);
+    const source = path.resolve(isolationRoot, name);
+    if (path.isAbsolute(name) || !isWithin(isolationRoot, source) || source === isolationRoot) throw new Error(`--export ${name} must name a file inside the state root`);
+    if (!path.isAbsolute(dest) || isWithin(isolationRoot, path.resolve(dest))) throw new Error(`--export destination must be absolute and outside the state root: ${dest}`);
+    if (existsSync(dest)) throw new Error(`--export destination already exists: ${dest}`);
+    return { source, dest: path.resolve(dest) };
+  });
+}
+
 async function main() {
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
@@ -159,6 +177,7 @@ async function main() {
   const sourceRepo = path.resolve(cli.repoRoot);
   const root = await mkdtemp(path.join(os.tmpdir(), "codex-java-lsp-isolated-jdt-"));
   const detachedRepo = path.join(root, "repo");
+  let exports = [];
   try {
     await Promise.all([
       mkdir(path.join(root, "cache"), { recursive: true }),
@@ -189,8 +208,16 @@ async function main() {
       logDir: env.JDTLS_LOG_DIR,
       jdtlsBin: env.JDTLS_BIN ?? "UNRESOLVED"
     }));
+    exports = resolveExports(cli.exports, root);
     await run(command[0], command.slice(1), { cwd: process.cwd(), env });
   } finally {
+    // Exported even when the command failed: a failing run's evidence is still evidence.
+    for (const { source, dest } of exports) {
+      if (!existsSync(source)) { console.error(`export missing: ${source}`); continue; }
+      await mkdir(path.dirname(dest), { recursive: true });
+      await copyFile(source, dest);
+      console.log(JSON.stringify({ exported: dest }));
+    }
     if (!cli.keep) await rm(root, { recursive: true, force: true });
     else console.log(`preserved isolated JDT benchmark root: ${root}`);
   }
@@ -201,6 +228,7 @@ function parseCli(args) {
   const optionArgs = separator >= 0 ? args.slice(0, separator) : args;
   const command = separator >= 0 ? args.slice(separator + 1) : [];
   const environment = {};
+  const exports = [];
   let repoRoot;
   let revision = "HEAD";
   let keep = false;
@@ -219,6 +247,10 @@ function parseCli(args) {
       revision = optionArgs[++index];
       continue;
     }
+    if (arg === "--export") {
+      exports.push(optionArgs[++index] ?? "");
+      continue;
+    }
     if (arg === "--env") {
       const entry = optionArgs[++index];
       const equals = entry?.indexOf("=") ?? -1;
@@ -231,7 +263,7 @@ function parseCli(args) {
   if (!repoRoot) throw new Error("--repo-root is required");
   if (!existsSync(repoRoot)) throw new Error(`repository does not exist: ${repoRoot}`);
   if (command.length === 0) throw new Error("a benchmark command is required after --");
-  return { repoRoot, revision, keep, environment, command };
+  return { repoRoot, revision, keep, environment, exports, command };
 }
 
 function run(command, args, { cwd, env } = {}) {
@@ -257,7 +289,7 @@ function capture(command, args) {
 }
 
 function printUsage() {
-  console.log("Usage: node scripts/run-isolated-jdt-benchmark.mjs --repo-root PATH [--revision SHA] [--env NAME=VALUE] -- COMMAND [ARGS with {repo}/{state}]");
+  console.log("Usage: node scripts/run-isolated-jdt-benchmark.mjs --repo-root PATH [--revision SHA] [--env NAME=VALUE] [--export NAME=DEST] -- COMMAND [ARGS with {repo}/{state}]");
 }
 
 function isWithin(root, target) {

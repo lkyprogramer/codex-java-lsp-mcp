@@ -1,0 +1,35 @@
+{
+  "schema": "ilv2-k-contract-matrix/v1",
+  "contractVersion": "ilv2-k-contracts/mac14-v1",
+  "baseMatrix": {
+    "path": "docs/java-specialist-release-audit-v1.1/contracts/runtime-matrix.json",
+    "sha256": "194472f9c5bfc43d3f469cc3b6d1a06b0123c7e96ef6811ef0c510198d4ca407",
+    "note": "Frozen v1.1 audit kit bytes (SHA256SUMS, MANIFEST.json); K01–K32 ids, levels and original oracles stay there unchanged. This overlay is the current contract version (MAC-14, verification §6.2)."
+  },
+  "entryPoints": {
+    "runner": "scripts/run-release-contracts.mjs",
+    "tests": "CONTRACT_TESTS in the runner: one or more [test file, name pattern] entries per contract; every entry must select and pass at least one test",
+    "realJdt": "scripts/release-jdt-contracts.mjs inside scripts/run-isolated-jdt-benchmark.mjs; evidence schema release-real-jdt-evidence/v2 passed with --jdt-evidence",
+    "load": "dist/benchmark/measure-request-load.js, protocol k29-request-path-v2"
+  },
+  "changes": {
+    "K03": { "setup": "MCP through one isolated owner daemon", "oracle": "unchanged business assertions: ambiguous without sourceSet, main/test selected by sourceSet" },
+    "K05": { "setup": "MCP through the owner; real FSEvents tracker", "oracle": "waits for the correct answer at the new content hash; names the workspace and capture (snapshotId, contentManifestId) of both answers" },
+    "K06": { "setup": "six linked git worktrees of one family started together through one owner", "oracle": "each worktree answers only from its own Java and XML content (same paths, different hashes); before its own verified binding it refuses as NOT_READY, never from a sibling or a building snapshot; six workspaces, six captures; request-view: a workspace without its own verified binding is NOT_READY" },
+    "K11": { "setup": "MCP through the owner; real watcher refresh", "oracle": "named method ID survives the move; selection/evidence/preview at the new range and hash; the explicit call fact stays and moves with its caller in the new snapshot; names workspace and capture" },
+    "K12": { "setup": "MCP zero-deadline rejection plus the real IndexOwner request view", "oracle": "nonzero budgets bound resolve, workspace create, prepare, SQL in query workers and preview; external elapsed within deadline + 1 s; a handler outliving its deadline loses its view and snapshot lease, and the superseded snapshot is reclaimed" },
+    "K15": { "setup": "MCP through the owner", "oracle": "as K05: correct text at the new hash from the edit's capture" },
+    "K19": { "setup": "MCP through the owner", "oracle": "as K05 for add, rename and delete: each answer from its own new capture" },
+    "K20": { "setup": "real IndexOwner request view and owner GC", "oracle": "hits, then a publish of a new snapshot, then status/coverage/anchor/preview on the same held lease; preview of a changed or deleted captured file is a sourceChanged gap; GC keeps the superseded snapshot while leased and reclaims it within two cycles after release" },
+    "K21": { "setup": "a twin worktree seed-bound to the sibling's sealed snapshot", "oracle": "XML-only modify, then delete, in the twin: one path delta each, logical digest equal to the twin's own full, the twin's XML hash, the sibling's binding and XML unchanged; no VACUUM INTO (ledger D01)" },
+    "K24": { "setup": "integrity test plus the real IndexOwner request view", "oracle": "a FAILED/RECOVERED Java file and a normal update publish together: the update is visible, an affected negative is DEGRADED; after the repair coverage is COMPLETE" },
+    "K26": { "setup": "real frozen JDT inside one isolated owner over a detached fixture clone, stdio relay", "oracle": "disabled: explicit --enable-lsp error, status unstarted; enabled: locator selections resolve declarations, references bind Caller.java:5:23; two linked worktrees with the same URIs and different content answer concurrently from their own content in distinct sessions; missing real JDT is BLOCKED_ENV" },
+    "K28": { "setup": "as K26", "oracle": "a 1 ms caller exits by deadline while the long caller's shared work stays in flight; deltas of the owner's semantic gateway: one shared join, one backend completion, no abort; inflight returns to 0" },
+    "K29": { "setup": "unchanged (MAC-08C)", "oracle": "fixed 1000-file request-path load gate; real lishu-v2 cold/seed/full pressure is G11 and does not substitute" },
+    "K30": { "setup": "real snapshot store, query pool and owner GC", "oracle": "a sealed snapshot has no WAL/SHM/journal sidecar; reader, query, base and publication leases keep their snapshot through sweeps until release; worker leases follow open connections; superseded snapshots physically go after release under continuous publishes; not only a WAL checkpoint" }
+  },
+  "heartbeat": "builder liveness: a real child of at least 5 s judged by first arrival, adjacent arrival gaps and last arrival; liveness beats are separate from work progress",
+  "retired": {
+    "src/benchmark/release-index-contracts.test.ts": "legacy in-process SqlJavaIndexClient/LocalBuilder versions of K03/K06/K11/K20/K21/K30; their business assertions moved to the entries above; K23 stays there"
+  }
+}

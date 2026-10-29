@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CONTRACT_TESTS, K29_REQUEST_PROTOCOL, acceptJdtEvidence, contractOutcome, loadEvidenceGate, testEvidence } from "./run-release-contracts.mjs";
+import { CONTRACT_TESTS, JDT_EVIDENCE_SCHEMA, K_CONTRACT_VERSION, K29_REQUEST_PROTOCOL, acceptJdtEvidence, combinedEvidence, contractOutcome, loadEvidenceGate, testEvidence } from "./run-release-contracts.mjs";
+import { fixtureDigest } from "./release-jdt-contracts.mjs";
 import { REQUEST_LOAD_PROTOCOL } from "../dist/benchmark/measure-request-load.js";
 
 const tap = (result, directive = "") => `# Subtest: K01: real contract\n${result} 1 - K01: real contract${directive}\n`;
@@ -67,18 +68,59 @@ test("a selected-only run exits on its selected contracts and never claims the f
   assert.deepEqual([contractOutcome(oneMissing, ids).exitCode, contractOutcome(oneMissing, ids).summary.allContractsPass], [1, false]);
 });
 
-test("release JDT gate rejects a different candidate and unmeasured PASS labels", () => {
+test("release JDT gate accepts only owner-path v2 evidence for this candidate, native and fixture", () => {
   const identity = { sourceDigest: "a".repeat(64) };
-  const evidence = { shortCode: "DEADLINE_EXCEEDED", backendCalls: 1, whileShortExited: { inflight: 1, sharedJoins: 1, abortedNoWaiters: 0 }, longOutcome: { completion: "COMPLETE" }, settled: { inflight: 0, completeWrites: 1, abortedNoWaiters: 0 } };
-  const payload = { candidateIdentity: identity, K28: { status: "PASS", evidence } };
-  assert.equal(acceptJdtEvidence(payload, identity, "K28").status, "PASS");
-  assert.equal(acceptJdtEvidence(payload, { sourceDigest: "b" }, "K28").status, "FAIL");
-  assert.equal(acceptJdtEvidence({ ...payload, K28: { status: "PASS", evidence: {} } }, identity, "K28").status, "FAIL");
-  assert.equal(acceptJdtEvidence({ ...payload, K26: { status: "PASS", evidence: {} } }, identity, "K26").status, "FAIL");
-  assert.equal(acceptJdtEvidence(payload, identity, "K26").status, "FAIL");
+  const native = { binarySha256: "n".repeat(64), sourceDigest: "s".repeat(64) };
+  const base = { inflight: 0, sharedJoins: 0, abortedNoWaiters: 0, completeWrites: 2 };
+  const k28 = { shortCode: "DEADLINE_EXCEEDED", whileShortExited: { inflight: 1, sharedJoins: 1, abortedNoWaiters: 0, base }, longOutcome: { completion: "COMPLETE" }, settled: { inflight: 0, completeWrites: 3, abortedNoWaiters: 0 } };
+  const refs = { groups: [{ files: [{ path: "src/main/java/probe/Caller.java", positions: [{ line: 5, column: 23 }] }] }] };
+  const k26 = {
+    disabled: { isError: true, message: "start with --enable-lsp", status: { lsp: { enabled: false }, started: false } },
+    enabled: { locator: { summary: { candidates: 1, errors: 0, selectionResolvesDeclaration: 1 } }, references: refs,
+      isolation: { a: { hover: "compute(int value)" }, b: { hover: "compute(long value)" }, references: { a: refs, b: refs }, sessions: { a: { repoHash: "x" }, b: { repoHash: "y" } } } }
+  };
+  const payload = { schema: JDT_EVIDENCE_SCHEMA, candidateIdentity: identity, nativeBinarySha256: native.binarySha256, nativeSourceDigest: native.sourceDigest, fixtureDigest,
+    K26: { status: "PASS", evidence: k26 }, K28: { status: "PASS", evidence: k28 } };
+  const accept = (p, id, i = identity, n = native) => acceptJdtEvidence(p, i, id, n).status;
+  assert.deepEqual([accept(payload, "K26"), accept(payload, "K28")], ["PASS", "PASS"]);
+  assert.equal(accept({ ...payload, schema: "release-real-jdt-evidence/v1" }, "K28"), "FAIL", "in-process v1 evidence is not owner-path evidence");
+  assert.equal(accept(payload, "K28", { sourceDigest: "b" }), "FAIL");
+  assert.equal(accept(payload, "K28", identity, { ...native, binarySha256: "m" }), "FAIL");
+  assert.equal(accept({ ...payload, fixtureDigest: "f" }, "K26"), "FAIL");
+  assert.equal(accept({ ...payload, K28: { status: "PASS", evidence: {} } }, "K28"), "FAIL");
+  assert.equal(accept({ ...payload, K28: { status: "PASS", evidence: { ...k28, settled: { ...k28.settled, completeWrites: 4 } } } }, "K28"), "FAIL", "backend ran twice");
+  assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: {} } }, "K26"), "FAIL");
+  const swapped = { ...k26.enabled.isolation, b: k26.enabled.isolation.a };
+  assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: { ...k26, enabled: { ...k26.enabled, isolation: swapped } } } }, "K26"), "FAIL", "cross-worktree content");
+  const shared = { ...k26.enabled.isolation, sessions: { a: { repoHash: "x" }, b: { repoHash: "x" } } };
+  assert.equal(accept({ ...payload, K26: { status: "PASS", evidence: { ...k26, enabled: { ...k26.enabled, isolation: shared } } } }, "K26"), "FAIL", "shared session");
+});
+
+test("a multi-entry contract passes only when every entry selected and passed its tests", () => {
+  const pass = { status: "PASS", selected: [{ name: "a", status: "passed" }] }, fail = { status: "FAIL", selected: [] };
+  assert.equal(combinedEvidence([pass]), pass, "a single entry keeps its own evidence shape");
+  assert.equal(combinedEvidence([pass, pass]).status, "PASS");
+  assert.equal(combinedEvidence([pass, fail]).status, "FAIL");
+  assert.equal(combinedEvidence([]).status, "FAIL");
+  assert.equal(combinedEvidence([pass, pass]).parts.length, 2);
+  for (const [id, entries] of Object.entries(CONTRACT_TESTS)) {
+    assert.ok(Array.isArray(entries) && entries.length > 0, id);
+    for (const [file, pattern] of entries) assert.ok(typeof file === "string" && new RegExp(pattern), `${id} ${file}`);
+  }
 });
 
 test("release runner covers all 32 contracts through tests or explicit real runtime handlers", () => {
   const ids = [...Object.keys(CONTRACT_TESTS), "K26", "K28", "K29"].sort();
   assert.deepEqual(ids, Array.from({ length: 32 }, (_, i) => "K" + String(i + 1).padStart(2, "0")));
+});
+
+test("the current K matrix names a contract version and covers every §6.2 change on the frozen K list", async () => {
+  const { readFileSync } = await import("node:fs");
+  const current = JSON.parse(readFileSync(new URL("./release-k-contract-matrix.json", import.meta.url), "utf8"));
+  const frozen = JSON.parse(readFileSync(new URL("../docs/java-specialist-release-audit-v1.1/contracts/runtime-matrix.json", import.meta.url), "utf8"));
+  assert.equal(K_CONTRACT_VERSION, current.contractVersion);
+  assert.match(K_CONTRACT_VERSION, /mac14/);
+  assert.deepEqual(frozen.contracts.map(row => row.id), Array.from({ length: 32 }, (_, i) => "K" + String(i + 1).padStart(2, "0")), "the full K01–K32 list is kept");
+  for (const id of ["K05", "K06", "K11", "K12", "K15", "K19", "K20", "K21", "K24", "K26", "K28", "K29", "K30"]) assert.ok(current.changes[id]?.oracle, `${id} has its §6.2 oracle`);
+  for (const id of Object.keys(current.changes)) assert.ok(frozen.contracts.some(row => row.id === id), id);
 });
