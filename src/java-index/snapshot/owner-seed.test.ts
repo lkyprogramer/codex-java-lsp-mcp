@@ -13,7 +13,7 @@ import { startBuildProcess } from "../../index-builder/build-process.js";
 import type { BuilderJob } from "../../index-builder/incremental.js";
 import { close, openImmutableIndexDb } from "../sql/driver.js";
 import { logicalDigest } from "../sql/logical-export.js";
-import { IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
+import { IndexOwner, MAX_SEED_CANDIDATES, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
 import { readSnapshotContent } from "./seal.js";
 import { FSEVENT_FLAGS, type TrackerSourceFactory } from "./workspace-tracker.js";
 
@@ -107,6 +107,42 @@ test("a worktree with a sibling's exact content binds the sibling's sealed snaps
   assert.deepEqual(await readdir(ctx.owner.store.layout.snapshots), [first.binding.snapshotId]);
   const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
   assert.deepEqual([round.outcome, round.kind, round.seedFrom, round.changed, round.deleted], ["noop", "seed-bind", first.binding.snapshotId, 0, 0]);
+});
+
+test("an exact twin of the latest sibling seed-binds after the candidate limit is exceeded", async t => {
+  const dir = await base(t);
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const siblings: Array<{ root: string } & Awaited<ReturnType<typeof bound>>> = [];
+  for (let index = 0; index <= MAX_SEED_CANDIDATES; index += 1) {
+    const root = await repo(dir, `candidate-${index}`);
+    await addMethod(root, `onlyCandidate${index}`);
+    siblings.push({ root, ...await bound(ctx, root) });
+  }
+  const snapshotIds = new Set(siblings.map(sibling => sibling.binding.snapshotId));
+  assert.equal(snapshotIds.size, MAX_SEED_CANDIDATES + 1, "every sibling keeps a distinct bound snapshot");
+  assert.equal(ctx.jobs.filter(({ job }) => job.kind === "full").length, 1, "only the first sibling needs a cold build");
+
+  const latest = siblings.at(-1)!;
+  const twinPath = path.join(dir, "latest-twin");
+  await cp(latest.root, twinPath, { recursive: true });
+  const twin = await realpath(twinPath);
+  const workspace = await ctx.owner.workspace(twin);
+  const candidates = ctx.owner.store.seedCandidates(workspace.workspaceId, latest.binding.buildKey);
+  assert.equal(candidates.length, MAX_SEED_CANDIDATES + 1, "the twin has more real candidates than one bounded scan accepts");
+  assert.ok(candidates.includes(latest.binding.snapshotId));
+
+  const second = await bound(ctx, twin);
+  assert.deepEqual(ctx.jobsFor(twin), [], "the latest exact-content sibling must avoid a builder even beyond the candidate limit");
+  assert.equal(second.binding.snapshotId, latest.binding.snapshotId);
+  assert.equal(second.binding.contentManifestId, latest.binding.contentManifestId);
+  const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
+  assert.deepEqual([round.outcome, round.kind, round.seedFrom, round.changed, round.deleted],
+    ["noop", "seed-bind", latest.binding.snapshotId, 0, 0]);
+  for (const sibling of siblings) {
+    assert.equal(ctx.owner.store.binding(sibling.workspace.workspaceId)?.snapshotId, sibling.binding.snapshotId,
+      "older sibling bindings remain available throughout candidate selection");
+  }
+  assert.equal((await readdir(ctx.owner.store.layout.snapshots)).length, snapshotIds.size, "the twin creates no new snapshot");
 });
 
 test("a worktree one file away seeds a delta from the sibling's base: only that file is rebuilt, and the result equals its own full", async t => {

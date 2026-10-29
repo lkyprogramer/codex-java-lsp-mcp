@@ -66,7 +66,8 @@ export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "trac
 export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: ReclaimReason };
 
 /** One GC cycle: what was deleted, and how many store objects each refusal kept. */
-export type SweepReport = { snapshots: string[]; jobs: string[]; workspaces: string[]; records: string[]; kept: Partial<Record<ReclaimReason, number>> };
+export type SweepReport = { snapshots: string[]; jobs: string[]; workspaces: string[]; records: string[];
+  leasedTargets: ReclaimTarget[]; kept: Partial<Record<ReclaimReason, number>> };
 
 /** One background verification: the verdict, and the workspaces a failure took out of service. */
 export type VerifyResult = { result: "VERIFIED" } | { result: "FAILED"; error: string; quarantined: string[] };
@@ -189,7 +190,9 @@ export class SnapshotStore {
     const ids = new Set<string>();
     // Verified or not: a FAILED verdict quarantines every binding on the snapshot and fails what was cloned from it.
     for (const [id, binding] of this.bindings) if (id !== workspaceId && binding.buildKey === buildKey && !this.failed(binding.snapshotId)) ids.add(binding.snapshotId);
-    return [...ids].sort();
+    // The scan is bounded: prefer larger time-prefixed IDs so old siblings cannot permanently
+    // exclude later bases. This is a locality heuristic; content hashes still decide reuse.
+    return [...ids].sort().reverse();
   }
 
   /** The bindingVersion a plan dispatched now must carry: the served binding's, else a quarantined one's, else 0. */
@@ -524,12 +527,16 @@ export class SnapshotStore {
    * jobs/ and workspaces/ (the owner lock, legacy caches, the Gradle home) are never visited.
    */
   async sweep(): Promise<SweepReport> {
-    const report: SweepReport = { snapshots: [], jobs: [], workspaces: [], records: [], kept: {} };
+    const report: SweepReport = { snapshots: [], jobs: [], workspaces: [], records: [], leasedTargets: [], kept: {} };
     const visit = async (directory: string, list: string[], target: (id: string) => ReclaimTarget) => {
       for (const id of await storeObjects(directory)) {
-        const result = await this.tryReclaim(target(id));
+        const reclaimTarget = target(id);
+        const result = await this.tryReclaim(reclaimTarget);
         if (result.reclaimed) list.push(id);
-        else if (result.reason !== "missing") report.kept[result.reason] = (report.kept[result.reason] ?? 0) + 1;
+        else if (result.reason !== "missing") {
+          report.kept[result.reason] = (report.kept[result.reason] ?? 0) + 1;
+          if (result.reason === "leased") report.leasedTargets.push(reclaimTarget);
+        }
       }
     };
     await visit(this.layout.workspaces, report.workspaces, workspaceId => ({ workspaceId }));

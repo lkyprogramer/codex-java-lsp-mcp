@@ -539,10 +539,14 @@ test("no lease of any purpose loses its snapshot to a sweep; the last release ma
     const report = await store.sweep();
     assert.deepEqual(report.snapshots, [], purpose);
     assert.equal(report.kept.leased, 1, purpose);
+    assert.deepEqual(report.leasedTargets, [{ snapshotId: first.snapshotId }], purpose);
     assert.ok(existsSync(lease.dbPath), purpose);
     lease.release();
   }
-  assert.deepEqual((await store.sweep()).snapshots, [first.snapshotId]);
+  const released = await store.sweep();
+  assert.deepEqual(released.leasedTargets, []);
+  assert.deepEqual(released.snapshots, [first.snapshotId]);
+  assert.equal(existsSync(path.join(store.layout.snapshots, first.snapshotId)), false);
 });
 
 test("a workspace binding goes only when its root is gone and no tracker, job or lease still serves it", async () => {
@@ -582,9 +586,16 @@ test("a workspace binding goes only when its root is gone and no tracker, job or
   assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-replaced-001" }), { reclaimed: false, reason: "leased" });
   assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-live-0000001" }), { reclaimed: false, reason: "root-live" });
   assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-unmounted-01" }), { reclaimed: false, reason: "root-unconfirmed" });
+  const blocked = await store.sweep();
+  assert.deepEqual(blocked.leasedTargets, [{ workspaceId: "ws-replaced-001" }]);
+  assert.equal(blocked.kept.leased, 1);
+  assert.deepEqual(blocked.workspaces, []);
+  assert.ok(store.binding("ws-replaced-001"));
+  assert.equal(existsSync(lease.dbPath), true);
   store.finishJob(job);
   lease.release();
   const report = await store.sweep();
+  assert.deepEqual(report.leasedTargets, []);
   assert.deepEqual(report.workspaces, ["ws-removed-0001", "ws-replaced-001"]);
   // The freed snapshots go in the same cycle; zero-diff siblings share none here.
   assert.deepEqual(report.snapshots.sort(), [bindings.removed.snapshotId, bindings.replaced.snapshotId].sort());
@@ -593,6 +604,57 @@ test("a workspace binding goes only when its root is gone and no tracker, job or
   assert.ok(store.binding("ws-live-0000001") && store.binding("ws-unmounted-01"));
   const reopened = await openStore(root);
   assert.deepEqual(reopened.recovery.bindings.map(entry => entry.workspaceId).sort(), ["ws-live-0000001", "ws-unmounted-01"]);
+});
+
+test("a shared snapshot lease preserves live and gone workspace bindings across sweeps until release", async t => {
+  const root = await cacheRoot();
+  const { store } = await openStore(root);
+  const firstRoot = await realpath(await mkdtemp(path.join(fixture.base, "shared-live-root-")));
+  const info = await stat(firstRoot);
+  const identity: RootIdentity = { canonicalRoot: firstRoot, dev: info.dev, ino: info.ino, volume: String(info.dev) };
+  store.track(WS, { root: identity, workspaceGeneration: 1, trackerEpoch: EPOCH });
+  const first = await store.publish(plan(fixture.a, { root: identity }), await jobFrom(store, fixture.a));
+  const other = "ws-shared-live-01";
+  store.track(other, { root: fixture.otherRoot, workspaceGeneration: 1, trackerEpoch: EPOCH });
+  const second = await store.bindVerified(plan(fixture.a, {
+    workspaceId: other, root: fixture.otherRoot, captureId: "cap-shared-0001"
+  }), first.snapshotId);
+  assert.equal(second.snapshotId, first.snapshotId);
+  store.untrack(WS);
+  const reader = store.acquireBound(other, "query-worker")!;
+  t.after(() => reader.lease.release());
+
+  assert.deepEqual(await store.tryReclaim({ workspaceId: WS }), { reclaimed: false, reason: "leased" });
+  const live = await store.sweep();
+  assert.equal(live.kept.leased, 1);
+  assert.deepEqual(live.leasedTargets, [{ workspaceId: WS }]);
+  assert.deepEqual(live.workspaces, []);
+  assert.deepEqual(live.snapshots, []);
+  assert.ok(store.binding(WS));
+
+  await rm(firstRoot, { recursive: true });
+  assert.deepEqual(await store.tryReclaim({ workspaceId: WS }), { reclaimed: false, reason: "leased" });
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    const gone = await store.sweep();
+    assert.deepEqual(gone.leasedTargets, [{ workspaceId: WS }]);
+    assert.equal(gone.kept.leased, 1);
+    assert.deepEqual(gone.workspaces, []);
+    assert.deepEqual(gone.snapshots, []);
+    assert.equal(store.binding(WS)!.snapshotId, first.snapshotId);
+    assert.equal(store.binding(other)!.snapshotId, first.snapshotId);
+    assert.ok(existsSync(reader.lease.dbPath));
+  }
+
+  reader.lease.release();
+  const released = await store.sweep();
+  assert.deepEqual(released.leasedTargets, []);
+  assert.deepEqual(released.workspaces, [WS]);
+  assert.deepEqual(released.snapshots, []);
+  assert.equal(store.binding(WS), undefined);
+  assert.equal(existsSync(path.join(store.layout.workspaces, WS)), false);
+  assert.equal(store.binding(other)!.snapshotId, first.snapshotId);
+  assert.deepEqual(await store.tryReclaim({ snapshotId: first.snapshotId }), { reclaimed: false, reason: "bound" });
+  assert.deepEqual(await snapshotsOf(root), [first.snapshotId]);
 });
 
 test("a job is registered before its directory exists, so a concurrent sweep never deletes it", async () => {
