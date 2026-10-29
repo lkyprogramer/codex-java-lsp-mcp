@@ -6,8 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildEnvLock,
+  candidateSuiteSummary,
   COMPARISON_POLICY_ENV_LOCKED,
   FORMAL_REQUEST_DEADLINE_MS,
+  greenCandidateSuite,
   MATRIX_PROJECTS,
   MATRIX_ROUNDS,
   MATRIX_VARIANTS,
@@ -259,6 +261,31 @@ test("verifier requires a valid private dependency inventory", async t => {
   await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 
   assert.throws(() => verifyMatrix({ matrixDir }), /dependency inventory/i);
+});
+
+const skippedTap = (lines, { tests = 3, pass = 2, skipped = 1, todo = 0 } = {}) => `TAP version 13\n${lines.join("\n")}\n1..${tests}\n# tests ${tests}\n# pass ${pass}\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo ${todo}\n# duration_ms 1\n`;
+
+test("a candidate suite is green with named skips and not with an unnamed skip, a todo or a miscount", () => {
+  const named = candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - driver # SKIP DRIVER_INPUT is not set"]));
+  assert.deepEqual(named.skippedTests, [{ name: "driver", reason: "DRIVER_INPUT is not set" }]);
+  assert.equal(greenCandidateSuite(named), true);
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - driver # SKIP"]))), false, "a skip must name why");
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - later # TODO"], { skipped: 0, todo: 1 }))), false);
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - c"], { skipped: 1 }))), false, "the skip count must match the named skips");
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a # SKIP off"], { tests: 1, pass: 0 }))), false, "an all-skipped suite proves nothing");
+});
+
+test("verifier accepts named candidate skips only as the manifest records them", async t => {
+  const tap = skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - driver # SKIP DRIVER_INPUT is not set"]);
+  const scripts = skippedTests => ({ tap, discoveredTests: 3, passedTests: 2, skippedTests });
+  const recorded = await fixtureMatrix({}, { candidateScripts: scripts([{ name: "driver", reason: "DRIVER_INPUT is not set" }]) });
+  const unrecorded = await fixtureMatrix({}, { candidateScripts: scripts(undefined) });
+  const renamed = await fixtureMatrix({}, { candidateScripts: scripts([{ name: "other", reason: "DRIVER_INPUT is not set" }]) });
+  t.after(() => Promise.all([recorded, unrecorded, renamed].map(dir => rm(path.dirname(dir), { recursive: true, force: true }))));
+
+  assert.doesNotThrow(() => verifyMatrix({ matrixDir: recorded }));
+  assert.throws(() => verifyMatrix({ matrixDir: unrecorded }), /all-green suite/, "an unrecorded skip leaves the counts short");
+  assert.throws(() => verifyMatrix({ matrixDir: renamed }), /TAP summary/);
 });
 
 test("verifier rejects a candidate patch whose replay tree is not the declared executable tree", async t => {
@@ -554,11 +581,13 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
   for (const [suite, count] of [["dist", 10], ["scripts", 5]]) {
     const stdoutFile = path.join(candidateTestRoot, `${suite}.tap`);
     const stderrFile = path.join(candidateTestRoot, `${suite}.stderr`);
-    const stdout = `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1\n`;
+    const custom = suite === "scripts" ? fixtureOptions.candidateScripts : undefined;
+    const stdout = custom?.tap ?? `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1\n`;
     await Promise.all([writeFile(stdoutFile, stdout), writeFile(stderrFile, "")]);
     candidateTests[suite] = {
-      discoveredTests: count,
-      passedTests: count,
+      discoveredTests: custom?.discoveredTests ?? count,
+      passedTests: custom?.passedTests ?? count,
+      ...(custom?.skippedTests ? { skippedTests: custom.skippedTests } : {}),
       stdout: { file: stdoutFile, bytes: Buffer.byteLength(stdout), sha256: sha256(stdout) },
       stderr: { file: stderrFile, bytes: 0, sha256: sha256("") }
     };

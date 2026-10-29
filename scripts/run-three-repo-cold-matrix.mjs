@@ -16,11 +16,13 @@ import {
 import {
   assignmentsFromPairs,
   buildEnvLock,
+  candidateSuiteSummary,
   COMPARISON_POLICY_ENV_LOCKED,
   COMPARISON_POLICY_EXECUTABLE,
   ENV_AB_ALLOWLIST,
   fingerprintTreatment,
   FORMAL_REQUEST_DEADLINE_MS,
+  greenCandidateSuite,
   MATRIX_PROJECTS,
   P95_CONTRACT_STRICT,
   P95_STRICT_RATIO,
@@ -501,19 +503,16 @@ async function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
         const stdoutFile = path.join(evidenceRoot, `${label}.tap`);
         const stderrFile = path.join(evidenceRoot, `${label}.stderr`);
         await Promise.all([writeFile(stdoutFile, stdoutBytes), writeFile(stderrFile, stderrBytes)]);
-        const stdoutText = stdoutBytes.toString("utf8");
-        const tests = [...stdoutText.matchAll(/^# tests (\d+)$/gm)].at(-1);
-        const passed = [...stdoutText.matchAll(/^# pass (\d+)$/gm)].at(-1);
-        const discoveredTests = tests ? Number(tests[1]) : 0;
-        const passedTests = passed ? Number(passed[1]) : 0;
+        const summary = candidateSuiteSummary(stdoutBytes.toString("utf8"));
         if (code !== 0) {
           reject(new Error(`${label} candidate tests exited with ${code}: ${stderrBytes.toString("utf8")}`));
-        } else if (discoveredTests <= 0 || passedTests !== discoveredTests) {
-          reject(new Error(`${label} candidate tests did not prove a non-empty all-green suite`));
+        } else if (!greenCandidateSuite(summary)) {
+          reject(new Error(`${label} candidate tests did not prove a non-empty suite with no failed, cancelled, todo or unexplained skipped test`));
         } else {
           resolve({
-            discoveredTests,
-            passedTests,
+            discoveredTests: summary.tests,
+            passedTests: summary.pass,
+            skippedTests: summary.skippedTests,
             stdout: { file: stdoutFile, bytes: stdoutBytes.byteLength, sha256: sha256(stdoutBytes) },
             stderr: { file: stderrFile, bytes: stderrBytes.byteLength, sha256: sha256(stderrBytes) }
           });

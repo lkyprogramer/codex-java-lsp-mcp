@@ -520,7 +520,7 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   for (const suite of ["dist", "scripts"]) {
     const result = value.candidateTests?.[suite];
     if (!result || !Number.isInteger(result.discoveredTests) || result.discoveredTests <= 0
-      || result.passedTests !== result.discoveredTests) {
+      || result.passedTests + (result.skippedTests ?? []).length !== result.discoveredTests) {
       throw new MatrixValidationError(`${file}: candidate ${suite} tests must prove a non-empty all-green suite`);
     }
     validateCandidateTestEvidence(result, file, suite);
@@ -701,17 +701,43 @@ function validateHashBoundFile(entry, manifestFile, label) {
 function validateCandidateTestEvidence(result, manifestFile, suite) {
   validateHashBoundFile(result.stdout, manifestFile, `candidate ${suite} test stdout`);
   validateHashBoundFile(result.stderr, manifestFile, `candidate ${suite} test stderr`);
-  const stdout = readFileSync(result.stdout.file, "utf8");
-  const summary = name => {
-    const match = [...stdout.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gm"))].at(-1);
-    return match ? Number(match[1]) : undefined;
-  };
-  if (summary("tests") !== result.discoveredTests
-    || summary("pass") !== result.passedTests
-    || summary("fail") !== 0
-    || summary("cancelled") !== 0) {
+  const summary = candidateSuiteSummary(readFileSync(result.stdout.file, "utf8"));
+  if (summary.tests !== result.discoveredTests
+    || summary.pass !== result.passedTests
+    || JSON.stringify(summary.skippedTests) !== JSON.stringify(result.skippedTests ?? [])
+    || !greenCandidateSuite(summary)) {
     throw new MatrixValidationError(`${manifestFile}: candidate ${suite} TAP summary does not match the manifest`);
   }
+}
+
+// Env-gated measurement drivers skip outside their own runs, so a green
+// candidate suite is: nothing failed, cancelled or left todo, and every test
+// that did not pass is a skip that names its reason.
+export function candidateSuiteSummary(tap) {
+  const count = name => {
+    const match = [...tap.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gm"))].at(-1);
+    return match ? Number(match[1]) : undefined;
+  };
+  const skippedTests = [...tap.matchAll(/^\s*ok \d+ - (.+?) # SKIP(?: (.*))?$/gm)]
+    .map(match => ({ name: match[1], reason: (match[2] ?? "").trim() }));
+  return {
+    tests: count("tests"),
+    pass: count("pass"),
+    fail: count("fail"),
+    cancelled: count("cancelled"),
+    skipped: count("skipped") ?? 0,
+    todo: count("todo") ?? 0,
+    skippedTests
+  };
+}
+
+export function greenCandidateSuite(summary) {
+  return Number.isInteger(summary.tests) && summary.tests > 0
+    && Number.isInteger(summary.pass) && summary.pass > 0
+    && summary.fail === 0 && summary.cancelled === 0 && summary.todo === 0
+    && summary.pass + summary.skipped === summary.tests
+    && summary.skippedTests.length === summary.skipped
+    && summary.skippedTests.every(entry => entry.reason.length > 0);
 }
 
 function validateDependencyInventory(dependencies, manifestFile) {
