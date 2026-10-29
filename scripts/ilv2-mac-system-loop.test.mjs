@@ -210,10 +210,12 @@ test("starvation and lease leaks come from the queue and sweep telemetry, so the
   assert.equal(starve.queued, 4);
   assert.deepEqual(starve.starved.map(row => [row.workspaceId, row.waitedMs]), [["b", LIMITS.starvationMs + 7000]], "served only past the bound: starved");
   assert.deepEqual(starve.cutOff.map(row => row.workspaceId), ["c"], "still queued when its owner's telemetry ends: cut off by that owner's exit, not starved");
-  const sweep = (ms, owner, kept) => ({ at: ms, pid: owner, type: "sweep", report: { kept } });
+  const sweep = (ms, owner, kept) => ({ at: ms, pid: owner, type: "sweep", report: { kept,
+    leasedTargets: Array.from({ length: kept.leased ?? 0 }, (_, index) => ({ snapshotId: `snap-${owner}-${index}` })) } });
   const leases = leaseLeaks([sweep(0, 100, { leased: 1 }), sweep(LIMITS.leaseHoldMs + 1, 100, { leased: 1 }), sweep(LIMITS.leaseHoldMs + 2, 100, {}),
     sweep(0, 200, { leased: 2, "in-flight": 1 }), sweep(9, 200, { leased: 2, "in-flight": 1 }), sweep(0, 300, { leased: 1, "in-flight": 1 }), sweep(5, 300, {})]);
-  assert.deepEqual(leases.leaks.map(row => [row.owner, row.reason]), [[100, "held without a build in flight"], [200, "kept at the incarnation's last sweep"]]);
+  assert.deepEqual(leases.leaks.map(row => [row.owner, row.reason]), [[100, "held without a build in flight"],
+    [200, "kept at the incarnation's last sweep"], [200, "kept at the incarnation's last sweep"]]);
   assert.deepEqual([leases.sweeps, leases.owners], [7, 3]);
 });
 
@@ -228,6 +230,37 @@ test("analyze keeps hard gates separate from measured performance and never call
   assert.deepEqual(verdict.performanceVerdicts.FAIL.includes("editFirstCorrect"), true);
   assert.equal(verdict.performance.editFirstCorrect.verdict, "FAIL", "1 round < 20");
   assert.equal(verdict.performance.physical20.verdict, "FAIL");
+});
+
+test("lease hold windows follow one unbound snapshot, not rotating targets or shared workspace bindings", () => {
+  const sweep = (at, leasedTargets, kept = {}) => ({ at, pid: 100, type: "sweep",
+    report: { kept: { ...kept, leased: leasedTargets.length }, leasedTargets } });
+  const bound = LIMITS.leaseHoldMs;
+  const rotating = leaseLeaks([sweep(0, [{ snapshotId: "snap-a" }]),
+    sweep(bound + 1, [{ snapshotId: "snap-b" }]), sweep(2 * bound + 2, [])]);
+  assert.deepEqual(rotating.leaks, [], "different snapshots cannot extend one hold window");
+  const shared = leaseLeaks([sweep(0, [{ workspaceId: "ws-retired" }]),
+    sweep(bound + 1, [{ workspaceId: "ws-retired" }])]);
+  assert.deepEqual(shared.leaks, [], "a shared bound snapshot may have a legitimate reader in another workspace");
+  const stuck = leaseLeaks([sweep(0, [{ snapshotId: "snap-a" }]),
+    sweep(bound + 1, [{ snapshotId: "snap-a" }]), sweep(bound + 2, [])]);
+  assert.equal(stuck.leaks.length, 1);
+  assert.equal(stuck.leaks[0].snapshotId, "snap-a");
+  const final = leaseLeaks([sweep(0, [{ snapshotId: "snap-left" }])]);
+  assert.equal(final.leaks[0].snapshotId, "snap-left", "the final unbound snapshot remains a failure");
+});
+
+test("lease evidence with unidentified nonzero targets cannot pass resources", () => {
+  for (const report of [{ kept: { leased: 1 } }, { kept: { leased: 1 }, leasedTargets: [] }]) {
+    const rows = [{ at: 0, pid: 100, type: "sweep", report },
+      { at: 1, pid: 100, type: "sweep", report: { kept: {}, leasedTargets: [] } }];
+    assert.equal(leaseLeaks(rows).evidenceComplete, false, "later release cannot fill missing historical identities");
+    const fixture = measuredG11Fixture();
+    fixture.telemetry.push(...rows);
+    assert.equal(analyze(fixture).hardGates.resources.verdict, "FAIL");
+  }
+  assert.equal(leaseLeaks([{ at: 0, pid: 100, type: "sweep", report: { kept: {} } }]).evidenceComplete, true,
+    "an explicitly zero aggregate needs no target identity");
 });
 
 const measuredG11Fixture = () => {
@@ -258,7 +291,7 @@ const measuredG11Fixture = () => {
     edits,
     seeds: ["le20", "to200"].flatMap(tier => Array.from({ length: 20 }, (_, id) => ({ id: `${tier}-${id}`, tier, phase: "seed", window: "normal", windowEnd: "normal", windowVersion: 0, endWindowVersion: 0, startAt: 23000, endedAt: 23010, firstCorrect: id, firstCorrectMs: 10, loadStart: { load1: 1 }, loadEnd: { load1: 1 } }))),
     physical: [0, 20, 200].flatMap(files => Array.from({ length: 3 }, (_, index) => ({ id: `physical-${files}-${index}`, files, firstCorrect: index, firstCorrectMs: 10, startAt: 23000, endedAt: 23010, loadStart: { load1: 1 }, loadEnd: { load1: 1 },
-      newSnapshots: 0, jobs: 0, kind: "seed-bind", volumeValid: true, noiseBytes: 1, fullGrowthBytes: 1000, volumeRatio: 0.01, pageRatio: 0.01 }))),
+      newSnapshots: 0, jobs: 0, kind: "seed-bind", volumeValid: true, volumeGrowthBytes: 10, noiseBytes: 1, fullGrowthBytes: 1000, volumeRatio: 0.01, pageRatio: 0.01 }))),
     fulls: Array.from({ length: 3 }, () => ({ ...fullSample(fullFixture()), fullServiceMs: 400000 })), statusSamples: Array.from({ length: 100 }, (_, requestId) => ({ requestId, phase: "edits", phaseEnd: "edits", window: "normal", windowEnd: "normal", windowVersion: 0, endWindowVersion: 0,
       status: "ok", startedAt: 34000 + requestId * 2, endedAt: 34001 + requestId * 2, elapsedMs: 1, loadStart: { load1: 1 }, loadEnd: { load1: 1 } })),
     phases: [{ name: "fairness", startedAt: 0, endedAt: 22000 }, { name: "edits", startedAt: 30000, endedAt: 34000 }],
@@ -433,6 +466,64 @@ test("G11 physical aggregation retains noisy rows and requires three complete va
   item = analyze(fixture).performance.physical20;
   assert.equal(item.missingN, 1, "an unexplained volume-invalid flag cannot hide missing evidence");
   assert.equal(item.evidenceComplete, false);
+});
+
+test("G11 physical nonpositive or noise-bound full denominators are complete invalid experiments", () => {
+  for (const denominator of [{ fullGrowthBytes: 0 }, { fullGrowthBytes: -49463296 },
+    { fullGrowthBytes: 1000, fullNoiseBytes: 1000 }, { fullGrowthBytes: 1000, fullNoiseBytes: 1001 }]) {
+    const fixture = measuredG11Fixture();
+    fixture.physical = fixture.physical.map(row => row.files === 20
+      ? { ...row, ...denominator, volumeValid: false, volumeRatio: undefined } : row);
+    const item = analyze(fixture).performance.physical20;
+    assert.equal(item.verdict, "INVALID_EXPERIMENT");
+    assert.deepEqual([item.attemptedN, item.validN, item.invalidN, item.missingN, item.censored], [3, 0, 3, 0, 0]);
+    assert.equal(item.evidenceComplete, true);
+    assert.ok(item.attempts.every(row => row.value === undefined && row.category === "ENVIRONMENT"));
+  }
+  const fixture = measuredG11Fixture();
+  for (const row of fixture.physical) row.fullNoiseBytes = 999;
+  assert.equal(analyze(fixture).performance.physical20.verdict, "PASS", "full growth strictly above measured uncertainty remains usable");
+});
+
+test("G11 physical invalid denominators cannot hide missing or failed raw evidence", () => {
+  const mutations = [row => { delete row.volumeGrowthBytes; }, row => { delete row.noiseBytes; },
+    row => { delete row.fullGrowthBytes; }, row => { delete row.firstCorrect; }, row => { delete row.endedAt; },
+    row => { delete row.loadStart; }, row => { delete row.loadEnd; }, row => { row.loadEnd = { load1: -1 }; },
+    row => { row.censored = true; }, row => { row.error = "failed"; }, row => { row.outcome = "failed"; },
+    row => { row.status = "error"; }, row => { row.status = "pending"; }, row => { row.fullNoiseBytes = null; },
+    row => { row.fullNoiseBytes = -1; }, row => { row.volumeValid = true; }];
+  for (const mutate of mutations) {
+    const fixture = measuredG11Fixture();
+    const row = { ...fixture.physical.find(row => row.files === 20), id: "incomplete-physical",
+      fullGrowthBytes: -49463296, volumeValid: false, volumeRatio: undefined };
+    mutate(row); fixture.physical.push(row);
+    const result = analyze(fixture), item = result.performance.physical20;
+    assert.equal(item.missingN, 1, mutate.toString());
+    assert.equal(item.invalidN, 0);
+    assert.equal(item.evidenceComplete, false);
+    assert.equal(result.measurementComplete, false);
+  }
+  const fixture = measuredG11Fixture();
+  fixture.physical.push({ ...fixture.physical.find(row => row.files === 20), volumeRatio: undefined });
+  assert.equal(analyze(fixture).performance.physical20.missingN, 1, "a reliable denominator cannot explain a missing ratio");
+  const unexplained = summarizeTimingAttempts([{ category: "ENVIRONMENT", verdict: "INVALID_EXPERIMENT", value: undefined }],
+    { limit: LIMITS.physicalRatio[20], min: 3 });
+  assert.equal(unexplained.censored, 1, "the exception cannot apply to every environment attempt");
+});
+
+test("G11 physical supplements retain invalid denominators and every new valid high cost", () => {
+  const fixture = measuredG11Fixture(), rows = fixture.physical.filter(row => row.files === 20);
+  fixture.physical.push(...rows.map(row => ({ ...row, id: `old-${row.id}`, fullGrowthBytes: -49463296,
+    volumeValid: false, volumeRatio: undefined })));
+  let result = analyze(fixture), item = result.performance.physical20;
+  assert.equal(result.measurementComplete, true);
+  assert.deepEqual([item.attemptedN, item.validN, item.invalidN, item.missingN, item.censored], [6, 3, 3, 0, 0]);
+  assert.equal(item.rows.length, 6);
+  for (const row of rows) { row.volumeRatio = 0.9; row.volumeGrowthBytes = 900; }
+  result = analyze(fixture); item = result.performance.physical20;
+  assert.equal(result.measurementComplete, true);
+  assert.equal(item.verdict, "FAIL");
+  assert.equal(item.value, 0.9);
 });
 
 test("G11 zero-write invariant cannot be excluded by environmental load", () => {
@@ -948,17 +1039,25 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
     await waitForIdle("main-full");
     begin("main");
     state.loadSamples.push(load());
-    const free0 = await freeBytes(main.root);
+    const fullNoiseStartAt = Date.now(), fullNoiseFreeBefore = await freeBytes(main.root);
+    await delay(NOISE_MS);
+    const fullNoiseFreeAfter = await freeBytes(main.root), fullNoiseEndAt = Date.now();
+    const free0 = fullNoiseFreeAfter;
     const mainStart = Date.now();
     main.registered = true;
     const mainFirst = await firstCorrect(main, classOracle(main), { stopMs: FULL_STOP_MS, pollMs: 1000 });
     await fresh(main);
     const mainFull = await fullOf(main, mainStart, "main-HEAD");
     const free1 = await freeBytes(main.root);
+    const fullVolumeEndAt = Date.now();
+    const fullNoiseBytes = Math.abs(fullNoiseFreeBefore - fullNoiseFreeAfter) / (fullNoiseEndAt - fullNoiseStartAt) * (fullVolumeEndAt - fullNoiseEndAt);
     const mainBinding = (await owner.bindings())[main.root];
     const mainDb = path.join(owner.mac1, "snapshots", mainBinding.snapshotId, "index.sqlite");
     const mainPages = (await pageDiff(mainDb, mainDb)).pagesAfter;
-    state.main = { firstCorrectNoBaseMs: mainFirst.ms, full: mainFull, volumeGrowthBytes: free0 - free1, snapshotId: mainBinding.snapshotId, dbBytes: (await stat(mainDb)).size, pages: mainPages };
+    state.main = { firstCorrectNoBaseMs: mainFirst.ms, full: mainFull, volumeGrowthBytes: free0 - free1, fullNoiseBytes,
+      noiseMeasurement: { startAt: fullNoiseStartAt, endedAt: fullNoiseEndAt, freeBefore: fullNoiseFreeBefore, freeAfter: fullNoiseFreeAfter },
+      volumeMeasurement: { startAt: fullNoiseEndAt, endedAt: fullVolumeEndAt, freeBefore: free0, freeAfter: free1 },
+      snapshotId: mainBinding.snapshotId, dbBytes: (await stat(mainDb)).size, pages: mainPages };
     const baseAvailableAt = Date.now();
     end("main");
     assert.ok(Number.isFinite(mainFirst.ms), "main reached its first correct query");
@@ -994,9 +1093,11 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
         : classOracle(ws);
       await waitForIdle(`seed-${n}-before-noise`);
       const snapshotsBefore = (await owner.storeObjects()).snapshots;
+      const noiseStartAt = Date.now();
       const noiseStart = await freeBytes(ws.root);
       await delay(NOISE_MS);
       const noiseEnd = await freeBytes(ws.root);
+      const noiseEndAt = Date.now();
       const before = load();
       const samplePhase = phase, sampleWindow = window, sampleWindowVersion = windowVersion;
       const startEpoch = Date.now();
@@ -1008,8 +1109,8 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
       const jobs = telemetry.rows.filter(row => row.type === "scheduler" && row.event.type === "closed" && row.event.workspaceId === ws.workspaceId);
       await delay(1000);
       const settledFree = await freeBytes(ws.root);
-      const elapsed = performance.now() - started + 1000;
-      const noise = Math.abs(noiseStart - noiseEnd) / NOISE_MS * elapsed;
+      const volumeEndAt = Date.now(), physicalLoadEnd = load();
+      const noise = Math.abs(noiseStart - noiseEnd) / (noiseEndAt - noiseStartAt) * (volumeEndAt - noiseEndAt);
       const grown = noiseEnd - settledFree;
       const binding = (await owner.bindings())[ws.root];
       const sample = { id: ws.name, label, commit, files, phase: samplePhase, ownerPid, workspaceId: ws.workspaceId, startAt: startEpoch, endedAt: first.endedAt,
@@ -1026,10 +1127,16 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
           pageRatio = pages.changed / mainPages;
         }
         const fullGrowth = state.main.volumeGrowthBytes;
+        const fullNoise = state.main.fullNoiseBytes;
+        const fullReliable = fullGrowth > 0 && fullGrowth > fullNoise;
         state.physical.push({ id: ws.name, files, firstCorrect: sample.firstCorrect, firstCorrectMs: sample.firstCorrectMs, censored: sample.censored,
-          startAt: sample.startAt, endedAt: sample.endedAt, loadStart: sample.loadStart, loadEnd: sample.loadEnd, outcome: sample.outcome, kind: round?.kind, jobs: jobs.length, newSnapshots: snapshotsAfter.filter(id => !snapshotsBefore.includes(id)).length,
-          volumeGrowthBytes: grown, noiseBytes: noise, volumeRatio: fullGrowth > 0 ? grown / fullGrowth : undefined,
-          volumeValid: files === 0 ? true : fullGrowth > 0 && noise < LIMITS.physicalRatio[files] * fullGrowth, pageRatio, fullGrowthBytes: fullGrowth });
+          startAt: sample.startAt, endedAt: volumeEndAt, loadStart: sample.loadStart, loadEnd: physicalLoadEnd, outcome: sample.outcome, kind: round?.kind, jobs: jobs.length, newSnapshots: snapshotsAfter.filter(id => !snapshotsBefore.includes(id)).length,
+          noiseMeasurement: { startAt: noiseStartAt, endedAt: noiseEndAt, freeBefore: noiseStart, freeAfter: noiseEnd },
+          volumeMeasurement: { startAt: noiseEndAt, endedAt: volumeEndAt, freeBefore: noiseEnd, freeAfter: settledFree },
+          fullNoiseMeasurement: state.main.noiseMeasurement, fullVolumeMeasurement: state.main.volumeMeasurement,
+          volumeGrowthBytes: grown, noiseBytes: noise, volumeRatio: fullReliable ? grown / fullGrowth : undefined,
+          volumeValid: files === 0 ? true : fullReliable && noise < LIMITS.physicalRatio[files] * fullGrowth,
+          pageRatio, fullGrowthBytes: fullGrowth, fullNoiseBytes: fullNoise });
       }
       // The sample's token is not visible from main (cross-workspace negative).
       if (target) await negative(main, javaMiss(main, target.shape, target.token), `sample-${n}-not-in-main`);

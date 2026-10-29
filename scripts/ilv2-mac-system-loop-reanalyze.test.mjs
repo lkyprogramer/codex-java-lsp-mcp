@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { combineMeasurements, reanalyzeWithSupplements, requireMeasuredShortfall } from "./ilv2-mac-system-loop-reanalyze.mjs";
-import { LIMITS } from "./ilv2-mac-system-loop.mjs";
+import { analyze, LIMITS } from "./ilv2-mac-system-loop.mjs";
 import { sha256 } from "./ilv2-mac-contracts.mjs";
 
 const valid = (value = 1, kind) => ({ category: "VALID", verdict: "VALID", value, kind, loadStart: { load1: 1 }, loadEnd: { load1: 1 } });
@@ -64,6 +64,33 @@ test("G11 supplementation keeps missing evidence blocking and Java XML counts se
   assert.equal(combineMeasurements([primary, extra]).measurementComplete, false);
   extra.verdict.performance.editFirstCorrect.attempts = Array.from({ length: 11 }, () => valid(1, "java"));
   assert.equal(combineMeasurements([primary, extra]).measurementComplete, false, "extra Java cannot replace XML");
+});
+
+test("G11 physical supplementation preserves explained invalid denominators and provenance", () => {
+  const physical = Array.from({ length: 3 }, (_, id) => ({ id, files: 20, firstCorrect: id,
+    firstCorrectMs: 10, startAt: 100, endedAt: 110, loadStart: { load1: 1 }, loadEnd: { load1: 1 },
+    newSnapshots: 1, jobs: 1, kind: "seed-delta", volumeGrowthBytes: 10, noiseBytes: 1,
+    fullGrowthBytes: 1000, volumeValid: true, volumeRatio: 0.01 }));
+  const physicalReport = (name, rows) => report(name, { physical20: analyze({ calls: [], telemetry: [], edits: [], seeds: [],
+    physical: rows, fulls: [], statusSamples: [], loads: {}, versions: {}, injectedPids: [] }).performance.physical20 });
+  const primary = physicalReport("old-physical", physical.map(row => ({ ...row, fullGrowthBytes: -49463296,
+    volumeValid: false, volumeRatio: undefined })));
+  const supplement = physicalReport("new-physical", physical);
+  let combined = combineMeasurements([primary, supplement]), item = combined.performance.physical20;
+  assert.equal(combined.measurementComplete, true);
+  assert.deepEqual([item.attemptedN, item.validN, item.invalidN, item.missingN, item.censored], [6, 3, 3, 0, 0]);
+  assert.deepEqual(item.attempts.map(row => row.evidence), [...Array(3).fill("old-physical"), ...Array(3).fill("new-physical")]);
+  assert.deepEqual(item.attempts.map(row => row.runIndex), [0, 0, 0, 1, 1, 1]);
+  assert.ok(item.attempts.slice(0, 3).every(row => row.value === undefined && row.fullGrowthBytes === -49463296));
+  const slow = physicalReport("slow-physical", physical.map(row => ({ ...row, volumeGrowthBytes: 900, volumeRatio: 0.9 })));
+  combined = combineMeasurements([primary, slow]);
+  assert.equal(combined.measurementComplete, true);
+  assert.equal(combined.performance.physical20.verdict, "FAIL");
+  assert.equal(combined.performance.physical20.value, 0.9);
+  const missingRows = physical.map(row => ({ ...row })); delete missingRows[0].noiseBytes;
+  combined = combineMeasurements([primary, physicalReport("missing-physical", missingRows), supplement]);
+  assert.equal(combined.measurementComplete, false);
+  assert.equal(combined.performance.physical20.missingN, 1);
 });
 
 test("G11 supplementation rejects aliased evidence and changed compiled product bytes", async t => {

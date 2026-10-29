@@ -138,11 +138,12 @@ export function timingItem({ samples, limit, p = 0.95, min, idle, strictMax, evi
 /** Keep every attempt; only complete measurements with known loads can be excluded for environment.
  * n/validN count all valid samples, invalidN counts environment-only attempts, missingN always blocks completion. */
 function sampledTiming(rows, { pick, complete = () => true, startLoad = row => row?.loadStart, endLoad = row => row?.loadEnd,
-  environmentReason = () => undefined, minByKind, ...limits }) {
+  environmentReason = () => undefined, invalidPhysicalDenominator = () => false, minByKind, ...limits }) {
   const knownLoad = load => Number.isFinite(load?.load1) && load.load1 >= 0;
   const attempts = rows.map((row, sourceIndex) => {
     const value = pick(row), loadStart = startLoad(row), loadEnd = endLoad(row);
-    const dataComplete = Number.isFinite(value) && !row?.censored && !row?.error && row?.outcome !== "failed" && row?.status !== "error" && row?.status !== "pending" && complete(row);
+    const explainedPhysicalValue = value === undefined && invalidPhysicalDenominator(row);
+    const dataComplete = (Number.isFinite(value) || explainedPhysicalValue) && !row?.censored && !row?.error && row?.outcome !== "failed" && row?.status !== "error" && row?.status !== "pending" && complete(row);
     const loadsKnown = knownLoad(loadStart) && knownLoad(loadEnd);
     const missing = !dataComplete || !loadsKnown;
     const reason = !dataComplete ? "missing, failed, unclosed or censored measurement evidence" : !loadsKnown ? "missing or invalid load1 at a sample edge"
@@ -152,7 +153,8 @@ function sampledTiming(rows, { pick, complete = () => true, startLoad = row => r
       workspace: row?.workspace, workspaceId: row?.workspaceId, pid: row?.pid, snapshotId: row?.snapshotId, kind: row?.kind, firstCorrect: row?.firstCorrect,
       startAt: row?.startAt ?? row?.startedAt ?? row?.dispatchAt, endedAt: row?.endedAt ?? row?.endAt ?? row?.closeAt,
       value, loadStart, loadEnd, status: row?.status, outcome: row?.outcome, ok: row?.ok, code: row?.code, signal: row?.signal, failure: row?.failure, forcedExit: row?.forcedExit, category, verdict: category === "VALID" ? "VALID" : category === "ENVIRONMENT" || dataComplete ? "INVALID_EXPERIMENT" : "FAIL",
-      ...(reason ? { reason } : {}), volumeValid: row?.volumeValid, noiseBytes: row?.noiseBytes, fullGrowthBytes: row?.fullGrowthBytes };
+      ...(reason ? { reason } : {}), ...(category === "ENVIRONMENT" && explainedPhysicalValue ? { invalidPhysicalDenominator: true } : {}),
+      volumeValid: row?.volumeValid, volumeGrowthBytes: row?.volumeGrowthBytes, noiseBytes: row?.noiseBytes, fullGrowthBytes: row?.fullGrowthBytes, fullNoiseBytes: row?.fullNoiseBytes };
   });
   return summarizeTimingAttempts(attempts, { ...limits, minByKind });
 }
@@ -167,7 +169,9 @@ export function summarizeTimingAttempts(attempts, { limit, p = 0.95, min, strict
   const kindsMet = !minByKind || Object.entries(minByKind).every(([kind, min]) => countsByKind[kind] >= min);
   const result = timingItem({ ...limits, samples: valid.map(row => row.value), idle: true });
   const detail = { attemptedN: attempts.length, validN: valid.length, invalidN, missingN: missing.length,
-    censored: attempts.filter(row => !Number.isFinite(row.value)).length, evidenceComplete: missing.length === 0 && kindsMet, attempts,
+    censored: attempts.filter(row => !Number.isFinite(row.value)
+      && !(row.category === "ENVIRONMENT" && row.invalidPhysicalDenominator === true && row.value === undefined)).length,
+    evidenceComplete: missing.length === 0 && kindsMet, attempts,
     ...(minByKind ? { countsByKind, minByKind } : {}) };
   if (missing.length) return { ...result, ...detail, verdict: missing.some(row => row.verdict === "FAIL") ? "FAIL" : "INVALID_EXPERIMENT", reason: "required sample evidence is missing" };
   if (valid.length < limits.min || !kindsMet) return { ...result, ...detail, verdict: invalidN ? "INVALID_EXPERIMENT" : "FAIL", reason: "too few valid samples in the required groups" };
@@ -277,23 +281,45 @@ export function starvation(rows, boundMs = LIMITS.starvationMs) {
   return { queued, starved, cutOff };
 }
 
-/** Leases the owner kept with no build in flight past the hold bound, and any lease still kept at an incarnation's last sweep. */
+/** Unbound snapshots kept past the hold bound, or at the last sweep. A workspace may legitimately
+ * wait on another workspace's shared snapshot lease; its reclamation is judged after that lease ends. */
 export function leaseLeaks(rows, holdMs = LIMITS.leaseHoldMs) {
-  const byOwner = new Map(), leaks = [];
+  const byOwner = new Map(), leaks = [], missingTargets = [];
   for (const row of rows) if (row.type === "sweep" && row.report) byOwner.set(row.pid, [...(byOwner.get(row.pid) ?? []), row]);
   for (const [owner, sweeps] of byOwner) {
-    let since;
+    const held = new Map();
+    let lastSnapshots = [];
     for (const sweep of sweeps) {
       const kept = sweep.report.kept ?? {};
-      if ((kept.leased ?? 0) > 0 && !kept["in-flight"]) {
-        since ??= sweep.at;
-        if (sweep.at - since > holdMs) { leaks.push({ owner, since, at: sweep.at, leased: kept.leased, reason: "held without a build in flight" }); since = undefined; }
-      } else since = undefined;
+      const count = kept.leased ?? 0;
+      const targets = sweep.report.leasedTargets ?? [];
+      const validTarget = target => target && typeof target === "object" && Object.keys(target).length === 1
+        && ((typeof target.snapshotId === "string" && target.snapshotId.length > 0)
+          || (typeof target.workspaceId === "string" && target.workspaceId.length > 0));
+      if (!Number.isInteger(count) || count < 0 || !Array.isArray(targets) || targets.length !== count
+        || !targets.every(validTarget) || new Set(targets.map(target => JSON.stringify(target))).size !== targets.length) {
+        missingTargets.push({ owner, at: sweep.at, leased: count, reason: "leased target identities missing or inconsistent" });
+        held.clear();
+        lastSnapshots = [];
+        continue;
+      }
+      lastSnapshots = targets.flatMap(target => typeof target.snapshotId === "string" ? [target.snapshotId] : []);
+      // Preserve the existing in-flight exclusion: aggregate reports cannot assign a build to a specific target.
+      if (kept["in-flight"]) { held.clear(); continue; }
+      for (const snapshotId of held.keys()) if (!lastSnapshots.includes(snapshotId)) held.delete(snapshotId);
+      for (const snapshotId of lastSnapshots) {
+        const state = held.get(snapshotId) ?? { since: sweep.at, reported: false };
+        held.set(snapshotId, state);
+        if (!state.reported && sweep.at - state.since > holdMs) {
+          leaks.push({ owner, snapshotId, since: state.since, at: sweep.at, reason: "held without a build in flight" });
+          state.reported = true;
+        }
+      }
     }
-    const last = sweeps.at(-1).report.kept ?? {};
-    if ((last.leased ?? 0) > 0) leaks.push({ owner, at: sweeps.at(-1).at, leased: last.leased, reason: "kept at the incarnation's last sweep" });
+    for (const snapshotId of lastSnapshots) leaks.push({ owner, snapshotId, at: sweeps.at(-1).at, reason: "kept at the incarnation's last sweep" });
   }
-  return { sweeps: [...byOwner.values()].reduce((n, sweeps) => n + sweeps.length, 0), owners: byOwner.size, leaks };
+  return { sweeps: [...byOwner.values()].reduce((n, sweeps) => n + sweeps.length, 0), owners: byOwner.size, leaks,
+    evidenceComplete: missingTargets.length === 0, missingTargets };
 }
 
 /**
@@ -431,7 +457,7 @@ export function analyze({ calls, telemetry, edits, seeds, physical, fulls, statu
   const floor = {
     isolation: audit.audited >= edits.length + seeds.length && (negatives ?? []).length > 0,
     requestDeadline: calls.length > 0,
-    resources: dispatched > 0 && leases.sweeps > 0,
+    resources: dispatched > 0 && leases.sweeps > 0 && leases.evidenceComplete,
     noStarvation: starve.queued > 0 && (quick || fair.deltas.length > 0)
   };
   const hard = {
@@ -556,11 +582,15 @@ function physicalZero(physical) {
 /** Net physical growth against the same-input fresh full; noisy complete attempts stay visible but do not fill valid samples. */
 function physicalItem(physical, files) {
   const rows = physical.filter(row => row.files === files), limit = LIMITS.physicalRatio[files];
-  const noiseKnown = row => Number.isFinite(row.noiseBytes) && row.noiseBytes >= 0 && Number.isFinite(row.fullGrowthBytes) && row.fullGrowthBytes > 0;
+  const noiseKnown = row => Number.isFinite(row.volumeGrowthBytes) && Number.isFinite(row.noiseBytes) && row.noiseBytes >= 0
+    && Number.isFinite(row.fullGrowthBytes) && (!Object.hasOwn(row, "fullNoiseBytes") || Number.isFinite(row.fullNoiseBytes) && row.fullNoiseBytes >= 0);
+  const fullReliable = row => row.fullGrowthBytes > 0 && (!Object.hasOwn(row, "fullNoiseBytes") || row.fullGrowthBytes > row.fullNoiseBytes);
   const result = sampledTiming(rows, { pick: row => row.volumeRatio, limit, p: 0.5, min: LIMITS.physicalRounds,
     complete: row => physicalComplete(row) && noiseKnown(row) && typeof row.volumeValid === "boolean"
-      && row.volumeValid === (row.noiseBytes < limit * row.fullGrowthBytes),
-    environmentReason: row => !row.volumeValid ? "volume-allocation noise exceeds the measured difference" : undefined });
+      && row.volumeValid === (fullReliable(row) && row.noiseBytes < limit * row.fullGrowthBytes),
+    invalidPhysicalDenominator: row => !fullReliable(row),
+    environmentReason: row => !fullReliable(row) ? "fresh-full physical growth is nonpositive or within measured full noise"
+      : !row.volumeValid ? "volume-allocation noise exceeds the measured difference" : undefined });
   const validRows = result.attempts.filter(row => row.category === "VALID").map(row => rows[row.sourceIndex]);
   return { ...result, rows, volumeRatio: stats(validRows.map(row => row.volumeRatio)),
     pageRatio: stats(validRows.map(row => row.pageRatio).filter(Number.isFinite)) };
