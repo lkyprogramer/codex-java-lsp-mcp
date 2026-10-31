@@ -429,6 +429,11 @@ run_candidate_smoke() {
   fi
   candidate_cache="$(cd "$candidate_cache" && pwd -P)"
   candidate_build="$("$NODE_BIN" -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).gitSha)' "$RELEASE_DIR/dist/build-stamp.json")"
+  local candidate_command=("$RUNTIME_DIR/.launcher.candidate.$BUILD_ID/dist/native/ilv2-mac" owner "$candidate_cache" "$RELEASE_DIR/dist/http-server.js")
+  if [[ "${JAVA_LSP_ISOLATED_VALIDATION:-}" == "1" ]]; then
+    # Full installer acceptance shares the same two-fixture admission as its tests.
+    candidate_command=("$NODE_BIN" "$RELEASE_DIR/scripts/ilv2-mac-fixture-exec.mjs" "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID/dist/native/ilv2-mac" "$candidate_cache" "$RELEASE_DIR/dist/http-server.js")
+  fi
   (
     cd "$RELEASE_DIR"
     exec env -u JDTLS_DATA_DIR -u JDTLS_LOG_DIR \
@@ -444,7 +449,7 @@ run_candidate_smoke() {
       "CODEX_HOME=$CANDIDATE_TEST_ROOT/codex-home" \
       "HOME=$CANDIDATE_TEST_ROOT/home" \
       "JDTLS_BIN=$JDTLS_BIN" \
-      "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID/dist/native/ilv2-mac" owner "$candidate_cache" "$RELEASE_DIR/dist/http-server.js"
+      "${candidate_command[@]}"
   ) >"$CANDIDATE_LOG" 2>&1 &
   CANDIDATE_PID="$!"
   if ! wait_for_candidate_ready "$candidate_url/readyz"; then
