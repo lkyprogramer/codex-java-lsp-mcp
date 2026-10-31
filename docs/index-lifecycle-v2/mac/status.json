@@ -197,7 +197,8 @@
     {
       "gateId": "G17",
       "taskId": "MAC-17",
-      "status": "PLAN"
+      "status": "NOT_RUN",
+      "result": "mac-17/task-result.json"
     },
     {
       "gateId": "G18",
