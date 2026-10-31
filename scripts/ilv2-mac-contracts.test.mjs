@@ -108,6 +108,18 @@ test("a reviewed exclusion is exact to path, blob, rule and count; binaries rema
   await writeFile(path.join(root, "raw.gz"), Buffer.from([31, 139, 0])); await git(["add", "raw.gz"]);
   assert.equal((await scanStaged(root, { rules })).findings.some(item => item.rule === "binary-or-raw"), true);
 });
+test("plist templates are scanned as text without allowing arbitrary templates or binary payloads", async t => {
+  const { root, git } = await gitRepository(t);
+  await writeFile(path.join(root, "owner.plist.template"), "<plist><dict/></plist>\n");
+  await git(["add", "owner.plist.template"]);
+  assert.equal((await scanStaged(root)).status, "PASS");
+  await writeFile(path.join(root, "other.template"), "text\n");
+  await writeFile(path.join(root, "owner.plist.template"), Buffer.from([0, 1, 2]));
+  await git(["add", "other.template", "owner.plist.template"]);
+  const report = await scanStaged(root);
+  assert.ok(report.findings.some(row => row.path === "other.template" && row.rule === "file-type"));
+  assert.ok(report.findings.some(row => row.path === "owner.plist.template" && row.rule === "binary-or-raw"));
+});
 test("closeout rejects unregistered, zero-byte and nonzero expired remnants", async t => {
   const root = await directory(t, "ilv2-closeout-test-");
   await writeFile(path.join(root, "unknown.json"), "{}");

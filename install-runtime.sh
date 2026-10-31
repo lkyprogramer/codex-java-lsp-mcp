@@ -1,32 +1,26 @@
 #!/usr/bin/env bash
-# input: Source checkout, local Node/JDT LS, and explicit optional HTTP activation request.
-# output: Immutable release, managed loopback daemon, and only after health success an optional Codex URL registration.
+# input: Source checkout and frozen Node/native identity.
+# output: Immutable release and native-owner managed loopback daemon.
 # pos: User-level installer; it never mutates a running release or changes Codex MCP transport by default.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVER_NAME="${SERVER_NAME:-codex-java-lsp}"
 RUNTIME_DIR="${CODEX_JAVA_LSP_RUNTIME_DIR:-$HOME/Library/Application Support/codex-java-lsp-mcp}"
 LAUNCH_AGENTS_DIR="${CODEX_JAVA_LSP_LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
 LOG_DIR="${CODEX_JAVA_LSP_LOG_DIR:-$HOME/Library/Logs/codex-java-lsp-mcp}"
 LAUNCH_AGENT_LABEL="${CODEX_JAVA_LSP_LAUNCH_AGENT_LABEL:-com.lky.codex-java-lsp-mcp}"
 HTTP_PORT="${JAVA_LSP_HTTP_PORT:-38456}"
 HTTP_CANARY_PORT="${JAVA_LSP_HTTP_CANARY_PORT:-38457}"
-ACTIVATE_HTTP="false"
-HTTP_ACTIVATION_ATTESTATION="${CODEX_JAVA_LSP_HTTP_ACTIVATION_ATTESTATION:-}"
 PREFLIGHT_RUNTIME="false"
 
 usage() {
   cat <<'EOF'
-Usage: ./install-runtime.sh [--activate-http <attestation.json>] [--port <fixed-port>] [--canary-port <candidate-port>]
+Usage: ./install-runtime.sh [--port <fixed-port>] [--canary-port <candidate-port>]
        ./install-runtime.sh --preflight-runtime
 
 ILV2_NODE_BIN and ILV2_RUNTIME_MANIFEST must identify the frozen runtime.
-
-By default this installs an immutable release and starts the launchd-managed HTTP daemon,
-but preserves the existing Codex MCP registration. --activate-http is a separate,
-no-install transport switch that requires a fresh build-and-instance-bound Codex
-CLI/Desktop attestation for the already running daemon.
+ILV2_CODESIGN_IDENTITY must identify a stable launcher signing identity.
+The installer never changes Codex MCP registration.
 
 A release copy excludes eval dumps (artifacts/, graphify-out/, .workflow/). After a
 successful current switch the installer keeps current plus previous-current and
@@ -39,15 +33,6 @@ while [[ $# -gt 0 ]]; do
     --preflight-runtime)
       PREFLIGHT_RUNTIME="true"
       shift
-      ;;
-    --activate-http)
-      ACTIVATE_HTTP="true"
-      HTTP_ACTIVATION_ATTESTATION="${2:-}"
-      if [[ -z "$HTTP_ACTIVATION_ATTESTATION" || "$HTTP_ACTIVATION_ATTESTATION" == --* ]]; then
-        echo "--activate-http requires an absolute attestation JSON path." >&2
-        exit 2
-      fi
-      shift 2
       ;;
     --port)
       HTTP_PORT="${2:-}"
@@ -124,18 +109,13 @@ export ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST
 for command_name in curl rsync launchctl; do
   require_command "$command_name"
 done
-if [[ "$ACTIVATE_HTTP" == "true" ]]; then
-  require_command codex
-  normalize_absolute_path HTTP_ACTIVATION_ATTESTATION
-fi
-
 JDTLS_BIN="${JDTLS_BIN:-$(command -v jdtls || true)}"
 if [[ -z "$JDTLS_BIN" || "$JDTLS_BIN" != /* || ! -x "$JDTLS_BIN" ]]; then
   echo "jdtls was not found as an executable absolute path. Install it with: brew install jdtls" >&2
   exit 1
 fi
 
-JAVA_LSP_CACHE_BASE="${JAVA_LSP_CACHE_BASE:-$HOME/Library/Caches/codex-java-lsp}"
+JAVA_LSP_CACHE_BASE="${JAVA_LSP_CACHE_BASE:-$HOME/Library/Caches/codex-java-lsp-ilv2}"
 JAVA_LSP_OWNERSHIP_BASE="${JAVA_LSP_OWNERSHIP_BASE:-$JAVA_LSP_CACHE_BASE/.ownership}"
 for path_env_name in JAVA_LSP_PROJECTS_JSON JAVA_LSP_CACHE_BASE JAVA_LSP_OWNERSHIP_BASE; do
   normalize_absolute_path "$path_env_name"
@@ -220,6 +200,10 @@ cleanup_installer() {
   cleanup_candidate
   cleanup_candidate_test_environment
   cleanup_install_test_environment
+  if [[ -n "${RELEASE_DIR:-}" && -n "${BUILD_ID:-}" ]]; then
+    rm -rf "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID"
+    rm -f "$STATE_DIR/.daemon.env.candidate.$BUILD_ID" "$STATE_DIR/.agent.plist.candidate.$BUILD_ID"
+  fi
   release_install_lock
 }
 
@@ -338,20 +322,6 @@ prune_unreferenced_releases() {
   done
 }
 
-copy_legacy_release_if_needed() {
-  if [[ -e "$CURRENT_LINK" || ! -f "$RUNTIME_DIR/dist/server.js" ]]; then
-    return
-  fi
-  local legacy_id="legacy-$(date -u +%Y%m%dT%H%M%SZ)"
-  local legacy_dir="$RELEASES_DIR/$legacy_id"
-  mkdir -p "$legacy_dir"
-  rsync_source_tree "$RUNTIME_DIR/" "$legacy_dir/" \
-    --exclude releases \
-    --exclude state \
-    --exclude current
-  ln -s "releases/$legacy_id" "$STATE_DIR/previous-current"
-}
-
 assert_clean_release_source() {
   "$NODE_BIN" "$SCRIPT_DIR/scripts/verify-clean-source-tree.mjs" "$SCRIPT_DIR"
 }
@@ -391,7 +361,7 @@ merge_project_jdk_env() {
       existing_value="${entry#*=}"
       if [[ "$existing_key" == "$key" ]]; then
         if [[ "$existing_value" != "$value" ]]; then
-          echo "Conflicting project JDK override for $key between installer environment and existing stdio MCP registration." >&2
+          echo "Conflicting project JDK override for $key between installer environment and managed daemon state." >&2
           return 1
         fi
         return 0
@@ -409,16 +379,7 @@ collect_project_jdk_env() {
       merge_project_jdk_env "$env_name" "${!env_name}" || return 1
     fi
   done < <(env)
-  if ! command -v codex >/dev/null 2>&1; then
-    return 0
-  fi
-  if ! existing_registration="$(codex mcp get "$SERVER_NAME" --json 2>/dev/null)"; then
-    return 0
-  fi
-  while IFS=$'\t' read -r key value; do
-    [[ -z "$key" ]] && continue
-    merge_project_jdk_env "$key" "$value" || return 1
-  done < <(printf '%s' "$existing_registration" | "$NODE_BIN" "$RELEASE_DIR/scripts/extract-stdio-project-jdk-env.mjs")
+
 }
 
 run_release_tests_in_isolated_environment() {
@@ -466,6 +427,7 @@ run_candidate_smoke() {
     cleanup_candidate_test_environment
     return 1
   fi
+  candidate_cache="$(cd "$candidate_cache" && pwd -P)"
   candidate_build="$("$NODE_BIN" -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).gitSha)' "$RELEASE_DIR/dist/build-stamp.json")"
   (
     cd "$RELEASE_DIR"
@@ -473,13 +435,16 @@ run_candidate_smoke() {
       "JAVA_LSP_HTTP_PORT=$HTTP_CANARY_PORT" \
       "JAVA_LSP_HTTP_INSTANCE_ID=$CANDIDATE_INSTANCE_ID" \
       "JAVA_LSP_CACHE_BASE=$candidate_cache" \
+      "JAVA_LSP_CACHE_ROOT=$candidate_cache" \
+      "JAVA_LSP_SERVICE_STATE_ROOT=$CANDIDATE_TEST_ROOT/service-state" \
+      "GRADLE_USER_HOME=$CANDIDATE_TEST_ROOT/service-state/jdt-gradle-home" \
       "JAVA_LSP_OWNERSHIP_BASE=$candidate_ownership" \
       "JAVA_LSP_PROJECTS_JSON=$candidate_projects" \
       "XDG_CONFIG_HOME=$CANDIDATE_TEST_ROOT/config" \
       "CODEX_HOME=$CANDIDATE_TEST_ROOT/codex-home" \
       "HOME=$CANDIDATE_TEST_ROOT/home" \
       "JDTLS_BIN=$JDTLS_BIN" \
-      "$NODE_BIN" --disable-warning=ExperimentalWarning dist/http-server.js
+      "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID/dist/native/ilv2-mac" owner "$candidate_cache" "$RELEASE_DIR/dist/http-server.js"
   ) >"$CANDIDATE_LOG" 2>&1 &
   CANDIDATE_PID="$!"
   if ! wait_for_candidate_ready "$candidate_url/readyz"; then
@@ -497,6 +462,10 @@ run_candidate_smoke() {
 }
 
 assert_existing_managed_config_is_compatible() {
+  if [[ ( -f "$STATE_DIR/daemon.env" || -e "$CURRENT_LINK" || -L "$CURRENT_LINK" ) && ! -d "$RUNTIME_DIR/launcher" ]]; then
+    echo "Existing runtime has no verified MAC-17 owner bundle; use a new ILV2 runtime directory and retain the old runtime unchanged." >&2
+    exit 2
+  fi
   if [[ ! -f "$STATE_DIR/daemon.env" ]]; then
     return
   fi
@@ -550,6 +519,13 @@ backup_link_for_rollback() {
 
 backup_managed_configuration() {
   mkdir -p "$ROLLBACK_DIR"
+  if [[ -d "$RUNTIME_DIR/launcher" ]]; then
+    "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" verify "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID" "$RUNTIME_DIR/launcher" || return 1
+    cp -Rp "$RUNTIME_DIR/launcher" "$ROLLBACK_DIR/launcher" || return 1
+    printf 'present\n' >"$ROLLBACK_DIR/launcher.marker"
+  else
+    printf 'absent\n' >"$ROLLBACK_DIR/launcher.marker"
+  fi
   backup_file_for_rollback \
     "$STATE_DIR/daemon.env" \
     "$ROLLBACK_DIR/daemon.env" \
@@ -644,6 +620,15 @@ restore_link_from_rollback() {
 }
 
 restore_previous_managed_configuration() {
+  if [[ "$(<"$ROLLBACK_DIR/launcher.marker")" == "present" ]]; then
+    local staged_bundle="$RUNTIME_DIR/.launcher.restore.$$"
+    cp -Rp "$ROLLBACK_DIR/launcher" "$staged_bundle" || return 1
+    "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" replace "$staged_bundle" "$RUNTIME_DIR/launcher" || return 1
+  elif [[ "$(<"$ROLLBACK_DIR/launcher.marker")" == "absent" ]]; then
+    rm -rf "$RUNTIME_DIR/launcher" || return 1
+  else
+    return 1
+  fi
   restore_file_from_rollback \
     "$STATE_DIR/daemon.env" \
     "$ROLLBACK_DIR/daemon.env" \
@@ -686,19 +671,20 @@ restore_previous_managed_configuration() {
   fi
 }
 
-inherit_operator_idle_ttl() {
-  if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
-    return
-  fi
-  if [[ ! -f "$STATE_DIR/daemon.env" ]]; then
-    return
-  fi
-  local previous
-  previous="$(bash -c 'source "$1"; printf "%s" "${JAVA_LSP_IDLE_TTL_MS:-}"' _ "$STATE_DIR/daemon.env" || true)"
-  if [[ -n "$previous" ]]; then
-    JAVA_LSP_IDLE_TTL_MS="$previous"
-    export JAVA_LSP_IDLE_TTL_MS
-  fi
+inherit_managed_environment() {
+  local key previous
+  if [[ ! -f "$STATE_DIR/daemon.env" ]]; then return; fi
+  for key in JAVA_LSP_IDLE_TTL_MS JAVA_HOME JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JAVA_LSP_JDTLS_XMX; do
+    if [[ -z "${!key:-}" ]]; then
+      previous="$(bash -c 'source "$1"; printf "%s" "${!2:-}"' _ "$STATE_DIR/daemon.env" "$key")"
+      if [[ -n "$previous" ]]; then printf -v "$key" '%s' "$previous"; export "$key"; fi
+    fi
+  done
+  local entry
+  while IFS=$'\t' read -r key previous; do
+    [[ -z "$key" ]] && continue
+    merge_project_jdk_env "$key" "$previous" || return 1
+  done < <(bash -c 'source "$1"; while IFS= read -r key; do printf "%s\t%s\n" "$key" "${!key}"; done < <(compgen -A variable JAVA_LSP_PROJECT_JAVA_HOME)' _ "$STATE_DIR/daemon.env")
 }
 
 write_state() {
@@ -713,7 +699,16 @@ write_state() {
       printf 'JAVA_LSP_HTTP_INSTANCE_ID=%q\n' "$MANAGED_INSTANCE_ID"
       printf 'JAVA_LSP_CACHE_BASE=%q\n' "$JAVA_LSP_CACHE_BASE"
       printf 'JAVA_LSP_OWNERSHIP_BASE=%q\n' "$JAVA_LSP_OWNERSHIP_BASE"
+      printf 'ILV2_NODE_BIN=%q\n' "$ILV2_NODE_BIN"
+      printf 'ILV2_RUNTIME_MANIFEST=%q\n' "$ILV2_RUNTIME_MANIFEST"
       printf 'NODE_BIN=%q\n' "$NODE_BIN"
+      printf 'JAVA_LSP_CACHE_ROOT=%q\n' "$JAVA_LSP_CACHE_BASE"
+      printf 'JAVA_LSP_SERVICE_STATE_ROOT=%q\n' "$STATE_DIR"
+      printf 'GRADLE_USER_HOME=%q\n' "$STATE_DIR/jdt-gradle-home"
+      local key
+      for key in JAVA_HOME JDTLS_BIN JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JAVA_LSP_JDTLS_XMX; do
+        if [[ -n "${!key:-}" ]]; then printf '%s=%q\n' "$key" "${!key}"; fi
+      done
       if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
         printf 'JAVA_LSP_IDLE_TTL_MS=%q\n' "$JAVA_LSP_IDLE_TTL_MS"
       fi
@@ -725,8 +720,8 @@ write_state() {
       fi
     } >"$staged"
   ) || return 1
-  mv -f "$staged" "$STATE_DIR/daemon.env" || return 1
-  chmod 600 "$STATE_DIR/daemon.env" || return 1
+  chmod 600 "$staged" || return 1
+  mv -f "$staged" "${1:-$STATE_DIR/daemon.env}" || return 1
 }
 
 write_launch_agent() {
@@ -739,10 +734,14 @@ write_launch_agent() {
     "JAVA_LSP_HTTP_PORT=$HTTP_PORT"
     "JAVA_LSP_HTTP_INSTANCE_ID=$MANAGED_INSTANCE_ID"
     "JAVA_LSP_CACHE_BASE=$JAVA_LSP_CACHE_BASE"
+    "JAVA_LSP_CACHE_ROOT=$JAVA_LSP_CACHE_BASE"
+    "JAVA_LSP_SERVICE_STATE_ROOT=$STATE_DIR"
+    "GRADLE_USER_HOME=$STATE_DIR/jdt-gradle-home"
     "JAVA_LSP_OWNERSHIP_BASE=$JAVA_LSP_OWNERSHIP_BASE"
   )
   local env_name
   for env_name in \
+    JAVA_LSP_GRADLE_DISTRIBUTIONS \
     JAVA_HOME \
     JDTLS_JAVA_HOME \
     JAVA_LSP_PROJECTS_JSON \
@@ -779,12 +778,14 @@ write_launch_agent() {
     "$RELEASE_DIR/macos/com.lky.codex-java-lsp-mcp.plist.template" \
     "$staged" \
     "$LAUNCH_AGENT_LABEL" \
-    "$RUNTIME_DIR/run-daemon.sh" \
+    "$RUNTIME_DIR/launcher/dist/native/ilv2-mac" \
     "$RUNTIME_DIR" \
     "$LOG_DIR" \
+    "$JAVA_LSP_CACHE_BASE" \
+    "$RELEASE_DIR/dist/http-server.js" \
     "${environment[@]}" || return 1
   chmod 600 "$staged" || return 1
-  mv -f "$staged" "$LAUNCH_AGENT_PLIST" || return 1
+  mv -f "$staged" "${1:-$LAUNCH_AGENT_PLIST}" || return 1
 }
 
 install_stable_entrypoints() {
@@ -837,84 +838,6 @@ restore_previous_release() {
   mv -f -h "$staged" "$CURRENT_LINK" || return 1
 }
 
-activate_http_registration() {
-  local backup="$STATE_DIR/mcp-before-http-$BUILD_ID.json"
-  local rollback="$STATE_DIR/rollback-stdio-mcp.sh"
-  local reverse_rollback="$STATE_DIR/rollback-http-mcp.sh"
-  local managed_url="http://127.0.0.1:$HTTP_PORT/mcp"
-  if codex mcp get "$SERVER_NAME" --json >"$backup" 2>/dev/null; then
-    chmod 600 "$backup"
-    "$NODE_BIN" "$CURRENT_LINK/scripts/write-mcp-rollback.mjs" "$backup" "$rollback"
-  else
-    echo "No existing Codex MCP registration named $SERVER_NAME; HTTP activation has no stdio rollback artifact." >&2
-  fi
-  codex mcp remove "$SERVER_NAME" >/dev/null 2>&1 || true
-  if ! codex mcp add "$SERVER_NAME" --url "$managed_url"; then
-    if [[ -x "$rollback" ]]; then "$rollback"; fi
-    echo "HTTP MCP registration failed; previous stdio registration was restored when available." >&2
-    exit 1
-  fi
-  if ! codex mcp get "$SERVER_NAME" --json | "$NODE_BIN" -e '
-    const expected = process.argv[1];
-    let value = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", chunk => { value += chunk; });
-    process.stdin.on("end", () => {
-      const config = JSON.parse(value);
-      if (config.transport?.type !== "streamable_http" || config.transport?.url !== expected) process.exitCode = 1;
-    });
-  ' "$managed_url"; then
-    if [[ -x "$rollback" ]]; then "$rollback"; fi
-    echo "HTTP MCP registration verification failed; previous stdio registration was restored when available." >&2
-    exit 1
-  fi
-  if ! "$NODE_BIN" "$CURRENT_LINK/scripts/write-mcp-rollback.mjs" \
-    --http "$SERVER_NAME" "$managed_url" "$reverse_rollback"; then
-    if [[ -x "$rollback" ]]; then "$rollback"; fi
-    echo "Could not save the HTTP reverse-recovery command; previous stdio registration was restored when available." >&2
-    exit 1
-  fi
-}
-
-verify_http_activation_gate() {
-  if [[ -z "$HTTP_ACTIVATION_ATTESTATION" || ! -f "$HTTP_ACTIVATION_ATTESTATION" ]]; then
-    echo "HTTP activation requires a readable Codex CLI/Desktop attestation JSON produced by the release gate." >&2
-    return 1
-  fi
-  local managed_instance expected_build
-  managed_instance="$(bash -c 'source "$1"; printf "%s" "${JAVA_LSP_HTTP_INSTANCE_ID:-}"' _ "$STATE_DIR/daemon.env")"
-  expected_build="$("$NODE_BIN" -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).gitSha)' "$CURRENT_LINK/dist/build-stamp.json")"
-  "$NODE_BIN" "$CURRENT_LINK/scripts/verify-http-activation-attestation.mjs" \
-    "$HTTP_ACTIVATION_ATTESTATION" "$expected_build" "$managed_instance"
-}
-
-verify_stdio_handoff_environment() {
-  local existing_registration key value
-  if ! existing_registration="$(codex mcp get "$SERVER_NAME" --json 2>/dev/null)"; then
-    echo "HTTP activation requires reading the existing Codex MCP registration before it can replace stdio." >&2
-    return 1
-  fi
-  # daemon.env is installer-owned mode 0600 state. Source it only after its
-  # existence was checked above so the exact daemon namespace is authoritative.
-  # shellcheck disable=SC1090
-  source "$STATE_DIR/daemon.env"
-  if [[ -z "${JAVA_LSP_OWNERSHIP_BASE:-}" ]]; then
-    echo "Managed daemon state does not record JAVA_LSP_OWNERSHIP_BASE; reinstall before HTTP activation." >&2
-    return 1
-  fi
-  if ! printf '%s' "$existing_registration" \
-    | "$NODE_BIN" "$CURRENT_LINK/scripts/verify-stdio-ownership-handoff.mjs" "$JAVA_LSP_OWNERSHIP_BASE"; then
-    return 1
-  fi
-  while IFS=$'\t' read -r key value; do
-    [[ -z "$key" ]] && continue
-    if [[ "${!key+x}" != "x" || "${!key}" != "$value" ]]; then
-      echo "Managed daemon is missing the existing stdio project JDK override $key; reinstall with the same override before activation." >&2
-      return 1
-    fi
-  done < <(printf '%s' "$existing_registration" | "$NODE_BIN" "$CURRENT_LINK/scripts/extract-stdio-project-jdk-env.mjs")
-}
-
 managed_daemonctl() {
   CODEX_JAVA_LSP_RUNTIME_DIR="$RUNTIME_DIR" "$RUNTIME_DIR/daemonctl.sh" "$@"
 }
@@ -933,38 +856,12 @@ restore_before_daemon_restart() {
   if [[ "$rollback_failed" == "true" ]]; then
     echo "Managed-file rollback failed; the existing daemon was not restarted." >&2
   fi
+  if [[ "$rollback_failed" == "false" && -f "$STATE_DIR/daemon.env" && -L "$CURRENT_LINK" ]]; then
+    managed_daemonctl start && managed_daemonctl smoke || true
+  fi
   prune_unreferenced_releases || true
   exit 1
 }
-
-activate_existing_http_registration() {
-  if [[ ! -L "$CURRENT_LINK" || ! -f "$STATE_DIR/daemon.env" || ! -x "$RUNTIME_DIR/daemonctl.sh" ]]; then
-    echo "HTTP activation requires an existing managed release; run install-runtime.sh without --activate-http first." >&2
-    return 1
-  fi
-  if ! acquire_install_lock; then
-    return 1
-  fi
-  if ! managed_daemonctl status || ! managed_daemonctl smoke; then
-    echo "HTTP activation requires the already installed daemon to be healthy; registration remains unchanged." >&2
-    return 1
-  fi
-  if ! verify_stdio_handoff_environment; then
-    echo "HTTP MCP registration remains unchanged because the existing stdio environment cannot safely hand off to this daemon." >&2
-    return 1
-  fi
-  if ! verify_http_activation_gate; then
-    echo "HTTP MCP registration remains unchanged because the production release gate is incomplete." >&2
-    return 1
-  fi
-  activate_http_registration
-  echo "HTTP MCP registration activated without changing the installed release. Restart Codex/Desktop before opening a new task." >&2
-}
-
-if [[ "$ACTIVATE_HTTP" == "true" ]]; then
-  activate_existing_http_registration
-  exit $?
-fi
 
 echo "Java: $(java -version 2>&1 | head -n 1 || true)" >&2
 echo "JDT LS: $JDTLS_BIN" >&2
@@ -974,22 +871,33 @@ echo "Fixed HTTP port: $HTTP_PORT; isolated candidate port: $HTTP_CANARY_PORT" >
 mkdir -p "$RUNTIME_DIR" "$RELEASES_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR" "$LOG_DIR"
 chmod 700 "$STATE_DIR"
 acquire_install_lock
-assert_clean_release_source
-copy_legacy_release_if_needed
 assert_existing_managed_config_is_compatible
+mkdir -p "$JAVA_LSP_CACHE_BASE"
+JAVA_LSP_CACHE_BASE="$(cd "$JAVA_LSP_CACHE_BASE" && pwd -P)"
+export JAVA_LSP_CACHE_BASE JAVA_LSP_CACHE_ROOT="$JAVA_LSP_CACHE_BASE"
+assert_clean_release_source
 copy_release
+"$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" prepare "$RELEASE_DIR" "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID"
 run_candidate_smoke
 collect_project_jdk_env
+inherit_managed_environment
+CANDIDATE_STATE="$STATE_DIR/.daemon.env.candidate.$BUILD_ID"
+CANDIDATE_PLIST="$STATE_DIR/.agent.plist.candidate.$BUILD_ID"
+write_state "$CANDIDATE_STATE"
+write_launch_agent "$CANDIDATE_PLIST"
+bash -n "$CANDIDATE_STATE"
+/usr/bin/plutil -lint "$CANDIDATE_PLIST"
 backup_managed_configuration
-inherit_operator_idle_ttl
+if [[ -f "$STATE_DIR/daemon.env" ]]; then managed_daemonctl stop; fi
 current_switched="false"
-if ! write_state; then restore_before_daemon_restart "daemon state update" "$current_switched"; fi
-if ! write_launch_agent; then restore_before_daemon_restart "LaunchAgent update" "$current_switched"; fi
+if ! "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" replace "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID" "$RUNTIME_DIR/launcher"; then restore_before_daemon_restart "launcher update" "$current_switched"; fi
+if ! mv -f "$CANDIDATE_STATE" "$STATE_DIR/daemon.env"; then restore_before_daemon_restart "daemon state update" "$current_switched"; fi
+if ! mv -f "$CANDIDATE_PLIST" "$LAUNCH_AGENT_PLIST"; then restore_before_daemon_restart "LaunchAgent update" "$current_switched"; fi
 if ! install_stable_entrypoints; then restore_before_daemon_restart "stable entrypoint update" "$current_switched"; fi
 if ! switch_current; then restore_before_daemon_restart "immutable release switch" "$current_switched"; fi
 current_switched="true"
 
-if ! managed_daemonctl restart || ! managed_daemonctl smoke; then
+if ! managed_daemonctl start || ! managed_daemonctl smoke; then
   echo "New fixed-port daemon failed after current switch; attempting immutable release rollback." >&2
   if ! managed_daemonctl stop; then
     echo "The failed release could not be confirmed stopped; refusing to restore a different release/configuration over a loaded daemon." >&2
@@ -1016,6 +924,5 @@ fi
 prune_unreferenced_releases || true
 
 echo "HTTP daemon is healthy, but existing Codex MCP registration was preserved." >&2
-echo "After the full Codex CLI/Desktop gate, switch explicitly with: $SCRIPT_DIR/install-runtime.sh --activate-http /absolute/path/to/attestation.json" >&2
 echo "Current immutable release: $RUNTIME_DIR/current -> $(readlink "$CURRENT_LINK")" >&2
 echo "HTTP smoke: $RUNTIME_DIR/daemonctl.sh smoke" >&2

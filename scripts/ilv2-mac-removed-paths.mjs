@@ -45,19 +45,15 @@ export const LEDGER = [
       "src/README.md": "comment", "scripts/release-k-contract-matrix.json": "comment"
     },
     explainPattern: [[/^src\/benchmark\//, "offline-driver"], [/^scripts\/(run-jin-|run-fsr|run-memory-benchmark|attribute-impact-payload|diff-index-impl|replay-entity-entry|verify-facts-digest)/, "offline-driver"]] },
-  { id: "D05", type: "CODE", owner: "MAC-08, MAC-17", names: ["extract-stdio-project-jdk-env", "verify-stdio-ownership-handoff"],
-    replacement: "stdio only relays to the owner (MAC-08B); the installer handshake goes with the MAC-17 installer",
-    explain: {
-      "install-runtime.sh": "installer-migration", "scripts/extract-stdio-project-jdk-env.mjs": "installer-migration", "scripts/verify-stdio-ownership-handoff.mjs": "installer-migration",
-      "scripts/extract-stdio-project-jdk-env.test.mjs": "installer-migration", "scripts/verify-stdio-ownership-handoff.test.mjs": "installer-migration", "scripts/runtime-artifacts.test.mjs": "installer-migration"
-    } },
+  { id: "D05", type: "CODE", owner: "MAC-08, MAC-17", names: ["extract-stdio-project-jdk-env", "verify-stdio-ownership-handoff", "write-mcp-rollback", "verify-http-activation-attestation"],
+    replacement: "stdio only relays to the fixed native owner; obsolete registration and migration helpers removed in MAC-17" },
   { id: "D06", type: "PLAN", owner: "manual, MAC-02A", names: ["COPYFILE_FICLONE", /\bcp -c\b/], replacement: "clonefile primitive with explicit success/failure (mac-platform/clonefile.ts)",
     plan: "old manual cp -c / COPYFILE_FICLONE guarantee and copy fallback; no matching implementation existed in src/scripts" },
   { id: "D07", type: "CODE", owner: "MAC-03, MAC-08B", names: [/\bfs\.watch\b/, "chokidar", "repo-fs-watch", "repo-change-coordinator"],
     replacement: "native FSEvents tracker with confirmed watermarks (workspace-tracker.ts)",
     explain: {
       "src/java-index/snapshot/workspace-tracker.ts": "comment", "src/benchmark/task36-mutation-matrix.ts": "comment", "scripts/task36-multiprocess-smoke.mjs": "comment",
-      "src/path-utils.ts": "comment", "scripts/edit-to-visible-benchmark.mjs": "comment", "scripts/run-storm-gate.mjs": "comment", "package.json": "unused-dependency"
+      "src/path-utils.ts": "comment", "scripts/edit-to-visible-benchmark.mjs": "comment", "scripts/run-storm-gate.mjs": "comment"
     } },
   { id: "D08", type: "CODE", owner: "MAC-04, MAC-07, MAC-08B, MAC-13", names: ["v1AliasIds"], replacement: "one schema format, BLOB hash identity, context name resolution to real declaration IDs" },
   { id: "D09", type: "CODE", owner: "MAC-08B, MAC-13", names: ["IDLE_WARMING"], replacement: "request view acquires after prepare; held-view labels (request-view.ts)" },

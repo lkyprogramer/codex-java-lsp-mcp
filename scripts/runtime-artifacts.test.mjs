@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { chmod, mkdtemp, mkdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, realpath, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -8,17 +8,17 @@ import { createServer } from "node:net";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { renderLaunchAgent } from "./render-launch-agent-plist.mjs";
-import { renderHttpRollback, renderStdioRollback } from "./write-mcp-rollback.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("LaunchAgent renderer escapes absolute paths and daemon environment values", () => {
-  const template = `__LABEL__|__RUNNER__|__RUNTIME_DIR__|__LOG_DIR__|__ENVIRONMENT_ENTRIES__`;
+  const template = `__LABEL__|__RUNNER__|__RUNTIME_DIR__|__LOG_DIR__|__ENVIRONMENT_ENTRIES__|__CACHE_ROOT__|__SERVER_ENTRY__`;
   const rendered = renderLaunchAgent(template, {
     label: "com.lky.codex-java-lsp-mcp",
     runner: "/Users/example/Library/Application Support/codex & java/run-daemon.sh",
     runtimeDir: "/Users/example/Library/Application Support/codex & java",
     logDir: "/Users/example/Library/Logs/codex & java",
+    cacheRoot: "/cache", serverEntry: "/release/dist/http-server.js",
     environment: new Map([
       ["JAVA_LSP_HTTP_PORT", "38456"],
       ["JDTLS_EXTRA_ARGS", "--jvm-arg=-Dname=a&b"]
@@ -33,83 +33,37 @@ test("LaunchAgent renderer escapes absolute paths and daemon environment values"
     runner: "/runner",
     runtimeDir: "/runtime",
     logDir: "/logs",
+    cacheRoot: "/cache", serverEntry: "/release/dist/http-server.js",
     environment: {}
   }), /Invalid LaunchAgent label/);
 });
 
-test("generated rollback restores only the saved stdio MCP command and environment", async t => {
-  const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-rollback-"));
-  t.after(() => rm(fixture, { recursive: true, force: true }));
-  const binDir = path.join(fixture, "bin");
-  await mkdir(binDir);
-  const calls = path.join(fixture, "calls.txt");
-  const codex = path.join(binDir, "codex");
-  await writeFile(codex, `#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"${calls}\"\n`);
-  await chmod(codex, 0o755);
-  const rollback = path.join(fixture, "rollback.sh");
-  await writeFile(rollback, renderStdioRollback({
-    name: "codex-java-lsp",
-    transport: {
-      type: "stdio",
-      command: "/runtime path/run.sh",
-      args: ["--mode", "safe value"],
-      env: {
-        JDTLS_BIN: "/opt/homebrew/bin/jdtls",
-        JAVA_LSP_MAX_ACTIVE_REPOS: "8"
-      }
-    }
-  }));
-  await chmod(rollback, 0o755);
-  await run("bash", [rollback], { CODEX_BIN: codex });
-  assert.deepEqual((await readFile(calls, "utf8")).trim().split("\n"), [
-    "mcp remove codex-java-lsp",
-    "mcp add codex-java-lsp --env JAVA_LSP_MAX_ACTIVE_REPOS=8 --env JDTLS_BIN=/opt/homebrew/bin/jdtls -- /runtime path/run.sh --mode safe value"
-  ]);
-  assert.throws(() => renderStdioRollback({ name: "x", transport: { type: "streamable_http", url: "http://127.0.0.1/mcp" } }), /Only an existing stdio/);
+test("LaunchAgent launches the fixed native owner with immutable entry and recovery settings", () => {
+  const template = readFileSync(path.join(projectRoot, "macos/com.lky.codex-java-lsp-mcp.plist.template"), "utf8");
+  assert.match(template, /<key>Program<\/key>\s*<string>__RUNNER__<\/string>/);
+  assert.match(template, /<string>owner<\/string>/);
+  assert.match(template, /<key>ThrottleInterval<\/key>\s*<integer>1<\/integer>/);
+  assert.match(template, /<key>AbandonProcessGroup<\/key>\s*<false\/>/);
 });
 
-test("generated HTTP reverse rollback restores only the managed loopback URL", async t => {
-  const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-http-reverse-rollback-"));
-  t.after(() => rm(fixture, { recursive: true, force: true }));
-  const binDir = path.join(fixture, "bin");
-  await mkdir(binDir);
-  const calls = path.join(fixture, "calls.txt");
-  const codex = path.join(binDir, "codex");
-  await writeFile(codex, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> "${calls}"\n`);
-  await chmod(codex, 0o755);
-  const rollback = path.join(fixture, "rollback-http.sh");
-  await writeFile(rollback, renderHttpRollback("codex-java-lsp", "http://127.0.0.1:38456/mcp"));
-  await chmod(rollback, 0o755);
-  await run("bash", [rollback], { CODEX_BIN: codex });
-  assert.deepEqual((await readFile(calls, "utf8")).trim().split("\n"), [
-    "mcp remove codex-java-lsp",
-    "mcp add codex-java-lsp --url http://127.0.0.1:38456/mcp"
-  ]);
-  assert.throws(
-    () => renderHttpRollback("codex-java-lsp", "https://example.invalid/mcp"),
-    /exact loopback/
-  );
-});
-
-test("stable daemon runner resolves only the current immutable release", async t => {
-  const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-runner-"));
+test("stable daemon runner enters the native owner with canonical cache and immutable release", async t => {
+  const fixture = await realpath(await mkdtemp(path.join(tmpdir(), "codex-java-lsp-runner-")));
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const release = path.join(fixture, "releases", "one");
   await mkdir(path.join(release, "dist"), { recursive: true });
-  await writeFile(path.join(release, "dist", "http-server.js"), "// fixture\n");
+  await mkdir(path.join(fixture, "launcher/dist/native"), { recursive: true });
+  await mkdir(path.join(fixture, "state"));
+  await writeFile(path.join(fixture, "state/daemon.env"), `JAVA_LSP_CACHE_BASE=${shellValue(fixture + "/cache")}\nJAVA_LSP_CACHE_ROOT=${shellValue(fixture + "/cache")}\nJAVA_LSP_SERVICE_STATE_ROOT=${shellValue(fixture + "/state")}\nGRADLE_USER_HOME=${shellValue(fixture + "/state/jdt-gradle-home")}\n`);
+  await writeFile(path.join(release, "dist/http-server.js"), "// fixture\n");
   await symlink("releases/one", path.join(fixture, "current"));
-  const capture = path.join(fixture, "node-argument.txt");
-  const fakeNode = path.join(fixture, "fake-node.sh");
-  await writeFile(fakeNode, `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > "${capture}"\n`);
-  await chmod(fakeNode, 0o755);
-  await writeFile(path.join(fixture, "run-daemon.sh"), await readFile(path.join(projectRoot, "run-daemon.sh"), "utf8"));
+  const capture = path.join(fixture, "arguments.txt");
+  const native = path.join(fixture, "launcher/dist/native/ilv2-mac");
+  await writeFile(native, `#!/bin/bash\nprintf '%s\\n' "$@" > "${capture}"\n`);
+  await chmod(native, 0o755);
+  await writeFile(path.join(fixture, "run-daemon.sh"), await readFile(path.join(projectRoot, "run-daemon.sh")));
   await chmod(path.join(fixture, "run-daemon.sh"), 0o755);
-  await run(path.join(fixture, "run-daemon.sh"), [], { NODE_BIN: fakeNode, JAVA_LSP_HTTP_PORT: "38456" });
-  assert.deepEqual((await readFile(capture, "utf8")).trim().split("\n"), [
-    "--disable-warning=ExperimentalWarning",
-    "--max-old-space-size=768",
-    path.join(fixture, "current", "dist", "http-server.js")
-  ]);
+  await run(path.join(fixture, "run-daemon.sh"), [], { JAVA_LSP_HTTP_PORT: "6553" });
+  assert.deepEqual((await readFile(capture, "utf8")).trim().split("\n"), ["owner", fixture + "/cache", release + "/dist/http-server.js"]);
 });
 
 test("stable hook runner resolves only the current immutable release", async t => {
@@ -176,29 +130,20 @@ test("HTTP entrypoint remains executable through the stable current symlink", as
   await new Promise(resolve => child.once("exit", resolve));
 });
 
-test("activation-only mode requires a pre-existing managed release before any Codex mutation", async t => {
-  const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-activation-only-"));
-  t.after(() => rm(fixture, { recursive: true, force: true }));
-  const binDir = path.join(fixture, "bin");
-  const calls = path.join(fixture, "calls.txt");
-  await mkdir(binDir);
-  for (const executable of ["codex", "launchctl", "curl", "rsync", "jdtls"]) {
-    await writeFile(path.join(binDir, executable), `#!/usr/bin/env bash\nprintf '${executable} %s\\n' "$*" >> "${calls}"\n`);
-    await chmod(path.join(binDir, executable), 0o755);
-  }
-  const evidence = path.join(fixture, "attestation.json");
-  await writeFile(evidence, "{}\n");
-  await assert.rejects(
-    run(path.join(projectRoot, "install-runtime.sh"), ["--activate-http", evidence], {
-      PATH: `${binDir}:${process.env.PATH}`,
-      CODEX_JAVA_LSP_RUNTIME_DIR: path.join(fixture, "runtime"),
-      CODEX_JAVA_LSP_LAUNCH_AGENTS_DIR: path.join(fixture, "LaunchAgents"),
-      CODEX_JAVA_LSP_LOG_DIR: path.join(fixture, "logs"),
-      JDTLS_BIN: path.join(binDir, "jdtls")
-    }),
-    /requires an existing managed release/
-  );
-  await assert.rejects(readFile(calls, "utf8"), { code: "ENOENT" });
+test("installer refuses an existing pre-MAC-17 runtime without a verified owner bundle", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-unverified-runtime-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const state = path.join(root, "state");
+  await mkdir(state);
+  await writeFile(path.join(state, "daemon.env"), "# pre-MAC-17 runtime\n");
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  const start = installer.indexOf("assert_existing_managed_config_is_compatible() {");
+  const end = installer.indexOf("\nbackup_file_for_rollback()", start);
+  const check = installer.slice(start, end);
+  await assert.rejects(run("bash", ["-c", `${check}\nassert_existing_managed_config_is_compatible`], {
+    RUNTIME_DIR: root, STATE_DIR: state, CURRENT_LINK: path.join(root, "current"), HTTP_PORT: "6553", LAUNCH_AGENT_LABEL: "com.example.isolated", LAUNCH_AGENT_PLIST: path.join(root, "agent.plist")
+  }), /Existing runtime has no verified MAC-17 owner bundle/);
+  assert.equal(await readFile(path.join(state, "daemon.env"), "utf8"), "# pre-MAC-17 runtime\n");
 });
 
 test("installer refuses concurrent release changes and leaves the existing lock intact", async t => {
@@ -236,7 +181,7 @@ test("installer release tests isolate cache, ownership, projects, and XDG state 
   assert.match(installer, /"CODEX_HOME=\$INSTALL_TEST_ROOT\/codex-home"/);
   assert.match(installer, /"HOME=\$INSTALL_TEST_ROOT\/home"/);
   assert.match(installer, /cd "\$SCRIPT_DIR"\n    exec env \\/);
-  assert.match(installer, /cleanup_install_test_environment\n\s*release_install_lock/);
+  assert.match(installer, /cleanup_install_test_environment[\s\S]*release_install_lock/);
 });
 
 test("installer candidate smoke isolates its process state from the managed daemon", () => {
@@ -253,18 +198,16 @@ test("installer candidate smoke isolates its process state from the managed daem
   assert.match(installer, /cleanup_candidate\n\s*cleanup_candidate_test_environment/);
 });
 
-test("installer persists canonical ownership and migrates only supported project JDK overrides before activation", () => {
+test("installer binds the canonical owner cache and independent persistent service state", () => {
   const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
-  assert.match(installer, /JAVA_LSP_CACHE_BASE="\$\{JAVA_LSP_CACHE_BASE:-\$HOME\/Library\/Caches\/codex-java-lsp\}"/);
-  assert.match(installer, /JAVA_LSP_OWNERSHIP_BASE="\$\{JAVA_LSP_OWNERSHIP_BASE:-\$JAVA_LSP_CACHE_BASE\/\.ownership\}"/);
-  assert.match(installer, /collect_project_jdk_env\(\)/);
-  assert.match(installer, /extract-stdio-project-jdk-env\.mjs/);
-  assert.match(installer, /verify-stdio-ownership-handoff\.mjs/);
-  assert.match(installer, /PROJECT_JDK_ENV/);
-  assert.match(installer, /printf 'JAVA_LSP_OWNERSHIP_BASE=%q\\n' "\$JAVA_LSP_OWNERSHIP_BASE"/);
-  assert.match(installer, /collect_project_jdk_env\nbackup_managed_configuration/);
-  assert.match(installer, /verify_stdio_handoff_environment/);
-  assert.match(installer, /if ! acquire_install_lock; then/);
+  assert.match(installer, /codex-java-lsp-ilv2/);
+  assert.match(installer, /JAVA_LSP_CACHE_BASE="\$\(cd "\$JAVA_LSP_CACHE_BASE" && pwd -P\)"/);
+  assert.match(installer, /"JAVA_LSP_CACHE_ROOT=\$JAVA_LSP_CACHE_BASE"/);
+  assert.match(installer, /"JAVA_LSP_SERVICE_STATE_ROOT=\$STATE_DIR"/);
+  assert.match(installer, /"GRADLE_USER_HOME=\$STATE_DIR\/jdt-gradle-home"/);
+  assert.doesNotMatch(installer, /codex mcp|activate-http|copy_legacy_release_if_needed|verify_stdio_handoff/);
+  assert.match(installer, /merge_project_jdk_env/);
+  assert.match(installer, /inherit_managed_environment/);
 });
 
 test("installer handles an empty project JDK override list under nounset", () => {
@@ -277,7 +220,7 @@ test("installer rejects dirty release provenance before assembling a new immutab
   const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
   assert.match(installer, /assert_clean_release_source\(\)/);
   assert.match(installer, /verify-clean-source-tree\.mjs/);
-  assert.match(installer, /acquire_install_lock\nassert_clean_release_source\ncopy_legacy_release_if_needed/);
+  assert.match(installer, /assert_clean_release_source\ncopy_release/);
 });
 
 test("runtime installer excludes eval dumps from immutable releases and prunes unreferenced copies", () => {
@@ -506,6 +449,7 @@ test("daemon controller restores the predecessor managed configuration before re
   });
   assert.equal(await readlink(path.join(fixture.root, "current")), "releases/old");
   assert.equal(await readFile(path.join(fixture.root, "state", "daemon.env"), "utf8"), fixture.oldState);
+  assert.equal(await readFile(path.join(fixture.root, "launcher/identity"), "utf8"), "old launcher\n");
   assert.equal(await readFile(path.join(fixture.root, "run-daemon.sh"), "utf8"), "old daemon runner\n");
   assert.equal(await readFile(path.join(fixture.root, "run.sh"), "utf8"), "old stdio runner\n");
   const callLog = await readFile(fixture.calls, "utf8");
@@ -558,66 +502,6 @@ test("daemon controller fails closed before stopping when the predecessor lacks 
   await assert.rejects(readFile(fixture.calls, "utf8"), { code: "ENOENT" });
 });
 
-test("stdio rollback failure restores the managed HTTP registration and daemon before returning failure", async t => {
-  const root = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-stdio-rollback-recover-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const stateDir = path.join(root, "state");
-  const binDir = path.join(root, "bin");
-  const calls = path.join(root, "calls.txt");
-  const launchdState = path.join(root, "launchd-loaded");
-  await mkdir(path.join(root, "current", "dist"), { recursive: true });
-  await mkdir(stateDir);
-  await mkdir(binDir);
-  await writeFile(path.join(root, "current", "dist", "build-stamp.json"), '{"gitSha":"rollback-test"}\n');
-  await writeFile(path.join(root, "current", "dist", "smoke-http.js"), "process.exit(0);\n");
-  await writeFile(path.join(stateDir, "daemon.env"), [
-    `RUNTIME_DIR_FROM_STATE=${shellValue(root)}`,
-    "LAUNCH_AGENT_LABEL=com.example.codex-java-lsp",
-    `LAUNCH_AGENT_PLIST=${shellValue(path.join(root, "agent.plist"))}`,
-    "JAVA_LSP_HTTP_PORT=38456",
-    "JAVA_LSP_HTTP_INSTANCE_ID=managed-rollback-test",
-    `NODE_BIN=${shellValue(process.execPath)}`
-  ].join("\n"));
-  await writeFile(path.join(stateDir, "rollback-stdio-mcp.sh"), `#!/usr/bin/env bash\nprintf 'stdio\\n' >> "${calls}"\nexit 1\n`);
-  await writeFile(path.join(stateDir, "rollback-http-mcp.sh"), `#!/usr/bin/env bash\nprintf 'http\\n' >> "${calls}"\n`);
-  await chmod(path.join(stateDir, "rollback-stdio-mcp.sh"), 0o755);
-  await chmod(path.join(stateDir, "rollback-http-mcp.sh"), 0o755);
-  await writeFile(path.join(root, "daemonctl.sh"), await readFile(path.join(projectRoot, "daemonctl.sh"), "utf8"));
-  await chmod(path.join(root, "daemonctl.sh"), 0o755);
-  await writeFile(launchdState, "loaded\n");
-  const launchctl = path.join(binDir, "launchctl");
-  const curl = path.join(binDir, "curl");
-  await writeFile(launchctl, `#!/usr/bin/env bash
-printf 'launchctl %s\\n' "$*" >> "${calls}"
-state=${JSON.stringify(launchdState)}
-if [[ "$1" == print ]]; then
-  if [[ -f "$state" ]]; then exit 0; fi
-  echo 'Could not find service' >&2
-  exit 113
-fi
-if [[ "$1" == bootout ]]; then mv "$state" "$state.stopped"; exit 0; fi
-if [[ "$1" == bootstrap ]]; then : > "$state"; exit 0; fi
-exit 0
-`);
-  await writeFile(curl, "#!/usr/bin/env bash\nprintf '{\"status\":\"ok\",\"instanceId\":\"managed-rollback-test\"}'\n");
-  await chmod(launchctl, 0o755);
-  await chmod(curl, 0o755);
-
-  await assert.rejects(
-    run(path.join(root, "daemonctl.sh"), ["rollback-stdio"], {
-      CODEX_JAVA_LSP_RUNTIME_DIR: root,
-      LAUNCHCTL_BIN: launchctl,
-      CURL_BIN: curl
-    }),
-    /Stdio restoration failed; HTTP configuration and managed daemon were restored/
-  );
-  const callLog = await readFile(calls, "utf8");
-  assert.match(callLog, /stdio\nhttp\n/);
-  assert.match(callLog, /launchctl bootout gui\/\d+\/com\.example\.codex-java-lsp/);
-  assert.match(callLog, /launchctl bootstrap gui\/\d+ .*agent\.plist/);
-  assert.equal((await readFile(launchdState, "utf8")).trim(), "");
-});
-
 async function createReleaseRollbackFixture(t, options = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-release-rollback-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -633,6 +517,16 @@ async function createReleaseRollbackFixture(t, options = {}) {
   await mkdir(path.join(root, "releases", "old", "dist"), { recursive: true });
   await mkdir(path.join(root, "releases", "older", "dist"), { recursive: true });
   await mkdir(rollbackDir, { recursive: true });
+  for (const version of ["new", "old"]) {
+    const scripts = path.join(root, "releases", version, "scripts");
+    await mkdir(scripts);
+    await writeFile(path.join(scripts, "managed-owner-launcher.mjs"), `import {cp,rm} from 'node:fs/promises'; const [command,src,dst]=process.argv.slice(2); if(command==='replace'){await rm(dst,{recursive:true,force:true});await cp(src,dst,{recursive:true});}`);
+  }
+  await mkdir(path.join(rollbackDir, "launcher"));
+  await writeFile(path.join(rollbackDir, "launcher/identity"), "old launcher\n");
+  await mkdir(path.join(root, "launcher"));
+  await writeFile(path.join(root, "launcher/identity"), "new launcher\n");
+  await writeFile(path.join(rollbackDir, "launcher.marker"), "present\n");
   await mkdir(binDir);
   await symlink("releases/new", path.join(root, "current"));
   await symlink("releases/old", path.join(stateDir, "previous-current"));
@@ -671,7 +565,7 @@ if [[ "$1" == print ]]; then ${options.loaded ? "exit 0" : "exit 1"}; fi
 if [[ "$1" == bootout ]]; then ${options.bootoutFails ? "exit 1" : "exit 0"}; fi
 `);
   await writeFile(curl, `#!/usr/bin/env bash\nprintf 'curl %s\\n' "$*" >> "${calls}"\nprintf '{"status":"ok","instanceId":"managed-old"}'\n`);
-  await writeFile(node, `#!/usr/bin/env bash\nprintf 'node %s\\n' "$*" >> "${calls}"\nif [[ "$1" == -e ]]; then printf 'old'; fi\n`);
+  await writeFile(node, `#!/usr/bin/env bash\nprintf 'node %s\\n' "$*" >> "${calls}"\nif [[ "$1" == -e ]]; then printf 'old'; elif [[ "$1" == *managed-owner-launcher.mjs ]]; then exec "${process.execPath}" "$@"; fi\n`);
   await chmod(launchctl, 0o755);
   await chmod(curl, 0o755);
   await chmod(node, 0o755);

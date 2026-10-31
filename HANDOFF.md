@@ -1,24 +1,24 @@
 # HANDOFF
 
-## daemon 生产化（index-on-disk P3）
+## 当前 ILV2 owner 与 workspace snapshot
 
-**存储层**：真源是每仓 `index.sqlite`（schema v3 intern）+ `SqlJavaIndexClient`。facts 标量列 + JSONB；KG / entity token 在同一库。不要再写 `java-index-snapshot*.json.gz`。
+一个 canonical cache root 对应一个 owner。固定签名 native launcher 获取 fd4 独占锁后直接 exec 冻结 Node；受管子进程继承锁引用。stdio 只转发到 owner。静态真源是 `mac1/` 下封存的 SQLite snapshot 与 workspace binding；builder 写私有候选，发布前校验，请求持有 snapshot lease。
 
-**builder**：`BuilderSupervisor` 拉起 `builder-main --mode serve`（冷建 `cold`）。串行 job、空闲退出、watchdog ≤2。daemon 只读打开；缺库时 `BUILDING` 或 sibling `VACUUM INTO` + reconcile。
+MAC-17 完整 launcher bundle 位于 `<runtime>/launcher/`；launchd Program 指向固定 native binary，HTTP entry 指向具体 immutable release。plist 使用 RunAtLoad、失败重启、1 秒 throttle、`AbandonProcessGroup=false`；native 锁等待最多 5 秒。进程组清理与私有 Gradle daemon 清理分别核验。不新增 heap/RSS 杀进程阈值。
 
-**生命周期**：`JAVA_LSP_CONN_IDLE_MS` 关只读连接，下次查询重开。JDT idle 仍走 `JAVA_LSP_IDLE_TTL_MS`。不要 hydrate / hibernate recycle / 按 RSS 杀 isolate。
+首次安装显式设置 `CODEX_JAVA_LSP_RUNTIME_DIR` 为新 ILV2 runtime。默认 runtime 仍为历史路径；已有 daemon.env/current 却没有 verified bundle 时，在停服前拒绝。默认新缓存 `~/Library/Caches/codex-java-lsp-ilv2`；service-state 是 runtime 的 `state/`，私有 Gradle home 是 `state/jdt-gradle-home/`。旧生产 runtime/cache/state 保留。
 
-**已删**：heap worker/client/store、EntitySearchIndex 类、KnowledgeGraphStore 堆实现、snapshot/columnar/seeder、hibernate/prewarm/recycle 环境变量读取。`parse-tree-cache` 已内联到 `src/java-index/builder/parse-cache.ts`。
+升级与 rollback-release 成对管理完整 bundle、immutable release、env/plist、稳定入口及 predecessor pointer。回滚恢复路径绑定，不删除缓存或 Gradle home；首次安装没有完整前序备份时不具备 release rollback。
 
-**陷阱**：不要再加 heap/RSS 看护。不要 `--activate-http`。不要 `JAVA_LSP_ENGINE`。不要第四个 live daemon。canary `:38457`。不要把 `fat-service` 加回 pins。生产切流仍须 **P3-T4 证据 + 用户确认** 后 `./install-runtime.sh`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+## 当前任务与证据边界
 
-pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。探针：`scripts/probe-daemon-acceptance.mjs`（D2/D4/D6 + P2-G2/G5/G6）。手册：`docs/deep/codex-java-lsp-mcp-index-on-disk-ai-execution-manual-2026-09-07.md`。
+用户 2026-10-31 授权：MAC-16 收尾、MAC-17 候选及隔离 `:38457` canary；截止 2026-11-03 18:00+08，到期无论结果汇报。不 push、不动生产、不扩优化。2026-08 的历史安装授权不能用于本轮部署。实际结果见 `docs/index-lifecycle-v2/mac/status.json` 和相应 task-result；单测不替代真实签名/launchd/TCC/升级回滚/canary。
 
-隔离验证：`PATH="/opt/homebrew/bin:$PATH"` + `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`（门证据，Tier-1）。ILV2迭代用 `sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs -- COMMAND`（持久隔离tree，增量构建，不产生证据，Tier-0）。ILV2工作根已迁至 `~/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac`（不得放在 TCC 保护目录）；门状态只看 `docs/index-lifecycle-v2/mac/status.json`。ILV2手册自`ILV2-MAC/6`起拆为索引（原手册路径）+ `docs/deep/ilv2-mac-manual/`（rules/contract/cards/verification/ledger），每卡只加载索引、本卡和引用章节。JDT/Gradle工具链已`brew pin`；JDT设置不得带`gradle.version`（会绕开冻结home去下载）。TCC-LAUNCHER-IDENTITY 已改选“launcher稳定签名+一次性Documents授权”（2026-10-15），业务worktree不迁移；`plans/worktree-migration/`下的dry-run计划作废。
+工作根 `~/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac` 不放在 TCC 保护目录。执行合同见 `docs/deep/ilv2-mac-manual/`。Tier-0 使用 `sh scripts/run-isolated-node.sh scripts/ilv2-mac-dev.mjs -- COMMAND`；正式证据通过隔离验证入口。业务 worktree 不迁移；不代用户授予隐私权限。生产固定路径授权、首次业务仓读取和升级复验须另行批准。不要第四个 live daemon；常驻测试只用已授权 `:38457`，fixture 全机配额最多 2。
 
-## 当前任务
+## 历史日志
 
-用户 2026-08-27 终局：达到上线标准，合 `main` + 本机 `./install-runtime.sh`（无 `--activate-http`，不 push）。后续按 §9.6。
+以下保留各日期的候选与授权背景，不描述当前 ILV2 架构，不构成本轮部署授权。
 
 ## E1（2026-08-23）
 

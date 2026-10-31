@@ -1,85 +1,38 @@
-# 本机 Java LSP 现行操作（Index-on-Disk）
+# ILV2 安装候选与生产操作边界
 
-- 日期：2026-10-11
-- 当前 build：由 `daemonctl.sh status` 查询；`current` 指向当前不可变 release。
-- 回滚目标：以 `state/previous-current` 为准。2026-10-11 QA 发布基线为 `8f737ac7cd14`；后续 hook 同步见 [Java agent 指导](../next-stage/java-agent-guidance-review.md)。
-- MCP：`http://127.0.0.1:38456/mcp`（不要 `--activate-http`，不要改 URL）
-- 索引真源：每 worktree 一份 `~/Library/Caches/codex-java-lsp/<repoHash>/index.sqlite`
-- 历史切流步骤（SourceIndex → 5 工具）见 [production-cutover-runbook.md](production-cutover-runbook.md)；**不要再按那份的 hibernate / 7 仓冷建 / 删 SourceIndex 执行。**
+日期：2026-10-31。本轮仅 MAC-16 收尾、MAC-17 候选及隔离 `:38457` canary；不 push、不动生产。旧生产 URL、LaunchAgent、runtime/cache/state 保留。历史授权不能用于本轮部署。
 
-## 现在是什么
+## 候选安装布局
 
-共享 HTTP daemon，LaunchAgent `com.lky.codex-java-lsp-mcp`，`RunAtLoad=true`（用户登录后自动起，不是登录前的系统 LaunchDaemon）。公开工具 5 个：`java_status` `java_impact` `java_symbol` `java_diagnostics` `java_runtime`。
+首次安装必须显式设置 `CODEX_JAVA_LSP_RUNTIME_DIR` 为新的 ILV2 runtime；安装器默认仍是历史路径，不能裸执行覆盖旧生产。已有 daemon.env/current 却没有 verified owner bundle 时，在停服前拒绝。
 
-`projects.json` 当前 `lspEnabled` pin：**lishuedu / lishu-v2 / exam-parent-v3 / cipherlink**。fat-service / analysis / recognition 未启用。
+固定路径是 `<runtime>/launcher/dist/native/ilv2-mac`。完整 bundle 包含 native/manifest、owner guard 与其 JS 闭包、ESM 声明和逐文件 inventory，校验权限、hash、实际稳定签名、protocol/architecture 和冻结 Node 身份。launchd Program 直接指向 launcher，参数中的 HTTP entry 指向具体 immutable release。
 
-## 索引与 worktree
+plist 使用 `RunAtLoad=true`、`KeepAlive={SuccessfulExit=false}`、`ThrottleInterval=1`、`AbandonProcessGroup=false`。owner 最多等待锁 5 秒；锁忙非零退出。进程组清理不等于私有 Gradle daemon 已退出，须分别核验。
 
-| 行为 | 实际 |
-|---|---|
-| 身份 | `repoHash` = 规范化 worktree 路径哈希。一 root 一 DB。 |
-| 同 Git family | `familyHash` = common-dir 哈希。新 worktree 无库时异步 `VACUUM INTO` sibling，改写 `meta.repoRoot`，并等 reconcile 完成再对外 READY。 |
-| 未提交 `.env` / `.sdkmanrc` | 不进 JavaIndex。JDT JDK 优先已提交的 gradle/maven toolchain。 |
-| `git worktree add` 刷掉全部 `.java` mtime | 比 `content_hash`；相同则只戳时间戳，不整树 parse。 |
-| 空闲 | 关 SQLite 连接（默认 10 min）。非 pin worktree 再过 JDT idle TTL 会 `shutdown` 释放 runtime lease（库文件留下，再开直接 reload）。**不 hydrate。** |
-| WAL | 写连接 close / 只读 idle drop 后 `wal_checkpoint(TRUNCATE)`；`journal_size_limit=64MiB`。不要手删 `*-wal`。 |
-| `JAVA_LSP_INDEX_DIR` | 若设成全局目录，所有 root 会抢同一个 `index.sqlite`。**生产 plist 不要设。** |
+默认新缓存 `~/Library/Caches/codex-java-lsp-ilv2`；`JAVA_LSP_SERVICE_STATE_ROOT=<runtime>/state`；`GRADLE_USER_HOME` 与 JDT Gradle home 为其 `jdt-gradle-home/`。该目录不受 snapshot GC 或 release 更新/回滚删除。canary 使用独立 HOME/runtime/cache/state/log/label。
 
-## LSP 启动
+## 安装与回滚合同
 
-JDT **默认不随 daemon / `java_status` / `java_impact(fast)` 启动。**
+安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 `ILV2_NODE_BIN`、`ILV2_RUNTIME_MANIFEST` 与稳定 `ILV2_CODESIGN_IDENTITY`，不修改 Codex MCP registration。
 
-- `java_status(start=false)`、`java_impact(fast)`：只开该 root 的 sqlite。
-- `java_impact(auto)`：仅 service-profile 锚点才打 JDT；controller 不打。
-- `java_symbol(operation=query)` 默认静态定位，`operation=evidence` 读取关联 XML，两者不启动 JDT。
-- `java_symbol(position/references)` / `backend=jdt` / `java_diagnostics` / `required`：要 LSP，且仓 `lspEnabled`（worktree 可按 family 继承启用资格）。
-- 普通仓库和 worktree 的 hook 均提醒按需启动；`started=false` 不代表静态索引不可用。全局 `AGENTS.md` 负责工具选择与源码核实策略。
-- 最多 3 个 JDT；idle 15 min（本机 plist `JAVA_LSP_IDLE_TTL_MS=900000`）；关进程保留 `workspace/`。
-- `session.state=READY` ≠ 工程 import 完。workspace symbol 要等 `ServiceReady`。
-- 不要四个 pin 同时 `start=true`。不要设 `JAVA_LSP_ENGINE`。不要起第四个 HTTP daemon。
+先完成候选构建/校验、隔离 smoke 与配置检查，再备份前序状态、停止旧 job、替换完整 bundle/env/plist/入口/current，最后启动并 smoke。故障恢复先确认候选退出，再恢复整组前序状态。
 
-## Cache 什么能删
+`daemonctl.sh rollback-release` 在停服前核验备份，再恢复完整 bundle、release、env/plist、稳定入口和 predecessor pointer；恢复的 env 选择前序 cache/state，数据目录均保留。首次安装没有完整前序备份时不能执行 release rollback。其他命令为 status/start/stop/restart/wait-ready/smoke。
 
-禁止 `rm -rf ~/Library/Caches/codex-java-lsp`，禁止手删 pin 的 `index.sqlite` / `*-wal`，禁止删 `.ownership` 和 `leases/`。
+未来生产切换须另行批准具体 SHA/digest、固定 launcher 绝对路径、label、端口与回退步骤，并冻结旧 runtime/cache/state 保留位置。不手删数据库、owner lock、lease 或 Gradle home。
 
-| 可删 | 条件 |
-|---|---|
-| 已结束的 Codex worktree 对应 12 位目录 | 路径已死或确认不再用；下次打开会再拷 sibling 库 |
-| 空闲仓的 `workspace/` | 只影响下次 JDT import |
-| `logs/`、`telemetry/`、`cold-build-metrics.json` | 可删 |
+## 验证边界
 
-Janitor 每 6 小时：L0 退役 gz；回收死 pid 的 `leases/runtime` 目录；L1 非 pin 且 `lastRequestAt` 超 2 天或路径已死；L2 非 pin 超 48 目录 / 6 GiB。`lspEnabled` pin 永不因 TTL 删除。活 JDT / 未 idle 退役的 runtime lease 仍 skip。非 pin 空闲后会放 lease，L1/L2 才能收盘。先看再删：
+实际结果以 MAC-17 task-result 和候选清单为准。定向单测不证明真实稳定签名、launchd、TCC、升级回滚或两小时/1000 正常请求 canary 已通过。canary 先 start 再 attach，覆盖 full/seed/编辑/重启，正常与故障窗口分开统计，实例 source/build/native/runtime 身份须匹配。
 
-```bash
-npm run cache:harvest
-npm run cache:harvest -- --apply
-```
+生产固定路径的 Documents 授权、首次业务仓读取和升级后复验须另获授权并实测。空私有 Gradle home 的首次下载、首次语义可用时间与新增磁盘成本未测时保留未测；静态和语义时间分别报告。本轮不复制用户完整 Gradle home 或凭据。
 
-## 安装 / 回滚
+## 历史生产证据
+
+以下仅适用于记录中的旧候选与时段，不代表当前生产状态或 ILV2 验收。旧路径和观察口径不能直接用于 ILV2 清理或部署。
 
 2026-10-11 QA 合同版本已实际安装。原 15 发布门、K01–K32、隔离升级与回滚均已通过评审；本次生产 installer 的 1366 源码测试和 436 脚本测试全部通过，无跳过，线上 health/ready 与五工具 smoke 通过。URL、四个 pin、项目配置、cache/ownership 和 15min JDT idle TTL 保持原值。这段描述限定于 QA 发布 `8f737ac7cd14`；原始 proof 与验收报告位于维护工作区 `docs/next-stage/qa-contract-release-evidence/` 和 `docs/next-stage/qa-contract-release-review.md`，不随发行包安装。生产未执行回滚，成功版本保留。
-
-当前事实 revision 为 **5**。旧 revision 2 的静态索引在正常访问时重建，未手动删除生产缓存。静态 READY 以完整源遍历及实际解析、失败、恢复计数为依据；JDT 子进程仍存活时保留 lease，确认退出后才释放。较早 runtime integrity 阶段的 NO_GO、失败和原始发布清单仍作为历史保留。
-
-后续安装按当前变更范围执行原 installer 和相关验证；维护工作区的历史 QA 资格清单只绑定原候选，不作为后续候选的验证结果。较早 [计划](../next-stage/runtime-integrity-plan.md)、[发布评审](../next-stage/runtime-integrity-release-review.md) 和 [原 NO_GO 清单](../next-stage/release-evidence.json) 为历史材料。[K runner](../../scripts/run-release-contracts.mjs) 与 [真实 JDT driver](../../scripts/release-jdt-contracts.mjs) 是隔离验证入口；它们的结果不构成安装授权。
-
-```bash
-# 干净工作区；不要 --activate-http
-./install-runtime.sh
-"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" smoke
-# Restart Codex，开新 task
-
-# 回滚上一份 immutable release
-"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release
-```
-
-登录自动启动：
-
-```bash
-launchctl enable "gui/$(id -u)/com.lky.codex-java-lsp-mcp"
-```
-
-`daemonctl.sh stop` 只卸当前会话；下次登录仍会按 `RunAtLoad` 拉起，除非 `launchctl disable`。
 
 ## 48h 观察（P3-G5）
 

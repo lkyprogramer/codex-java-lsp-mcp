@@ -33,7 +33,7 @@ export async function scanStaged(repoRoot, { rules = [], exclusions = [] } = {})
     };
     const hard = rule => findings.push({ path: name, rule, count: 1 });
     if (bytes.length > 1024 * 1024) hard("file-size");
-    if (!SAFE_EXTENSIONS.has(path.extname(name)) && !["LICENSE", ".gitignore"].includes(path.basename(name))) hard("file-type");
+    if (!SAFE_EXTENSIONS.has(path.extname(name)) && !name.endsWith(".plist.template") && !["LICENSE", ".gitignore"].includes(path.basename(name))) hard("file-type");
     const mode = (await git(["ls-files", "--stage", "--", name])).stdout.toString().slice(0, 6);
     if (!["100644", "100755"].includes(mode)) hard("non-regular-blob");
     let validUtf8 = true;
