@@ -745,6 +745,11 @@ write_launch_agent() {
     "JAVA_LSP_OWNERSHIP_BASE=$JAVA_LSP_OWNERSHIP_BASE"
   )
   local env_name
+  if [[ "${JAVA_LSP_ISOLATED_VALIDATION:-}" == "1" ]]; then
+    for env_name in HOME TMPDIR XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME CODEX_HOME ILV2_RUN_ROOT ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST JAVA_LSP_ISOLATED_VALIDATION; do
+      if [[ -n "${!env_name:-}" ]]; then environment+=("$env_name=${!env_name}"); fi
+    done
+  fi
   for env_name in \
     JAVA_LSP_GRADLE_DISTRIBUTIONS \
     JAVA_HOME \
