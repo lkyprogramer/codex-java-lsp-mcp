@@ -4,6 +4,8 @@
 
 唯一门状态由 [task-result.json](task-result.json) 和 [status.json](../status.json) 生成。原始失败、定向复核、独立评审、资源及归档事实见 [acceptance-summary.json](acceptance-summary.json)。本报告不表示可以部署生产。
 
+后续用户授权的 native 超时补证据已单独收尾：[诊断报告](native-timeout-diagnosis.md)。结果为 **NOT_REPRODUCED / 根因 UNDETERMINED**；原失败工件与现场缺失，未实施产品修复，本页 G17 FAIL 保留。[诊断 workflow 结果](native-timeout-task-result.json) 不覆盖正式安装验收。
+
 ## 本次改动与身份
 
 最终实现源码为 `f58e66190952aab415a9f5f6fc4e70cdbacf86c1`：
