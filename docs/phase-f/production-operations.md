@@ -14,7 +14,7 @@ plist 使用 `RunAtLoad=true`、`KeepAlive={SuccessfulExit=false}`、`ThrottleIn
 
 ## 安装与回滚合同
 
-安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 `ILV2_NODE_BIN`、`ILV2_RUNTIME_MANIFEST` 与稳定 `ILV2_CODESIGN_IDENTITY`，不修改 Codex MCP registration。
+安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 `ILV2_NODE_BIN`、`ILV2_RUNTIME_MANIFEST` 与稳定 `ILV2_CODESIGN_IDENTITY`，不修改 Codex MCP registration。隔离签名另需显式 `ILV2_CODESIGN_KEYCHAIN`；只有签名子进程使用账户 HOME 查找该身份，不复制 keychain，其他构建和运行进程保留隔离 HOME。
 
 先完成候选构建/校验、隔离 smoke 与配置检查，再备份前序状态、停止旧 job、替换完整 bundle/env/plist/入口/current，最后启动并 smoke。故障恢复先确认候选退出，再恢复整组前序状态。
 

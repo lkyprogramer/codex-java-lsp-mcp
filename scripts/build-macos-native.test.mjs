@@ -52,9 +52,9 @@ async function launch(binary, cache, entry) {
   return result;
 }
 
-test("native-build-relocates-with-identical-bytes-and-loads-only-bundled-guard", { timeout: 60000 }, async () => {
+test("native-build-relocates-with-identical-code-and-loads-only-bundled-guard", { timeout: 60000 }, async () => {
   const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), "mac-native-relocation-")));
-  const records = [], manifests = [];
+  const records = [], manifests = [], codeHashes = [];
   let error;
   try {
     const entry = path.join(directory, "entry.mjs");
@@ -69,6 +69,9 @@ test("native-build-relocates-with-identical-bytes-and-loads-only-bundled-guard",
       await cp(path.join(sourceRoot, "package.json"), path.join(candidate, "package.json"));
       await mkdir(path.join(candidate, "cache"));
       const manifest = await buildMacNative(candidate); manifests.push(manifest);
+      const details = (await execute("/usr/bin/codesign", ["-dv", "--verbose=4", path.join(candidate, "dist/native/ilv2-mac")])).stderr;
+      const codeHash = /^CDHash=([a-f0-9]+)$/m.exec(details)?.[1];
+      assert.ok(codeHash, "actual CodeDirectory hash required"); codeHashes.push(codeHash);
       assert.ok(manifest.compilerArgs.every(arg => !arg.startsWith("-DILV2_OWNER_GUARD=")));
       const result = await launch(path.join(candidate, "dist/native/ilv2-mac"), path.join(candidate, "cache"), entry);
       records.push({ name, result });
@@ -76,7 +79,11 @@ test("native-build-relocates-with-identical-bytes-and-loads-only-bundled-guard",
       assert.deepEqual(JSON.parse(result.stdout), { entered: true, fd4: true });
     }
     assert.equal(manifests[0].sourceDigest, manifests[1].sourceDigest);
-    assert.equal(manifests[0].binarySha256, manifests[1].binarySha256, "candidate directory must not alter executable identity");
+    // Certificate CMS signatures can vary between signing operations. CodeDirectory
+    // hashes still bind the actual executable pages, identifier and special slots.
+    assert.equal(codeHashes[0], codeHashes[1], "candidate directory must not alter executable code identity");
+    assert.deepEqual(manifests[0].signing, manifests[1].signing, "relocation must retain the actual team and designated requirement");
+    if (manifests[0].signing.mode === "adhoc") assert.equal(manifests[0].binarySha256, manifests[1].binarySha256, "ad-hoc relocation retains identical bytes");
     assert.notDeepEqual(manifests[0].compilerArgs, manifests[1].compilerArgs, "manifest retains actual build paths");
     const candidate = path.join(directory, "different-candidate-path");
     const guard = path.join(candidate, "dist/mac-platform/owner-lock-guard.js");
@@ -102,7 +109,7 @@ test("native-build-relocates-with-identical-bytes-and-loads-only-bundled-guard",
   } catch (failure) { error = failure; if (failure.launchResult) records.push({ name: "launch-failure", result: failure.launchResult }); throw failure; }
   finally {
     if (process.env.ILV2_RUN_ROOT) await writeJson(path.join(process.env.ILV2_EVIDENCE_ROOT ?? path.join(process.env.ILV2_RUN_ROOT, "raw"), "native-relocation.json"), {
-      status: error ? "FAIL" : "PASS", error: error?.stack, manifests, records
+      status: error ? "FAIL" : "PASS", error: error?.stack, manifests, codeHashes, records
     });
     if (!error?.preserveFixture) await rm(directory, { recursive: true, force: true });
   }

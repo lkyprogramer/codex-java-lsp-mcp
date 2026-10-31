@@ -97,7 +97,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile co
 
 ### MAC-17 安装合同
 
-本轮不执行生产安装。安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 Node/runtime manifest 和 `ILV2_CODESIGN_IDENTITY` 稳定签名，不修改 Codex MCP registration。
+本轮不执行生产安装。安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 Node/runtime manifest 和 `ILV2_CODESIGN_IDENTITY` 稳定签名，不修改 Codex MCP registration。隔离构建还需显式 `ILV2_CODESIGN_KEYCHAIN`；仅 codesign 签名子进程使用账户 HOME 查找该身份，其他构建与运行进程保持隔离。
 
 首次 ILV2 安装必须显式设置 `CODEX_JAVA_LSP_RUNTIME_DIR` 为新的 runtime 目录。脚本默认仍为历史 runtime 路径；已有 daemon.env/current 却没有 verified launcher bundle 时，在停服前拒绝。旧生产 runtime、cache 和 state 保留。未来生产切换须另行批准具体 SHA/digest、固定 launcher 路径、label、端口和回退步骤。
 

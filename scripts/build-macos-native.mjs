@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { execute, isMain, runCli, sha256, verifyRuntime } from "./ilv2-mac-contracts.mjs";
 
@@ -35,7 +36,11 @@ export async function signLauncher(binary, { identity = process.env.ILV2_CODESIG
   const codesign = "/usr/bin/codesign";
   if (identity) {
     await execute(codesign, ["--force", "--sign", identity, "--identifier", SIGNING_IDENTIFIER, "--timestamp=none",
-      ...(keychain ? ["--keychain", keychain] : []), binary]);
+      ...(keychain ? ["--keychain", keychain] : []), binary],
+      // securityd still resolves the signing identity through the account HOME,
+      // even with --keychain. Only this signing subprocess uses that HOME;
+      // the compiler, capability probe and owner retain their isolated HOME.
+      keychain ? { env: { ...process.env, HOME: os.userInfo().homedir } } : undefined);
     await execute(codesign, ["--verify", "--strict", binary]);
   }
   const details = (await execute(codesign, ["-dv", binary])).stderr;
