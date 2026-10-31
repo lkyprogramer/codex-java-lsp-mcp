@@ -1,86 +1,89 @@
-# MAC-17 安装候选与隔离 canary 收尾
+# MAC-17 隔离安装验收收尾
 
-2026-10-31。本轮授权范围已完成：MAC-16 收尾、MAC-17 安装链路、签名候选、隔离 canary 与审查材料。未 push、未调用或修改生产，未追加性能或精度优化。完成时间早于 2026-11-03 18:00+08 截止。
+2026-10-31。本次有界验收已停止并收尾，**G17 = FAIL，candidateStatus = NOT_READY**。两次完整 installer 均在必需的脚本测试中遇到同一 native 调用超时；按预定停止条件不再重试，不补丁试错、不放宽时限。未 push、未操作生产，早于 2026-11-03 18:00+08 截止。
 
-候选可供审查。正式 **G17 = NOT_RUN，candidateStatus = NOT_READY**：完整 installer 入口、生产固定路径 TCC、首次私有 Gradle 语义等验收尚未完成。本轮的子结果 PASS 不替代这些合同。唯一门状态来自生成的 [task-result.json](task-result.json) 与 [status.json](../status.json)。
+唯一门状态由 [task-result.json](task-result.json) 和 [status.json](../status.json) 生成。原始失败、定向复核、独立评审、资源及归档事实见 [acceptance-summary.json](acceptance-summary.json)。本报告不表示可以部署生产。
 
-## 候选身份
+## 本次改动与身份
 
-| 项目 | 值 |
+最终实现源码为 `f58e66190952aab415a9f5f6fc4e70cdbacf86c1`：
+
+- `f5df7f9a`：仅隔离安装的 candidate smoke 使用已有全机 fixture 配额执行器；实际子进程组退出后释放名额，生命周期定向验证 3/3 PASS。
+- `f58e6619`：仅隔离模式的 plist 显式保留私有 HOME、TMP、XDG、CODEX、run 和冻结 runtime 身份，避免 launchd 脱离本次隔离环境。
+- 相对原候选 `0fb81bb52c0e`，`src/`、`native/`、native build helper、package.json 和 package-lock.json 均未变。不重跑 G12/G14、MAC-16 或原两小时 canary。
+
+源码和私有验收 harness 已独立审查。两次完整测试使用相同源码和冻结 Node/工具链，fresh npm-ci 的依赖字节清单不同，已按各自 identity 保留；不能声称它们与旧候选包字节相同。
+
+## 实际结果与停止点
+
+| 尝试 | 实际结果 |
 |---|---|
-| 源码提交 | `0fb81bb52c0e57d7f092f49a172bcd079494c29e` |
-| 实现提交 | `eba23e14`；签名环境修复 `0fb81bb5` |
-| 全源码文件清单 digest | `0ab2046807aa708bbfcbb633206cd0cf7236a3eef790fb3410e529a42dc74fc4` |
-| broker 源码 digest | `e69807ad083f97d3dc34ddeb392e23553255b4ab2ea1a39ea4f6a79f0f138fb4` |
-| 工件文件 inventory | `be447474f95409e35dc5eca8ecda0312ea3fc8c78dd147cfc44c3f0cfeeb8804` |
-| native binary SHA256 | `d2027502ddeb3548a703bb18b134f3f29a31a65a62a5b5f79435069ef6c443c6` |
-| 签名 | 实际 certificate identity；Team `2UVGT2J459`，固定 identifier，稳定 DR；两份构建严格验证通过且 CDHash 一致 |
-| 文件数量 / 逻辑字节 | 7266 / 305205216 bytes，包含物理复制的依赖 |
-| 候选包 | `/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T021745Z/deployment-candidate-0fb81bb52c0e.tar.gz` |
-| 候选包 SHA256 | `20a8d575469cf6da7d77477e21e3579dc1b065068d4e5243c93b942503a29ef1` |
-| 包大小 | 30714864 bytes |
+| R1：073839Z | 真实 npm ci 和签名 build 成功；复用的旧 runtime 包将 `.bin/tsc` 链接展开为普通文件，编译入口 MODULE_NOT_FOUND，未执行测试。这是准备失败，单独保留 |
+| R2：082239Z | 改用真实 npm-ci 依赖并保留链接。源码测试 1601/1601 PASS；脚本 670 项：659 PASS、10 具名 SKIP、1 FAIL |
+| R2 定向复核 | 在同一个冻结 broker/candidate 上仅运行失败用例，1/1 PASS；完整 source/dist/dependency/native identity 无漂移。该结果不覆盖原 full FAIL |
+| R3：085341Z | 经独立复核后进行唯一一次不改代码、阈值或时限的完整 installer 重试。源码仍 1601/1601 PASS；脚本仍 659 PASS、10 具名 SKIP、同一项 FAIL。到此停止 |
 
-候选包已实际解压一次并逐项核对全部 7266 个文件。源码全文件 digest 与 broker 选定构建输入 digest 使用不同文件集合，不混用。该包是冻结审查工件；现有 installer 没有直接消费预构建工件的入口，安装时仍会重建和运行完整测试。
+唯一失败为 `scripts/ilv2-mac-retrieval-eval.test.mjs:153` 的 product-mcp 独立 owner 检索用例，错误为 `native process deadline exceeded`。两次用例耗时分别约 5607.596 / 5592.667 ms。执行器的 5 秒上限覆盖 native 子进程启动至 close；原记录缺少当时 native PID、启动/退出和管道关闭时序，**根因 UNDETERMINED**，不能断言 statfs 阻塞。
 
-## 实现结果
+两次窗口全 AC，最高 load1 分别 7.39 / 5.50，可用内存最低约 8.34 / 8.97 GB；没有证据将失败归因于高负载。没有新增 retry、预热、超时放宽或 runtime 优化。
 
-- launchd Program 直接指向固定 `launcher/dist/native/ilv2-mac`；参数指向具体 immutable release entry。native owner 持有 canonical cache 的 fd4 锁，直接 exec 冻结 Node。
-- 完整 launcher bundle 封装 guard 及 JS 闭包、manifest、ESM 声明和逐文件 inventory；核验文件集合、权限、hash、native/runtime 和真实稳定签名。不是单独复制 binary。
-- plist 显式使用 RunAtLoad、失败重启、1 秒 throttle、`AbandonProcessGroup=false`；锁忙非零退出、最长等待 5 秒。
-- 新 ILV2 cache 与独立 service-state/Gradle home 分离。升级和 rollback 成对恢复 bundle、env、plist、稳定入口、immutable release 和 predecessor pointer，保留数据目录。
-- 已有 daemon.env/current 但没有 verified MAC-17 bundle 时，在停服前拒绝覆盖。首次 ILV2 安装须使用显式的新 runtime 目录，保留旧 runtime/cache/state。
-- 删除无调用的旧 stdio 迁移/注册 helper 及对应废弃测试，移除无生产导入的 chokidar 依赖；stdio 保持 owner relay。
-- 显式 keychain 签名时，只有 codesign 签名子进程使用账户 HOME 查找身份；编译、探针和产品仍使用隔离 HOME。不复制或导出 keychain/凭据，不增加堆/RSS 杀进程阈值。
-
-## 实际验证
-
-| 验证 | 结果与边界 |
+| 验收项 | 最终状态 |
 |---|---|
-| 正式签名构建和隔离环境探针 | READY；native/runtime/工具链身份匹配 |
-| 受影响定向测试 | 65/65 PASS，0 fail/skip；安装、bundle、canary、删除清单、扫描、签名、锁和退出 |
-| 不同执行者的另一次构建 | 4/4 关键锁/退出/协议边界 PASS；源码、runtime、native source/protocol、Team/DR/CDHash 一致 |
-| 真实安装组合演练 | A_READY → B_READY → 真实 daemonctl rollback-release → A_ROLLBACK_READY；真实签名/helper/plist/controller，退出清理 PASS。两条 immutable 路径使用同一源码，不是完整 installer 或跨版本迁移 |
-| 两小时 canary | 1000 正常请求：900 query + 100 status；20 次真实编辑另计；1020 槽位全 PASS，稳定请求错误 0 |
-| 正常请求跨度 | 7204072.349 ms（约 120.07 min） |
-| 20 次编辑首次正确结果 p95 | 1148.355 ms，门槛 3000 ms |
-| 两窗口 status p99 | 31.287 / 53.791 ms，门槛 200 ms |
-| full / seed / restart | 实际观察 full publication、seedFrom 和编辑后首次正确结果；计划重启单列故障窗口，前后 PID/PGID、endpoint、build/instance 均读回 |
-| 运行身份与正确性 | 响应 workspace/snapshot、声明路径/FQN/contentHash 与计划一致；完整候选文件身份在前后匹配 |
-| 主机窗口 | 126 样本均 AC；wall/monotonic 连续，起止负载 <20；未因内存/RSS 阈值杀进程 |
-| 既有证据复用 | G12/G14 保留；`git diff 39a4aefe..0fb81bb5 -- src native` 无变化，runtime/运行依赖指纹与 G14 相同。新安装/签名边界已有上述定向证据 |
+| 完整 installer 入口 | **FAIL**：必需测试门失败，尚未进入主服务激活 |
+| installer 安装后服务身份及实际业务读回 | NOT_RUN |
+| 完整 installer 升级与实际 daemonctl 回滚组合 | NOT_RUN；没有构建/激活本次 B release |
+| 空私有 Gradle home 首次语义、依赖下载、首次耗时和磁盘成本 | NOT_RUN；真实业务副本的首次 JDT 导入未开始 |
+| 生产固定 launcher 的 TCC 授权、业务文件读取、升级后复读 | NOT_RUN；用户排除生产，未运行授权探针，也没有观察到 TCC 拒绝 |
+| 生产部署、MAC-18/19、AI 效益 | NOT_RUN |
 
-精确 argv、退出码、计数和证据 hash 由 task-result 生成器从原 validation-index 读取。原始所有 preflight/admission 失败均保留；签名身份不可见和仓外私有 harness 被 broker 拒绝属于环境/入口失败，没有包装成行为 RED，也没有覆盖失败记录。
+两个完整尝试都保留 10 项同名、同理由的环境/专项未选具名 skip；没有取消项或 todo。没有把编译失败当行为 RED，也没有用单项 PASS 拼成完整 installer PASS。完整精确 argv、退出码及计数由生成器读取原 validation-index；失败后的 smoke/激活步骤未执行。
 
-独立评审只读检查原始 calls/plan/identity/source 及资源实际状态，没有重跑 canary、矩阵或再次解压候选包。真实 JDT 证据沿用此前 G14/G16；本次静态 canary 禁用 JDT。
+## 保留工件
 
-## 归档与资源
+本次只保留一份实际构建的 **UNQUALIFIED 取证包**，没有提升为可部署候选：
 
-统一清单登记 101 个 PID、29 个自有进程组、27 个 launchd job；实际退出及配额释放通过。raw/tmp 已删除，未登记路径和到期残留字节均为 0。候选 tar、清单和本地证据摘要保留。
+- 路径：`/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T085341Z-acceptance-retry2/unqualified-installer-build-f58e66190952.tar.gz`
+- SHA256：`3a3b4ebf2a1ccb73efdd083124494511d2f0485740c82f37ddb8bbd1fe9afc27`
+- 6492 个普通文件、7 个相对符号链接，逻辑字节 104941571；压缩包 20295761 bytes。
+- inventory digest：`7a34c9f0d4a4ec8e91c2f7a7521a8c454130527e85519c0e3c9f4f527932e277`。
+- 实际 native SHA256：`8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74`；Team `2UVGT2J459`，严格 codesign 核验通过。该身份属于实际 release，不能与独立 broker 重新签名后的 binary hash 混用。
+- 包已一次物理解压，逐项核对所有文件、目录模式及符号链接；验证 PASS 仅说明包完整，不代表安装验收通过。
 
-原始证据归档：`/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T021745Z/closeout/raw-evidence.tar.gz`，SHA256 `981d03d625db8d702fc9fc480af7fa05d51a4a058c429bc785e94f480405d349`；249 文件，原始逻辑字节 16009557，一次物理解压/全 hash 验证 PASS。
+原 `0fb81bb52c0e` 审查包保持 LOCAL，没有重复解压或修改：
 
-首次清理已完成归档验证和 raw 删除，随后因两处 0555 snapshot 目录拒绝 unlink。资源退出后只给本次到期 tmp 中这两个自有目录增加 owner 写权限，再继续原统一清理，保留第一次失败与恢复记录。原归档复用，没有第二次归档或解压。详细记录在私有 `closeout/finish-attempt1-failure.json` 和 `closeout/closeout.json.cleanupRecovery`。
+`/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T021745Z/deployment-candidate-0fb81bb52c0e.tar.gz`
 
-## 部署前剩余合同
+SHA256 `20a8d575469cf6da7d77477e21e3579dc1b065068d4e5243c93b942503a29ef1`。该包此前完成 7266 文件核对；其源码/工件与本次 f58 取证包分别标识。
 
-| 未完成项 | 当前边界 |
+## 复用的既有证据
+
+| 原候选检查 | 结果与边界 |
 |---|---|
-| 完整 installer 安装/升级/回滚入口 | NOT_RUN；现有入口每次重建、npm ci 和完整测试。组合演练不替代这项验收，本轮没有新增工件输入选项 |
-| 生产固定 launcher 路径 TCC、首次业务仓读取、升级复读 | NOT_RUN；用户本轮明确排除生产，因此没有触发授权探针，也没有宣称观察到 TCC 拒绝 |
-| 空私有 Gradle home 的首次下载、语义可用时间、额外磁盘 | NOT_RUN；静态可用不代表语义可用，不能从既有配置推定首次下载不发生 |
-| MCP canary 内部 held lease / 正向 snapshot reclamation | UNVERIFIED；246 实际 sweeps、reclaimed 列表 0、一个初始 snapshot 消失不足以证明完整回收合同。硬不变量复用 G14，不追加运行来补造 PASS |
+| 正式签名环境探针 | READY；本次复用冻结环境，没有以 READY 代替安装验收 |
+| 原受影响测试 / 独立另一次构建 | 65/65 PASS / 4/4 PASS；仅覆盖原候选和未变的受测边界，不覆盖本次 full CLI 失败 |
+| 原两小时静态 canary | 1000 正常请求加 20 次真实编辑；正常请求跨度约 120.07 分钟，编辑可见延迟 p95 1148.355 ms，两窗口 status p99 31.287 / 53.791 ms |
+| 原真实安装组合演练 | 同源双 immutable 路径 A→B→真实 daemonctl rollback→A PASS；不代表完整 installer 或跨版本迁移 |
+| MAC-16 | worktree/JDT 隔离 PASS；条件精度专项 NOT_RUN；原 closeout PASS，不重跑 |
+| 原 GC 观测 | 246 sweeps OBSERVED；正向 reclamation、canary 内部 held lease 仍 UNVERIFIED，硬不变量复用 G14 |
 
-下一步仅处理这些剩余验收；本轮到此停止。没有自动启动 MAC-18/19、生产切换、付费模型评测或后续优化。
+原 021745Z raw archive SHA256 `981d03d625db8d702fc9fc480af7fa05d51a4a058c429bc785e94f480405d349`，原资源和归档收尾保持不变。
 
-未来生产方案供审查，均未创建或读回：
+## 资源与归档
 
-| 绑定 | 拟定绝对路径/值 |
-|---|---|
-| 新 runtime | `/Users/luo/Library/Application Support/codex-java-lsp-mcp-ilv2` |
-| 固定 launcher | `/Users/luo/Library/Application Support/codex-java-lsp-mcp-ilv2/launcher/dist/native/ilv2-mac` |
-| 独立 cache | `/Users/luo/Library/Caches/codex-java-lsp-ilv2` |
-| service-state | `/Users/luo/Library/Application Support/codex-java-lsp-mcp-ilv2/state` |
-| 私有 Gradle home | `/Users/luo/Library/Application Support/codex-java-lsp-mcp-ilv2/state/jdt-gradle-home` |
-| label / MCP | `com.lky.codex-java-lsp-mcp` / `127.0.0.1:38456/mcp` |
+独立评审按完整清单实际核对 ps、每个精确 launchd job 和只读 quota。统一 closeout 再核对实际退出，各做一次 raw 归档及一次物理解压全 hash 验证，删除本次到期 raw/tmp。三根均 **closeout PASS、unregisteredPaths=[]、expiredResidualBytes=0**；最终资源清单与独立评审列表一致。
 
-生产切换须另获明确授权，并先冻结实际配置和旧 runtime/cache/state/plist 保留位置。保留旧 owner 的可恢复入口；停止新 job 后恢复旧完整配置再启动旧 owner，核验两者不会同时拥有同一 cache。首次 ILV2 安装没有 verified 前序 bundle，不能把 subsequent release rollback 当作自动旧系统迁移。当前未读取生产状态。
+| 运行根后缀 | PID / 自有组 / job | raw archive SHA256 |
+|---|---|---|
+| 20261031T073839Z-acceptance | 6 / 3 / 1 | `e327a879a892dfe6ed88bd23803308ef393cbd014713d1722121ddb25409fbc6` |
+| 20261031T082239Z-acceptance-retry1 | 167 / 35 / 35 | `d2c168f2735a6c4c7e58d5d3d78219b9340de82c1bdd60ff89ed26a3df9816a8` |
+| 20261031T085341Z-acceptance-retry2 | 166 / 35 / 35 | `95fc11d2e7cfb01202d5d7bf7d0d0ef9ac812e99a41d4fa763a70d788f7a7f14` |
+
+归档均为对应运行根的 `closeout/raw-evidence.tar.gz`。原失败日志、fixture 证据和 host 观测均在归档内；LOCAL 清单、判定、包、独立评审及 validation-index 保留。本次只在实际退出后给本次到期的只读 snapshot 目录增加 owner 写权限，没有删除其他运行根或清理未知进程。
+
+## 限制与下一步
+
+本次按停止条件结束，不再自动启动任何验证。若另行启动后续任务，先补齐 full-suite 场景的 native 启动、退出和管道关闭证据，定位这一个 5 秒超时；取得新证据后再决定修复及最小复验。随后才能继续完整安装激活、空 Gradle 首次语义、升级和回滚。当前不重放失败 installer，也不新增诊断框架。
+
+生产 TCC 与生产切换仍需单独明确授权。MAC-17 隔离验收即使通过，也不等于 MAC-18 已切换或 MAC-19 观察完成。本次没有创建或调用生产 runtime/cache/LaunchAgent，也没有读取生产状态。
+
+installer 的 npm ci 记录了 9 项依赖告警（4 moderate、4 high、1 critical），尚未区分生产/开发影响。额外独立 `npm audit` 被自动审批拒绝，理由是可能外发依赖元数据；已放弃该额外动作，没有绕过或升级依赖。

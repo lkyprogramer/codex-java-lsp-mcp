@@ -1,0 +1,293 @@
+{
+  "schema": "mac17-isolated-installer-acceptance/v1",
+  "status": "FAIL",
+  "candidateStatus": "NOT_READY",
+  "sourceCommit": "f58e66190952aab415a9f5f6fc4e70cdbacf86c1",
+  "rootCause": "UNDETERMINED",
+  "stopReason": "Same complete-suite native spawn-to-close deadline failure twice; bounded retry exhausted. No further tests or optimization.",
+  "attempts": [
+    {
+      "runId": "20261031T073839Z-acceptance",
+      "privateRunRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T073839Z-acceptance",
+      "status": "FAIL",
+      "mainValidation": "1793434437308-7e96ec02-de62-4861-9835-e743f44be385",
+      "identity": null,
+      "sourceTests": null,
+      "scriptTests": null,
+      "host": {
+        "samples": 4,
+        "maxLoad1": 8.490234375,
+        "minAvailableBytes": 8403648512,
+        "allAC": true
+      },
+      "managedActivation": "NOT_RUN",
+      "emptyGradleFirstUse": "NOT_RUN",
+      "fullUpgrade": "NOT_RUN",
+      "fullRollback": "NOT_RUN",
+      "failure": "Preparation: dereferenced .bin/tsc, MODULE_NOT_FOUND; tests not entered"
+    },
+    {
+      "runId": "20261031T082239Z-acceptance-retry1",
+      "privateRunRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T082239Z-acceptance-retry1",
+      "status": "FAIL",
+      "mainValidation": "1793435504383-06327c00-ccc6-43c6-9a81-5a88ccdddf34",
+      "identity": {
+        "sourceDigest": "4f0dca11ce390693ac9343ad4119e673ea79c4c656c4ca3cbf6df6919313b522",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "3dfb9ee6d0ced632222af697ed61276de2d671570e242df48f79d3158615aab6",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "1ec718ca598526f6cccafbbcaad68ecd0895a17f4a3560f7b08f2398c8e4b186",
+        "distInventorySha256": "083c1dd9acbbb49a4a14ce6ef1306695a37c46b62a622178cfef9cb038a24408",
+        "dependencySha256": "fcb4b8908d8362b8d88de5ced098723699646cef5d26ef5d361f2d8c887c3375"
+      },
+      "sourceTests": {
+        "tests": 1601,
+        "pass": 1601,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "scriptTests": {
+        "tests": 670,
+        "pass": 659,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 10,
+        "todo": 0
+      },
+      "host": {
+        "samples": 19,
+        "maxLoad1": 7.392578125,
+        "minAvailableBytes": 8340914176,
+        "allAC": true
+      },
+      "managedActivation": "NOT_RUN",
+      "emptyGradleFirstUse": "NOT_RUN",
+      "fullUpgrade": "NOT_RUN",
+      "fullRollback": "NOT_RUN",
+      "failure": "product-mcp retrieval owner preparation: native process deadline exceeded; cause UNDETERMINED",
+      "failureBodyMs": 5607.596291,
+      "targetedReadback": {
+        "name": "product-mcp-failure-readback",
+        "status": "SELECTED_COMMANDS_PASSED",
+        "identity": {
+          "sourceDigest": "4f0dca11ce390693ac9343ad4119e673ea79c4c656c4ca3cbf6df6919313b522",
+          "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+          "nativeSha256": "3dfb9ee6d0ced632222af697ed61276de2d671570e242df48f79d3158615aab6",
+          "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+          "buildStampSha256": "1ec718ca598526f6cccafbbcaad68ecd0895a17f4a3560f7b08f2398c8e4b186",
+          "distInventorySha256": "083c1dd9acbbb49a4a14ce6ef1306695a37c46b62a622178cfef9cb038a24408",
+          "dependencySha256": "fcb4b8908d8362b8d88de5ced098723699646cef5d26ef5d361f2d8c887c3375"
+        },
+        "tap": {
+          "tests": 1,
+          "pass": 1,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "doesNotOverrideFullFailure": true
+      }
+    },
+    {
+      "runId": "20261031T085341Z-acceptance-retry2",
+      "privateRunRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T085341Z-acceptance-retry2",
+      "status": "FAIL",
+      "mainValidation": "1793436981073-9721248b-4ccf-447b-bd9e-0dde3808a7ac",
+      "identity": {
+        "sourceDigest": "4f0dca11ce390693ac9343ad4119e673ea79c4c656c4ca3cbf6df6919313b522",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "d4d88d282ccaddd7edba04bf633e837244de51db25c7ba84f1b17586f592fdd6",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "d8fb1d9e0fcf9a00cc97ff15acbac7323bb5aa5926d1f89e2fe0df54bffee319",
+        "distInventorySha256": "babc03cf371d608e9cad4c0e0545d5ed20ab5d02d3ad76242f664816fe1eabff",
+        "dependencySha256": "83fe1a0b963eddfb1fcbb4f3bfdf66ab462ec408b11e2990550f521015fb62b5"
+      },
+      "sourceTests": {
+        "tests": 1601,
+        "pass": 1601,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "scriptTests": {
+        "tests": 670,
+        "pass": 659,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 10,
+        "todo": 0
+      },
+      "host": {
+        "samples": 18,
+        "maxLoad1": 5.49755859375,
+        "minAvailableBytes": 8971403264,
+        "allAC": true
+      },
+      "managedActivation": "NOT_RUN",
+      "emptyGradleFirstUse": "NOT_RUN",
+      "fullUpgrade": "NOT_RUN",
+      "fullRollback": "NOT_RUN",
+      "failure": "product-mcp retrieval owner preparation: native process deadline exceeded; cause UNDETERMINED",
+      "failureBodyMs": 5592.667042
+    }
+  ],
+  "notRun": {
+    "managedInstallerActivation": "NOT_RUN",
+    "fullInstallerUpgrade": "NOT_RUN",
+    "fullInstallerRollback": "NOT_RUN",
+    "emptyGradleHomeFirstSemanticsAndDownloadsAndDisk": "NOT_RUN",
+    "productionFixedLauncherTccAndBusinessReadAndUpgradeReread": "NOT_RUN"
+  },
+  "priorEvidence": {
+    "runRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T021745Z",
+    "sourceCommit": "0fb81bb52c0e57d7f092f49a172bcd079494c29e",
+    "affectedTests": "65/65 PASS",
+    "independentFreshBuild": "4/4 PASS",
+    "staticCanary": "1000 normal requests +20 edits,2h PASS",
+    "directComposition": "Same-source paths A-B-realdaemonctlrollback-A PASS; not full installer",
+    "unchangedPaths": [
+      "src",
+      "native",
+      "scripts/build-macos-native.mjs",
+      "package.json",
+      "package-lock.json"
+    ],
+    "reuseBoundary": "Prior original artifacts only; cannot cover current full CLI FAIL or assert identical fresh dependency bytes.",
+    "canaryGc": "246 sweeps observed;positive reclamation and held lease UNVERIFIED;reuse existing G14 invariants."
+  },
+  "freshDependencyBoundary": "R2 and R3 actual inventory digests differ; preserve each actual identity, do not conflate with old canary/package.",
+  "unqualifiedPackage": {
+    "schema": "mac17-package-physical-verification/v1",
+    "status": "PASS",
+    "qualification": "UNQUALIFIED",
+    "physicalExtractions": 1,
+    "allEntriesVerified": 7682,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T085341Z-acceptance-retry2/unqualified-installer-build-f58e66190952.tar.gz",
+      "sha256": "3a3b4ebf2a1ccb73efdd083124494511d2f0485740c82f37ddb8bbd1fe9afc27",
+      "bytes": 20295761
+    },
+    "inventoryDigest": "7a34c9f0d4a4ec8e91c2f7a7521a8c454130527e85519c0e3c9f4f527932e277",
+    "at": "2026-10-31T09:24:12.440195+00:00",
+    "notClaimed": [
+      "No product execution",
+      "Not installer acceptance",
+      "Not deployment ready"
+    ]
+  },
+  "independentReview": {
+    "file": "final-independent-review.json",
+    "sha256": "077a97efd0c85f44a398ca9c3897244d44c88669c7bcd26657f826cede20c972",
+    "status": "PASS_REVIEW_OF_FAILED_ACCEPTANCE",
+    "resourceStatus": "PASS",
+    "reviewerTestsRun": false,
+    "reviewerArchivesExtracted": false
+  },
+  "dependencyAudit": {
+    "status": "NOT_RUN",
+    "installerObservedWarnings": {
+      "total": 9,
+      "moderate": 4,
+      "high": 4,
+      "critical": 1
+    },
+    "productionImpact": "UNASSESSED",
+    "extraAudit": "Automatic approval review rejected optional npm audit for possible dependency metadata transmission;abandoned without bypass or dependency upgrades."
+  },
+  "authorization": {
+    "push": false,
+    "production": false,
+    "optimization": false,
+    "deadline": "2026-11-03T18:00:00+08:00"
+  },
+  "closeout": {
+    "status": "PASS",
+    "independentReviewResourceListsEqualFinalManifests": true,
+    "finalManifestChange": "Only final LOCAL artifact registrations; PID/group/job inventories unchanged",
+    "closeouts": [
+      {
+        "runId": "20261031T073839Z-acceptance",
+        "status": "PASS",
+        "pids": 6,
+        "ownedGroups": 3,
+        "launchdJobs": 1,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T073839Z-acceptance/closeout/raw-evidence.tar.gz",
+          "sha256": "e327a879a892dfe6ed88bd23803308ef393cbd014713d1722121ddb25409fbc6",
+          "fileCount": 16,
+          "bytes": 21349,
+          "physicalVerification": "PASS"
+        }
+      },
+      {
+        "runId": "20261031T082239Z-acceptance-retry1",
+        "status": "PASS",
+        "pids": 167,
+        "ownedGroups": 35,
+        "launchdJobs": 35,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T082239Z-acceptance-retry1/closeout/raw-evidence.tar.gz",
+          "sha256": "d2c168f2735a6c4c7e58d5d3d78219b9340de82c1bdd60ff89ed26a3df9816a8",
+          "fileCount": 394,
+          "bytes": 46375871,
+          "physicalVerification": "PASS"
+        }
+      },
+      {
+        "runId": "20261031T085341Z-acceptance-retry2",
+        "status": "PASS",
+        "pids": 166,
+        "ownedGroups": 35,
+        "launchdJobs": 35,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T085341Z-acceptance-retry2/closeout/raw-evidence.tar.gz",
+          "sha256": "95fc11d2e7cfb01202d5d7bf7d0d0ef9ac812e99a41d4fa763a70d788f7a7f14",
+          "fileCount": 390,
+          "bytes": 46334914,
+          "physicalVerification": "PASS"
+        }
+      }
+    ]
+  },
+  "finishedAt": "2026-10-31T09:29:49.484278+00:00",
+  "unqualifiedBuildIdentity": {
+    "status": "UNQUALIFIED",
+    "sourceCommit": "f58e66190952aab415a9f5f6fc4e70cdbacf86c1",
+    "buildRelease": "f58e66190952-20261031T085556Z",
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T085341Z-acceptance-retry2/unqualified-installer-build-f58e66190952.tar.gz",
+      "sha256": "3a3b4ebf2a1ccb73efdd083124494511d2f0485740c82f37ddb8bbd1fe9afc27",
+      "bytes": 20295761
+    },
+    "inventoryDigest": "7a34c9f0d4a4ec8e91c2f7a7521a8c454130527e85519c0e3c9f4f527932e277",
+    "fileCount": 6492,
+    "directoryCount": 1183,
+    "symlinkCount": 7,
+    "logicalBytes": 104941571,
+    "native": {
+      "binarySha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+      "sourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+      "signing": {
+        "mode": "identity",
+        "identifier": "com.lky.codex-java-lsp-mcp.ilv2-mac",
+        "teamIdentifier": "2UVGT2J459",
+        "designatedRequirement": "identifier \"com.lky.codex-java-lsp-mcp.ilv2-mac\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: KAIYAO LUO (KFHZHX2HVP)\" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */"
+      },
+      "codeIdentity": {
+        "Identifier": "com.lky.codex-java-lsp-mcp.ilv2-mac",
+        "CDHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+        "TeamIdentifier": "2UVGT2J459"
+      }
+    }
+  }
+}
