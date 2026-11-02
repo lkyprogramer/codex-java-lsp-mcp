@@ -287,6 +287,7 @@ async function main() {
       if (!sameDependencyInventory(before, await dependencyTreeInventory(isolatedNodeModules))) throw new Error("isolated dependency copy does not match source node_modules");
       await symlink(isolatedNodeModules, path.join(candidateRoot, "node_modules"), "dir");
       env = isolatedValidationEnvironment(validationRoot, cli.environment);
+      await invoke(process.execPath, [path.join(candidateRoot, "scripts", "ilv2-mac-dependencies.mjs"), "check", "--repo-root", candidateRoot], { cwd: candidateRoot, env });
       for (const args of [[path.join(candidateRoot, "node_modules", ".bin", "tsc"), "-p", path.join(candidateRoot, "tsconfig.json")],
         [path.join(candidateRoot, "scripts", "build-macos-native.mjs")], [path.join(candidateRoot, "scripts", "write-build-stamp.mjs")]]) {
         await invoke(process.execPath, args, { cwd: candidateRoot, env });

@@ -1,5 +1,7 @@
 # MAC-17 隔离安装验收收尾
 
+2026-11-02 用户授权的 [当前主机新基线隔离验收](current-baseline-acceptance.md) 正在执行。下列内容是历史收尾记录，失败结论与工件保持原样；新运行单独记录结果。
+
 2026-10-31。本次有界验收已停止并收尾，**G17 = FAIL，candidateStatus = NOT_READY**。两次完整 installer 均在必需的脚本测试中遇到同一 native 调用超时；按预定停止条件不再重试，不补丁试错、不放宽时限。未 push、未操作生产，早于 2026-11-03 18:00+08 截止。
 
 唯一门状态由 [task-result.json](task-result.json) 和 [status.json](../status.json) 生成。原始失败、定向复核、独立评审、资源及归档事实见 [acceptance-summary.json](acceptance-summary.json)。本报告不表示可以部署生产。

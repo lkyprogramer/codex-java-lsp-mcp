@@ -340,6 +340,7 @@ copy_release() {
     else
       "$NODE_BIN" "$NPM_BIN" install
     fi
+    "$NODE_BIN" "$RELEASE_DIR/scripts/ilv2-mac-dependencies.mjs" check --repo-root "$RELEASE_DIR"
     CODEX_JAVA_LSP_BUILD_SHA="$BUILD_SHA" "$NODE_BIN" "$NPM_BIN" run build
   )
   run_release_tests_in_isolated_environment
