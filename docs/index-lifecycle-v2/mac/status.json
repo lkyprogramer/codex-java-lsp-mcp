@@ -251,6 +251,16 @@
       "id": "WF-M17-CAP-CURRENT",
       "status": "NOT_REPRODUCED",
       "result": "mac-17/first-capability-result.json"
+    },
+    {
+      "id": "WF-M17-BASE-PREP",
+      "status": "FAIL",
+      "result": "mac-17/current-baseline-preparation-result.json"
+    },
+    {
+      "id": "WF-M17-BASE-COLD",
+      "status": "BLOCKED_ENV",
+      "result": "mac-17/current-baseline-result.json"
     }
   ],
   "openDecisions": [

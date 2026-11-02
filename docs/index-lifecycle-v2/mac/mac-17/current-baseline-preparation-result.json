@@ -1,0 +1,94 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-BASE-PREP",
+  "status": "FAIL",
+  "dependency": {
+    "G17": "FAIL; original gate preserved",
+    "implementationHead": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5"
+  },
+  "identity": {
+    "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "57670431eb60f39fd8b52f02fc39705e304b2aecc81f685beb6de6501033b9cb",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "50cf479d3dc46404e7151dd525353aadc015e8d6738c6dc5503cef7541624471",
+    "distInventorySha256": "936a55499ebefe6e092a54305810a3362d10741efd84d2c552cda5ecbf209fdd",
+    "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+  },
+  "checks": [
+    {
+      "name": "baseline-affected",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/baseline-affected/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "elapsedMs": 1797,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-dependencies.test.mjs",
+        "scripts/run-isolated-validation.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "preparation",
+      "file": "current-baseline-preparation-summary.json",
+      "sha256": "1f1c8ec7354b6aeebe7481202249b6f7404d6e67bdb3cce7c9f293b2026b0db4",
+      "status": "FAIL",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "cebda7df5abcdc7eea5008005015e5e00903b21cc45ffc5f74b95e5151c0e17c",
+    "registeredPids": 11,
+    "ownedGroups": 3,
+    "launchdJobs": 2,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023000Z-new-baseline-acceptance/closeout/raw-evidence.tar.gz",
+      "sha256": "d6a912391f87a7cc4aec8b909eb4e212d26e05ee00e5601d29d53690b368c3bb",
+      "fileCount": 37,
+      "bytes": 77284,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "e2866ac6805bc1d1f43209d41f3be0be0ddd591314c759fff1ca50bf3bf8f594",
+      "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "2a2bdfb6e46087aaed6628efc5069c92d025234edc4969110998a5d81058ef72",
+  "notClaimed": [
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "ProductionTCC/businessread",
+    "Complete cold Gradle semantic acceptance",
+    "AI quality/token/speed benefit",
+    "Compatibility/rollback work cancelled by user"
+  ],
+  "next": "Review minimum isolated JVM TLS/proxy environment proposal; no automatic implementation, tests or deployment. Fault => disable use.",
+  "authorization": "User new-baseline acceptance; later cold-import cause/minimum proposal; latest cancels compatibility/rollback. No push/production, original deadline.",
+  "notes": [
+    "All historical failures preserved.",
+    "No timeout/threshold/oracle/dependency version change.",
+    "No product JDT fix or environment workaround applied; HEAD mitigation only."
+  ],
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023000Z-new-baseline-acceptance"
+}

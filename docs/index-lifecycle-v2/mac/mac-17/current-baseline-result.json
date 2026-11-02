@@ -1,0 +1,143 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-BASE-COLD",
+  "status": "BLOCKED_ENV",
+  "dependency": {
+    "G17": "FAIL; original gate preserved",
+    "implementationHead": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5"
+  },
+  "identity": {
+    "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "ec6b51bbd3cc58a623a52a020735833ac55c84a6c64b2015e3f1131c6400ce08",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "17359ffb411592816f08a5390710a8b8710cded1ce894f5544da9cfb52928c7b",
+    "distInventorySha256": "014ec4d04b42b21cdedf752f25118577424522089afd176e9895a3c420eb2276",
+    "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+  },
+  "checks": [
+    {
+      "name": "1793587090477-62cc8992-7f0c-4b86-9e55-eb72805d49c2",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/1793587090477-62cc8992-7f0c-4b86-9e55-eb72805d49c2/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 7,
+      "tests": 2276,
+      "pass": 2266,
+      "fail": 0,
+      "elapsedMs": 832979,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/tmp/runtime/tmp/codex-java-lsp-isolated-validation-7qbHTp/candidate/dist/smoke.js"
+      ]
+    },
+    {
+      "name": "1793588224271-2e5b7dfd-312f-4a1c-9227-abc596baa424",
+      "role": "independent-rerun",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/1793588224271-2e5b7dfd-312f-4a1c-9227-abc596baa424/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 7,
+      "tests": 2276,
+      "pass": 2266,
+      "fail": 0,
+      "elapsedMs": 839331,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/tmp/runtime/tmp/codex-java-lsp-isolated-validation-Izz6iC/candidate/dist/smoke.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "scope-and-cold-facts",
+      "file": "current-baseline-summary.json",
+      "sha256": "7b6bbf7ec2ace3ba4007f84db77aaa28134cbcc7dac349df709a1cf8692f1429",
+      "status": "BLOCKED_ENV",
+      "provenance": null
+    },
+    {
+      "name": "original-installer-outcome",
+      "file": "acceptance-outcome.json",
+      "sha256": "5617f98843e1c6c53ce7285db476020747d593357dc400cfc72ed5bbb9e8b69d",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "transparent-cold-observation",
+      "file": "gradle-cause-outcome.json",
+      "sha256": "1c73c18fa289b00d417e1b4ea91b971b0cbd96ef1cc7a8419a8616bf38620450",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "candidate-integrity",
+      "file": "review-candidate-verification.json",
+      "sha256": "aeb12dc51514f742f9a237657127dd00845397cfdcf4a0200885889786a6005a",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "default-jvm-head",
+      "file": "plugin-http-comparison-summary.json",
+      "sha256": "f405dd458b2f214011e16f45d8da3c1b9493d2652789851394ddad21f0071933",
+      "status": "OBSERVED",
+      "provenance": null
+    },
+    {
+      "name": "tls12-head",
+      "file": "plugin-http-tls12-summary.json",
+      "sha256": "f76d5d9fa3ce49b0ba3e8f45cf3abb2fe8dc8fa3d5a7e5ff25ece7b5dce58424",
+      "status": "OBSERVED",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "1dbd2b449170e12f3e91842be04b17044796ab994b9d001d44d55840740d25d8",
+    "registeredPids": 357,
+    "ownedGroups": 80,
+    "launchdJobs": 69,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/closeout/raw-evidence.tar.gz",
+      "sha256": "2dcaf9be7b817dfb26db033160e62acb6d08f8ddd79cb6358b34f3092db0499d",
+      "fileCount": 851,
+      "bytes": 97657217,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "2fef7e84ab22d957b1b121ac16143343fa4d8b97d6f415dc03d95a4e4765f1ae",
+      "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "ec79bfb7b6aa8022b6442ba2818a2ac4a029b9027b84ba031689f6c333d790a6",
+  "notClaimed": [
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "ProductionTCC/businessread",
+    "Complete cold Gradle semantic acceptance",
+    "AI quality/token/speed benefit",
+    "Compatibility/rollback work cancelled by user"
+  ],
+  "next": "Review minimum isolated JVM TLS/proxy environment proposal; no automatic implementation, tests or deployment. Fault => disable use.",
+  "authorization": "User new-baseline acceptance; later cold-import cause/minimum proposal; latest cancels compatibility/rollback. No push/production, original deadline.",
+  "notes": [
+    "All historical failures preserved.",
+    "No timeout/threshold/oracle/dependency version change.",
+    "No product JDT fix or environment workaround applied; HEAD mitigation only."
+  ],
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1"
+}
