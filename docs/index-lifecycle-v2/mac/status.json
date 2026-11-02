@@ -261,6 +261,11 @@
       "id": "WF-M17-BASE-COLD",
       "status": "BLOCKED_ENV",
       "result": "mac-17/current-baseline-result.json"
+    },
+    {
+      "id": "WF-M17-TLS12",
+      "status": "FAIL",
+      "result": "mac-17/tls12-single-result.json"
     }
   ],
   "openDecisions": [

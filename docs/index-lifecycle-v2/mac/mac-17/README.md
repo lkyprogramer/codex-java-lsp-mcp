@@ -1,5 +1,7 @@
 # MAC-17 隔离安装验收收尾
 
+2026-11-02 用户授权的 [单次 TLS 1.2 冷 Gradle 验收](tls12-single-acceptance.md) **FAIL**。Spring Boot 4.0.6 插件 marker 仍无法解析，真实语义未通过。按用户要求停止使用候选，不再重试。既有安装证据与历史失败保留。正式 G17 FAIL 保留。
+
 2026-11-02 用户授权的 [新基线安装结果与冷 Gradle 最小方案](current-baseline-acceptance.md)：完整安装和升级通过，冷 Gradle 语义仍阻塞，候选 NOT_READY。用户取消兼容与回滚工作。下列内容是历史收尾记录，失败结论与工件保持原样；新运行单独记录结果。
 
 2026-10-31。本次有界验收已停止并收尾，**G17 = FAIL，candidateStatus = NOT_READY**。两次完整 installer 均在必需的脚本测试中遇到同一 native 调用超时；按预定停止条件不再重试，不补丁试错、不放宽时限。未 push、未操作生产，早于 2026-11-03 18:00+08 截止。

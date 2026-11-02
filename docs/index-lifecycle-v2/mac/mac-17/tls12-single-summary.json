@@ -1,0 +1,120 @@
+{
+  "schema": "mac17-tls12-single-public-summary/v1",
+  "status": "FAIL",
+  "candidateStatus": "NOT_READY",
+  "sourceCommit": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5",
+  "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+  "baseCandidateSha256": "bdafaa6ccd270db710fa16e30e1f434506a70fee55aa9670740a7b4292dc81c2",
+  "profileSha256": "c564c0eb680cef486625a6d8368267869731d075475391a4bcf50d72939d640c",
+  "planSha256": "b2b4a0898fd65d1077dfa88babccc2cb5bb06d73aee6b318dcc87a1671bd1e21",
+  "profile": {
+    "schema": "mac17-isolated-jvm-profile/v1",
+    "scope": "Registered isolated run only",
+    "jvmArguments": [
+      "-Djdk.tls.client.protocols=TLSv1.2",
+      "-Dhttps.protocols=TLSv1.2",
+      "-Dhttps.proxyHost=127.0.0.1",
+      "-Dhttps.proxyPort=8888"
+    ],
+    "jdtLauncherArguments": [
+      "--jvm-arg=-Djdk.tls.client.protocols=TLSv1.2",
+      "--jvm-arg=-Dhttps.protocols=TLSv1.2",
+      "--jvm-arg=-Dhttps.proxyHost=127.0.0.1",
+      "--jvm-arg=-Dhttps.proxyPort=8888"
+    ],
+    "proxy": {
+      "host": "127.0.0.1",
+      "port": 8888,
+      "authentication": false
+    },
+    "tlsVerification": "DEFAULT_ENABLED; no truststore/hostname/certificate override",
+    "timeouts": {
+      "publicRequestMs": 15000,
+      "jdtStartMs": 120000,
+      "driverMs": 600000,
+      "supervisorMs": 720000
+    },
+    "configurationOnly": true,
+    "productArtifactsChanged": false
+  },
+  "singleAttempt": {
+    "launches": 1,
+    "tests": 1,
+    "startCalls": 1,
+    "tap": [
+      {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    ],
+    "status": "FAIL"
+  },
+  "terminalFailure": {
+    "at": "2026-11-02T06:38:26.295Z",
+    "message": "semantic oracle unavailable after bounded attempts"
+  },
+  "gradleFailure": "Plugin org.springframework.boot 4.0.6 marker could not resolve in Gradle Central Plugin Repository/MavenRepo",
+  "firstStaticMs": 132347.72404200002,
+  "firstSemanticMs": null,
+  "elapsedFirstUseMs": 195726.122042,
+  "parameterProofs": {
+    "transportGradleArgumentsObserved": true,
+    "actualJdtArgumentsObserved": true,
+    "actualGradleArgumentsObserved": false
+  },
+  "daemonProofBoundary": "Absence in the captured command line does not prove whether per-build properties took effect; full daemon parameter proof remains unmet.",
+  "cache": {
+    "newFiles": 239,
+    "newArtifacts": 0,
+    "logicalBytes": 195604392,
+    "allocatedBytes": 207577088,
+    "distributionDownloaded": false
+  },
+  "artifactIdentityAfter": "UNCHANGED",
+  "independentReview": {
+    "status": "PASS",
+    "scope": "Read-only review of failed attempt facts and actual exits, not a runtime PASS",
+    "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "openFindings": [],
+    "fixtureSlots": 0,
+    "externalFixtureJobs": 0
+  },
+  "closeout": {
+    "status": "PASS",
+    "registeredPids": 10,
+    "ownedGroups": 6,
+    "launchdJobs": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T061500Z-tls12-single-acceptance/closeout/raw-evidence.tar.gz",
+      "sha256": "6a076d6f32134acb6629094f4955e59dce39bb963e11c98579d03433807c918e",
+      "fileCount": 28,
+      "bytes": 1179383,
+      "physicalVerification": "PASS"
+    },
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0
+  },
+  "historicalGate": "G17 FAIL preserved",
+  "notValidated": [
+    "Successful cold Gradle model/dependency import",
+    "Exact semantic definition/reference oracle",
+    "Actual Gradle daemon configuration effect",
+    "ProductionTCC/businessread/deployment",
+    "FormalG17/current-native2hSLO/AIbenefits"
+  ],
+  "notPerformed": [
+    "No second semantic case",
+    "No installer/fullsuite/build",
+    "No compatibility/rollback",
+    "No timeout/trust/certificate relaxation",
+    "No push/production changes"
+  ],
+  "reusedInstallationEvidence": "20261102T023500Z full installer A/B and prior closeouts untouched; no new candidate package",
+  "next": "Disabled after the single failed case. No automatic further diagnosis, tests, modifications or production actions.",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T061500Z-tls12-single-acceptance"
+}

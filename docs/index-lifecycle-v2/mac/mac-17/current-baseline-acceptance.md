@@ -43,7 +43,7 @@
 
 JDT 使用既有 `JDTLS_EXTRA_ARGS` 入口；Gradle 使用既有 `java.import.gradle.jvmArguments` 设置位置。两类实际 JVM 必须分别配置，不能推定 Gradle daemon 一定继承 JDT 参数。不得放开全部宿主 JVM 环境变量或写入全局设置。保持 15 秒请求、120 秒启动、冻结版本、证书校验和原语义 oracle。
 
-**方案尚未实施。** HEAD 成功只支持这一候选设置，不证明完整 Gradle 依赖或语义已经恢复；深层 TLS 握手原因也未确定。后续若授权实施，只补一次真实空 home 首次语义验收，复用本次安装证据，不重 installer、完整测试或矩阵。失败即停用新版本，不自动重试、兼容或回退。
+**本节记录原方案。** 用户随后授权唯一一次隔离实施，结果见 [单次 TLS 1.2 冷 Gradle 验收](tls12-single-acceptance.md)：真实语义 FAIL，候选停止使用，不再重试。HEAD 成功没有证明完整 Gradle 依赖或语义恢复。原证据和本页历史判定保留。
 
 ## 本地审查工件
 
