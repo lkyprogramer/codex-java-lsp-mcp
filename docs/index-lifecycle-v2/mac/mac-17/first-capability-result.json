@@ -1,0 +1,107 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-CAP-CURRENT",
+  "status": "NOT_REPRODUCED",
+  "dependency": {
+    "G17": "FAIL;preserved",
+    "implementationHead": "f58e66190952aab415a9f5f6fc4e70cdbacf86c1"
+  },
+  "identity": {
+    "sourceDigest": "f3a1a70d4ec360f152cfe32d3cb7e6ba0fbca8d235d2838e6f1a7015c1fea465",
+    "runtimeManifestSha256": "f6bbab98ebf4ad63077a0b251c3013a257137f7604b96bd92d68e096fb2997ce",
+    "nativeSha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+    "nativeSourceDigest": "e0d2f3de98f6f2111bc0bf27d79f7cf6d0bd5fc97b23d82d263743eb98b0fda0",
+    "buildStampSha256": "aa8125ed981a12a9a76b38024950cf27f98ee592c9adfecdf32a9c3d4465b3c9",
+    "distInventorySha256": "af3af2e9f4234f8fd2c9f84ff8247b76ee1361bf077b3905acdb29064b1e6d45",
+    "dependencySha256": "b26f93738a70821d456a7a8e3a7b5f250c32ea0c8c9835d03e5f88e6a9fd4a3f"
+  },
+  "checks": [
+    {
+      "name": "fresh-broker-product-first",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/fresh-broker-product-first/result.json",
+      "sourceDigest": "f3a1a70d4ec360f152cfe32d3cb7e6ba0fbca8d235d2838e6f1a7015c1fea465",
+      "commands": 4,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 134975,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=product-mcp:",
+        "scripts/mac17-first-capability.test.mjs"
+      ]
+    },
+    {
+      "name": "corrected-dependencies-product",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/corrected-dependencies-product/result.json",
+      "sourceDigest": "f3a1a70d4ec360f152cfe32d3cb7e6ba0fbca8d235d2838e6f1a7015c1fea465",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 7021,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=product-mcp:",
+        "scripts/mac17-first-capability.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "first-capability-capture",
+      "file": "capture-summary.json",
+      "sha256": "367b91c504bd5b02d2b1c78fbd45a873e766fa075a82ecefd522e8b961672007",
+      "status": "NOT_REPRODUCED",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "69dc2fad1c687458258ebd0d17cc21ce0c66fd4a15108975ca2bac454df06f28",
+    "registeredPids": 20,
+    "ownedGroups": 8,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T013814Z-current-host-diagnosis/closeout/raw-evidence.tar.gz",
+      "sha256": "d750ad217a5801345b20b31f0805e6edcf7d980a3893eb4a04a853a570e1aff7",
+      "fileCount": 41,
+      "bytes": 289117,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS_REVIEW_OF_LIMITED_DIAGNOSIS",
+      "sha256": "f38bf258ed332c543f8cb948871853a82ab4549532e0265fa0090afb794cc48d",
+      "source": null,
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "37df09874006180b561c33863eaade8b25a012b63c88384e558360adeb28a07b",
+  "notClaimed": [
+    "Original native5s deadline root cause remains UNDETERMINED; no G17PASS/deployreadiness or productionTCC acceptance.",
+    "Original failures, observer preparation failure and blocked original host profile retained.",
+    "New OS/clang current-host result is not an old-host or sample causal comparison.",
+    "Dependency restoration recovery does not constitute a native runtime product fix."
+  ],
+  "next": "No more diagnostic samples/suites in this round. Apply documented packaging/restoration and failure-evidence plan; historical5s remains open and production acceptance is NOT_RUN.",
+  "authorization": "User authorized continued isolated diagnosis and solution; original deadline2026-11-03T18:00+08, no product implementation/push/production/optimization.",
+  "notes": "Temporary private observer only. Original native C/5s/assertions unchanged. Status classifies diagnostic scope, not product gate.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T013814Z-current-host-diagnosis"
+}

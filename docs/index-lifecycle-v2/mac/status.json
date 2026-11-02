@@ -231,6 +231,26 @@
       "id": "WF-MAC17-NATIVE-DIAG",
       "status": "NOT_REPRODUCED",
       "result": "mac-17/native-timeout-task-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-PREP",
+      "status": "INVALID_EXPERIMENT",
+      "result": "mac-17/first-capability-preparation-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-OLD",
+      "status": "NOT_REPRODUCED",
+      "result": "mac-17/first-capability-original-host-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-DRIFT",
+      "status": "BLOCKED_ENV",
+      "result": "mac-17/first-capability-host-drift-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-CURRENT",
+      "status": "NOT_REPRODUCED",
+      "result": "mac-17/first-capability-result.json"
     }
   ],
   "openDecisions": [

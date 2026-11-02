@@ -6,6 +6,8 @@
 
 后续用户授权的 native 超时补证据已单独收尾：[诊断报告](native-timeout-diagnosis.md)。结果为 **NOT_REPRODUCED / 根因 UNDETERMINED**；原失败工件与现场缺失，未实施产品修复，本页 G17 FAIL 保留。[诊断 workflow 结果](native-timeout-task-result.json) 不覆盖正式安装验收。
 
+2026-11-02 继续取证已区分首次启动延迟、依赖恢复导致的 NOT_READY 和 OS/clang 漂移。依赖恢复问题已定因，同一候选修正依赖后原单项 1/1 PASS；历史 5 秒根因仍未确定。实际二进制、同 PID 时序、采样边界及解决方案见 [首次 capability 捕获报告](first-capability-capture.md)。正式 G17 FAIL 保留。
+
 ## 本次改动与身份
 
 最终实现源码为 `f58e66190952aab415a9f5f6fc4e70cdbacf86c1`：

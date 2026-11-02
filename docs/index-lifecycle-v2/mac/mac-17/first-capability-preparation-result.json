@@ -1,0 +1,58 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-CAP-PREP",
+  "status": "INVALID_EXPERIMENT",
+  "dependency": {
+    "G17": "FAIL;preserved",
+    "implementationHead": "f58e66190952aab415a9f5f6fc4e70cdbacf86c1"
+  },
+  "identity": null,
+  "checks": [],
+  "evidence": [
+    {
+      "name": "first-capability-capture",
+      "file": "capture-summary.json",
+      "sha256": "10930906f0bb4139c29ebef4a0de354462d1cfa7aaa499f8a16548bd69c97062",
+      "status": "INVALID_EXPERIMENT",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "2e1ffe74f1cd4abbeff2302e7446fe33761c28ebbf21c022da6ca48026f25416",
+    "registeredPids": 7,
+    "ownedGroups": 3,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T154611Z-first-capability/closeout/raw-evidence.tar.gz",
+      "sha256": "f5b63c89b29bb2a9ffd8879eab70255525dcdf203585826f7deb674e8decc52a",
+      "fileCount": 16,
+      "bytes": 13526,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS_REVIEW_OF_LIMITED_DIAGNOSIS",
+      "sha256": "f38bf258ed332c543f8cb948871853a82ab4549532e0265fa0090afb794cc48d",
+      "source": null,
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "notClaimed": [
+    "Original native5s deadline root cause remains UNDETERMINED; no G17PASS/deployreadiness or productionTCC acceptance.",
+    "Original failures, observer preparation failure and blocked original host profile retained.",
+    "New OS/clang current-host result is not an old-host or sample causal comparison.",
+    "Dependency restoration recovery does not constitute a native runtime product fix."
+  ],
+  "next": "No more diagnostic samples/suites in this round. Apply documented packaging/restoration and failure-evidence plan; historical5s remains open and production acceptance is NOT_RUN.",
+  "authorization": "User authorized continued isolated diagnosis and solution; original deadline2026-11-03T18:00+08, no product implementation/push/production/optimization.",
+  "notes": "Temporary private observer only. Original native C/5s/assertions unchanged. Status classifies diagnostic scope, not product gate.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T154611Z-first-capability"
+}

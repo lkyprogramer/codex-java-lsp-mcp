@@ -1,0 +1,615 @@
+{
+  "schema": "mac17-first-capability-summary/v1",
+  "status": "NOT_REPRODUCED",
+  "originalFiveSecondRootCause": "UNDETERMINED",
+  "formalG17": "FAIL_RETAINED",
+  "productSourceUnchanged": true,
+  "implementationCommit": "f58e66190952aab415a9f5f6fc4e70cdbacf86c1",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "runs": [
+    {
+      "runId": "20261031T154611Z-first-capability",
+      "runRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T154611Z-first-capability",
+      "workflowId": "WF-M17-CAP-PREP",
+      "status": "INVALID_EXPERIMENT",
+      "resultFile": "first-capability-preparation-result.json",
+      "privateSummarySha256": "10930906f0bb4139c29ebef4a0de354462d1cfa7aaa499f8a16548bd69c97062",
+      "checks": [],
+      "nativeCapabilities": [
+        {
+          "trace": "raw/native-trace/events-84029.jsonl",
+          "id": "84029-1",
+          "api": "execFile-promisified",
+          "nativePid": 84050,
+          "observerPid": 84029,
+          "firstCallWallMs": 1793462129774,
+          "spawnCallMs": 3.4456669999999576,
+          "beforeCallToStdoutMs": null,
+          "beforeCallToExitMs": 147.30512499999986,
+          "beforeCallToCloseMs": 147.7155839999998,
+          "spawnReturnToCloseMs": 144.26991699999985,
+          "exitToCloseMs": 0.4104589999999462,
+          "exitCode": null,
+          "signal": "SIGTERM",
+          "stdoutBytes": 0,
+          "stderrBytes": 0,
+          "killCalled": false,
+          "parentTimerObservations": [],
+          "copyMs": [
+            0.5260419999999613
+          ]
+        }
+      ],
+      "retainedImages": [
+        {
+          "file": "closeout/native-images/hook-84029-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7f9d336c6a676fde843b11d4089df32b754702394318e8c4fdc16a588ebcbf08",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/image-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7f9d336c6a676fde843b11d4089df32b754702394318e8c4fdc16a588ebcbf08",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        }
+      ],
+      "closeout": {
+        "status": "PASS",
+        "registeredPids": 7,
+        "ownedGroups": 3,
+        "launchdJobs": 0,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T154611Z-first-capability/closeout/raw-evidence.tar.gz",
+          "sha256": "f5b63c89b29bb2a9ffd8879eab70255525dcdf203585826f7deb674e8decc52a",
+          "fileCount": 16,
+          "bytes": 13526,
+          "physicalVerification": "PASS"
+        },
+        "rawTmpHomeAbsent": true
+      }
+    },
+    {
+      "runId": "20261031T155807Z-first-capability-retry1",
+      "runRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T155807Z-first-capability-retry1",
+      "workflowId": "WF-M17-CAP-OLD",
+      "status": "NOT_REPRODUCED",
+      "resultFile": "first-capability-original-host-result.json",
+      "privateSummarySha256": "cba046eecd914b11f7aa9d4feae739c8f318cd09c7f175f7610ee44736752e39",
+      "checks": [
+        {
+          "name": "fresh-broker-product-first",
+          "status": "FAIL",
+          "identity": {
+            "sourceDigest": "b3b703cc5e3f78513bb7dee62a183465add504c204395bc6507475ace6e6e850",
+            "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+            "nativeSha256": "44c785794330382af9b9d248124d35e74933f020be1e0931648b5fd553026b09",
+            "nativeSourceDigest": "e0d2f3de98f6f2111bc0bf27d79f7cf6d0bd5fc97b23d82d263743eb98b0fda0",
+            "buildStampSha256": "a8b4b43d44363800be366a989ece0b1cedeeed5ae43bdeb3dab62faf04d593c4",
+            "distInventorySha256": "5cc2548b9cbbd14ac7e5549623c652d247b860b9d497bc253aba12204aca3d9c",
+            "dependencySha256": "b26f93738a70821d456a7a8e3a7b5f250c32ea0c8c9835d03e5f88e6a9fd4a3f"
+          },
+          "commandCount": 4,
+          "tap": {
+            "tests": 1,
+            "pass": 0,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0,
+            "todo": 0
+          },
+          "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)"
+        }
+      ],
+      "nativeCapabilities": [
+        {
+          "trace": "raw/native-trace/events-84443.jsonl",
+          "id": "84443-1",
+          "api": "execFile-promisified",
+          "nativePid": 84463,
+          "observerPid": 84443,
+          "firstCallWallMs": 1793462405795,
+          "spawnCallMs": 3.9180840000000217,
+          "beforeCallToStdoutMs": 3240.293875,
+          "beforeCallToExitMs": 3240.831917,
+          "beforeCallToCloseMs": 3241.093375,
+          "spawnReturnToCloseMs": 3237.175291,
+          "exitToCloseMs": 0.2614579999999478,
+          "exitCode": 0,
+          "signal": null,
+          "stdoutBytes": 98,
+          "stderrBytes": 0,
+          "killCalled": false,
+          "parentTimerObservations": [
+            {
+              "wallMs": 1793462408302,
+              "monotonicNs": "133306020663166",
+              "observerPid": 84443,
+              "id": "84443-1",
+              "event": "parent-timer-observed",
+              "elapsedMs": 2506.407125,
+              "pid": 84463,
+              "timerLagMs": 6.33566699999983,
+              "exitCode": null,
+              "signalCode": null,
+              "pipes": {
+                "stdout": {
+                  "ended": false,
+                  "destroyed": false
+                },
+                "stderr": {
+                  "ended": false,
+                  "destroyed": false
+                }
+              }
+            }
+          ],
+          "copyMs": [
+            0.5255829999999833
+          ]
+        },
+        {
+          "trace": "raw/native-trace/events-84516.jsonl",
+          "id": "84516-1",
+          "api": "spawn",
+          "nativePid": 84576,
+          "observerPid": 84516,
+          "firstCallWallMs": 1793462411638,
+          "spawnCallMs": 0.8081250000000182,
+          "beforeCallToStdoutMs": 4.211584000000016,
+          "beforeCallToExitMs": 4.9559169999999995,
+          "beforeCallToCloseMs": 5.0512919999999895,
+          "spawnReturnToCloseMs": 4.243166999999971,
+          "exitToCloseMs": 0.09537499999999,
+          "exitCode": 0,
+          "signal": null,
+          "stdoutBytes": 98,
+          "stderrBytes": 0,
+          "killCalled": false,
+          "parentTimerObservations": [],
+          "copyMs": [
+            0.6547910000000456
+          ]
+        }
+      ],
+      "retainedImages": [
+        {
+          "file": "closeout/native-images/hook-84443-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "44c785794330382af9b9d248124d35e74933f020be1e0931648b5fd553026b09",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/hook-84516-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "44c785794330382af9b9d248124d35e74933f020be1e0931648b5fd553026b09",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/hook-84516-2/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "44c785794330382af9b9d248124d35e74933f020be1e0931648b5fd553026b09",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/image-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "44c785794330382af9b9d248124d35e74933f020be1e0931648b5fd553026b09",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        }
+      ],
+      "closeout": {
+        "status": "PASS",
+        "registeredPids": 14,
+        "ownedGroups": 4,
+        "launchdJobs": 0,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T155807Z-first-capability-retry1/closeout/raw-evidence.tar.gz",
+          "sha256": "0d9ce6c3e9c6527177d5cbdbb6c7f38b0a5a13a75a8c61a3d787c40959c8fc12",
+          "fileCount": 32,
+          "bytes": 167726,
+          "physicalVerification": "PASS"
+        },
+        "rawTmpHomeAbsent": true
+      }
+    },
+    {
+      "runId": "20261102T013000Z-passive-capability",
+      "runRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T013000Z-passive-capability",
+      "workflowId": "WF-M17-CAP-DRIFT",
+      "status": "BLOCKED_ENV",
+      "resultFile": "first-capability-host-drift-result.json",
+      "privateSummarySha256": "f10d6031d38f1f6ae427bc29db47c507f07190aac639f2175b642b7bd9c38b8b",
+      "checks": [
+        {
+          "name": "fresh-broker-product-first",
+          "status": "FAIL",
+          "identity": null,
+          "commandCount": 0,
+          "tap": {
+            "tests": 0,
+            "pass": 0,
+            "fail": 0,
+            "skipped": 0,
+            "cancelled": 0,
+            "todo": 0
+          },
+          "mainError": "runtime drift: macOS build"
+        }
+      ],
+      "nativeCapabilities": [],
+      "retainedImages": [],
+      "closeout": {
+        "status": "PASS",
+        "registeredPids": 4,
+        "ownedGroups": 3,
+        "launchdJobs": 0,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T013000Z-passive-capability/closeout/raw-evidence.tar.gz",
+          "sha256": "134b420b83cacf5b0f532b80e967bd73f65861d212f7cffd73bee0d1d4d04880",
+          "fileCount": 10,
+          "bytes": 3091,
+          "physicalVerification": "PASS"
+        },
+        "rawTmpHomeAbsent": true
+      }
+    },
+    {
+      "runId": "20261102T013814Z-current-host-diagnosis",
+      "runRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T013814Z-current-host-diagnosis",
+      "workflowId": "WF-M17-CAP-CURRENT",
+      "status": "NOT_REPRODUCED",
+      "resultFile": "first-capability-result.json",
+      "privateSummarySha256": "367b91c504bd5b02d2b1c78fbd45a873e766fa075a82ecefd522e8b961672007",
+      "checks": [
+        {
+          "name": "fresh-broker-product-first",
+          "status": "FAIL",
+          "identity": {
+            "sourceDigest": "f3a1a70d4ec360f152cfe32d3cb7e6ba0fbca8d235d2838e6f1a7015c1fea465",
+            "runtimeManifestSha256": "f6bbab98ebf4ad63077a0b251c3013a257137f7604b96bd92d68e096fb2997ce",
+            "nativeSha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+            "nativeSourceDigest": "e0d2f3de98f6f2111bc0bf27d79f7cf6d0bd5fc97b23d82d263743eb98b0fda0",
+            "buildStampSha256": "aa8125ed981a12a9a76b38024950cf27f98ee592c9adfecdf32a9c3d4465b3c9",
+            "distInventorySha256": "af3af2e9f4234f8fd2c9f84ff8247b76ee1361bf077b3905acdb29064b1e6d45",
+            "dependencySha256": "b26f93738a70821d456a7a8e3a7b5f250c32ea0c8c9835d03e5f88e6a9fd4a3f"
+          },
+          "commandCount": 4,
+          "tap": {
+            "tests": 1,
+            "pass": 0,
+            "fail": 1,
+            "skipped": 0,
+            "cancelled": 0,
+            "todo": 0
+          },
+          "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)"
+        },
+        {
+          "name": "corrected-dependencies-product",
+          "status": "SELECTED_COMMANDS_PASSED",
+          "identity": {
+            "sourceDigest": "f3a1a70d4ec360f152cfe32d3cb7e6ba0fbca8d235d2838e6f1a7015c1fea465",
+            "runtimeManifestSha256": "f6bbab98ebf4ad63077a0b251c3013a257137f7604b96bd92d68e096fb2997ce",
+            "nativeSha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+            "nativeSourceDigest": "e0d2f3de98f6f2111bc0bf27d79f7cf6d0bd5fc97b23d82d263743eb98b0fda0",
+            "buildStampSha256": "aa8125ed981a12a9a76b38024950cf27f98ee592c9adfecdf32a9c3d4465b3c9",
+            "distInventorySha256": "af3af2e9f4234f8fd2c9f84ff8247b76ee1361bf077b3905acdb29064b1e6d45",
+            "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+          },
+          "commandCount": 1,
+          "tap": {
+            "tests": 1,
+            "pass": 1,
+            "fail": 0,
+            "skipped": 0,
+            "cancelled": 0,
+            "todo": 0
+          },
+          "mainError": null
+        }
+      ],
+      "nativeCapabilities": [
+        {
+          "trace": "raw/corrected-dependencies/native-trace/events-48519.jsonl",
+          "id": "48519-1",
+          "api": "spawn",
+          "nativePid": 48580,
+          "observerPid": 48519,
+          "firstCallWallMs": 1793584373781,
+          "spawnCallMs": 0.9507919999999785,
+          "beforeCallToStdoutMs": 4.499459000000002,
+          "beforeCallToExitMs": 5.216584000000012,
+          "beforeCallToCloseMs": 5.313625000000002,
+          "spawnReturnToCloseMs": 4.362833000000023,
+          "exitToCloseMs": 0.09704099999999016,
+          "exitCode": 0,
+          "signal": null,
+          "stdoutBytes": 98,
+          "stderrBytes": 0,
+          "killCalled": false,
+          "parentTimerObservations": [],
+          "copyMs": [
+            0.6487500000000637
+          ]
+        },
+        {
+          "trace": "raw/native-trace/events-42438.jsonl",
+          "id": "42438-1",
+          "api": "execFile-promisified",
+          "nativePid": 42461,
+          "observerPid": 42438,
+          "firstCallWallMs": 1793583631615,
+          "spawnCallMs": 4.360249999999951,
+          "beforeCallToStdoutMs": 1252.7446250000003,
+          "beforeCallToExitMs": 1253.4467920000002,
+          "beforeCallToCloseMs": 1253.5953749999999,
+          "spawnReturnToCloseMs": 1249.235125,
+          "exitToCloseMs": 0.1485829999996895,
+          "exitCode": 0,
+          "signal": null,
+          "stdoutBytes": 98,
+          "stderrBytes": 0,
+          "killCalled": false,
+          "parentTimerObservations": [],
+          "copyMs": [
+            0.5300000000002001
+          ]
+        },
+        {
+          "trace": "raw/native-trace/events-42500.jsonl",
+          "id": "42500-1",
+          "api": "spawn",
+          "nativePid": 42582,
+          "observerPid": 42500,
+          "firstCallWallMs": 1793583636021,
+          "spawnCallMs": 1.1231659999999692,
+          "beforeCallToStdoutMs": 5.137875000000008,
+          "beforeCallToExitMs": 5.6712909999999965,
+          "beforeCallToCloseMs": 6.0163330000000315,
+          "spawnReturnToCloseMs": 4.893167000000062,
+          "exitToCloseMs": 0.34504200000003493,
+          "exitCode": 0,
+          "signal": null,
+          "stdoutBytes": 98,
+          "stderrBytes": 0,
+          "killCalled": false,
+          "parentTimerObservations": [],
+          "copyMs": [
+            0.6100830000000315
+          ]
+        }
+      ],
+      "retainedImages": [
+        {
+          "file": "closeout/native-images/hook-42438-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/hook-42500-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/hook-42500-2/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images/hook-48519-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": null,
+          "teamIdentifier": null,
+          "codeDirectoryHash": null,
+          "signerClass": null,
+          "signatureEvidenceReused": true
+        },
+        {
+          "file": "closeout/native-images/hook-48519-2/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": null,
+          "teamIdentifier": null,
+          "codeDirectoryHash": null,
+          "signerClass": null,
+          "signatureEvidenceReused": true
+        },
+        {
+          "file": "closeout/native-images/image-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": 0,
+          "teamIdentifier": "2UVGT2J459",
+          "codeDirectoryHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+          "signerClass": "Apple Development",
+          "signatureEvidenceReused": false
+        },
+        {
+          "file": "closeout/native-images-corrected/image-1/ilv2-mac",
+          "bytes": 56464,
+          "sha256": "7a7a5be8ce18a87abde3aaa1dcd577f8e69cfd56760483a762d8487f830bae94",
+          "strictSignatureExitCode": null,
+          "teamIdentifier": null,
+          "codeDirectoryHash": null,
+          "signerClass": null,
+          "signatureEvidenceReused": true
+        }
+      ],
+      "closeout": {
+        "status": "PASS",
+        "registeredPids": 20,
+        "ownedGroups": 8,
+        "launchdJobs": 0,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T013814Z-current-host-diagnosis/closeout/raw-evidence.tar.gz",
+          "sha256": "d750ad217a5801345b20b31f0805e6edcf7d980a3893eb4a04a853a570e1aff7",
+          "fileCount": 41,
+          "bytes": 289117,
+          "physicalVerification": "PASS"
+        },
+        "rawTmpHomeAbsent": true
+      }
+    }
+  ],
+  "independentReview": {
+    "status": "PASS_REVIEW_OF_LIMITED_DIAGNOSIS",
+    "sha256": "f38bf258ed332c543f8cb948871853a82ab4549532e0265fa0090afb794cc48d",
+    "findings": [],
+    "totalCounts": {
+      "pids": 45,
+      "ownedGroups": 18,
+      "launchdJobs": 0
+    },
+    "globalFixtureCounts": {
+      "fixture_slots": 0,
+      "external_fixture_jobs": 0
+    }
+  },
+  "oldHostFirstStartupEvidence": {
+    "nativePid": 84463,
+    "parentNodePid": 84443,
+    "preSampleObservedAliveNoStdoutMs": 2562.7079010009766,
+    "sampledNative": "raw/sample-84443-1-native-84463.txt",
+    "sampledParent": "raw/sample-84443-1-node-parent-84443.txt",
+    "sampleFindings": "Native dyld startup/notification frames; parent main thread predominantly kevent. Sampling interference not excluded.",
+    "systemLog": "raw/first-capability-systemlog.json",
+    "systemLogSha256": "7e74138f98814f0495185d1239cb4934ddeb045254039ec9e6a87dedc4fbe905",
+    "amfidPathEntry": "2026-11-01T00:00:05.796700+08:00",
+    "xprotectPathResult": "2026-11-01T00:00:08.952767+08:00",
+    "kernelPathExecAllowed": "2026-11-01T00:00:08.954353+08:00",
+    "kernelSampledPidDyldSharedRegionUnnest": "2026-11-01T00:00:09.001464+08:00",
+    "interpretation": "Pre-main/OS execution admission delay observed in successful newimage call. No proof of original5s root cause or monitor receiver identity. No ASP interruption in this exact currentPID window."
+  },
+  "runtimeLineage": {
+    "schema": "mac17-current-host-runtime-lineage/v1",
+    "previous": {
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.1\nBuildVersion:\t\t25F80\n",
+      "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.5.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+      "manifest": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/plans/mac-00/20261013T144536Z/runtime.json",
+      "manifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524"
+    },
+    "current": {
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.7.2\nBuildVersion:\t\t25G332\n",
+      "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+      "sdk": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+      "sdkVersion": "26.5",
+      "manifestSha256": "f6bbab98ebf4ad63077a0b251c3013a257137f7604b96bd92d68e096fb2997ce"
+    },
+    "nodeIdentity": "Frozen Node executable/path/realpath/versions all verified unchanged",
+    "scope": "Current-host diagnosis only; not original OS environment,not sample causal A/B,not formal G17 acceptance; historical manifests untouched",
+    "at": "2026-11-02T01:39:56.532207+00:00"
+  },
+  "readinessRecovery": {
+    "causeConfirmed": true,
+    "preparationRecovered": true,
+    "mechanism": "Python tarfile materialized AppleDouble metadata as ordinary .node; node-gyp-build chooses first extension match,dlopen fails",
+    "badFile": "._tree_sitter_runtime_binding.node",
+    "badHeaderHex": "0005160700020000",
+    "badBytes": 163,
+    "badSha256": "9eda034a8c251883dd5b45c9c6122f6d242ead036f3c7c42ea0a01d944b38379",
+    "goodHeaderHex": "cffaedfe0c000001",
+    "goodBytes": 676368,
+    "goodSha256": "70285a6cce2c47acdc84d619c108658a6fcdd442c9ffee7a5b4284ba04e9f2de",
+    "actualBadLoadErrorCode": "ERR_DLOPEN_FAILED",
+    "changedIdentityFields": [
+      "dependencies",
+      "workspaceDependencies"
+    ],
+    "unchangedIdentityFields": [
+      "source",
+      "candidateSource",
+      "runtime",
+      "native",
+      "build",
+      "dist"
+    ],
+    "beforeDependency": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 8894,
+      "directoryCount": 667,
+      "symlinkCount": 7,
+      "totalBytes": 59856653,
+      "sha256": "b26f93738a70821d456a7a8e3a7b5f250c32ea0c8c9835d03e5f88e6a9fd4a3f"
+    },
+    "afterDependency": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4110,
+      "directoryCount": 667,
+      "symlinkCount": 7,
+      "totalBytes": 59076861,
+      "sha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+    },
+    "correctedLoaderAndRealParse": "PASS",
+    "correctedOriginalProductTarget": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "bodyMs": 1963.424416
+    },
+    "newBuildsForDependencyCorrection": 0
+  },
+  "notClaimed": [
+    "No historical5s root cause or fix established",
+    "Current OS/clang changed; not a matched sample causal A/B or formalG17 acceptance",
+    "No fullinstaller activation/upgrade/rollback or emptyGradlefirstuse acceptance",
+    "No productionTCC validation,MAC18/19,push or production operation",
+    "No dependency upgrade or optional npm audit"
+  ],
+  "solution": [
+    "Use verified native macOS tar or manifest-based payload restoration; preserve relative links; ensure AppleDouble metadata is never a loadable .node payload.",
+    "Keep first owner stderr and exact failed native artifact/PID phases before cleanup.",
+    "Choose a product fix only after positive firstfailure admission/stdout/close evidence; retain original5000ms and FAIL.",
+    "Freeze an explicit new formal OS/compiler baseline before resuming remaining MAC17 acceptance; production still separately authorized."
+  ]
+}
