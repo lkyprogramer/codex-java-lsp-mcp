@@ -204,10 +204,35 @@ test("installer binds the canonical owner cache and independent persistent servi
   assert.match(installer, /JAVA_LSP_CACHE_BASE="\$\(cd "\$JAVA_LSP_CACHE_BASE" && pwd -P\)"/);
   assert.match(installer, /"JAVA_LSP_CACHE_ROOT=\$JAVA_LSP_CACHE_BASE"/);
   assert.match(installer, /"JAVA_LSP_SERVICE_STATE_ROOT=\$STATE_DIR"/);
-  assert.match(installer, /"GRADLE_USER_HOME=\$STATE_DIR\/jdt-gradle-home"/);
+  assert.match(installer, /MANAGED_GRADLE_HOME="\$STATE_DIR\/jdt-gradle-home"/);
+  assert.match(installer, /"GRADLE_USER_HOME=\$MANAGED_GRADLE_HOME"/);
   assert.doesNotMatch(installer, /codex mcp|activate-http|copy_legacy_release_if_needed|verify_stdio_handoff/);
   assert.match(installer, /merge_project_jdk_env/);
   assert.match(installer, /inherit_managed_environment/);
+});
+
+test("isolated Gradle install leaves a failed activation stopped", async () => {
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  const start = installer.indexOf("if ! managed_daemonctl start || ! managed_daemonctl smoke; then");
+  assert.ok(start >= 0);
+  const end = installer.indexOf("\nfi\n", start);
+  assert.ok(end > start);
+  const failureBranch = installer.slice(start, end + "\nfi".length);
+  const shell = [
+    "set -euo pipefail",
+    "INSTALL_WITH_GRADLE=true",
+    'managed_daemonctl() { echo "call: $1" >&2; [[ "$1" != "smoke" ]]; }',
+    'restore_previous_release() { echo "unexpected restore" >&2; }',
+    'restore_previous_managed_configuration() { echo "unexpected restore" >&2; }',
+    failureBranch
+  ].join("\n");
+  await assert.rejects(run("/bin/bash", ["-c", shell]), error => {
+    const calls = error.message.match(/\bcall: [a-z]+/g);
+    assert.deepEqual(calls, ["call: start", "call: smoke", "call: stop"]);
+    assert.match(error.message, /The new service is stopped/);
+    assert.doesNotMatch(error.message, /unexpected restore/);
+    return true;
+  });
 });
 
 test("installer handles an empty project JDK override list under nounset", () => {

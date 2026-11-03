@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { captureCandidatePatch } from "./run-three-repo-cold-matrix.mjs";
 import { createRegisteredBrokerRoot, verifyRuntime, managedPath, readJson, writeJson, contains, execute } from "./ilv2-mac-contracts.mjs";
+import { assertReleaseInventory, releaseInventory, writeReleaseSeal } from "./ilv2-mac-sealed-release.mjs";
 import {
   bindCandidateNodeCommand,
   copyIsolatedNodeModules,
@@ -246,6 +247,9 @@ export async function registeredReuseRoot(runRoot, brokerRoot) {
 async function main() {
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
+  if (cli.sealRelease && (!process.env.ILV2_RUN_ROOT || cli.profile === "compile")) {
+    throw new Error("release sealing requires a registered run and acceptance commands");
+  }
   let runtime;
   let validationRoot;
   if (cli.reuse) {
@@ -258,7 +262,7 @@ async function main() {
     : path.join(validationRoot, "results");
   await mkdir(evidenceRoot, { recursive: true });
   const directory = await validationResultDirectory(evidenceRoot, cli.name ?? `${Date.now()}-${randomUUID()}`);
-  let identity, mainError, cleanupError, index = 0;
+  let identity, inventory, mainError, cleanupError, index = 0;
   const commands = [];
   const invoke = async (command, args, options) => {
     try { const record = await recordValidationCommand(directory, command, args, options, index++); commands.push(record); return record; }
@@ -297,6 +301,7 @@ async function main() {
       await writeJson(path.join(validationRoot, "validation-candidate.json"), { schema: "ilv2-validation-candidate/v1", workspaceRoot: sourceRoot, candidateRoot, identity, environment: cli.environment });
     }
     const dependencyInventoryFile = path.join(validationRoot, "dependency-inventory.json");
+    if (cli.sealRelease) inventory = await releaseInventory(candidateRoot);
     await writeJson(dependencyInventoryFile, identity.dependencies);
     env.JAVA_LSP_ISOLATED_DEPENDENCY_INVENTORY_FILE = dependencyInventoryFile;
     if (cli.profile === "full") {
@@ -309,6 +314,7 @@ async function main() {
     }
     await verifyValidationIdentity(identity, candidateRoot, sourceRoot, await verifyRuntime());
     await verifyNativeToolchain(identity.native);
+    if (inventory) assertReleaseInventory(inventory, await releaseInventory(candidateRoot));
   } catch (error) { mainError = error; }
   finally {
     // Only the gate closeout can prove descendants/launchd/Gradle have exited.
@@ -339,6 +345,10 @@ async function main() {
   }
   if (mainError) throw mainError;
   if (cleanupError) throw cleanupError;
+  if (inventory) {
+    const sealedRelease = await writeReleaseSeal(directory, { candidate: candidateRoot, inventory, profile: cli.profile, identity });
+    console.log(JSON.stringify({ sealedRelease }));
+  }
 }
 
 function parseCli(args) {
@@ -347,6 +357,7 @@ function parseCli(args) {
   const command = separator >= 0 ? args.slice(separator + 1) : [];
   let profile = "targeted";
   let keep = false;
+  let sealRelease = false;
   let reuse, name;
   const environment = {};
   for (let index = 0; index < optionArgs.length; index += 1) {
@@ -354,6 +365,10 @@ function parseCli(args) {
     if (arg === "--help" || arg === "-h") return { help: true };
     if (arg === "--keep") {
       keep = true;
+      continue;
+    }
+    if (arg === "--seal-release") {
+      sealRelease = true;
       continue;
     }
     if (arg === "--profile") {
@@ -379,7 +394,7 @@ function parseCli(args) {
     throw new Error("--profile must be compile, targeted or full");
   }
   if (profile === "targeted" && command.length === 0) throw new Error("targeted validation requires a command after --");
-  return { profile, keep, reuse, name, environment, command };
+  return { profile, keep, reuse, name, environment, command, sealRelease };
 }
 
 function run(command, args, { cwd, env } = {}) {
@@ -405,7 +420,7 @@ function capture(command, args) {
 }
 
 function printUsage() {
-  console.log("Usage: node scripts/run-isolated-validation.mjs [--keep | --reuse BROKER_ROOT] [--name UNIQUE_NAME] --profile compile|full | --profile targeted -- COMMAND [ARGS...]");
+  console.log("Usage: node scripts/run-isolated-validation.mjs [--keep | --reuse BROKER_ROOT] [--name UNIQUE_NAME] [--seal-release] --profile compile|full | --profile targeted -- COMMAND [ARGS...]");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

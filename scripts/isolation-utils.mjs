@@ -2,7 +2,7 @@
 // output: Detached clones, private dependency identities, and commands bound to private validation state.
 // pos: Shared validation isolation primitive for code, Java repositories, and formal matrices.
 import { createHash } from "node:crypto";
-import { cp, readFile, readdir, readlink } from "node:fs/promises";
+import { cp, lstat, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
 import { readdirSync, statSync } from "node:fs";
 
@@ -66,7 +66,7 @@ export async function copyIsolatedNodeModules(sourceRoot, isolationRoot) {
   return target;
 }
 
-export async function dependencyTreeInventory(root) {
+export async function dependencyTreeInventory(root, { includeMode = false, excludeRoot = [] } = {}) {
   const resolvedRoot = path.resolve(root);
   const digest = createHash("sha256");
   const totals = { fileCount: 0, directoryCount: 0, symlinkCount: 0, totalBytes: 0 };
@@ -75,25 +75,27 @@ export async function dependencyTreeInventory(root) {
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
     for (const entry of entries) {
+      if (!relativeDirectory && excludeRoot.includes(entry.name)) continue;
       const relativePath = path.posix.join(relativeDirectory.split(path.sep).join(path.posix.sep), entry.name);
       const absolutePath = path.join(directory, entry.name);
+      const mode = includeMode ? `\0${(await lstat(absolutePath)).mode & 0o7777}` : "";
       if (entry.isDirectory()) {
         totals.directoryCount += 1;
-        digest.update(`D\0${relativePath}\n`);
+        digest.update(`D\0${relativePath}${mode}\n`);
         await visit(absolutePath, path.join(relativeDirectory, entry.name));
       } else if (entry.isFile()) {
         const bytes = await readFile(absolutePath);
         totals.fileCount += 1;
         totals.totalBytes += bytes.byteLength;
-        digest.update(`F\0${relativePath}\0${bytes.byteLength}\0${sha256(bytes)}\n`);
+        digest.update(`F\0${relativePath}\0${bytes.byteLength}\0${sha256(bytes)}${mode}\n`);
       } else if (entry.isSymbolicLink()) {
         const target = await readlink(absolutePath);
         const resolvedTarget = path.resolve(path.dirname(absolutePath), target);
-        if (!isWithin(resolvedRoot, resolvedTarget)) {
+        if (!isWithin(resolvedRoot, resolvedTarget) || (includeMode && path.isAbsolute(target))) {
           throw new Error(`isolated dependency symlink escapes node_modules: ${relativePath}`);
         }
         totals.symlinkCount += 1;
-        digest.update(`L\0${relativePath}\0${target}\n`);
+        digest.update(`L\0${relativePath}\0${target}${mode}\n`);
       } else {
         throw new Error(`unsupported isolated dependency entry: ${relativePath}`);
       }
@@ -103,7 +105,7 @@ export async function dependencyTreeInventory(root) {
   await visit(resolvedRoot);
   return {
     schemaVersion: 1,
-    algorithm: "sha256-path-type-size-content-v1",
+    algorithm: includeMode ? "sha256-path-type-size-content-mode-v1" : "sha256-path-type-size-content-v1",
     ...totals,
     sha256: digest.digest("hex")
   };

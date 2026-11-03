@@ -12,11 +12,23 @@ LAUNCH_AGENT_LABEL="${CODEX_JAVA_LSP_LAUNCH_AGENT_LABEL:-com.lky.codex-java-lsp-
 HTTP_PORT="${JAVA_LSP_HTTP_PORT:-38456}"
 HTTP_CANARY_PORT="${JAVA_LSP_HTTP_CANARY_PORT:-38457}"
 PREFLIGHT_RUNTIME="false"
+GRADLE_PREPARATION_PLAN=""
+GRADLE_PREPARATION_PROXY_PORT=""
+PREPARED_JAR_INDEX_DIR=""
+INSTALL_WITH_GRADLE="false"
+FORMAL_INSTALL="false"
+SEALED_RELEASE=""
+SEALED_RELEASE_SHA=""
 
 usage() {
   cat <<'EOF'
 Usage: ./install-runtime.sh [--port <fixed-port>] [--canary-port <candidate-port>]
        ./install-runtime.sh --preflight-runtime
+       ./install-runtime.sh --prepare-gradle <isolated-plan.json>
+       ./install-runtime.sh --install-with-gradle <isolated-plan.json> --port <isolated-port> --canary-port <isolated-port>
+           [--sealed-release <acceptance.json> <sha256>]
+       ./install-runtime.sh --formal --install-with-gradle <plan.json> --sealed-release <acceptance.json> <sha256>
+           --canary-port <unused-port>
 
 ILV2_NODE_BIN and ILV2_RUNTIME_MANIFEST must identify the frozen runtime.
 ILV2_CODESIGN_IDENTITY must identify a stable launcher signing identity.
@@ -34,9 +46,26 @@ while [[ $# -gt 0 ]]; do
       PREFLIGHT_RUNTIME="true"
       shift
       ;;
+    --prepare-gradle|--install-with-gradle)
+      [[ -z "$GRADLE_PREPARATION_PLAN" ]] || { usage >&2; exit 2; }
+      if [[ "$1" == "--install-with-gradle" ]]; then INSTALL_WITH_GRADLE="true"; fi
+      GRADLE_PREPARATION_PLAN="${2:-}"
+      [[ -n "$GRADLE_PREPARATION_PLAN" ]] || { usage >&2; exit 2; }
+      shift 2
+      ;;
     --port)
       HTTP_PORT="${2:-}"
       shift 2
+      ;;
+    --sealed-release)
+      [[ -z "$SEALED_RELEASE" && -n "${2:-}" && "${3:-}" =~ ^[a-f0-9]{64}$ ]] || { usage >&2; exit 2; }
+      SEALED_RELEASE="$2"
+      SEALED_RELEASE_SHA="$3"
+      shift 3
+      ;;
+    --formal)
+      FORMAL_INSTALL="true"
+      shift
       ;;
     --canary-port)
       HTTP_CANARY_PORT="${2:-}"
@@ -57,6 +86,24 @@ OS_NAME="$(uname -s 2>/dev/null || printf 'unknown')"
 if [[ "$OS_NAME" != "Darwin" ]]; then
   echo "codex-java-lsp currently supports macOS only; detected $OS_NAME." >&2
   exit 1
+fi
+
+if [[ -n "$SEALED_RELEASE" && "$INSTALL_WITH_GRADLE" != "true" ]]; then
+  echo "Sealed release installation requires --install-with-gradle." >&2
+  exit 2
+fi
+if [[ "$FORMAL_INSTALL" == "true" && ( "$INSTALL_WITH_GRADLE" != "true" || -z "$SEALED_RELEASE" || -n "${JAVA_LSP_ISOLATED_VALIDATION:-}" ) ]]; then
+  echo "Formal installation requires a sealed release and a real-project preparation plan." >&2
+  exit 2
+fi
+if [[ -n "$GRADLE_PREPARATION_PLAN" ]]; then
+  if [[ "$PREFLIGHT_RUNTIME" == "true" || ( "$FORMAL_INSTALL" != "true" && "${JAVA_LSP_ISOLATED_VALIDATION:-}" != "1" ) ]]; then
+    echo "Gradle preparation requires its isolated installation phase." >&2
+    exit 2
+  fi
+  if [[ "$INSTALL_WITH_GRADLE" == "false" ]]; then
+    exec sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-gradle-prepare.mjs" --plan "$GRADLE_PREPARATION_PLAN"
+  fi
 fi
 
 require_command() {
@@ -95,6 +142,7 @@ validate_port() {
 }
 
 unset NODE_OPTIONS NODE_PATH NODE_REPL_HISTORY NODE_V8_COVERAGE NODE_COMPILE_CACHE NODE_REDIRECT_WARNINGS
+unset JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT
 if [[ "$PREFLIGHT_RUNTIME" == "true" ]]; then
   exec sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-runtime.mjs" --identity
 fi
@@ -137,9 +185,15 @@ fi
 
 RELEASES_DIR="$RUNTIME_DIR/releases"
 STATE_DIR="$RUNTIME_DIR/state"
+MANAGED_GRADLE_HOME="$STATE_DIR/jdt-gradle-home"
 CURRENT_LINK="$RUNTIME_DIR/current"
 LAUNCH_AGENT_PLIST="$LAUNCH_AGENTS_DIR/$LAUNCH_AGENT_LABEL.plist"
 BUILD_SHA="$(git -C "$SCRIPT_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'source')"
+SEAL_SUFFIX=""
+if [[ "$FORMAL_INSTALL" == "true" ]]; then SEAL_SUFFIX="-formal"; fi
+if [[ -n "$SEALED_RELEASE" ]]; then
+  BUILD_SHA="$("$NODE_BIN" "$SCRIPT_DIR/scripts/ilv2-mac-sealed-release.mjs" "--verify$SEAL_SUFFIX" "$SEALED_RELEASE" "$SEALED_RELEASE_SHA")"
+fi
 BUILD_ID="${BUILD_SHA}-$(date -u +%Y%m%dT%H%M%SZ)"
 RELEASE_DIR="$RELEASES_DIR/$BUILD_ID"
 CANDIDATE_LOG="$STATE_DIR/candidate-$BUILD_ID.log"
@@ -206,8 +260,6 @@ cleanup_installer() {
   fi
   release_install_lock
 }
-
-trap cleanup_installer EXIT
 
 acquire_install_lock() {
   if ! mkdir "$INSTALL_LOCK_DIR" 2>/dev/null; then
@@ -680,7 +732,7 @@ restore_previous_managed_configuration() {
 inherit_managed_environment() {
   local key previous
   if [[ ! -f "$STATE_DIR/daemon.env" ]]; then return; fi
-  for key in JAVA_LSP_IDLE_TTL_MS JAVA_HOME JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JAVA_LSP_JDTLS_XMX; do
+  for key in JAVA_LSP_IDLE_TTL_MS JAVA_HOME JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JDTLS_INDEX_TIMEOUT_MS JAVA_LSP_JDTLS_XMX; do
     if [[ -z "${!key:-}" ]]; then
       previous="$(bash -c 'source "$1"; printf "%s" "${!2:-}"' _ "$STATE_DIR/daemon.env" "$key")"
       if [[ -n "$previous" ]]; then printf -v "$key" '%s' "$previous"; export "$key"; fi
@@ -710,9 +762,19 @@ write_state() {
       printf 'NODE_BIN=%q\n' "$NODE_BIN"
       printf 'JAVA_LSP_CACHE_ROOT=%q\n' "$JAVA_LSP_CACHE_BASE"
       printf 'JAVA_LSP_SERVICE_STATE_ROOT=%q\n' "$STATE_DIR"
-      printf 'GRADLE_USER_HOME=%q\n' "$STATE_DIR/jdt-gradle-home"
+      printf 'GRADLE_USER_HOME=%q\n' "$MANAGED_GRADLE_HOME"
+      if [[ -n "$GRADLE_PREPARATION_PROXY_PORT" ]]; then
+        printf 'JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT=%q\n' "$GRADLE_PREPARATION_PROXY_PORT"
+      fi
+      if [[ -n "$PREPARED_JAR_INDEX_DIR" ]]; then
+        printf 'JAVA_LSP_PREPARED_JAR_INDEX_DIR=%q\n' "$PREPARED_JAR_INDEX_DIR"
+      fi
+      if [[ "$FORMAL_INSTALL" == "true" ]]; then
+        printf 'JAVA_LSP_PREPARED_GRADLE_REPO=%q\n' "$JAVA_LSP_PREPARED_GRADLE_REPO"
+        printf 'JAVA_LSP_PREPARED_GRADLE_PROXY_PORT=%q\n' "$GRADLE_PREPARATION_PROXY_PORT"
+      fi
       local key
-      for key in JAVA_HOME JDTLS_BIN JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JAVA_LSP_JDTLS_XMX; do
+      for key in JAVA_HOME JDTLS_BIN JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JDTLS_INDEX_TIMEOUT_MS JAVA_LSP_JDTLS_XMX; do
         if [[ -n "${!key:-}" ]]; then printf '%s=%q\n' "$key" "${!key}"; fi
       done
       if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
@@ -742,7 +804,7 @@ write_launch_agent() {
     "JAVA_LSP_CACHE_BASE=$JAVA_LSP_CACHE_BASE"
     "JAVA_LSP_CACHE_ROOT=$JAVA_LSP_CACHE_BASE"
     "JAVA_LSP_SERVICE_STATE_ROOT=$STATE_DIR"
-    "GRADLE_USER_HOME=$STATE_DIR/jdt-gradle-home"
+    "GRADLE_USER_HOME=$MANAGED_GRADLE_HOME"
     "JAVA_LSP_OWNERSHIP_BASE=$JAVA_LSP_OWNERSHIP_BASE"
   )
   local env_name
@@ -750,6 +812,19 @@ write_launch_agent() {
     for env_name in HOME TMPDIR XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME CODEX_HOME ILV2_RUN_ROOT ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST JAVA_LSP_ISOLATED_VALIDATION; do
       if [[ -n "${!env_name:-}" ]]; then environment+=("$env_name=${!env_name}"); fi
     done
+    if [[ -n "$GRADLE_PREPARATION_PROXY_PORT" ]]; then
+      environment+=("JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT=$GRADLE_PREPARATION_PROXY_PORT")
+    fi
+    if [[ -n "$PREPARED_JAR_INDEX_DIR" ]]; then
+      environment+=("JAVA_LSP_PREPARED_JAR_INDEX_DIR=$PREPARED_JAR_INDEX_DIR")
+    fi
+  fi
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then
+    environment+=("JAVA_LSP_PREPARED_GRADLE_REPO=$JAVA_LSP_PREPARED_GRADLE_REPO"
+      "JAVA_LSP_PREPARED_GRADLE_PROXY_PORT=$GRADLE_PREPARATION_PROXY_PORT")
+    if [[ -n "$PREPARED_JAR_INDEX_DIR" ]]; then
+      environment+=("JAVA_LSP_PREPARED_JAR_INDEX_DIR=$PREPARED_JAR_INDEX_DIR")
+    fi
   fi
   for env_name in \
     JAVA_LSP_GRADLE_DISTRIBUTIONS \
@@ -757,6 +832,7 @@ write_launch_agent() {
     JDTLS_JAVA_HOME \
     JAVA_LSP_PROJECTS_JSON \
     JDTLS_EXTRA_ARGS \
+    JDTLS_INDEX_TIMEOUT_MS \
     JAVA_LSP_JDTLS_XMX \
     JAVA_LSP_MAX_ACTIVE_REPOS \
     JAVA_LSP_IDLE_TTL_MS \
@@ -856,6 +932,10 @@ managed_daemonctl() {
 restore_before_daemon_restart() {
   local phase="$1"
   local current_switched="$2"
+  if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+    echo "Install failed during $phase; leaving the new service stopped." >&2
+    exit 1
+  fi
   echo "Install failed during $phase; restoring managed files before any daemon restart." >&2
   local rollback_failed="false"
   if [[ "$current_switched" == "true" ]] && ! restore_previous_release; then
@@ -879,6 +959,32 @@ echo "JDT LS: $JDTLS_BIN" >&2
 echo "Runtime root: $RUNTIME_DIR" >&2
 echo "Fixed HTTP port: $HTTP_PORT; isolated candidate port: $HTTP_CANARY_PORT" >&2
 
+if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+  preparation_validation="--validate-install"
+  if [[ -n "$SEALED_RELEASE" ]]; then preparation_validation="--validate-sealed-install"; fi
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then preparation_validation="--validate-formal-install"; fi
+  GRADLE_PREPARATION_PROXY_PORT="$(GRADLE_USER_HOME="$MANAGED_GRADLE_HOME" JDTLS_BIN="$JDTLS_BIN" "$NODE_BIN" "$SCRIPT_DIR/scripts/ilv2-mac-gradle-prepare.mjs" \
+    "$preparation_validation" "$GRADLE_PREPARATION_PLAN" "$RUNTIME_DIR" "$LAUNCH_AGENT_PLIST" "$LOG_DIR" \
+    "$JAVA_LSP_CACHE_BASE" "$JAVA_LSP_OWNERSHIP_BASE" "$LAUNCH_AGENT_LABEL" "$HTTP_PORT" "$HTTP_CANARY_PORT")"
+  if job_state="$(/bin/launchctl print "gui/$UID/$LAUNCH_AGENT_LABEL" 2>&1)" \
+    || [[ "$job_state" != *"Could not find service"* && "$job_state" != *"No such process"* ]]; then
+    echo "Isolated Gradle installation requires a confirmed unused LaunchAgent label." >&2
+    exit 2
+  fi
+  if [[ -e "$LAUNCH_AGENT_PLIST" || -L "$LAUNCH_AGENT_PLIST" ]]; then
+    echo "Isolated Gradle installation requires a new LaunchAgent plist path." >&2
+    exit 2
+  fi
+  if [[ "$FORMAL_INSTALL" == "true" && -e "$HOME/Library/LaunchAgents/com.lky.codex-java-lsp-mcp.plist" ]]; then
+    if ! /bin/launchctl print-disabled "gui/$UID" | /usr/bin/grep -E '"com\.lky\.codex-java-lsp-mcp"[[:space:]]*=>[[:space:]]*disabled' >/dev/null \
+      || /bin/launchctl print "gui/$UID/com.lky.codex-java-lsp-mcp" >/dev/null 2>&1; then
+      echo "The legacy LaunchAgent must be stopped and disabled before reusing port 38456." >&2
+      exit 2
+    fi
+  fi
+  mkdir "$RUNTIME_DIR"
+fi
+trap cleanup_installer EXIT
 mkdir -p "$RUNTIME_DIR" "$RELEASES_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR" "$LOG_DIR"
 chmod 700 "$STATE_DIR"
 acquire_install_lock
@@ -886,10 +992,30 @@ assert_existing_managed_config_is_compatible
 mkdir -p "$JAVA_LSP_CACHE_BASE"
 JAVA_LSP_CACHE_BASE="$(cd "$JAVA_LSP_CACHE_BASE" && pwd -P)"
 export JAVA_LSP_CACHE_BASE JAVA_LSP_CACHE_ROOT="$JAVA_LSP_CACHE_BASE"
-assert_clean_release_source
-copy_release
+if [[ -n "$SEALED_RELEASE" ]]; then
+  "$NODE_BIN" "$SCRIPT_DIR/scripts/ilv2-mac-sealed-release.mjs" "--materialize$SEAL_SUFFIX" "$SEALED_RELEASE" "$SEALED_RELEASE_SHA" "$RELEASE_DIR"
+else
+  assert_clean_release_source
+  copy_release
+fi
 "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" prepare "$RELEASE_DIR" "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID"
 run_candidate_smoke
+if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+  mkdir "$MANAGED_GRADLE_HOME"
+  prep_args=(--plan "$GRADLE_PREPARATION_PLAN")
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then prep_args=(--prepare-formal "${prep_args[@]}"); fi
+  GRADLE_USER_HOME="$MANAGED_GRADLE_HOME" sh "$RELEASE_DIR/scripts/run-isolated-node.sh" \
+    "$RELEASE_DIR/scripts/ilv2-mac-gradle-prepare.mjs" "${prep_args[@]}"
+  if [[ -d "$MANAGED_GRADLE_HOME/jdt-shared-index" ]]; then
+    PREPARED_JAR_INDEX_DIR="$MANAGED_GRADLE_HOME/jdt-shared-index"
+  fi
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then
+    cp "$JAVA_LSP_GRADLE_DISTRIBUTIONS" "$STATE_DIR/gradle-distributions.json"
+    export JAVA_LSP_GRADLE_DISTRIBUTIONS="$STATE_DIR/gradle-distributions.json"
+    cp "$ILV2_RUNTIME_MANIFEST" "$STATE_DIR/runtime.json"
+    export ILV2_RUNTIME_MANIFEST="$STATE_DIR/runtime.json"
+  fi
+fi
 collect_project_jdk_env
 inherit_managed_environment
 CANDIDATE_STATE="$STATE_DIR/.daemon.env.candidate.$BUILD_ID"
@@ -898,7 +1024,7 @@ write_state "$CANDIDATE_STATE"
 write_launch_agent "$CANDIDATE_PLIST"
 bash -n "$CANDIDATE_STATE"
 /usr/bin/plutil -lint "$CANDIDATE_PLIST"
-backup_managed_configuration
+if [[ "$INSTALL_WITH_GRADLE" == "false" ]]; then backup_managed_configuration; fi
 if [[ -f "$STATE_DIR/daemon.env" ]]; then managed_daemonctl stop; fi
 current_switched="false"
 if ! "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" replace "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID" "$RUNTIME_DIR/launcher"; then restore_before_daemon_restart "launcher update" "$current_switched"; fi
@@ -909,11 +1035,16 @@ if ! switch_current; then restore_before_daemon_restart "immutable release switc
 current_switched="true"
 
 if ! managed_daemonctl start || ! managed_daemonctl smoke; then
-  echo "New fixed-port daemon failed after current switch; attempting immutable release rollback." >&2
+  echo "New fixed-port daemon failed after current switch." >&2
   if ! managed_daemonctl stop; then
     echo "The failed release could not be confirmed stopped; refusing to restore a different release/configuration over a loaded daemon." >&2
     exit 1
   fi
+  if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+    echo "The new service is stopped. Install files remain available for inspection." >&2
+    exit 1
+  fi
+  echo "Attempting immutable release rollback." >&2
   restored_release="false"
   if restore_previous_release; then
     restored_release="true"

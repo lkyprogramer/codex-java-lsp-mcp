@@ -192,7 +192,10 @@ test("owner-kill-during-builder-query-base-lease-full-recovery", { timeout: 9000
 test("gradle-stop-failure-static-recovers-semantic-blocks-then-recovers", { timeout: 900000 }, async t => {
   const frozen = await frozenToolchains();
   let main;
-  const owner = await startRecoveryOwner(t, "blocked", { frozen, pins: roots => [roots[0]], repos: async dir => [main = await gradleRepo(dir, "main")] });
+  const owner = await startRecoveryOwner(t, "blocked", {
+    frozen, pins: roots => [roots[0]], repos: async dir => [main = await gradleRepo(dir, "main")],
+    env: { JAVA_LSP_GRADLE_RECOVERY_TRACE: "1" }
+  });
   const record = { name: t.name };
   let primary;
   try {
@@ -256,10 +259,19 @@ test("gradle-stop-failure-static-recovers-semantic-blocks-then-recovers", { time
     assert.match(early.error ?? "", /RECOVERY_BLOCKED/, "no retry inside the floor");
     await delay(Math.max(0, SEMANTIC_RETRY_MS - (performance.now() - blockedAt)) + 1000);
     const trigger = await call(http2, "java_symbol", position(main));
+    record.repairTrigger = trigger;
     assert.match(trigger.error ?? "", /^semanticState=(RECOVERY_BLOCKED|RECOVERING)/);
+    let retryObserved = trigger.error?.startsWith("semanticState=RECOVERING");
     const ready = await eventually(async () => {
       const status = await call(http2, "java_status", {});
-      return status.semantic?.semanticState === "READY" ? { daemonAlive: processAlive(daemon) } : false;
+      const semantic = status.semantic;
+      record.lastRecoveryStatus = semantic ?? { error: status.error };
+      if (semantic?.semanticState === "READY") return { daemonAlive: processAlive(daemon) };
+      if (semantic?.semanticState === "RECOVERING") retryObserved = true;
+      if (semantic?.semanticState === "RECOVERY_BLOCKED" && (retryObserved || semantic.failure !== blocked.failure)) {
+        throw new Error(semantic.failure ?? "Gradle recovery blocked without an error");
+      }
+      return false;
     }, 30000);
     assert.equal(ready.daemonAlive, false, "the old daemon was stopped before semantic admission reopened");
     record.after = { ready, trigger: trigger.error.slice(0, 300), semantic: await semanticDefinition(http2, main) };

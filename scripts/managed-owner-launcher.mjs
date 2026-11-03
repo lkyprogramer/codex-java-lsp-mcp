@@ -7,7 +7,7 @@ import { NATIVE_PROTOCOL, SIGNING_IDENTIFIER } from "./build-macos-native.mjs";
 const files = ["package.json", "dist/native/ilv2-mac", "dist/native/manifest.json",
   ...["owner-lock-guard", "owner-lock", "clonefile", "native-protocol", "native-exec"].map(name => `dist/mac-platform/${name}.js`)];
 
-async function verifySignature(binary, signing) {
+export async function verifySignature(binary, signing) {
   await execute("/usr/bin/codesign", ["--verify", "--strict", binary]);
   const details = (await execute("/usr/bin/codesign", ["-dv", binary])).stderr;
   const requirement = (await execute("/usr/bin/codesign", ["-d", "-r-", binary])).stdout.match(/designated => (.*)/)?.[1];
