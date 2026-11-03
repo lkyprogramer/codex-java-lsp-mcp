@@ -1,0 +1,193 @@
+{
+  "schema": "mac17-home-and-plugin-diagnostic-summary/v1",
+  "result": "FAIL_RETAINED",
+  "candidateStatus": "NOT_READY_DISABLED",
+  "sourceDigest": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+  "sourceBaseCommit": "ff81b8ddbcb8c508f785f035be92323e5a8b4027",
+  "buildLabel": "ff81b8ddbcb8+pab009ca3f871",
+  "productPatchSha256": "ab009ca3f87108ee6ccd4cb744e0a496b4a10921a52b1d578445f3570abbd632",
+  "actualNativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+  "sourceComponents": {
+    "focusedFinal": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "scope": "Original R1310 selected tests, no fullsuite"
+    },
+    "red": {
+      "tests": 1,
+      "fail": 1,
+      "error": "ENOENT properties"
+    },
+    "twoOperationHomeProbe": "PASS; actual Gradle HOME and Maven locator private; component proof only"
+  },
+  "httpClientComparison": {
+    "bytes": 600176,
+    "sha256": "bbb00763f5998f03a26f21e47ed500f253c7fc5c158fa3e8a41dbf97aa7416fd",
+    "curlHttp11Ms": 116.857,
+    "jdkHttp11Ms": 306.576917,
+    "gradleHttpHelperMs": 359.821125,
+    "boundary": "Single requests, original TLS/proxy/cert checks; no unique overall-delay cause or SLO proof"
+  },
+  "runs": [
+    {
+      "run": "20261102T121000Z-home-boundary-fix",
+      "caseStatus": "FAIL",
+      "firstStaticMs": 119780.158541,
+      "firstSemanticMs": null,
+      "jdtSpawns": 1,
+      "spawnToTermMs": 119997.44820800002,
+      "terminalFailure": [
+        {
+          "at": "2026-11-02T12:32:44.251Z",
+          "message": "Deadline exceeded during jdtls.project.import after 114402ms"
+        }
+      ],
+      "protocolHeaderErrors": 0,
+      "actualBuildRows": 1,
+      "closeout": {
+        "status": "PASS",
+        "pids": 22,
+        "groups": 5,
+        "jobs": 0,
+        "expiredResidualBytes": 0,
+        "unregisteredPaths": [],
+        "rawArchiveSha256": "97f92e12f1c8edba1fa1cbb43e9640f472291a14d4298d739c6762e1ed7fadcf",
+        "physicalVerification": "PASS"
+      }
+    },
+    {
+      "run": "20261102T125000Z-gradle-arguments-fix",
+      "caseStatus": "FAIL",
+      "firstStaticMs": 122082.092459,
+      "firstSemanticMs": null,
+      "jdtSpawns": 1,
+      "spawnToTermMs": 119994.890458,
+      "terminalFailure": [
+        {
+          "at": "2026-11-02T12:53:17.238Z",
+          "message": "Deadline exceeded during jdtls.project.import after 113358ms"
+        }
+      ],
+      "protocolHeaderErrors": 0,
+      "actualBuildRows": 1,
+      "closeout": {
+        "status": "PASS",
+        "pids": 24,
+        "groups": 6,
+        "jobs": 0,
+        "expiredResidualBytes": 0,
+        "unregisteredPaths": [],
+        "rawArchiveSha256": "99a80a47c15de17084bb145ca7da6c967de526ece4c1e90f5f818de578a16ce9",
+        "physicalVerification": "PASS"
+      }
+    },
+    {
+      "run": "20261102T131000Z-gradle-home-properties",
+      "caseStatus": "FAIL",
+      "firstStaticMs": 136593.09904200002,
+      "firstSemanticMs": null,
+      "jdtSpawns": 1,
+      "spawnToTermMs": 119995.79208299998,
+      "terminalFailure": [
+        {
+          "at": "2026-11-02T13:20:27.020Z",
+          "message": "Deadline exceeded during jdtls.project.import after 113837ms"
+        }
+      ],
+      "protocolHeaderErrors": 129,
+      "actualBuildRows": 3,
+      "closeout": {
+        "status": "PASS",
+        "pids": 23,
+        "groups": 7,
+        "jobs": 0,
+        "expiredResidualBytes": 0,
+        "unregisteredPaths": [],
+        "rawArchiveSha256": "072cd5342342b0024cef12aaed592bed501b609e4d864aa692cc2dc2e4ef1504",
+        "physicalVerification": "PASS"
+      }
+    },
+    {
+      "run": "20261102T132500Z-properties-clean-once",
+      "caseStatus": "FAIL",
+      "firstStaticMs": 135291.050084,
+      "firstSemanticMs": null,
+      "jdtSpawns": 1,
+      "spawnToTermMs": 119994.826,
+      "terminalFailure": [
+        {
+          "at": "2026-11-02T13:32:33.007Z",
+          "message": "JDT import failed"
+        }
+      ],
+      "protocolHeaderErrors": 0,
+      "actualBuildRows": 1,
+      "closeout": {
+        "status": "PASS",
+        "pids": 14,
+        "groups": 5,
+        "jobs": 0,
+        "expiredResidualBytes": 0,
+        "unregisteredPaths": [],
+        "rawArchiveSha256": "c78fd26dcd6ff62e66f18b193e00538d3da90b74effaf97486361f9ee0d9c982",
+        "physicalVerification": "PASS"
+      }
+    },
+    {
+      "run": "20261102T134000Z-plugin-mirror-cold-once",
+      "caseStatus": "FAIL",
+      "firstStaticMs": 124358.456542,
+      "firstSemanticMs": null,
+      "jdtSpawns": 1,
+      "spawnToTermMs": 119995.311125,
+      "terminalFailure": [
+        {
+          "at": "2026-11-02T13:48:54.550Z",
+          "message": "Deadline exceeded during jdtls.project.import after 114214ms"
+        }
+      ],
+      "protocolHeaderErrors": 0,
+      "actualBuildRows": 1,
+      "closeout": {
+        "status": "PASS",
+        "pids": 20,
+        "groups": 7,
+        "jobs": 0,
+        "expiredResidualBytes": 0,
+        "unregisteredPaths": [],
+        "rawArchiveSha256": "d8aa02f8000ecda9078c5d9f6ef4a0b8ad4671c6a0a8b7d68681a35d14308560",
+        "physicalVerification": "PASS"
+      }
+    }
+  ],
+  "package": {
+    "status": "PASS",
+    "archive": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T131000Z-gradle-home-properties/review-candidate-22923c65250b.tar.gz",
+    "archiveSha256": "3aa3584b81d17e1b5cd5a74c5ce44555ec039368e6ca901741eb7d542e7567eb",
+    "archiveBytes": 20003177,
+    "inventorySha256": "6cb341fa784570daa63adc0daa5246c5cb53c6c2801cd851e481f1bd913fe5ea",
+    "physicalVerification": "PASS",
+    "physicalExtractions": 1,
+    "verificationConsumer": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T132500Z-properties-clean-once/tmp/candidate",
+    "fileCount": 6505,
+    "directoryCount": 1183,
+    "symlinkCount": 7,
+    "logicalBytes": 105092196,
+    "candidateStatus": "UNQUALIFIED_PENDING_CLEAN_ACCEPTANCE",
+    "excluded": ".git metadata only"
+  },
+  "formalG17": "FAIL_RETAINED",
+  "decisionPending": "User choice required for installation-stage dependency restoration versus original empty-cache total120s; no silent prewarming/budget relaxation",
+  "remainingCause": "Contextual Gradle dependency restoration delay still unconfirmed; isolated HTTP requests fast",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "notPerformed": [
+    "Fullsuite/installer rerun",
+    "Native rebuild",
+    "Compatibility/rollback/canary/G12",
+    "Production/TCC/fixed-port operations",
+    "Push",
+    "Additional npm audit"
+  ],
+  "historyBoundary": "R1310 FAIL retained as observer-interfered, not clean product verdict"
+}

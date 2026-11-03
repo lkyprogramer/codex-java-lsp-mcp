@@ -1,0 +1,111 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-JDT-PREP1",
+  "status": "FAIL",
+  "dependency": {
+    "G17": "FAIL preserved",
+    "actualJdtObservations": 0
+  },
+  "identity": {
+    "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "37173644a64c9540fd39288367e4d861e5b5672a4737628338b695c633444aa5",
+    "distInventorySha256": "79f95e9911f1d09f8067a7e9eb334c89e4d896b6b1caade5ff18e515802cce52",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "threshold-final",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/threshold-final/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "elapsedMs": 87,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T075300Z-jdt-chain-and-cold-final/gradle-proof.test.mjs"
+      ]
+    },
+    {
+      "name": "observe",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "Original marker observation undefined",
+      "result": "raw/validation/observe/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0,
+      "elapsedMs": 626,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T075300Z-jdt-chain-and-cold-final/mac17-phase-driver.mjs",
+        "observe"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "original-preparation-failure",
+      "file": "observe-outcome.json",
+      "sha256": "b8dbbc489db08b4d2d43b913b440c422a4c98b373dec96d0721e6211c4080c42",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "preserved-preparation-boundary",
+      "file": "preparation-final-summary.json",
+      "sha256": "561ba7da2aa1852c85deee24ca532c47d4ed91d863853d59258341da39e82319",
+      "status": "FAIL",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "8a5a3b121be4ec9527495e86116f455bae136bbe65527a5f7e546fea74cdf807",
+    "registeredPids": 3,
+    "ownedGroups": 0,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T075300Z-jdt-chain-and-cold-final/closeout/raw-evidence.tar.gz",
+      "sha256": "3b592a5ea67e67f9784f74d9fd8beedc2b2b15850ca628f9beec2386ce0e0d62",
+      "fileCount": 13,
+      "bytes": 44628,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "2c5424242fcbb685aec8cc5946709100eb49c7526891eb5b652087d21d0b8fa1",
+      "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "6f5621a52ee6ea686cbe02e43740e791d565d51369e8756b77bace272f58e71d",
+  "notClaimed": [
+    "JDT/Gradle observation ran in this preparation root",
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED"
+  ],
+  "next": "Preparation failure closed; next separately registered root retains lineage. Do not replay.",
+  "authorization": "User approved one actual original-chain observation plus one final semantic acceptance; this failed before all runtime starts. No push/production/fullsuite.",
+  "notes": null,
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T075300Z-jdt-chain-and-cold-final"
+}

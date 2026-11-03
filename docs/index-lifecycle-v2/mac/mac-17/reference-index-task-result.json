@@ -1,0 +1,129 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-REF-DIAG",
+  "status": "PASS",
+  "dependency": null,
+  "identity": {
+    "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "44c1d0db1913f1b14c507f73703baf88925d32d5c310223d048c73275fc1f8d9",
+    "distInventorySha256": "c505f02a7b3878568d8b56e9edb7b9993f81b078a76cef6a861f27d771504221",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "root-cause-evidence",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/root-cause-evidence/result.json",
+      "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 84,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T161200Z-reference-timeout-evidence/diagnostic-evidence.test.mjs"
+      ]
+    },
+    {
+      "name": "final-once",
+      "role": "expected-red",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/final-once/result.json",
+      "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 244570,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T161200Z-reference-timeout-evidence/final-cold.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "same-pid-reference-root-cause",
+      "file": "diagnosis-facts.json",
+      "sha256": "ba0b407ff742f8feafa0b36b471061b5547d15e34406e1f8c91b83becdd5c25f",
+      "status": "ROOTCAUSE_CONFIRMED",
+      "provenance": "Original4s/8s same-PID stacks, live indexing progression, original10s cancellation; not a repaired-product result"
+    },
+    {
+      "name": "same-context-artifacts",
+      "file": "artifact-reuse-comparison.json",
+      "sha256": "d0a45a8a8df4f390a995448885ab7158b4934abbd0fe58087b70260c62364557",
+      "status": "PASS",
+      "provenance": "Exact1395 path/hash/size identities; only necessary consumer restoration, no old archive physical re-verification"
+    },
+    {
+      "name": "frozen-api-minimal-solution",
+      "file": "solution-plan.json",
+      "sha256": "d19ba7ae794683b485a321db56a03eaa89601c6446948a7e155116d9978021ac",
+      "status": "PROPOSED_NOT_IMPLEMENTED",
+      "provenance": "Static frozen-JAR verification; proposal only, no product implementation/compilation/acceptance"
+    },
+    {
+      "name": "complete-real-exit",
+      "file": "root-resource-observation.json",
+      "sha256": "a729125d8b57ceb859d245d47612c1b9f76e1c59037cfe1062b59ed8244a4378",
+      "status": "PASS",
+      "provenance": "20PID/7ownedgroups, including both jcmd tools; real exit, exactjobs/root and globalquota"
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "51b56795f61c07fe91dab938602f8c801af62a334cc405e68209142602a52fea",
+    "registeredPids": 20,
+    "ownedGroups": 7,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T161200Z-reference-timeout-evidence/closeout/raw-evidence.tar.gz",
+      "sha256": "0a07e75e0694bb88bc7c902c9c35cbd13efd5a76114131e202ade0af14d769ed",
+      "fileCount": 51,
+      "bytes": 10114607,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "752595d2f5e381edb2bb0ca952d3b3a023e1043ed9b9370bcbe28c8f59455a66",
+      "source": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "819162615ee7c359e1ebbbdab909769096dd9fcf17ac136e4ef9c6a410e23e17",
+  "notClaimed": [
+    "Repaired product",
+    "Formal G17 PASS",
+    "Prepared-cache semantic acceptance PASS",
+    "Original empty-cache120s PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "Production TCC/business read",
+    "AI benefit",
+    "Uninstrumented SLO",
+    "Every instant of10s spent at one stack frame",
+    "All historical missing-stack causes proven"
+  ],
+  "next": "诊断完成。最小方案是在现有120秒启动事务中通过attempt.connection调用既有只读java.project.getAll索引屏障，校验结果和当前尝试后才READY。方案尚未实施；后续只做定向生命周期验证和单轮真实精确定义/引用验收，不放宽10秒/15秒，不重跑完整测试或生产。",
+  "authorization": "Latest user asked to diagnose clearly and provide thorough solution. One focused isolated reproduction with4s/8s bounded same-PID jcmd snapshots, original10s/15s/120s retained; no product fix/fullsuite/normal installer/push/production; absolute deadline2026-11-03T18:00+08 retained.",
+  "notes": "PASS is diagnosis/evidence verification only. Real original-oracle runtime test remains1FAIL; a separate1PASS reads existing evidence only. No second reference/runtime case. Static command fence plan is not implemented or accepted. Exact current source/dist/native/deps and1395 third-party artifacts reused; necessary private model preparation is not a full installer rerun.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T161200Z-reference-timeout-evidence"
+}

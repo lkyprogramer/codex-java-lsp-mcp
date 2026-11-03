@@ -70,6 +70,8 @@
 - JavaIndex 是冷启动事实来源；JDT LS 是可选精确增强，不是路由正确性的唯一来源。
 - JDT LS 的 `READY` 要等待当前连接的初始工程导入完成通知；`initialize` 返回和进度静默均不代表就绪。冷态 `java_symbol` 精确查询会报告 `JDT_NOT_READY`，可用 `java_status(start=false)` 等待 `READY` 后重试；导入在后台继续，按需启动保持不变。初始导入完成不保证后续全部 build/index 或注解处理成功。
 - JDT LS 的 Gradle 导入使用 `-Dorg.gradle.parallel=false`，覆盖导入和 APT tooling model；保留注解处理与 Lombok agent。普通命令行构建仍使用业务仓库的并行设置。
+- JDT LS 的 Gradle 导入不预下载外部依赖的源码附件。受管 init 脚本位于 JDT workspace，不预填私有 Gradle home；项目源码目录和二进制 classpath 保留。外部依赖源码跳转没有预下载附件。
+- 共享 JDT 启动达到原 120 秒上限时，返回 `JDT_SERVER_ERROR` 并进入现有退避期；`java_status` 的 `restartBackoff.lastErrorMessage` 保留阶段与原因。调用方请求超时仍独立于共享启动。
 - JDT LS runtime JDK 与项目 JDK 分开处理，避免把语言服务器运行环境误当成项目编译环境。
 - resource 默认值按本机内存保守计算；多 repo 并行时优先保住可用性，而不是抢占更多 JDT LS。
 - `warm-required` 仍是 precision/recall 可选增强，不是默认路径；profile-aware/default warm 需要先解决首触 `textDocument/references` P95。
@@ -97,9 +99,15 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile co
 
 ### MAC-17 安装合同
 
+最新[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
+
+此前隔离失败见 [安装期恢复与准备后语义验收](docs/index-lifecycle-v2/mac/mac-17/install-prepared-acceptance.md)。依赖恢复通过。JDT 在原 120 秒内 READY。精确定义通过，首次引用超时，完整验收仍失败。
+
+隔离安装增加 `--prepare-gradle <plan>`。该计划绑定同一私有 repo、HOME、Gradle home 和冻结工具链。恢复 Eclipse 与 APT 模型后，Gradle 先退出，再固定依赖清单。真实 JDT 验收使用准备后的缓存。该入口要求隔离标记和注册运行根，不切换服务。
+
 本轮不执行生产安装。安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 Node/runtime manifest 和 `ILV2_CODESIGN_IDENTITY` 稳定签名，不修改 Codex MCP registration。隔离构建还需显式 `ILV2_CODESIGN_KEYCHAIN`；仅 codesign 签名子进程使用账户 HOME 查找该身份，其他构建与运行进程保持隔离。
 
-首次 ILV2 安装必须显式设置 `CODEX_JAVA_LSP_RUNTIME_DIR` 为新的 runtime 目录。脚本默认仍为历史 runtime 路径；已有 daemon.env/current 却没有 verified launcher bundle 时，在停服前拒绝。旧生产 runtime、cache 和 state 保留。未来生产切换须另行批准具体 SHA/digest、固定 launcher 路径、label、端口和回退步骤。
+首次 ILV2 安装必须显式设置 `CODEX_JAVA_LSP_RUNTIME_DIR` 为新的 runtime 目录。脚本默认仍为历史 runtime 路径；已有 daemon.env/current 却没有 verified launcher bundle 时，在停服前拒绝。旧生产 runtime、cache 和 state 保留。未来生产切换须另行批准具体 SHA/digest、固定 launcher 路径、label、端口和停用步骤。
 
 ```text
 <new-ilv2-runtime>/
@@ -124,7 +132,7 @@ launchd Program 直接指向固定 `launcher/dist/native/ilv2-mac`；HTTP entry 
 
 控制器还支持 `status`、`start`、`stop`、`restart`、`wait-ready`、`smoke`。stdio 是 owner relay，不创建另一套 runtime。HTTP 只绑定 loopback，提供 `/mcp`、`/healthz`、`/readyz`；浏览器 Origin 默认拒绝。不要把 token、业务源码或完整 tool payload 写入公共材料。
 
-定向单测不能替代真实签名、launchd、TCC、升级/回滚演练及两小时、1000 正常请求 canary。实际结果以 MAC-17 task-result 与候选清单为准；生产固定路径 TCC 授权和业务仓读取未包含在本轮授权中。
+定向单测不能替代真实签名、launchd、TCC 和实际安装验收。兼容与回滚按用户要求不再验收，有问题停用。历史两小时 canary 只覆盖原候选身份。实际结果以 MAC-17 task-result 与候选清单为准；生产固定路径 TCC 授权和业务仓读取未包含在本轮授权中。
 
 ## 项目启用
 
@@ -245,6 +253,7 @@ hook 行为：
 | `JDTLS_BIN` | 指定 `jdtls` 可执行文件。 |
 | `JDTLS_JAVA_HOME` | 指定运行 JDT LS 的 Java home。 |
 | `JDTLS_EXTRA_ARGS` | 追加传给在线 `jdtls` launcher 的参数，例如额外 `--jvm-arg=`；隔离 benchmark 会丢弃调用者提供的值，禁止用第二个 `-data` 覆盖私有 workspace。 |
+| `JDTLS_INDEX_TIMEOUT_MS` | JDT 初次导入后等待搜索索引的独立时限，默认 `600000`（10 分钟）。请求超时后，索引可继续运行。用 `java_status(start=false)` 查看 `progress.indexBarrier`。 |
 | `JAVA_LSP_CACHE_BASE` | 覆盖统一 cache base；安装器默认 `~/Library/Caches/codex-java-lsp-ilv2`，canonical 路径绑定 native owner。 |
 | `JAVA_LSP_SERVICE_STATE_ROOT` | 服务状态根；受管安装为 runtime 的 `state/`，私有 Gradle home 为 `jdt-gradle-home/`。 |
 | `ILV2_CODESIGN_IDENTITY` | 稳定 launcher 签名 identity；MAC-17 安装拒绝 ad-hoc bundle。 |

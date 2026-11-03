@@ -266,6 +266,76 @@
       "id": "WF-M17-TLS12",
       "status": "FAIL",
       "result": "mac-17/tls12-single-result.json"
+    },
+    {
+      "id": "WF-M17-ASTRA-DIAG",
+      "status": "FAIL",
+      "result": "mac-17/astra-diagnostic-result.json"
+    },
+    {
+      "id": "WF-M17-JDT-PREP1",
+      "status": "FAIL",
+      "result": "mac-17/original-chain-preparation-1-result.json"
+    },
+    {
+      "id": "WF-M17-JDT-PREP2",
+      "status": "FAIL",
+      "result": "mac-17/original-chain-preparation-2-result.json"
+    },
+    {
+      "id": "WF-M17-JDT-COLD",
+      "status": "FAIL",
+      "result": "mac-17/original-chain-cold-result.json"
+    },
+    {
+      "id": "WF-M17-COLD-REMEDIATION",
+      "status": "NOT_RUN",
+      "result": "mac-17/cold-remediation-task-result.json"
+    },
+    {
+      "id": "WF-M17-REMEDIATED-COLD-ONCE",
+      "status": "FAIL",
+      "result": "mac-17/remediated-final-cold-task-result.json"
+    },
+    {
+      "id": "WF-M17-HOME-JVM-ONLY",
+      "status": "FAIL",
+      "result": "mac-17/home-jvm-only-task-result.json"
+    },
+    {
+      "id": "WF-M17-HOME-CLI-ONLY",
+      "status": "FAIL",
+      "result": "mac-17/home-cli-only-task-result.json"
+    },
+    {
+      "id": "WF-M17-HOME-PROPERTIES-OBS",
+      "status": "FAIL",
+      "result": "mac-17/home-properties-observation-task-result.json"
+    },
+    {
+      "id": "WF-M17-PROPERTIES-CLEAN",
+      "status": "FAIL",
+      "result": "mac-17/properties-clean-task-result.json"
+    },
+    {
+      "id": "WF-M17-PLUGIN-MIRROR",
+      "status": "FAIL",
+      "result": "mac-17/gradle-cold-final-task-result.json"
+    },
+    {
+      "id": "WF-M17-INSTALL-PREPARED",
+      "status": "FAIL",
+      "result": "mac-17/install-prepared-task-result.json"
+    },
+    {
+      "id": "WF-M17-REF-DIAG",
+      "status": "PASS",
+      "result": "mac-17/reference-index-task-result.json"
+    },
+    {
+      "id": "WF-M17-INDEX-READY-FIX",
+      "status": "PASS",
+      "result": "mac-17/index-ready-fix-task-result.json"
     }
   ],
   "openDecisions": [
@@ -326,6 +396,8 @@
     }
   ],
   "next": [
-    "MAC-17"
+    "MAC-17索引屏障修复通过17项定向检查及唯一真实精确定义/引用验收；客户端106.150s READY，首次引用430.448ms。",
+    "LOCAL审查候选source7805669821c9，包c6fc6ab4ff760c57af65d7d03838378dba40538820868d330219c7ca12148ba3；尚未部署。",
+    "正式G17历史FAIL保留；生产TCC/业务读回、新全量installer与canary未运行；不push、不动生产。"
   ]
 }

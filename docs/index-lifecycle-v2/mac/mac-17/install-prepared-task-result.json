@@ -1,0 +1,143 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-INSTALL-PREPARED",
+  "status": "FAIL",
+  "dependency": null,
+  "identity": {
+    "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "44c1d0db1913f1b14c507f73703baf88925d32d5c310223d048c73275fc1f8d9",
+    "distInventorySha256": "c505f02a7b3878568d8b56e9edb7b9993f81b078a76cef6a861f27d771504221",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "prepare-boundary-retry1",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/prepare-boundary-retry1/result.json",
+      "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+      "commands": 1,
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "elapsedMs": 638,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=isolated startup appends|installation preparation confines|installer rejects",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/tmp/candidate/dist/jdtls-session.test.js",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/tmp/candidate/scripts/ilv2-mac-gradle-prepare.test.mjs"
+      ]
+    },
+    {
+      "name": "final-once",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/final-once/result.json",
+      "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 913912,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/final-cold.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "original-install-and-prepared-semantic-facts",
+      "file": "actual-analysis.json",
+      "sha256": "1f2b963e19e81d6c5d9267ad6efbc960bfa2a14da54757f75ae7257e709f3e26",
+      "status": "FAIL",
+      "provenance": "Original ended outcomes/TAP/actions, no replay; install restoration PASS, final reference request FAIL"
+    },
+    {
+      "name": "terminal-reference-timeout",
+      "file": "semantic-terminal-analysis.json",
+      "sha256": "4c36cf695b153343c8142ba04fd41588260193d20c19fc84918f54d68ed4c1c2",
+      "status": "FAIL",
+      "provenance": "Original precise definition matched; sole reference request timed out after10000ms. Earlier firstFailure is not the terminal failure."
+    },
+    {
+      "name": "complete-resource-readback",
+      "file": "root-resource-observation.json",
+      "sha256": "e98e5363079c29c0a5defadf2dca2542d751fb709e2a179e833784b9ae5872df",
+      "status": "PASS",
+      "provenance": "All20 recorded PIDs/8 owned groups exited, exact root argv/jobs absent, both quota tables0; no unknown kill"
+    },
+    {
+      "name": "actual-candidate-package-integrity",
+      "file": "review-candidate-verification.json",
+      "sha256": "05a33398e1b3b43863862df6467943e195f056a1bc5c93d462a6386ce0dddd9c",
+      "status": "PASS",
+      "provenance": "One physical extraction and full mode/link/hash identity; package integrity only"
+    },
+    {
+      "name": "unit-preparation-failure-retained",
+      "file": "prepare-boundary-result.json",
+      "sha256": "78a8702078cc7b3a0fc41c949acaf6ff4e5395eb374fbc0dbbee702465073cfd",
+      "status": "FAIL",
+      "provenance": "Original private TMP setup missing;3FAIL, not a product behavior RED; original index retained"
+    },
+    {
+      "name": "initial-supervisor-launch-failure-retained",
+      "file": "failed-system-python-outcome.json",
+      "sha256": "4530f98ad454160ac6fe3f6acda7518028443cf147fd4adc7db121fb1121ac27",
+      "status": "FAIL",
+      "provenance": "Apple Python license gate before supervisor code; zero installer/semantic commands; actual supported interpreter used for sole pipeline"
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "1e70559416949a4665b80c6cec6763c194cfcc00a8a44f62b33ad602509325d4",
+    "registeredPids": 20,
+    "ownedGroups": 8,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/closeout/raw-evidence.tar.gz",
+      "sha256": "997022d325e99cc4e3e15b0bfad349338bd5fb45b545c6443926503eb81f71ee",
+      "fileCount": 49,
+      "bytes": 9901752,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "bdaf7f60963b90a8f297354d0da7530752ca4593e2933d1c4ba6ce11d8da932a",
+      "source": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "53cb9a10cc88c9743c864d922ec0f3eeac191d31b5b0c92dcc6c33df789afca2",
+  "notClaimed": [
+    "Prepared-cache complete semantic PASS",
+    "Empty-cache total120s PASS",
+    "Formal G17 PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "Production TCC/business read",
+    "AI quality/token/performance benefit",
+    "Confirmed internal cause of reference timeout"
+  ],
+  "next": "本轮失败即停。若继续，仅针对首次引用的10秒超时补充分段证据；先确认就绪/索引等待或实际搜索耗时，再做最小修复。不得把推断当根因，不追加冷安装或完整测试，不放宽原10秒/120秒。",
+  "authorization": "User explicitly selected dependency restoration during installation; unchanged JDT120s/API15s/precise definitions and references; original hard deadline2026-11-03T18:00+08. One install-dependency restoration and one prepared-cache semantic case. No fullsuite/fullinstaller/compatibility/rollback/push/production.",
+  "notes": "Preparation:Eclipse23projects399binaries and actualAPT1processor;1395artifact files324604180bytes;731552ms. JDT sole startup30195ms toServiceReady; definition2567.400ms PASS; reference10005.858ms FAIL. Initial static readiness119844ms with earlier MCP errors, sole start:true15s MCP timeout retained; shared startup continued without secondstart. JDT SIGKILL occurred during authorized cleanup. Unit TMP setup3FAIL retained then same3 checks3PASS; systemPython launchFAIL before anycase retained. This source was directly TypeScript-compiled once; actual signed native/dependencies reused, no fresh nativebuild/SLO/fullsuite claim. Historical five prior roots untouched.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare"
+}

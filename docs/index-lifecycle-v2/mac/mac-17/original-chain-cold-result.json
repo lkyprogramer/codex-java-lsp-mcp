@@ -1,0 +1,134 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-JDT-COLD",
+  "status": "FAIL",
+  "dependency": {
+    "G17": "FAIL preserved",
+    "implementationHead": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5",
+    "producerBoundary": "Original signed artifact reused; current unusedClangchanged, no fresh build claimed"
+  },
+  "identity": {
+    "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "37173644a64c9540fd39288367e4d861e5b5672a4737628338b695c633444aa5",
+    "distInventorySha256": "79f95e9911f1d09f8067a7e9eb334c89e4d896b6b1caade5ff18e515802cce52",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "observe",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/observe/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0,
+      "elapsedMs": 181687,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T081400Z-jdt-chain-explicit-git/mac17-phase-driver.mjs",
+        "observe"
+      ]
+    },
+    {
+      "name": "final",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/final/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 275531,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T081400Z-jdt-chain-explicit-git/final-cold.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "implementation-and-scoped-facts",
+      "file": "implementation-final-summary.json",
+      "sha256": "c4ad42dc226988e6c2514c79df2212d2357459fcbe4942f184f6a555d54defea",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "actual-original-chain-observation",
+      "file": "observe-outcome.json",
+      "sha256": "8c1c08254baa00e2e6f3a362b7a931e0083b867a441efed756a8e3ea56f7cb40",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "actual-single-final-case",
+      "file": "final-outcome.json",
+      "sha256": "f674db643a84db4581add79e531a30038dfd69ef504fe443f3da52fa5dbdf499",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "preparation-lineage",
+      "file": "preparation-lineage.json",
+      "sha256": "46d665dd67d0d2bed9af6aee891880f707a0db4e20a5798777a63816c579df42",
+      "status": null,
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "e90bb045eb8474e57271278ef968391086a73d4c7809be45d3b0627cbd28be29",
+    "registeredPids": 17,
+    "ownedGroups": 8,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T081400Z-jdt-chain-explicit-git/closeout/raw-evidence.tar.gz",
+      "sha256": "359ad92905b70f62584034852031cbfde03ce2f813c45aa1274b19c13e92f9be",
+      "fileCount": 48,
+      "bytes": 199902707,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "02bcfdc95c0f492dd06ef177f2460934d224768182c4dc0bd364d0d6238e46f1",
+      "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "8a5797d3be28c9e1c9a5a3c8eb87e844139570108071868305d6f112f87b2fd4",
+  "notClaimed": [
+    "Historical marker root cause solved",
+    "JDT independent no-auth proxy defect fixed",
+    "Import or semantic readiness PASS",
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "AI benefit"
+  ],
+  "next": "Candidate disabled. End task with preserved failure and concrete frozen-business dependency gap. No automatic new tests, fixture changes, parameter tuning or optimization.",
+  "authorization": "User approved correctedgate→one originalchain observation→only actualevidence minimumrepair→one finalemptyhome realsemantic. Original15s/120s/trust preserved. No fullsuite/installer/push/production/compat/rollback; harddeadline2026-11-03T18:00+08.",
+  "notes": [
+    "Two preparation failures before any nativeowner/JDT/Gradle start retained as separate roots.",
+    "Only original-chain observation1 and finalsemanticcase1 executed; no retries.",
+    "Current marker and actualbuildproperty proofsPASS; originalfinal coldimport notREADY at120s.",
+    "BusinessBOM gap recorded from original frozen input; no fixture edit or claim of sole deadline cause."
+  ],
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T081400Z-jdt-chain-explicit-git"
+}

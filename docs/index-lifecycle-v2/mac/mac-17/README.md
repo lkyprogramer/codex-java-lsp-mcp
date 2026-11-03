@@ -1,5 +1,23 @@
 # MAC-17 隔离安装验收收尾
 
+2026-11-03 [索引就绪修复与单次真实验收](index-ready-fix-acceptance.md)：修复通过。17/17 定向检查及唯一真实精确定义、引用验收通过。客户端 106.150 秒 READY；首次引用 430.448 ms。19 PID、7 个自有组退出，候选和证据收尾通过。LOCAL 候选供审查，历史失败和正式 G17 FAIL 保留，未部署。
+
+**后续待办 · JDT 冷启动耗时（未开始）**。隔离样本从进程启动到 READY 为 106.150 秒，其中 `ServiceReady` 后的索引屏障耗时 74.356 秒。若日常使用同一仓库时反复遇到长等待，先用同一候选和仓库，对比新建与保留 JDT 工作区时的启动耗时，分别记录项目导入和索引屏障耗时。保留默认静态路径、原 120 秒启动上限和精确定义、引用门槛。此项性能工作单独排期。
+
+2026-11-03 [首次引用索引等待的根因与最小方案](reference-index-readiness-diagnosis.md)：同 PID 两次栈确认引用等待仍在推进的 JDT 索引队列。方案复用既有只读 `java.project.getAll`，在原 120 秒启动预算内通过索引屏障后再 READY。方案尚未实施，完整验收仍 FAIL。20 PID、7 个自有组退出，原始证据和到期资源收尾完成。
+
+2026-11-02 [安装期依赖恢复与准备后语义验收](install-prepared-acceptance.md)：部分完成。恢复两个真实模型通过，JDT 30.195 秒 READY，精确定义通过。唯一引用请求在原 10 秒预算超时，整体验收 FAIL，候选停用。20 PID、8 个自有组退出，证据与临时资源收尾通过。历史空缓存及 G17 FAIL 保留。
+
+2026-11-02 [Gradle 最终事实与验收边界](gradle-cold-final-diagnosis.md)：尚未彻底解决。隔离 HOME 组件 8/8 与真实两操作证明通过；干净冷语义仍 FAIL。五根资源与 raw/tmp 收尾完成，候选停用。等待用户选择安装期依赖恢复，或保留空缓存全程 120 秒并停止。历史失败与 G17 FAIL 保留。
+
+2026-11-02 [两补丁后的唯一最终冷语义验收](remediated-final-cold.md)：FAIL，候选停用。物理空 home 和单次 JDT 启动成立，原 120 秒截止时仍在下载必需依赖并导入模型；精确定义、引用均 NOT_RUN。实际 init、Gradle 参数和 marker 检查通过。17 PID、5 个自有组退出，证据归档完成。按用户要求失败即停，没有追加重试。
+
+2026-11-02 [冷导入的根因与最小修复](cold-import-root-cause-remediation.md)：Astra xhigh 复核三个独立缺陷。共享启动与状态分类回归 24/24 PASS；真实 Gradle 模型证明源码附件开关生效；隔离业务副本的单行 BOM 补丁使三个 classpath 的 9 项实际工件检查通过。修复后完整冷语义尚未运行，原 G17 FAIL 保留。
+
+2026-11-02 [按方案执行的最终结果](original-chain-cold-acceptance.md)：新门槛回归 5/5 PASS；唯一原链插件观测 PASS；唯一空 Gradle home 最终验收 FAIL。实际参数、代理路线和 Boot marker 均通过，但完整导入在原 120 秒预算边界结束，定义与引用未开始。另确认冻结业务输入的 BOM 传播缺口，不能把它当成超时的唯一原因。三个新运行根均收尾完成，候选停用，G17 FAIL 保留。
+
+2026-11-02 [Astra xhigh 诊断与收敛方案](astra-cold-gradle-diagnosis.md)：确认旧参数证明门槛错误及 JDT 无认证代理的独立缺陷。唯一真实 TAPI 探针观察到原插件 POM 下载成功，完整模型仍未在 120 秒内完成。历史 JDT/Buildship 插件失败原因尚未确认，原 FAIL 与候选 NOT_READY 保留。本轮没有实施产品修复。
+
 2026-11-02 用户授权的 [单次 TLS 1.2 冷 Gradle 验收](tls12-single-acceptance.md) **FAIL**。Spring Boot 4.0.6 插件 marker 仍无法解析，真实语义未通过。按用户要求停止使用候选，不再重试。既有安装证据与历史失败保留。正式 G17 FAIL 保留。
 
 2026-11-02 用户授权的 [新基线安装结果与冷 Gradle 最小方案](current-baseline-acceptance.md)：完整安装和升级通过，冷 Gradle 语义仍阻塞，候选 NOT_READY。用户取消兼容与回滚工作。下列内容是历史收尾记录，失败结论与工件保持原样；新运行单独记录结果。

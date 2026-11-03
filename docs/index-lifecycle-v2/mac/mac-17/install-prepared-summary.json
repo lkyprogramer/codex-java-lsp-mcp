@@ -1,0 +1,129 @@
+{
+  "schema": "mac17-install-prepared-public-summary/v1",
+  "status": "FAIL",
+  "acceptanceClass": "INSTALL_DEPENDENCIES_THEN_PREPARED_FIRST_SEMANTIC",
+  "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+  "buildLabel": "ff81b8ddbcb8+p44035234251f",
+  "productPatchSha256": "44035234251f78610d4e1a51ae0f84aeee673f747970f434362e6e53539e2428",
+  "installation": {
+    "status": "PASS",
+    "startedAt": "2026-11-02T15:20:25.137Z",
+    "endedAt": "2026-11-02T15:32:36.689Z",
+    "elapsedMs": 731552,
+    "projectModel": "PASS",
+    "aptModel": "PASS",
+    "projectCount": 23,
+    "requiredBinaryCount": 399,
+    "processorFiles": 1,
+    "artifactManifest": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/raw/final/gradle-prepare/artifact-manifest.json",
+      "sha256": "31c709da2f383a963d3e3ab8e63dd6ee91ba22983bac311589f8099abdef5ad4",
+      "count": 1395,
+      "logicalBytes": 324604180
+    },
+    "cacheTotals": {
+      "files": 5521,
+      "directories": 6292,
+      "logicalBytes": 568158145,
+      "allocatedBytes": 597778432,
+      "artifactFiles": 1395,
+      "artifactBytes": 324604180
+    },
+    "resourceExit": "PASS",
+    "buildProperties": "PASS",
+    "failure": null,
+    "cleanupFailure": null
+  },
+  "semanticTerminal": {
+    "schema": "mac17-prepared-semantic-terminal/v1",
+    "status": "FAIL",
+    "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+    "classification": "GRADLE_MODELS_RESTORED_JDT_READY_DEFINITION_PASS_REFERENCES_TIMEOUT",
+    "jdt": {
+      "pid": 1878,
+      "startCalls": 1,
+      "spawnAt": "2026-11-02T15:34:40.607Z",
+      "serviceReadyAt": "2026-11-02T15:35:10.802Z",
+      "readyMs": 30195,
+      "observedReadyMs": 33039,
+      "originalStartupCapMs": 120000
+    },
+    "startRequest": {
+      "elapsedMs": 15003.395208999995,
+      "error": {
+        "name": "McpError",
+        "message": "MCP error -32001: Request timed out",
+        "code": -32001
+      },
+      "interpretation": "Original sole-start request hit unchanged15s MCP timeout; underlying shared startup continued. No second start."
+    },
+    "definition": {
+      "status": "PASS",
+      "elapsedMs": 2567.4001660000067,
+      "exactDefinitionMatched": true,
+      "hoverMatched": true
+    },
+    "references": {
+      "status": "FAIL",
+      "requests": 1,
+      "elapsedMs": 10005.85837500001,
+      "originalSemanticCapMs": 10000,
+      "originalPublicRequestCapMs": 15000,
+      "actualError": "Deadline exceeded during request.handler after 10000ms"
+    },
+    "terminalAction": "semantic oracle unavailable after bounded attempts",
+    "recordedFirstFailureIsTerminal": false,
+    "firstStaticMs": 119844.477625,
+    "observedIndexBoundary": "ServiceReady and exact definition do not prove whole-workspace search/index ready. No same-PID timeout stack was captured in this no-probe case; reason inside reference processing remains UNCONFIRMED.",
+    "historicalFailures": "RETAINED",
+    "extraCaseAfterFailure": "NOT_RUN"
+  },
+  "candidate": {
+    "status": "PASS",
+    "archive": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/review-candidate-48253f3cc857.tar.gz",
+    "archiveSha256": "b5849e32d5f04c94de29c97357692f8e7e313f05a370ba2663f83f85bc66d0f6",
+    "inventorySha256": "68f4b39b2693e0c0148eb444378010073fd8f97a95b2765894a222ec2e7980e2",
+    "fileCount": 6508,
+    "directoryCount": 1183,
+    "symlinkCount": 7,
+    "logicalBytes": 105115141,
+    "physicalVerification": "PASS",
+    "verificationCount": 1,
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "boundary": "Package integrity only; scoped isolated result is separate; not formal G17 or production approval"
+  },
+  "resourceExit": {
+    "status": "PASS",
+    "pids": 20,
+    "ownedGroups": 8,
+    "launchdJobs": 0,
+    "fixtureSlots": 0,
+    "externalFixtureJobs": 0
+  },
+  "closeout": {
+    "status": "PASS",
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/closeout/raw-evidence.tar.gz",
+      "sha256": "997022d325e99cc4e3e15b0bfad349338bd5fb45b545c6443926503eb81f71ee",
+      "fileCount": 49,
+      "bytes": 9901752,
+      "physicalVerification": "PASS"
+    }
+  },
+  "historicalEmptyCache120s": "FAIL_RETAINED",
+  "formalG17": "FAIL_RETAINED",
+  "productionTCC": "NOT_RUN",
+  "compatibilityRollback": "NOT_RUN_USER_CANCELLED",
+  "fullTests": "NOT_RUN_REUSED_EXISTING_EVIDENCE",
+  "pushProduction": "NOT_RUN",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare",
+  "notes": [
+    "Unit private TMP preparation3FAIL retained, then same three checks3PASS.",
+    "Initial ApplePython launch failed before any installer/semantic command; corrected interpreter used for sole pipeline.",
+    "Independent review confirms facts/resources only, not acceptancePASS.",
+    "No new semantic or installation case after reference failure."
+  ]
+}

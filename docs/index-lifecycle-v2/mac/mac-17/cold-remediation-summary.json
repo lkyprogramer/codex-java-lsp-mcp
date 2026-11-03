@@ -1,0 +1,116 @@
+{
+  "schema": "mac17-cold-remediation-summary/v1",
+  "componentStatus": "PASS",
+  "finalColdAcceptance": "NOT_RUN",
+  "formalG17": "FAIL_RETAINED",
+  "candidateStatus": "NOT_READY",
+  "identity": {
+    "schema": "mac17-remediation-inputs/v1",
+    "recordedAt": "after completed consumer; not a claim of a pre-run freeze",
+    "sourceBaseHead": "ff81b8ddbcb8c508f785f035be92323e5a8b4027",
+    "sourceFiles": {
+      "src/jdtls-session.ts": "8181935396ff1be65a65a125de7ac26b50b25e52a2fdbaaa4d53a5d99f6267f2",
+      "src/jdt-restart-backoff.ts": "79da45feb3b8f96c356923d632477788dbee7510c12df37e585c44c1cef8cc79",
+      "src/jdtls-semantic-backend.ts": "4cc88f12591cf25f81ac18f14215f195bd412a144053845394947b7f7590f619",
+      "src/tools/status.ts": "acce24bb1f707ce98053fa28789bdc5492a3889ef3d33127c3cac9b2e5ba0852",
+      "src/jdtls-session.test.ts": "db7f24fdc511ae4ece81f499113c8ae8080e68274595bb964fd9c038a9f40839",
+      "src/jdt-restart-backoff.test.ts": "db341d19e6a4bc0836fcce43c4fc904763bce6732497b0103bc62af23d5369e7",
+      "src/tools/status.test.ts": "64a9d2d9953bae7c2bafea5455962935414a99f44133038667f4240ace4b2a35"
+    },
+    "productPatchSha256": "cfcd4f85b6073932e0b3fe324dbb2ddcb575f32863ffe42ada869d9c85c17843",
+    "businessPatchSha256": "4019b815297a5c310aad773c774d6b8512c1d8f6d0ffa62330d3e39ffb18a65c",
+    "businessHead": "6403a9c3c020741f2ce7bf77564e8e4dba1cc555",
+    "businessObserverV2Sha256": "d57dc7f2d6de0f9f2785cde7185f269cbf7bfe9f5a8719fd97a1a85c37c47063",
+    "earlierBusinessInputs": "business-inputs.json records pre-launch observer-v1 preparation; it is retained, not the final observer identity",
+    "tools": {
+      "/Users/luo/.nvm/versions/node/v22.16.0/bin/node": "a45751fbfe88440bebff63cd44814e4ed6deb642bc3e3c4a14c4f8ae0ed9e019",
+      "/opt/homebrew/Cellar/openjdk/25.0.2/libexec/openjdk.jdk/Contents/Home/bin/java": "ff4feaf792ede923cd24cf58eee52ff66ff78a6c0de07099b82a7951b297043d",
+      "/opt/homebrew/Cellar/openjdk/25.0.2/libexec/openjdk.jdk/Contents/Home/bin/javac": "469de81d8ba656cc1501e7e21761d62c72ab23f6df37cfbfc48f366a72e6deef",
+      "/opt/homebrew/Cellar/openjdk/25.0.2/libexec/openjdk.jdk/Contents/Home/lib/server/libjvm.dylib": "8c2f2f8461c3656dc1491c4037513e7882c35ae01a250c760bc37a54f2304d1e",
+      "/opt/homebrew/Cellar/jdtls/1.56.0/libexec/plugins/org.gradle.toolingapi_8.9.0.v20250827-0209-s.jar": "9138372a7ab2ec22076b6c4e7622af60464e30090b56d6222c3823166fa9c368",
+      "/opt/homebrew/Cellar/gradle/9.3.1/libexec/lib/gradle-tooling-api-9.3.1.jar": "d27e52393369979542b73f822290f07cf5b8637ac446f135c408c9a354a150a2"
+    },
+    "toolsCoverage": "Named consumed tools only, not a complete JDK/OS/distribution freeze. No native owner or product release build in this run."
+  },
+  "tests": {
+    "regressionRed": {
+      "tests": 5,
+      "pass": 2,
+      "fail": 3,
+      "skipped": 0
+    },
+    "focusedFinal": {
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "sourcePolicyProof": {
+    "status": "PASS",
+    "baseline": [
+      "ATTACHMENT|:app|dep-1.0-sources.jar",
+      "ATTACHMENT|:lib|dep-1.0-sources.jar",
+      "BINARY|:app|dep-1.0.jar",
+      "BINARY|:lib|dep-1.0.jar",
+      "PROJECT|:",
+      "PROJECT|:app",
+      "PROJECT|:lib",
+      "SOURCE|:app|src/main/java",
+      "SOURCE|:app|src/test/java",
+      "SOURCE|:lib|src/main/java",
+      "SOURCE|:lib|src/test/java"
+    ],
+    "fixed": [
+      "ATTACHMENT|:app|NONE",
+      "ATTACHMENT|:lib|NONE",
+      "BINARY|:app|dep-1.0.jar",
+      "BINARY|:lib|dep-1.0.jar",
+      "PROJECT|:",
+      "PROJECT|:app",
+      "PROJECT|:lib",
+      "SOURCE|:app|src/main/java",
+      "SOURCE|:app|src/test/java",
+      "SOURCE|:lib|src/main/java",
+      "SOURCE|:lib|src/test/java"
+    ],
+    "initSha256": "433b3ff49b0d74d049253be1c0664bc327f597e8e033a58f5630711501e25b1a",
+    "scope": "Actual EclipseProject model with local dependency binary/source jars; no external network, no JDT acceptance; APT not measured"
+  },
+  "businessProof": {
+    "status": "PASS",
+    "businessHead": "6403a9c3c020741f2ce7bf77564e8e4dba1cc555",
+    "patchSha256": "4019b815297a5c310aad773c774d6b8512c1d8f6d0ffa62330d3e39ffb18a65c",
+    "observerSha256": "d57dc7f2d6de0f9f2785cde7185f269cbf7bfe9f5a8719fd97a1a85c37c47063",
+    "resolved": [
+      "MAC17_RESOLVED|compileClasspath|com.fasterxml.jackson.core:jackson-annotations|2.21|82104",
+      "MAC17_RESOLVED|compileClasspath|jakarta.validation:jakarta.validation-api|3.1.1|106136",
+      "MAC17_RESOLVED|compileClasspath|org.slf4j:slf4j-api|2.0.17|69908",
+      "MAC17_RESOLVED|runtimeClasspath|com.fasterxml.jackson.core:jackson-annotations|2.21|82104",
+      "MAC17_RESOLVED|runtimeClasspath|jakarta.validation:jakarta.validation-api|3.1.1|106136",
+      "MAC17_RESOLVED|runtimeClasspath|org.slf4j:slf4j-api|2.0.17|69908",
+      "MAC17_RESOLVED|testRuntimeClasspath|com.fasterxml.jackson.core:jackson-annotations|2.21|82104",
+      "MAC17_RESOLVED|testRuntimeClasspath|jakarta.validation:jakarta.validation-api|3.1.1|106136",
+      "MAC17_RESOLVED|testRuntimeClasspath|org.slf4j:slf4j-api|2.0.17|69908"
+    ],
+    "scope": "Actual isolated business consumer configurations and external binary files; classes observer, not a full business suite or semantic acceptance"
+  },
+  "scope": "Minimum local product changes plus reviewed business patch in detached worktree; business main and old frozen input unchanged",
+  "boundary": [
+    "120s shared startup and 15s caller budgets unchanged",
+    "Certificate verification unchanged",
+    "No final cold semantic retry, product release/native rebuild, installer/fullsuite/canary/rollback/compatibility/production/push",
+    "No claim that removing source attachments guarantees 120s total cold startup",
+    "Local source-policy model has no external network; business proof downloaded Gradle wrapper and dependencies"
+  ],
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "closeout": {
+    "path": "/private/tmp/mac17-root-cause-20261102T090900Z/closeout/raw-evidence.tar.gz",
+    "sha256": "1346e48b54b3191a49fe03966b24baa496cd16e399cdc7ad52d2d95bb9c4a947",
+    "fileCount": 51,
+    "bytes": 161419,
+    "physicalVerification": "PASS"
+  },
+  "resourceExit": "PASS",
+  "retainedCopy": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/artifacts/mac-17/20261102T090900Z-root-cause-remediation"
+}

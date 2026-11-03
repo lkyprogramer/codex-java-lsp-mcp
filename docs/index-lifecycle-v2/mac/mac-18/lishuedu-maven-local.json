@@ -1,0 +1,30 @@
+{
+  "schema": "ilv2-lishuedu-maven-local/v1",
+  "files": [
+    {
+      "path": "com/lishu/common/lishu-common-dependencies/1.0.0-SNAPSHOT/lishu-common-dependencies-1.0.0-SNAPSHOT.pom",
+      "bytes": 16199,
+      "sha256": "c7999abfd16e8cdbdabab42326885d3a9c998324847711c337f29bc09d7e91de"
+    },
+    {
+      "path": "com/lishu/common/lishu-common-dependencies/1.0.0-SNAPSHOT/maven-metadata-local.xml",
+      "bytes": 563,
+      "sha256": "782bfaf5e7bf5dfd2648d8e04d0f9ca7845c58cc5623d889b8487b52f6d0fdf9"
+    },
+    {
+      "path": "com/lishu/common/lishu-boot-starter/1.0.0-SNAPSHOT/lishu-boot-starter-1.0.0-SNAPSHOT.pom",
+      "bytes": 3945,
+      "sha256": "779db665ba178b5fe0312e8991553afbe5f8cf94335c74704713d3083a40c122"
+    },
+    {
+      "path": "com/lishu/common/lishu-boot-starter/1.0.0-SNAPSHOT/lishu-boot-starter-1.0.0-SNAPSHOT.jar",
+      "bytes": 1914,
+      "sha256": "86d0b08410a112a564dcbbd6f9a924c3cbef0eba3cfcb75da62b14bff850d89e"
+    },
+    {
+      "path": "com/lishu/common/lishu-boot-starter/1.0.0-SNAPSHOT/maven-metadata-local.xml",
+      "bytes": 720,
+      "sha256": "d698587b1e9eedf7b2f19923290d34c4759a439bf5fb38723a36bfa516cb4b9b"
+    }
+  ]
+}

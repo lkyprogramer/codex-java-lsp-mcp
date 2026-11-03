@@ -1,0 +1,221 @@
+{
+  "schema": "mac17-original-chain-cold-public-summary/v1",
+  "status": "FAIL",
+  "candidateStatus": "NOT_READY",
+  "sourceCommit": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5",
+  "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+  "baseCandidateSha256": "bdafaa6ccd270db710fa16e30e1f434506a70fee55aa9670740a7b4292dc81c2",
+  "actualNativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+  "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+  "implemented": [
+    "Private gate now reads actual build properties/home/owned daemon PID/proxy route instead of daemon argv",
+    "Reuse-only admission verifies actual consumed runtime/payload, records changed Clang as unused producer without changing old baseline",
+    "Read-only metadataGit explicitly frozen to independent HomebrewGit; no Xcode license accepted"
+  ],
+  "thresholdRegression": {
+    "reusedRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T075300Z-jdt-chain-and-cold-final",
+    "name": "threshold-final",
+    "tests": 5,
+    "pass": 5,
+    "fail": 0,
+    "sameGateSha256": "cbcb17f2c82236eedbc5361676dd9824f5a34cd4bd5f6beb85b806eec29fa037"
+  },
+  "counts": {
+    "preparationFailuresBeforeRuntime": 2,
+    "originalChainObservations": 1,
+    "finalSemanticCases": 1,
+    "originalObservationJdtSpawns": 1,
+    "finalJdtSpawns": 1,
+    "fullsuiteReruns": 0,
+    "installerReruns": 0
+  },
+  "preparationFailures": [
+    {
+      "root": "20261102T075300Z-jdt-chain-and-cold-final",
+      "cause": "Unused Clang producer changed; no owner/JDT/Gradle started",
+      "closeout": {
+        "status": "PASS",
+        "registeredPids": 3,
+        "ownedGroups": 0,
+        "launchdJobs": 0,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T075300Z-jdt-chain-and-cold-final/closeout/raw-evidence.tar.gz",
+          "sha256": "3b592a5ea67e67f9784f74d9fd8beedc2b2b15850ca628f9beec2386ce0e0d62",
+          "fileCount": 13,
+          "bytes": 44628,
+          "physicalVerification": "PASS"
+        }
+      }
+    },
+    {
+      "root": "20261102T080800Z-jdt-chain-runtime-reuse",
+      "cause": "PATH selected AppleGit blocked by newXcode license; no owner/JDT/Gradle started. Nextroot used existing independentGit+SHA, no license accepted.",
+      "closeout": {
+        "status": "PASS",
+        "registeredPids": 1,
+        "ownedGroups": 0,
+        "launchdJobs": 0,
+        "unregisteredPaths": [],
+        "expiredResidualBytes": 0,
+        "archive": {
+          "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T080800Z-jdt-chain-runtime-reuse/closeout/raw-evidence.tar.gz",
+          "sha256": "dd9a5dbb67dcd8c41ff4b4fb2821f4f54ab61d0b7b884063d7de4d7129281870",
+          "fileCount": 5,
+          "bytes": 14476,
+          "physicalVerification": "PASS"
+        }
+      }
+    }
+  ],
+  "observation": {
+    "status": "PASS",
+    "marker": "MARKER_RESOLVED",
+    "detail": {
+      "verdict": "MARKER_RESOLVED",
+      "spawnAt": 1793607548469,
+      "observedAt": 1793607575941,
+      "sessionPid": 67012,
+      "startCalls": 1,
+      "startError": "MCP error -32001: Request timed out",
+      "daemonLogs": [
+        "daemon-67099.out.log"
+      ],
+      "noSemanticRequests": true
+    },
+    "buildProof": {
+      "status": "PASS",
+      "rows": 1,
+      "daemonPids": [
+        67099
+      ],
+      "failures": [],
+      "observation": "ACTUAL_BUILD_BEFORE_SETTINGS; daemon commandline not used"
+    },
+    "resourceExitStatus": "PASS",
+    "payload": "UNCHANGED"
+  },
+  "final": {
+    "status": "FAIL",
+    "tap": {
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "skip": 0,
+      "cancel": 0
+    },
+    "firstUse": {
+      "status": "BLOCKED_ENV",
+      "firstFailure": {
+        "phase": "first-static",
+        "message": "MCP tool error"
+      },
+      "startCalls": 1,
+      "firstStaticMs": 134258.39291599998,
+      "firstSemanticMs": null,
+      "elapsedMs": 261385.00912499998,
+      "sessionPid": 69091,
+      "newFiles": 4577,
+      "newArtifacts": 1704,
+      "logicalBytes": 750612206,
+      "allocatedBytes": 786276352,
+      "distributionPresent": true,
+      "distributionDownloaded": false,
+      "distributionDownloadFiles": [],
+      "cleanup": "NOT_OWNED_BY_ATTACH_DRIVER; root must close installed owner and Gradle resources"
+    },
+    "terminal": {
+      "at": "2026-11-02T08:27:13.539Z",
+      "type": "failure",
+      "message": "JDT import failed"
+    },
+    "buildProof": {
+      "status": "PASS",
+      "rows": 1,
+      "daemonPids": [
+        69156
+      ],
+      "failures": [],
+      "observation": "ACTUAL_BUILD_BEFORE_SETTINGS; daemon commandline not used"
+    },
+    "marker": "MARKER_RESOLVED",
+    "jdtLaunchTraceBoundary": "Original actualJdtLaunchArgumentsObserved=false retained: READY-selected process file absent. Raw spawn trace independently shows original four initial JDT flags; no claim of effective later JDT proxy settings.",
+    "jdtTiming": {
+      "pid": 69091,
+      "spawnAt": "2026-11-02T08:25:13.322Z",
+      "termAt": "2026-11-02T08:27:13.301Z",
+      "exitAt": "2026-11-02T08:27:13.530Z",
+      "spawnToTermMs": 119995.292625,
+      "spawnToExitMs": 120224.15179199999,
+      "boundary": "Ended on original120sstartup budget boundary; last status Starting70% RunClosedProjectBuildDependencies. No timeout relaxation."
+    },
+    "preciseDefinitions": "NOT_RUN; import never READY",
+    "references": "NOT_RUN; import never READY",
+    "payload": "UNCHANGED",
+    "resourceExitStatus": "PASS"
+  },
+  "originalFinalJvmProof": {
+    "profileSha256": "c564c0eb680cef486625a6d8368267869731d075475391a4bcf50d72939d640c",
+    "transportGradleArgumentsObserved": true,
+    "actualJdtLaunchArgumentsObserved": false,
+    "actualGradleBuildPropertiesObserved": true,
+    "boundary": "Launch arguments prove initial JDT configuration only. Actual Gradle parameters are proven inside build, not daemon argv."
+  },
+  "frozenInputFinding": {
+    "status": "CONFIRMED_BOM_PROPAGATION_GAP",
+    "artifacts": [
+      "com.fasterxml.jackson.core:jackson-annotations:",
+      "jakarta.validation:jakarta.validation-api:",
+      "org.slf4j:slf4j-api:"
+    ],
+    "boundary": "Producer uses local Boot dependency-management but exposes versionless api dependencies; consumer has no BOM constraints. Not proven sole120sdeadline cause. Frozen business fixture was not edited."
+  },
+  "gradleDaemonExceptionCounts": {
+    "SSLHandshakeException": 0,
+    "PKIX": 0,
+    "UnknownPluginException": 0,
+    "ModuleVersionNotFoundException": 6
+  },
+  "independent": {
+    "status": "PASS",
+    "scope": "Read-only facts/resource review accepts real final FAIL, not acceptancePASS",
+    "openFindings": [],
+    "fixtureSlots": 0,
+    "externalFixtureJobs": 0,
+    "psBoundary": "Independent sandbox denied ps; independent signal0ESRCH and root unifiedfullargvscan passed"
+  },
+  "closeout": {
+    "status": "PASS",
+    "registeredPids": 17,
+    "ownedGroups": 8,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T081400Z-jdt-chain-explicit-git/closeout/raw-evidence.tar.gz",
+      "sha256": "359ad92905b70f62584034852031cbfde03ce2f813c45aa1274b19c13e92f9be",
+      "fileCount": 48,
+      "bytes": 199902707,
+      "physicalVerification": "PASS"
+    }
+  },
+  "notPerformed": [
+    "No additional original-chain observation or final retry",
+    "No JDT jar patch/gradle.properties/repository/source-download switch",
+    "No product src/native/dist/dependency changes",
+    "No compatibility/rollback/fullsuite/installer",
+    "No productionTCC/businessread/deployment/push"
+  ],
+  "notClaimed": [
+    "Historical marker root cause solved",
+    "JDT independent no-auth proxy defect fixed",
+    "Import or semantic readiness PASS",
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "AI benefit"
+  ],
+  "next": "Candidate disabled. End task with preserved failure and concrete frozen-business dependency gap. No automatic new tests, fixture changes, parameter tuning or optimization.",
+  "deadline": "2026-11-03T18:00:00+08:00"
+}

@@ -1,0 +1,12 @@
+diff --git a/modules/platform-core/build.gradle.kts b/modules/platform-core/build.gradle.kts
+index 9134c7d2cc..5d941c6969 100644
+--- a/modules/platform-core/build.gradle.kts
++++ b/modules/platform-core/build.gradle.kts
+@@ -9,6 +9,7 @@ dependencyManagement {
+ }
+ 
+ dependencies {
++    api(platform(libs.spring.boot.bom))
+     api("com.fasterxml.jackson.core:jackson-annotations")
+     api(libs.jakarta.validation.api)
+     api(libs.slf4j.api)

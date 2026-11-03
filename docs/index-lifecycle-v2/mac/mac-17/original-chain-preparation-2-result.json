@@ -1,0 +1,92 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-JDT-PREP2",
+  "status": "FAIL",
+  "dependency": {
+    "G17": "FAIL preserved",
+    "actualJdtObservations": 0
+  },
+  "identity": {
+    "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "37173644a64c9540fd39288367e4d861e5b5672a4737628338b695c633444aa5",
+    "distInventorySha256": "79f95e9911f1d09f8067a7e9eb334c89e4d896b6b1caade5ff18e515802cce52",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "observe",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "Original marker observation undefined",
+      "result": "raw/validation/observe/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0,
+      "elapsedMs": 994,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T080800Z-jdt-chain-runtime-reuse/mac17-phase-driver.mjs",
+        "observe"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "original-preparation-failure",
+      "file": "observe-outcome.json",
+      "sha256": "9309e85e17dae19661d69efaa9322713b8d1234d1b2866c675cec7a27a45d208",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "preserved-preparation-boundary",
+      "file": "preparation-final-summary.json",
+      "sha256": "8b74e8cd1dc4d5859ce399754a98a14e011d1e19185386ff60fa2d3768b35198",
+      "status": "FAIL",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "2539836953c8939cf5760ac05185a7b51296cbee3e8e895a2677e8916ae14c30",
+    "registeredPids": 1,
+    "ownedGroups": 0,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T080800Z-jdt-chain-runtime-reuse/closeout/raw-evidence.tar.gz",
+      "sha256": "dd9a5dbb67dcd8c41ff4b4fb2821f4f54ab61d0b7b884063d7de4d7129281870",
+      "fileCount": 5,
+      "bytes": 14476,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "b02c7fc28ca6febc0958527eb5e8fd92742a50fac17b6f69e86346ede4e93ac0",
+      "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "199815e2b9c6834e02d9c3f316e8e01704c871a016cd86a5a4f29590ef257804",
+  "notClaimed": [
+    "JDT/Gradle observation ran in this preparation root",
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED"
+  ],
+  "next": "Preparation failure closed; next separately registered root retains lineage. Do not replay.",
+  "authorization": "User approved one actual original-chain observation plus one final semantic acceptance; this failed before all runtime starts. No push/production/fullsuite.",
+  "notes": null,
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T080800Z-jdt-chain-runtime-reuse"
+}
