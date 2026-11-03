@@ -68,13 +68,19 @@ test("DeadlineBudget.race rejects immediately once the budget is already spent",
   let now = 0;
   let cleaned = 0;
   const budget = DeadlineBudget.fromTimeout(10, () => now);
+  let rejectOperation!: (error: Error) => void;
+  const operation = new Promise<never>((_, reject) => { rejectOperation = reject; });
   now = 50;
   await assert.rejects(
-    () => budget.race("late-stage", Promise.resolve("value"), 1000, () => { cleaned += 1; }),
+    () => budget.race("late-stage", operation, 1000, () => {
+      cleaned += 1;
+      rejectOperation(new Error("operation closed during deadline cleanup"));
+    }),
     (error: unknown) => error instanceof JavaIntelligenceError
       && error.code === "DEADLINE_EXCEEDED"
       && /late-stage/.test(error.message)
   );
+  await new Promise<void>(resolve => setImmediate(resolve));
   assert.equal(cleaned, 1);
 });
 

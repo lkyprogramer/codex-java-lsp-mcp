@@ -11,6 +11,7 @@ import {
   lifecycleGateFromRestartBackoffStatus
 } from "./jdtls-session.js";
 import { JDTLS_XMS, jvmArgs } from "./jdtls-lsp-io.js";
+import { jdtGradleHome } from "./mac-platform/gradle-domain.js";
 import type { SemanticCacheKey } from "./semantic-gateway.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
@@ -130,6 +131,8 @@ function harness(
     leaseStore?: CrossProcessLeaseStore;
     maxOpenDocuments?: number;
     leaseHeartbeatMs?: number;
+    startHardCapMs?: number;
+    indexBarrierTimeoutMs?: number;
   } = {}
 ): Harness {
   const scratch = mkdtempSync(path.join(tmpdir(), "jdtls-session-"));
@@ -145,7 +148,9 @@ function harness(
     javaHome: process.env.JAVA_LSP_PROJECT_JAVA_HOME,
     stability: process.env.JDTLS_READY_STABILITY_MS,
     maxOpenDocuments: process.env.JDTLS_MAX_OPEN_DOCUMENTS,
-    leaseHeartbeat: process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS
+    leaseHeartbeat: process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS,
+    startHardCap: process.env.JDTLS_START_TIMEOUT_MS,
+    indexBarrierTimeout: process.env.JDTLS_INDEX_TIMEOUT_MS
   };
   process.env.JDTLS_BIN = path.join(scratch, "fake-jdtls");
   process.env.JDTLS_DATA_DIR = path.join(scratch, "workspace");
@@ -160,6 +165,12 @@ function harness(
   if (options.leaseHeartbeatMs !== undefined) {
     process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS = String(options.leaseHeartbeatMs);
   }
+  if (options.startHardCapMs !== undefined) {
+    process.env.JDTLS_START_TIMEOUT_MS = String(options.startHardCapMs);
+  }
+  if (options.indexBarrierTimeoutMs !== undefined) {
+    process.env.JDTLS_INDEX_TIMEOUT_MS = String(options.indexBarrierTimeoutMs);
+  }
 
   let now = 1_000_000;
   const session = new JdtlsSession(repoRoot, [], factory, () => now, options.leaseStore);
@@ -171,7 +182,9 @@ function harness(
     JAVA_LSP_PROJECT_JAVA_HOME: previous.javaHome,
     JDTLS_READY_STABILITY_MS: previous.stability,
     JDTLS_MAX_OPEN_DOCUMENTS: previous.maxOpenDocuments,
-    JAVA_LSP_JDT_LEASE_HEARTBEAT_MS: previous.leaseHeartbeat
+    JAVA_LSP_JDT_LEASE_HEARTBEAT_MS: previous.leaseHeartbeat,
+    JDTLS_START_TIMEOUT_MS: previous.startHardCap,
+    JDTLS_INDEX_TIMEOUT_MS: previous.indexBarrierTimeout
   })) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -311,17 +324,22 @@ test("a successful start records the spawned jdtls pid on the lease", async () =
   assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "stop() releases the lease");
 });
 
-test("isolated startup appends the private Java user.home after benchmark profile arguments", async () => {
+test("isolated startup passes prepared JAR indexes and the private Java user.home", async () => {
   const previous = {
     marker: process.env.JAVA_LSP_ISOLATED_VALIDATION,
     home: process.env.HOME,
-    extraArgs: process.env.JDTLS_EXTRA_ARGS
+    extraArgs: process.env.JDTLS_EXTRA_ARGS,
+    jarIndexes: process.env.JAVA_LSP_PREPARED_JAR_INDEX_DIR,
+    stateRoot: process.env.JAVA_LSP_SERVICE_STATE_ROOT
   };
   const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
   const { session } = harness(factory);
   try {
     process.env.JAVA_LSP_ISOLATED_VALIDATION = "1";
     process.env.HOME = "/tmp/private-jdt-home";
+    process.env.JAVA_LSP_SERVICE_STATE_ROOT = path.join(session.status().dataDir, "private-state");
+    const jarIndexes = path.join(jdtGradleHome(), "prepared index path");
+    process.env.JAVA_LSP_PREPARED_JAR_INDEX_DIR = jarIndexes;
     process.env.JDTLS_EXTRA_ARGS = "--jvm-arg=-Duser.home=/active/home --jvm-arg=-Xms1g";
     await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
     const userHomeArgs = factory.spawnInputs[0].args.filter(argument => argument.startsWith("--jvm-arg=-Duser.home="));
@@ -330,12 +348,19 @@ test("isolated startup appends the private Java user.home after benchmark profil
       "--jvm-arg=-Duser.home=/tmp/private-jdt-home"
     ]);
     assert.equal(factory.spawnInputs[0].args.at(-1), "--jvm-arg=-Duser.home=/tmp/private-jdt-home");
+    assert.deepEqual(factory.spawnInputs[0].args.filter(argument => argument.includes("jdt.core.sharedIndexLocation")),
+      [`--jvm-arg=-Djdt.core.sharedIndexLocation=${jarIndexes}`]);
+    const properties = readFileSync(path.join(jdtGradleHome(), "gradle.properties"), "utf8");
+    const encodedHome = process.env.HOME.split("").map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+    assert.equal(properties, `systemProp.user.home=${encodedHome}\n`);
   } finally {
     await session.stop();
     for (const [name, value] of Object.entries({
       JAVA_LSP_ISOLATED_VALIDATION: previous.marker,
       HOME: previous.home,
-      JDTLS_EXTRA_ARGS: previous.extraArgs
+      JDTLS_EXTRA_ARGS: previous.extraArgs,
+      JAVA_LSP_PREPARED_JAR_INDEX_DIR: previous.jarIndexes,
+      JAVA_LSP_SERVICE_STATE_ROOT: previous.stateRoot
     })) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
@@ -709,6 +734,53 @@ test("concurrent ensureStarted shares one transactional start", async () => {
   await session.stop();
 });
 
+test("Gradle import receives the managed init script and the isolated network profile", async t => {
+  const isolatedEnv = {
+    JAVA_LSP_ISOLATED_VALIDATION: "1",
+    JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT: "8888"
+  };
+  const previous = Object.fromEntries(Object.keys(isolatedEnv).map(key => [key, process.env[key]]));
+  previous.JAVA_LSP_SERVICE_STATE_ROOT = process.env.JAVA_LSP_SERVICE_STATE_ROOT;
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  Object.assign(process.env, isolatedEnv);
+  let initializeSettings: unknown;
+  let scriptAtInitialize: string | undefined;
+  const { session, factory } = harness(fakeTransportFactory({
+    handlers: {
+      initialize(params) {
+        initializeSettings = (params as { initializationOptions: { settings: unknown } }).initializationOptions.settings;
+        const file = path.join(session.status().dataDir, "gradle-import.init.gradle");
+        scriptAtInitialize = readFileSync(file, "utf8");
+        return { capabilities: {} };
+      }
+    }
+  }));
+  process.env.JAVA_LSP_SERVICE_STATE_ROOT = path.join(session.status().dataDir, "private-state");
+  try {
+    await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+    const file = path.join(session.status().dataDir, "gradle-import.init.gradle");
+    const expected = ["--init-script", file];
+    const network = ["-Djdk.tls.client.protocols=TLSv1.2", "-Dhttps.protocols=TLSv1.2",
+      "-Dhttps.proxyHost=127.0.0.1", "-Dhttps.proxyPort=8888"];
+    const gradleJvmArgs = ["-Dorg.gradle.parallel=false", ...network];
+    assert.deepEqual((initializeSettings as any).java.import.gradle.arguments, expected);
+    assert.deepEqual((initializeSettings as any).java.import.gradle.jvmArguments, gradleJvmArgs);
+    assert.deepEqual(factory.spawnInputs[0].args.filter(argument => /--jvm-arg=-D(?:jdk\.tls|https\.)/.test(argument)),
+      network.map(argument => `--jvm-arg=${argument}`));
+    assert.match(scriptAtInitialize ?? "", /classpath.downloadSources = false/);
+    assert.deepEqual(await factory.connections[0].emitRequest("workspace/configuration", {
+      items: [{ section: "java.import.gradle.arguments" }, { section: "java.import.gradle.jvmArguments" }]
+    }), [expected, gradleJvmArgs]);
+  } finally {
+    await session.stop();
+  }
+});
+
 test("a short caller deadline does not cancel a shared JDT startup", async () => {
   const initialize = deferred<unknown>();
   const { session, factory } = harness(fakeTransportFactory({ initialize }));
@@ -723,6 +795,7 @@ test("a short caller deadline does not cancel a shared JDT startup", async () =>
   assert.equal(session.status().state, "STARTING");
   await waitForSpawn(factory, 1);
   assert.equal(factory.children[0].killCalls, 0);
+  assert.equal(session.status().restartBackoff.consecutiveFailures, 0);
 
   initialize.resolve({ capabilities: {} });
   await long;
@@ -730,6 +803,44 @@ test("a short caller deadline does not cancel a shared JDT startup", async () =>
   assert.equal(factory.spawnCalls, 1);
   await session.stop();
 });
+
+for (const stage of ["initialize", "project.import"] as const) {
+  test(`shared ${stage} hard cap records the cause and prevents an immediate respawn`, async () => {
+    const leaseStore = new FakeLeaseStore();
+    const factory = fakeTransportFactory(stage === "initialize"
+      ? { initialize: deferred<unknown>() }
+      : { initializeResult: { capabilities: {} }, autoServiceReady: false });
+    const { session } = harness(factory, { startHardCapMs: 300, leaseStore });
+    let failure: JavaIntelligenceError | undefined;
+    try {
+      await assert.rejects(session.ensureStarted(DeadlineBudget.fromTimeout(5000)), error => {
+        assert.ok(error instanceof JavaIntelligenceError);
+        assert.equal(error.code, "JDT_SERVER_ERROR");
+        assert.match(error.message, new RegExp(`jdtls\\.${stage.replace(".", "\\.")}`));
+        assert.ok(error.cause instanceof JavaIntelligenceError);
+        assert.equal(error.cause.code, "DEADLINE_EXCEEDED");
+        failure = error;
+        return true;
+      });
+      assert.equal(session.status().state, "BROKEN");
+      assert.equal(session.status().progress.importState, "FAILED");
+      assert.equal(session.hasLiveChildren(), false);
+      assert.equal(factory.children[0].signalCode, "SIGTERM");
+      assert.equal(factory.connections[0].disposed, true);
+      assert.equal(leaseStore.released.length, 2);
+      const backoff = session.status().restartBackoff;
+      assert.equal(backoff.consecutiveFailures, 1);
+      assert.equal(backoff.lastErrorCode, "JDT_SERVER_ERROR");
+      assert.ok("lastErrorMessage" in backoff);
+      assert.equal(backoff.lastErrorMessage, failure!.message);
+      await assert.rejects(session.ensureStarted(DeadlineBudget.fromTimeout(1000)), error =>
+        error instanceof JavaIntelligenceError && error.code === "JDT_BACKOFF");
+      assert.equal(factory.spawnCalls, 1);
+    } finally {
+      await session.stop();
+    }
+  });
+}
 
 test("failed initialize disposes the attempt and permits a clean retry", async () => {
   const factory = sequenceTransportFactory([
@@ -833,6 +944,34 @@ test("stop during STARTING cancels waiters without recording a restart failure",
   assert.equal(session.status().restartBackoff.blockedUntilExplicitReset, false);
   assert.equal(factory.children[0].killCalls > 0, true);
   assert.equal(factory.connections[0].disposed, true);
+});
+
+test("stop before spawn releases the arriving lease and terminal stop rejects later starts", async () => {
+  const entered = deferred<void>();
+  const unblock = deferred<void>();
+  const leaseStore = new class extends FakeLeaseStore {
+    override async acquireJdt(): Promise<JdtLeaseAcquireResult> {
+      entered.resolve();
+      await unblock.promise;
+      return super.acquireJdt();
+    }
+  }();
+  const { session, factory } = harness(fakeTransportFactory({}), { leaseStore });
+  const started = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const cancelled = assert.rejects(started, (error: unknown) =>
+    error instanceof JavaIntelligenceError && error.code === "CANCELLED");
+  await entered.promise;
+  const stopped = session.stop();
+  unblock.resolve();
+  await Promise.all([cancelled, stopped]);
+  assert.equal(factory.children.length, 0);
+  assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"]);
+  assert.equal(session.status().restartBackoff.consecutiveFailures, 0);
+
+  await session.forceStop();
+  await assert.rejects(session.ensureStarted(), (error: unknown) =>
+    error instanceof JavaIntelligenceError && error.code === "CANCELLED");
+  assert.equal(leaseStore.acquireCalls, 1);
 });
 
 test("a READY child that exits marks the session BROKEN and restartable", async () => {
@@ -1725,6 +1864,108 @@ test("initial import blocks READY and semantic requests until ServiceReady", asy
     assert.equal(factory.connections[0]!.count("textDocument/references"), 1);
   } finally { await session.stop(); await ready.catch(() => undefined); }
 });
+
+test("search index barrier keeps indexing past the import budget and blocks semantic requests until READY", async () => {
+  const projects = deferred<unknown>();
+  const { session, factory, repoRoot } = harness(fakeTransportFactory({
+    autoServiceReady: false, responses: { "textDocument/references": [] }
+  }), { startHardCapMs: 1000, indexBarrierTimeoutMs: 3000 });
+  const file = path.join(repoRoot, "Probe.java");
+  writeFileSync(file, "class Probe {}\n");
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  try {
+    await waitForInitialized(factory);
+    const connection = factory.connections[0]!;
+    connection.pending.set("workspace/executeCommand", projects);
+    connection.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await waitForIndexBarrier(factory);
+    assert.equal(session.status().state, "STARTING");
+    assert.equal(session.status().progress.importState, "IMPORTING");
+    assert.equal(session.status().progress.indexBarrier?.state, "INDEXING");
+    await assert.rejects(session.rawReferences(file, 1, 7, false, 30), error =>
+      error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
+    assert.equal(connection.count("textDocument/references"), 0);
+    await delay(1050);
+    assert.equal(session.status().state, "STARTING");
+    assert.equal(factory.children[0]!.killCalls, 0);
+    projects.resolve([toFileUri(repoRoot).replace(/^file:\/\//, "file:")]);
+    await ready;
+    assert.equal(session.status().state, "READY");
+    assert.equal(session.status().progress.indexBarrier?.state, "READY");
+    assert.ok(session.status().progress.indexBarrier?.finishedAt);
+    assert.deepEqual(await session.rawReferences(file, 1, 7, false, 3000), []);
+    assert.equal(connection.count("textDocument/references"), 1);
+  } finally { await session.stop(); await ready.catch(() => undefined); }
+});
+
+test("search index barrier rejects malformed empty and foreign project replies", async () => {
+  for (const reply of [null, [], ["not-a-file-uri"], ["file://%"], ["file:///outside-this-workspace"]]) {
+    const { session, factory } = harness(fakeTransportFactory({ responses: { "workspace/executeCommand": reply } }));
+    try {
+      await assert.rejects(session.ensureStarted(DeadlineBudget.fromTimeout(5000)), error =>
+        error instanceof JavaIntelligenceError && error.code === "JDT_SERVER_ERROR" && /project URI/.test(error.message));
+      assert.equal(session.status().started, false);
+      assert.equal(session.status().progress.importState, "FAILED");
+      assert.ok(factory.children[0]!.killCalls > 0);
+    } finally { await session.stop(); }
+  }
+});
+
+test("search index barrier failure does not commit READY", async () => {
+  const { session, factory } = harness(fakeTransportFactory({ errors: { "workspace/executeCommand": new Error("index command failed") } }));
+  try {
+    await assert.rejects(session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /index command failed/);
+    assert.equal(session.status().started, false);
+    assert.equal(session.status().progress.importState, "FAILED");
+    assert.ok(factory.children[0]!.killCalls > 0);
+  } finally { await session.stop(); }
+});
+
+test("search index barrier uses its own deadline and releases its lease on timeout", async () => {
+  const projects = deferred<unknown>(), leaseStore = new FakeLeaseStore();
+  const { session, factory } = harness(fakeTransportFactory({ autoServiceReady: false }), { indexBarrierTimeoutMs: 250, leaseStore });
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const rejected = assert.rejects(ready, error => error instanceof JavaIntelligenceError
+    && error.code === "JDT_SERVER_ERROR" && /jdtls.search.index/.test(error.message));
+  void rejected.catch(() => undefined);
+  try {
+    await waitForInitialized(factory);
+    factory.connections[0]!.pending.set("workspace/executeCommand", projects);
+    factory.connections[0]!.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" });
+    await rejected;
+    assert.equal(session.status().started, false);
+    assert.equal(session.status().progress.indexBarrier?.state, "FAILED");
+    assert.ok(factory.children[0]!.killCalls > 0);
+    assert.deepEqual(leaseStore.released, ["JDT_WORKTREE", "JDT_SLOT"]);
+  } finally { await session.stop(); await rejected.catch(() => undefined); }
+});
+
+test("search index barrier late result cannot commit a stopped startup attempt", async () => {
+  const projects = deferred<unknown>();
+  const { session, factory, repoRoot } = harness(fakeTransportFactory({ handlers: {
+    "workspace/executeCommand": () => projects.promise
+  } }));
+  const ready = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const rejected = assert.rejects(ready, error => error instanceof JavaIntelligenceError && error.code === "CANCELLED");
+  void rejected.catch(() => undefined);
+  try {
+    await waitForIndexBarrier(factory);
+    const stopped = session.stop();
+    projects.resolve([toFileUri(repoRoot)]);
+    await stopped;
+    await rejected;
+    assert.equal(session.status().state, "STOPPED");
+    assert.equal(session.status().started, false);
+  } finally { projects.resolve([toFileUri(repoRoot)]); await session.stop(); await ready.catch(() => undefined); }
+});
+
+async function waitForIndexBarrier(factory: FakeJdtlsTransportFactory): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (factory.connections[0]?.count("workspace/executeCommand")) return;
+    await delay(5);
+  }
+  assert.fail("search index barrier was not requested");
+}
 
 test("initialization Error is not replaced by a later ServiceReady", async () => {
   const { session, factory } = harness(fakeTransportFactory({ initializeResult: { capabilities: {} }, autoServiceReady: false }));

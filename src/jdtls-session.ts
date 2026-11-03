@@ -2,8 +2,9 @@
 // output: Managed Eclipse JDT LS requests and normalized raw LSP responses.
 // pos: Stateful LSP client and process manager for the generic Java LSP MCP bridge.
 import { createWriteStream, existsSync, rmSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   NoopCrossProcessLeaseStore,
   type CompositeJdtLease,
@@ -18,10 +19,10 @@ import {
   type JdtlsTransportAttempt,
   type JdtlsTransportFactory
 } from "./jdtls-transport.js";
-import { repoHash } from "./path-utils.js";
+import { isWithin, repoHash } from "./path-utils.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
-import type { GradleDomain } from "./mac-platform/gradle-domain.js";
+import { jdtGradleHome, prepareIsolatedGradleHome, type GradleDomain } from "./mac-platform/gradle-domain.js";
 import { DocumentLru } from "./document-lru.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
@@ -47,6 +48,7 @@ import {
   lifecycleGateFromRestartBackoffStatus,
   buildInitializeParams,
   buildJavaSettings,
+  GRADLE_IMPORT_INIT_SCRIPT,
   pickJavaConfigurationSection
 } from "./jdtls-semantic-backend.js";
 import {
@@ -152,6 +154,12 @@ export type JdtlsCacheStatus = {
 
 export type JdtlsProgressStatus = {
   importState?: "NOT_STARTED" | "IMPORTING" | "READY" | "FAILED";
+  indexBarrier?: {
+    state: "INDEXING" | "READY" | "FAILED" | "CANCELLED";
+    startedAt: string;
+    finishedAt?: string;
+    timeoutMs: number;
+  };
   active: number;
   activeMessages: string[];
   lastProgressAt?: string;
@@ -207,6 +215,8 @@ export class JdtlsSession extends JdtlsLspClient {
     process.env.JDTLS_START_TIMEOUT_MS,
     120_000
   );
+  private readonly indexBarrierTimeoutMs = positiveInteger(process.env.JDTLS_INDEX_TIMEOUT_MS, 600_000);
+  private indexBarrier?: JdtlsProgressStatus["indexBarrier"];
   private startedAt?: Date;
   private readonly transportFactory: JdtlsTransportFactory;
   private readonly leaseStore: CrossProcessLeaseStore;
@@ -218,6 +228,7 @@ export class JdtlsSession extends JdtlsLspClient {
   private readonly projectJdk: ProjectJdkStatus;
   private readonly generatedCode: GeneratedCodeStatus;
   private readonly jdtlsRuntimeJavaHome?: string;
+  private readonly isolatedGradleJvmArgs: string[];
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private cacheHits = 0;
   private cacheMisses = 0;
@@ -291,6 +302,17 @@ export class JdtlsSession extends JdtlsLspClient {
     this.projectJdk = resolveProjectJdk(repoRoot, aliases);
     this.generatedCode = detectGeneratedCode(repoRoot);
     this.jdtlsRuntimeJavaHome = process.env.JDTLS_JAVA_HOME || process.env.JAVA_HOME;
+    const proxyPort = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1"
+      ? process.env.JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT
+      : this.repoRoot === process.env.JAVA_LSP_PREPARED_GRADLE_REPO
+        ? process.env.JAVA_LSP_PREPARED_GRADLE_PROXY_PORT : undefined;
+    if (proxyPort !== undefined && (!/^[1-9]\d{0,4}$/.test(proxyPort) || Number(proxyPort) > 65535)) {
+      throw new JavaIntelligenceError("JDT_CONFIG_ERROR", "Invalid prepared Gradle proxy port");
+    }
+    this.isolatedGradleJvmArgs = proxyPort === undefined ? [] : [
+      "-Djdk.tls.client.protocols=TLSv1.2", "-Dhttps.protocols=TLSv1.2",
+      "-Dhttps.proxyHost=127.0.0.1", `-Dhttps.proxyPort=${proxyPort}`
+    ];
   }
 
   bindOwnershipLifecycle(ownership?: RepoOwnershipLease): void {
@@ -409,6 +431,9 @@ export class JdtlsSession extends JdtlsLspClient {
       if (this.stopPromise) {
         await callerBudget.race("jdtls.stop.wait", this.stopPromise);
       }
+      if (this.terminallyStopped) {
+        throw new JavaIntelligenceError("CANCELLED", "JDT LS session was terminated");
+      }
       if (this.lifecycleState === "READY") {
         await callerBudget.race("jdtls.lease.heartbeat", this.heartbeatPendingLease());
         return;
@@ -436,7 +461,7 @@ export class JdtlsSession extends JdtlsLspClient {
             if (this.lifecycleState !== "STOPPED") this.transition("BROKEN");
             // Cross-process contention (IGNORED_CODES) never pollutes the
             // backoff counter; a genuine JDT start failure still does.
-            this.restartBackoff.recordFailure(classified.code);
+            this.restartBackoff.recordFailure(classified.code, classified.message);
             await this.releasePendingLease();
             throw classified;
           })
@@ -460,6 +485,7 @@ export class JdtlsSession extends JdtlsLspClient {
 
   private async startAfterLease(callerBudget: DeadlineBudget): Promise<void> {
     await this.pendingLeaseRelease;
+    this.assertStartPending();
     if (!this.pendingLease) {
       const leaseResult = await this.acquireCrossProcessLease(callerBudget);
       if (leaseResult.kind !== "ACQUIRED") {
@@ -472,10 +498,26 @@ export class JdtlsSession extends JdtlsLspClient {
       // them so retry cannot wait for the worktree lease held by this session.
       await this.heartbeatPendingLease();
     }
-    // The start owns its own hard cap. A caller deadline only stops that
-    // caller from waiting; it must never kill work shared with another caller.
+    this.assertStartPending();
+    // The launcher and import have their own cap. A caller deadline only
+    // stops that caller from waiting; it never kills the shared startup.
     const startBudget = DeadlineBudget.fromTimeout(this.startHardCapMs);
-    await this.startTransactional(startBudget);
+    try {
+      await this.startTransactional(startBudget);
+    } catch (error) {
+      // This deadline belongs to the shared startup, not a caller's wait.
+      // Count it as a server failure so the next request cannot respawn JDT immediately.
+      if (error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED") {
+        throw new JavaIntelligenceError("JDT_SERVER_ERROR", error.message, error);
+      }
+      throw error;
+    }
+  }
+
+  private assertStartPending(): void {
+    if (this.terminallyStopped || this.lifecycleState !== "STARTING") {
+      throw new JavaIntelligenceError("CANCELLED", "JDT LS startup was stopped or superseded");
+    }
   }
 
   /** A lease-store failure (corrupt shared config, lock timeout) is reported the same as a lease being unavailable. */
@@ -753,6 +795,7 @@ export class JdtlsSession extends JdtlsLspClient {
   }
 
   private async startTransactional(budget: DeadlineBudget): Promise<void> {
+    this.indexBarrier = undefined;
     if (!this.jdtlsBin) {
       throw new JavaIntelligenceError(
         "JDT_CONFIG_ERROR",
@@ -770,6 +813,12 @@ export class JdtlsSession extends JdtlsLspClient {
     try {
       await mkdir(this.dataDir, { recursive: true });
       await mkdir(this.logDir, { recursive: true });
+      if (this.buildSystem !== "maven") {
+        await writeFile(path.join(this.dataDir, "gradle-import.init.gradle"), GRADLE_IMPORT_INIT_SCRIPT, { mode: 0o600 });
+        if (process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.HOME) {
+          await prepareIsolatedGradleHome(this.gradleDomain?.home ?? jdtGradleHome(), process.env.HOME);
+        }
+      }
     } finally {
       this.activeFirstTouchTrace?.recordStartupPhase("filesystemSetupMs", performance.now() - filesystemStartedAt);
     }
@@ -785,6 +834,7 @@ export class JdtlsSession extends JdtlsLspClient {
     const spawnStartedAt = performance.now();
     let attempt: JdtlsTransportAttempt;
     try {
+      this.assertStartPending();
       this.gradleDomain?.assertSemanticAdmission();
       attempt = this.transportFactory.spawn({
         binary: this.jdtlsBin,
@@ -826,6 +876,7 @@ export class JdtlsSession extends JdtlsLspClient {
     this.attachAttemptLogging(attempt);
 
     try {
+      this.assertStartPending();
       if (this.pendingLease && attempt.child.pid !== undefined) {
         const recorded = await this.pendingLease.recordJdtlsPid(attempt.child.pid);
         if (!recorded) {
@@ -873,14 +924,32 @@ export class JdtlsSession extends JdtlsLspClient {
         );
       }
 
-      // initialize only establishes the protocol. ServiceReady is sent after
-      // the initial import job; it does not promise all build/index work succeeded.
+      // ServiceReady covers import. In the frozen JDT, executeCommand waits for
+      // the search index before this read-only command returns project URIs.
       await budget.race("jdtls.project.import", importWait.promise);
-      await budget.race("jdtls.lease.heartbeat", this.heartbeatPendingLease());
+      const indexBudget = DeadlineBudget.fromTimeout(this.indexBarrierTimeoutMs);
+      this.indexBarrier = { state: "INDEXING", startedAt: new Date().toISOString(), timeoutMs: this.indexBarrierTimeoutMs };
+      const projectUris = await indexBudget.race("jdtls.search.index", attempt.connection.sendRequest<unknown>(
+        "workspace/executeCommand", { command: "java.project.getAll", arguments: [] }
+      ));
+      let projectPaths: Array<string | undefined>;
+      try {
+        projectPaths = Array.isArray(projectUris)
+          ? projectUris.map((uri: unknown) => typeof uri === "string" ? fileURLToPath(uri) : undefined)
+          : [];
+      } catch (error) {
+        throw new JavaIntelligenceError("JDT_SERVER_ERROR", "JDT index barrier returned invalid project URIs", error);
+      }
+      if (!projectPaths.length || projectPaths.some(project => project === undefined)
+        || !projectPaths.some(project => project !== undefined && isWithin(this.repoRoot, project))) {
+        throw new JavaIntelligenceError("JDT_SERVER_ERROR", "JDT index barrier returned no valid project URI for this repository");
+      }
+      await indexBudget.race("jdtls.lease.heartbeat", this.heartbeatPendingLease());
       if (importWait.error) throw importWait.error;
       if (this.lifecycleState !== "STARTING" || this.startAttempt !== attempt) {
         throw new JavaIntelligenceError("CANCELLED", "JDT project import was stopped or superseded");
       }
+      this.indexBarrier = { ...this.indexBarrier, state: "READY", finishedAt: new Date().toISOString() };
       this.importState = "READY";
       this.importWait = undefined;
       this.process = attempt.child;
@@ -905,6 +974,13 @@ export class JdtlsSession extends JdtlsLspClient {
         this.lifecycleState === "STOPPED"
         || (this.startAttempt !== attempt
           && (this.lifecycleState === "STARTING" || this.lifecycleState === "READY"));
+      if (this.indexBarrier?.state === "INDEXING") {
+        this.indexBarrier = {
+          ...this.indexBarrier,
+          state: stoppedOrSuperseded ? "CANCELLED" : "FAILED",
+          finishedAt: new Date().toISOString()
+        };
+      }
       if (this.importWait === importWait) {
         this.importWait = undefined;
         this.importState = this.lifecycleState === "STOPPED" ? "NOT_STARTED" : "FAILED";
@@ -924,6 +1000,9 @@ export class JdtlsSession extends JdtlsLspClient {
   }
 
   private launchArgs(): string[] {
+    const preparedJarIndexes = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" || this.repoRoot === process.env.JAVA_LSP_PREPARED_GRADLE_REPO
+      ? process.env.JAVA_LSP_PREPARED_JAR_INDEX_DIR
+      : undefined;
     return [
       ...jvmArgs(this.generatedCode),
       "-data",
@@ -931,6 +1010,8 @@ export class JdtlsSession extends JdtlsLspClient {
       "-configuration",
       path.join(this.dataDir, "configuration"),
       ...splitArgs(process.env.JDTLS_EXTRA_ARGS),
+      ...(preparedJarIndexes ? [`--jvm-arg=-Djdt.core.sharedIndexLocation=${preparedJarIndexes}`] : []),
+      ...this.isolatedGradleJvmArgs.map(argument => `--jvm-arg=${argument}`),
       ...(process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.HOME
         ? [`--jvm-arg=-Duser.home=${process.env.HOME}`]
         : [])
@@ -1180,7 +1261,9 @@ export class JdtlsSession extends JdtlsLspClient {
       projectJdk: this.projectJdk,
       generatedCode: this.generatedCode,
       gradleHome: this.gradleDomain?.home,
-      gradleImport: this.gradleDomain?.gradleImport
+      gradleImport: this.gradleDomain?.gradleImport,
+      gradleJvmArgs: this.isolatedGradleJvmArgs,
+      gradleImportInitScript: this.buildSystem !== "maven" ? path.join(this.dataDir, "gradle-import.init.gradle") : undefined
     });
   }
 
@@ -1238,6 +1321,7 @@ export class JdtlsSession extends JdtlsLspClient {
   private progressStatus(): JdtlsProgressStatus {
     return {
       importState: this.importState,
+      indexBarrier: this.indexBarrier,
       active: this.activeProgress.size,
       activeMessages: [...this.activeProgress.values()].slice(0, 5),
       lastProgressAt: this.lastProgressAt?.toISOString(),

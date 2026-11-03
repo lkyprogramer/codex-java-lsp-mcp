@@ -1,8 +1,8 @@
 import path from "node:path";
 import os from "node:os";
 import { readFileSync } from "node:fs";
-import { access, mkdir, readdir, readFile, realpath, stat } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { access, mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
@@ -12,6 +12,27 @@ export function jdtGradleHome(env: NodeJS.ProcessEnv = process.env): string {
   const root = env.JAVA_LSP_SERVICE_STATE_ROOT ?? path.join(os.homedir(), "Library/Application Support/codex-java-lsp-mcp/state");
   if (!path.isAbsolute(root)) throw new Error("absolute service state root required");
   return path.join(root, "jdt-gradle-home");
+}
+
+/** Both installer preparation and JDT imports use this owned, isolated domain. */
+export async function prepareIsolatedGradleHome(home: string, ownerHome: string): Promise<void> {
+  // APT replaces operation arguments; Gradle also filters user.home from JVM arguments.
+  const encodedHome = ownerHome.split("").map(char => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+  const content = `systemProp.user.home=${encodedHome}\n`;
+  const properties = path.join(home, "gradle.properties");
+  await mkdir(home, { recursive: true });
+  const existing = await readFile(properties, "utf8").catch(error => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  });
+  if (existing !== undefined && existing !== content) {
+    throw new JavaIntelligenceError("JDT_CONFIG_ERROR", "isolated Gradle properties differ from the owner HOME");
+  }
+  if (existing === undefined) {
+    const temporary = `${properties}.${randomUUID()}.tmp`;
+    await writeFile(temporary, content, { mode: 0o600, flag: "wx" });
+    await rename(temporary, properties);
+  }
 }
 export type GradleDistribution = { version: string; launcher: string; launcherSha256: string; javaHome: string };
 /**
@@ -33,18 +54,42 @@ export type GradleCleanupIO = {
   command?(pid: number): Promise<string | undefined>;
 };
 const execute = promisify(execFile);
+const traceRecoveryEnabled = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.JAVA_LSP_GRADLE_RECOVERY_TRACE === "1";
+function traceRecovery(event: string, fields: Record<string, unknown>): void {
+  if (traceRecoveryEnabled) {
+    console.error(`[codex-java-lsp] Gradle recovery trace ${JSON.stringify({ event, at: new Date().toISOString(), ...fields })}`);
+  }
+}
+
 export const defaultGradleCleanupIO: GradleCleanupIO = {
   async execute(distribution, args, home, timeoutMs) {
     const started = performance.now();
     const digest = createHash("sha256").update(await readFile(distribution.launcher)).digest("hex");
     if (digest !== distribution.launcherSha256) throw new Error("frozen Gradle launcher changed");
+    const command = { version: distribution.version, args };
+    traceRecovery("launcher-verified", { ...command, elapsedMs: performance.now() - started });
     const remainingMs = Math.ceil(timeoutMs - (performance.now() - started));
     if (remainingMs <= 0) throw new Error("Gradle command deadline exceeded");
-    return (await execute(distribution.launcher, [...args, "--gradle-user-home", home], {
+    const operation = execute(distribution.launcher, [...args, "--gradle-user-home", home], {
       timeout: remainingMs, killSignal: "SIGKILL", maxBuffer: 1024 * 1024,
       env: { HOME: process.env.HOME, PATH: `${distribution.javaHome}/bin:/usr/bin:/bin`, TMPDIR: process.env.TMPDIR,
         JAVA_HOME: distribution.javaHome, GRADLE_USER_HOME: home }
-    })).stdout;
+    });
+    const child = operation.child;
+    const traceChild = (event: string, fields = {}) => traceRecovery(event, {
+      ...command, pid: child.pid, elapsedMs: performance.now() - started, ...fields
+    });
+    if (traceRecoveryEnabled) {
+      child.once("spawn", () => traceChild("client-spawn"));
+      child.stdout?.once("data", () => traceChild("client-stdout"));
+      child.once("exit", (code, signal) => traceChild("client-exit", { code, signal }));
+    }
+    try { return (await operation).stdout; }
+    catch (error) {
+      const original = error as Error & { code?: number | string; signal?: string; killed?: boolean };
+      traceChild("client-error", { message: original.message, code: original.code, signal: original.signal, killed: original.killed });
+      throw error;
+    }
   },
   alive(pid) {
     try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code !== "ESRCH"; }
@@ -115,8 +160,9 @@ export class GradleDomain {
       if (distributions.length === 0) throw new Error("actual Gradle distributions are not frozen");
     }
     for (const distribution of distributions) {
-      const command = (args: string[]) => this.bounded(() => this.io.execute(distribution, args, this.home, remaining()), deadline, "Gradle command");
-      const status = await command(["--status"]);
+      const command = (phase: string, arg: string) => this.bounded(() => this.io.execute(distribution, [arg], this.home, remaining()),
+        deadline, "Gradle command", { phase, version: distribution.version, command: arg });
+      const status = await command("before-stop", "--status");
       // Gradle's version-scoped registry is authoritative for this domain;
       // PIDs are observed, never used as targets of a kill operation.
       const pids = status.split("\n").flatMap(line => {
@@ -124,16 +170,23 @@ export class GradleDomain {
         return match ? [Number(match[1])] : [];
       });
       if (!/No Gradle daemons are running|\bPID\s+STATUS\b/.test(status)) throw new Error("unrecognized Gradle status response");
-      await command(["--stop"]);
-      while (pids.some(pid => this.io.alive(pid))) { remaining(); await delay(25); }
-      const after = await command(["--status"]);
+      await command("stop", "--stop");
+      const waitStarted = performance.now();
+      try {
+        while (pids.some(pid => this.io.alive(pid))) { remaining(); await delay(25); }
+        traceRecovery("daemon-exit", { version: distribution.version, pidCount: pids.length, elapsedMs: performance.now() - waitStarted });
+      } catch (error) {
+        traceRecovery("daemon-exit-error", { version: distribution.version, elapsedMs: performance.now() - waitStarted, message: String(error) });
+        throw error;
+      }
+      const after = await command("after-stop", "--status");
       if (/^\s*\d+\s+(IDLE|BUSY|CANCELED)\b/m.test(after)) throw new Error("Gradle daemon remains after stop");
       if (!/No Gradle daemons are running|\bPID\s+STATUS\b/.test(after)) throw new Error("unrecognized Gradle status response");
       // A daemon whose client died before it registered (an owner killed during a first import) is
       // invisible to --status and --stop, but its fresh log names it: --stop again once it registered.
       while ((await this.bounded(() => this.startingDaemons(distribution.version), deadline, "Gradle daemon log scan")).length) {
         remaining(); await delay(250);
-        await command(["--stop"]);
+        await command("stop-after-registration", "--stop");
       }
     }
     if (unavailable.length) throw new Error(`Gradle ${unavailable.join(", ")} ran in this domain but has no verified local distribution`);
@@ -155,9 +208,16 @@ export class GradleDomain {
     }
     return pids;
   }
-  private async bounded<T>(operation: () => Promise<T>, deadline: number, stage: string): Promise<T> {
-    const remainingMs = Math.ceil(deadline - performance.now());
-    if (remainingMs <= 0) throw new Error(`${stage} deadline exceeded`);
+  private async bounded<T>(operation: () => Promise<T>, deadline: number, stage: string,
+    details: Record<string, unknown> = {}): Promise<T> {
+    const started = performance.now();
+    const remainingMs = Math.ceil(deadline - started);
+    const fields = { stage, ...details };
+    if (remainingMs <= 0) {
+      const error = new Error(`${stage} deadline exceeded`);
+      traceRecovery("stage-error", { ...fields, elapsedMs: 0, message: error.message });
+      throw error;
+    }
     const running = Promise.resolve().then(operation);
     this.pendingOperations.add(running);
     const settled = () => {
@@ -167,9 +227,15 @@ export class GradleDomain {
     void running.then(settled, settled);
     let timer: NodeJS.Timeout | undefined;
     try {
-      return await Promise.race([running, new Promise<never>((_, reject) => {
+      const result = await Promise.race([running, new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`${stage} deadline exceeded`)), remainingMs);
+        traceRecovery("stage-start", { ...fields, remainingMs });
       })]);
+      traceRecovery("stage-end", { ...fields, elapsedMs: performance.now() - started });
+      return result;
+    } catch (error) {
+      traceRecovery("stage-error", { ...fields, elapsedMs: performance.now() - started, message: String(error) });
+      throw error;
     } finally { clearTimeout(timer); }
   }
 }

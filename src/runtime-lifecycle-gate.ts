@@ -5,8 +5,7 @@
 type AdmissionTicket = {
   kind: "query" | "control";
   resolve(): void;
-  reject(error: Error): void;
-  timer: NodeJS.Timeout;
+  clear(): void;
 };
 
 export type RuntimeLifecycleGateState = {
@@ -45,9 +44,10 @@ export class RuntimeLifecycleGate {
       });
   }
 
-  async withQuery<T>(operation: () => Promise<T>, deadlineMs: number): Promise<T> {
-    await this.acquire("query", deadlineAt(deadlineMs));
+  async withQuery<T>(operation: () => Promise<T>, deadlineMs: number, signal?: AbortSignal): Promise<T> {
+    await this.acquire("query", deadlineAt(deadlineMs), signal);
     try {
+      signal?.throwIfAborted();
       return await operation();
     } finally {
       this.activeQueries = Math.max(0, this.activeQueries - 1);
@@ -55,9 +55,10 @@ export class RuntimeLifecycleGate {
     }
   }
 
-  async withControl<T>(operation: () => Promise<T>, deadlineMs: number): Promise<T> {
-    await this.acquire("control", deadlineAt(deadlineMs));
+  async withControl<T>(operation: () => Promise<T>, deadlineMs: number, signal?: AbortSignal): Promise<T> {
+    await this.acquire("control", deadlineAt(deadlineMs), signal);
     try {
+      signal?.throwIfAborted();
       return await operation();
     } finally {
       this.controlActive = false;
@@ -65,27 +66,35 @@ export class RuntimeLifecycleGate {
     }
   }
 
-  private acquire(kind: AdmissionTicket["kind"], deadline: number): Promise<void> {
+  private acquire(kind: AdmissionTicket["kind"], deadline: number, signal?: AbortSignal): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      signal?.throwIfAborted();
       const remaining = deadline - Date.now();
       if (remaining <= 0) {
         reject(timeoutError(`${kind} admission`));
         return;
       }
-      const ticket = {} as AdmissionTicket;
-      ticket.kind = kind;
-      ticket.resolve = resolve;
-      ticket.reject = reject;
-      ticket.timer = setTimeout(() => {
+      const remove = (error: unknown) => {
         const index = this.admissionQueue.indexOf(ticket);
         if (index < 0) {
           return;
         }
         this.admissionQueue.splice(index, 1);
-        reject(timeoutError(this.timeoutLabel(ticket)));
+        ticket.clear();
+        reject(error);
         this.pumpAdmissions();
-      }, remaining);
+      };
+      const abort = () => remove(signal?.reason);
+      const timer = setTimeout(() => remove(timeoutError(this.timeoutLabel(ticket))), remaining);
+      const ticket: AdmissionTicket = {
+        kind, resolve,
+        clear() {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", abort);
+        }
+      };
       this.admissionQueue.push(ticket);
+      signal?.addEventListener("abort", abort, { once: true });
       this.pumpAdmissions();
     });
   }
@@ -105,7 +114,7 @@ export class RuntimeLifecycleGate {
     if (next.kind === "control") {
       this.admissionQueue.shift();
       this.controlActive = true;
-      clearTimeout(next.timer);
+      next.clear();
       next.resolve();
       return;
     }
@@ -116,7 +125,7 @@ export class RuntimeLifecycleGate {
     while (this.admissionQueue[0]?.kind === "query") {
       const query = this.admissionQueue.shift()!;
       this.activeQueries += 1;
-      clearTimeout(query.timer);
+      query.clear();
       query.resolve();
     }
   }

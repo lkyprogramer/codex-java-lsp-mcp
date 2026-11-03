@@ -16,6 +16,9 @@ import { RepoResolver } from "./repo-resolver.js";
 import { resetImpactTelemetryForTests } from "./telemetry/impact-telemetry.js";
 import { IndexOwner } from "./java-index/snapshot/index-owner.js";
 import { FSEVENT_FLAGS } from "./java-index/snapshot/workspace-tracker.js";
+import { RepoRuntimeManager } from "./repo-runtime-manager.js";
+import { NoopCrossProcessLeaseStore } from "./cross-process-lease.js";
+import { deferred } from "./test-support/fake-jdtls.test.js";
 
 const expectedTools = [...PUBLIC_JAVA_TOOLS].sort();
 
@@ -143,6 +146,62 @@ test("protocol factory creates independent servers over one shared application",
   } finally {
     await second.client.close();
     await application.close();
+  }
+});
+
+test("public MCP shutdown waits for the same repository's active semantic query", { timeout: 10000 }, async t => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "java-lsp-factory-control-")));
+  const repoRoot = path.join(root, "repo");
+  await mkdir(repoRoot);
+  await writeFile(path.join(repoRoot, "pom.xml"), "<project></project>");
+  await writeFile(path.join(repoRoot, "Sample.java"), "class Sample {}");
+  const config = path.join(root, "projects.json");
+  await writeFile(config, JSON.stringify({ aliases: [{ id: "sample", root: repoRoot, lspEnabled: true }] }));
+  const registry = new AliasRegistry(config);
+  const resolver = new RepoResolver(registry, { cwdFallback: "reject" });
+  const runtimes = new RepoRuntimeManager(resolver, { index: false, gradleDomain: false, transportMode: "streamable_http" },
+    undefined, undefined, new NoopCrossProcessLeaseStore());
+  const application = new JavaLspApplication({ transportMode: "streamable_http", registry, resolver, runtimes,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }) });
+  const querying = deferred<void>();
+  const release = deferred<void>();
+  const admitted = deferred<void>();
+  const order: string[] = [];
+  await application.initialize();
+  await runtimes.withContext({ repoRoot }, async ({ session }) => {
+    t.mock.method(session, "diagnosticsFor", async () => {
+      order.push("query-start");
+      querying.resolve();
+      await release.promise;
+      order.push("query-end");
+      return {};
+    });
+    t.mock.method(session, "stop", async () => { order.push("stop"); });
+  });
+  const first = (await connect(application, "semantic-query")).client;
+  const second = (await connect(application, "control")).client;
+  const withContext = runtimes.withContext.bind(runtimes);
+  const observedContext: typeof runtimes.withContext = (selector, handler, options) =>
+    withContext(selector, (context, request) => {
+      const pending = handler(context, request);
+      if (!options?.mayStartLsp) admitted.resolve();
+      return pending;
+    }, options);
+  t.mock.method(runtimes, "withContext", observedContext);
+  try {
+    const query = first.callTool({ name: "java_diagnostics", arguments: { repoRoot, files: ["Sample.java"] } });
+    await querying.promise;
+    const control = second.callTool({ name: "java_runtime", arguments: { repoRoot, action: "shutdown" } });
+    await admitted.promise;
+    assert.deepEqual(order, ["query-start"]);
+    release.resolve();
+    for (const result of await Promise.all([query, control])) assert.equal(result.isError, undefined);
+    assert.deepEqual(order, ["query-start", "query-end", "stop"]);
+  } finally {
+    release.resolve();
+    await Promise.all([first.close(), second.close()]);
+    await application.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 

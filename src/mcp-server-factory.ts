@@ -179,6 +179,7 @@ export function createMcpServer(
       return { stoppedRepos: activeRepos };
     }
     return withContext(args, context => javaRuntime(context, args), {
+      control: true,
       mayStartLsp: args.action === "restart",
       requireLspEnabled: args.action === "restart",
       signal
@@ -191,11 +192,13 @@ export function createMcpServer(
     contextOptions: {
       mayStartLsp?: boolean;
       requireLspEnabled?: boolean;
+      control?: boolean;
       requestOptions?: RequestOptionsInput;
       signal?: AbortSignal;
     } = {}
   ): Promise<T> {
-    return application.runtimes.withContext(args, async (context, request) => {
+    const route = contextOptions.control ? "withControl" : contextOptions.mayStartLsp ? "withQuery" : "withContext";
+    return application.runtimes[route](args, async (context, request) => {
       noteTelemetryRepoHash(context.repoHash);
       if (contextOptions.requireLspEnabled && !context.lsp.enabled) {
         throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");

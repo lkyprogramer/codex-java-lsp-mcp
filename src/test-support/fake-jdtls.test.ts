@@ -3,6 +3,7 @@
 // pos: The single shared JDT fake; do not create per-test duplicates.
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { pathToFileURL } from "node:url";
 import type {
   JdtlsChild,
   JdtlsConnection,
@@ -246,6 +247,15 @@ export class FakeJdtlsTransportFactory implements JdtlsTransportFactory {
       connection.responses.set("initialize", options.initializeResult ?? { capabilities: {} });
     }
     connection.responses.set("shutdown", null);
+    if (!Object.hasOwn(options.responses ?? {}, "workspace/executeCommand")) {
+      connection.handlers.set("workspace/executeCommand", params => {
+        const command = params as { command?: string; arguments?: unknown[] };
+        if (command.command !== "java.project.getAll" || command.arguments?.length !== 0) {
+          throw new Error("No fake response for this workspace command");
+        }
+        return [pathToFileURL(input.cwd).toString()];
+      });
+    }
     for (const [method, value] of Object.entries(options.responses ?? {})) {
       connection.responses.set(method, value);
     }

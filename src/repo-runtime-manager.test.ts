@@ -585,6 +585,34 @@ test("under a Gradle domain, start runs its cleanup before any semantic admissio
   assert.deepEqual(order, ["session-stop:RECOVERING", "session-stopped", "gradle--status", "gradle--stop", "gradle--status"]);
 });
 
+test("terminal shutdown reports the original Gradle stop error after stopping the index owner", { timeout: 5000 }, async t => {
+  const home = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-gradle-stop-error-")));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const original = new Error("injected terminal Gradle stop error");
+  const owner = new FakeOwner();
+  owner.bindings.set("wsrepoa", { snapshotId: "snap-1" });
+  let closing = false;
+  const domain = new GradleDomain(home, [{ version: "9.3.1", launcher: "/private/gradle/bin/gradle",
+    launcherSha256: "a".repeat(64), javaHome: "/private/jdk" }], {
+    alive: () => false,
+    async execute(_dist, args) {
+      if (closing && args[0] === "--stop") throw original;
+      return "No Gradle daemons are running.\n";
+    }
+  });
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), { index: owner.source(), gradleDomain: domain,
+    idleTtlMs: 100000, pressureIntervalMs: 0 }, resolved => fakeContext(resolved, sessions),
+    undefined, new NoopCrossProcessLeaseStore());
+  await manager.initialize();
+  await cleanupSettled(domain);
+  await manager.prewarmRepo({ repoRoot: "/repo-a" });
+  closing = true;
+  await assert.rejects(manager.shutdownAll({ terminal: true }), error => error === original);
+  assert.equal(owner.stops, 1);
+  assert.equal(sessions.get("/repo-a")?.stops, 1);
+});
+
 test("a blocked Gradle cleanup is retried only on semantic demand and not sooner than the retry floor", async t => {
   const home = realpathSync(mkdtempSync(path.join(tmpdir(), "runtime-gradle-")));
   t.after(() => rmSync(home, { recursive: true, force: true }));

@@ -14,6 +14,7 @@ import type { ProjectJdkStatus } from "../project-jdk.js";
 import type { ResolvedRepo } from "../repo-resolver.js";
 import type { ViewLabels } from "../java-index/snapshot/request-view.js";
 import type { RequestContext } from "../runtime/request-context.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { ToolContext } from "./context.js";
 import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
@@ -28,7 +29,7 @@ type SessionStatus = ReturnType<ToolContext["session"]["status"]>;
  * session state, only on options.semanticPolicy/mode/anchor.profile.
  */
 const AUTO_SEMANTIC_POLICY_EXPLANATION =
-  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors, never merely because JDT reports READY (READY requires the initial project import notification; later build/index work can still be pending). semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
+  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors. READY follows the initial project import and search index barrier; later edits can trigger more indexing. semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
 
 type DisabledStatus = {
   readonly repoRoot: string;
@@ -89,8 +90,7 @@ export async function javaStatus(
     try {
       await context.session.ensureStarted(request?.budget);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/deadline exceeded|timed out/i.test(message)) throw error;
+      if (!(error instanceof JavaIntelligenceError) || error.code !== "DEADLINE_EXCEEDED") throw error;
     }
   }
   const sessionStatus = context.session.status();
@@ -130,7 +130,8 @@ export function summarizeSessionStatus(status: SessionStatus): Record<string, un
       consecutiveFailures: status.restartBackoff.consecutiveFailures || undefined,
       retryAfterMs: status.restartBackoff.retryAfterMs,
       blockedUntilExplicitReset: status.restartBackoff.blockedUntilExplicitReset || undefined,
-      lastErrorCode: status.restartBackoff.lastErrorCode
+      lastErrorCode: status.restartBackoff.lastErrorCode,
+      lastErrorMessage: status.restartBackoff.lastErrorMessage
     }),
     startedAt: status.startedAt,
     knownDiagnostics: status.knownDiagnostics,
@@ -308,6 +309,7 @@ function summarizeProgress(progress: JdtlsProgressStatus): Record<string, unknow
     activeMessageCount: progress.activeMessages.length,
     lastProgressAt: progress.lastProgressAt,
     lastLanguageStatus: progress.lastLanguageStatus,
-    importState: progress.importState
+    importState: progress.importState,
+    indexBarrier: progress.indexBarrier
   });
 }

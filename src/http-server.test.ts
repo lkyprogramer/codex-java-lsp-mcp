@@ -521,6 +521,7 @@ function git(cwd: string, ...args: string[]): void {
 function fakeJdtlsProgram(): string {
   return `#!${process.execPath}
 let buffer = Buffer.alloc(0);
+let rootUri;
 
 function sendMessage(message) {
   const body = JSON.stringify(message);
@@ -533,11 +534,14 @@ function send(id, result) {
 
 function handle(message) {
   if (message.method === "initialize") {
+    rootUri = message.params.rootUri;
     send(message.id, { capabilities: {} });
   } else if (message.method === "initialized") {
     sendMessage({ jsonrpc: "2.0", method: "language/status", params: { type: "ServiceReady", message: "ServiceReady" } });
   } else if (message.method === "shutdown") {
     send(message.id, null);
+  } else if (message.method === "workspace/executeCommand" && message.params?.command === "java.project.getAll" && message.params?.arguments?.length === 0) {
+    send(message.id, [rootUri]);
   } else if (message.method === "workspace/symbol") {
     send(message.id, []);
   }

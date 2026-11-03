@@ -413,28 +413,28 @@ export class RepoRuntimeManager {
   async withQuery<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     return this.withContext(selector, async (context, request) => {
       const entry = this.runtimes.get(context.repoRoot);
       if (!entry) {
         return handler(context, request);
       }
-      return entry.gate.withQuery(() => handler(context, request), request.budget.remainingMs());
+      return entry.gate.withQuery(() => handler(context, request), request.budget.remainingMs(), options.signal);
     }, options);
   }
 
   async withControl<T>(
     selector: RepoSelector,
-    handler: (context: ManagedToolContext, request?: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+    handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
+    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     return this.withContext(selector, async (context, request) => {
       const entry = this.runtimes.get(context.repoRoot);
       if (!entry) {
         return handler(context, request);
       }
-      return entry.gate.withControl(() => handler(context, request), request.budget.remainingMs());
+      return entry.gate.withControl(() => handler(context, request), request.budget.remainingMs(), options.signal);
     }, options);
   }
 
@@ -697,9 +697,9 @@ export class RepoRuntimeManager {
     const closeSessions = () => closing ??= Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
     // Normal stop (contract §2.1): recover() closes semantic admission before any session starts
     // closing, waits for them, then stops and confirms every Gradle version this domain used.
-    const semantic = options.terminal ? this.gradleDomain?.recover(async () => { await closeSessions(); }).catch(error => {
-      console.error(`[codex-java-lsp] Gradle domain stop failed: ${error instanceof Error ? error.message : String(error)}`);
-    }) : undefined;
+    const semantic = options.terminal ? this.gradleDomain?.recover(async () => { await closeSessions(); }) : undefined;
+    // The original rejection is returned after the other shutdown work.
+    void semantic?.catch(() => undefined);
     await closeSessions();
     await Promise.all([...this.runtimes.values()].map(async entry => {
       for (const runtime of entry.snapshots.values()) runtime.router.dispose();

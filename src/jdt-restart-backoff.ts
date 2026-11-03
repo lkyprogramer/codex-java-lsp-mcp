@@ -8,6 +8,7 @@ export type JdtRestartBackoffStatus = {
   retryAfterMs?: number;
   blockedUntilExplicitReset: boolean;
   lastErrorCode?: JavaIntelligenceErrorCode;
+  lastErrorMessage?: string;
 };
 
 export type JdtRestartBackoffGate = {
@@ -41,6 +42,7 @@ export class JdtRestartBackoff {
   private nextRetryAtMs = 0;
   private blocked = false;
   private lastErrorCode?: JavaIntelligenceErrorCode;
+  private lastErrorMessage?: string;
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -52,9 +54,10 @@ export class JdtRestartBackoff {
       : { allowed: true, blockedUntilExplicitReset: false };
   }
 
-  recordFailure(code: JavaIntelligenceErrorCode): void {
+  recordFailure(code: JavaIntelligenceErrorCode, message?: string): void {
     if (IGNORED_CODES.has(code)) return;
     this.lastErrorCode = code;
+    this.lastErrorMessage = message;
     if (CONFIG_CODES.has(code)) {
       this.blocked = true;
       return;
@@ -78,6 +81,7 @@ export class JdtRestartBackoff {
     this.nextRetryAtMs = 0;
     this.blocked = false;
     this.lastErrorCode = undefined;
+    this.lastErrorMessage = undefined;
   }
 
   status(): JdtRestartBackoffStatus {
@@ -86,7 +90,8 @@ export class JdtRestartBackoff {
       consecutiveFailures: this.failures,
       retryAfterMs: retryAfterMs > 0 ? retryAfterMs : undefined,
       blockedUntilExplicitReset: this.blocked,
-      lastErrorCode: this.lastErrorCode
+      lastErrorCode: this.lastErrorCode,
+      lastErrorMessage: this.lastErrorMessage
     };
   }
 }

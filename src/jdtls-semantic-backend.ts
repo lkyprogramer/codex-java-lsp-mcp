@@ -234,6 +234,17 @@ function tokenAt(source: string, lineNumber: number, character: number): string 
   return line.slice(Math.max(0, character)).match(/^[A-Za-z_$][\w$]*/)?.[0];
 }
 
+// Apply after project configuration and also when the Tooling API applies Eclipse lazily.
+// Local source roots and binary classpaths remain in the model; only external source attachments are omitted.
+export const GRADLE_IMPORT_INIT_SCRIPT = `gradle.projectsEvaluated { g ->
+    g.rootProject.allprojects { p ->
+        p.plugins.withId("eclipse") {
+            p.extensions.getByType(org.gradle.plugins.ide.eclipse.model.EclipseModel).classpath.downloadSources = false
+        }
+    }
+}
+`;
+
 export function buildJavaSettings(input: {
   repoRoot: string;
   buildSystem: BuildSystem;
@@ -242,6 +253,8 @@ export function buildJavaSettings(input: {
   gradleHome?: string;
   /** A configured installation: no wrapper, and no gradle.version (JDT LS prefers it and the Tooling API would download). */
   gradleImport?: GradleImport;
+  gradleImportInitScript?: string;
+  gradleJvmArgs?: readonly string[];
 }): Record<string, unknown> {
   const runtime = input.projectJdk.resolvedHome && input.projectJdk.runtimeName
     ? [{ name: input.projectJdk.runtimeName, path: input.projectJdk.resolvedHome, default: true }]
@@ -254,9 +267,10 @@ export function buildJavaSettings(input: {
           enabled: input.buildSystem !== "maven",
           user: { home: input.gradleHome ?? jdtGradleHome() },
           ...(input.gradleImport ? { home: input.gradleImport.gradleHome, wrapper: { enabled: false }, java: { home: input.gradleImport.javaHome } } : {}),
+          ...(input.gradleImportInitScript ? { arguments: ["--init-script", input.gradleImportInitScript] } : {}),
           // Gradle's JDT APT tooling model resolves processors across projects.
           // Serialize that import only; target-repository build settings stay unchanged.
-          jvmArguments: ["-Dorg.gradle.parallel=false"],
+          jvmArguments: ["-Dorg.gradle.parallel=false", ...(input.gradleJvmArgs ?? [])],
           annotationProcessing: { enabled: annotationProcessing }
         },
         maven: {
