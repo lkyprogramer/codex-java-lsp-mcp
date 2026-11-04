@@ -646,6 +646,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     for (const absolutePath of admittedPaths) {
       const cached = this.factsByPath.get(absolutePath);
       if (cached?.generation === generation) {
+        this.currentRequestOptions().onStaticRead?.();
         outcomeByPath.set(absolutePath, {
           inputFile: absolutePath,
           absolutePath,
@@ -714,6 +715,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   ): FactsForFileItem {
     const cached = this.factsByPath.get(absolutePath);
     if (cached?.generation === generation && parseState === "COMPLETE") {
+      this.currentRequestOptions().onStaticRead?.();
       return { inputFile: absolutePath, absolutePath, state: "FOUND", facts: cached.facts };
     }
     return incompleteItem(absolutePath);
@@ -1153,6 +1155,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     generation: number
   ): Promise<FrameworkFileFacts[]> {
     const uncached = absolutePaths.filter(file => this.frameworkFactsByPath.get(file)?.generation !== generation);
+    if (uncached.length < absolutePaths.length) this.currentRequestOptions().onStaticRead?.();
     if (uncached.length > 0) {
       await this.loadFactsForFiles(uncached, generation, MAX_FRAMEWORK_FACT_FILES);
       for (const absolutePath of uncached) {
@@ -1314,7 +1317,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const annotationPrefixes = unique([...input.annotationPrefixes]).slice(0, 16);
     const key = `${importPrefixes.join("\u0000")}|${annotationPrefixes.join("\u0000")}`;
     const cached = this.repositoryFactMarkerCache.get(key);
-    if (cached?.generation === this.generation) return cached.markers;
+    if (cached?.generation === this.generation) {
+      this.currentRequestOptions().onStaticRead?.();
+      return cached.markers;
+    }
     const markers = await this.client.queryRepositoryFactMarkers(
       importPrefixes,
       annotationPrefixes,

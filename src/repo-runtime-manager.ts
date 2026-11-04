@@ -128,6 +128,7 @@ type RuntimeEntry = {
   unsubscribeLifecycle?: () => void;
   /** Set once `shutdown()` has retired this entry; undefined while active. */
   stoppedAt?: number;
+  retiring?: Promise<void>;
   /**
    * Best-effort: a degraded/unopened lease store must never block runtime
    * creation, so a failed acquire simply leaves this undefined and the repo
@@ -161,6 +162,7 @@ type RuntimeManagerOptions = {
   transportMode: RepoOwnerTransport;
   /** Pin roots keep their index runtime after JDT idle-stop. */
   isProtectedRepo?: (repoRoot: string) => boolean;
+  worktreeIdle?: IndexOwnerOptions["worktreeIdle"];
   index?: IndexOwnerSource;
   /** The private Gradle domain gating JDT (default: the service domain under the owner launcher, else none). */
   gradleDomain?: GradleDomain | false;
@@ -301,7 +303,10 @@ export class RepoRuntimeManager {
     if (this.options.index === false) return Promise.resolve(undefined);
     if (this.ownerPromise) return this.ownerPromise;
     const admission = this.admission;
-    const source = this.options.index ?? defaultIndexOwner(admission ? { admitted: admission.admitted, restored: () => admission.openStatic() } : {});
+    const source = this.options.index ?? defaultIndexOwner({
+      ...(admission ? { admitted: admission.admitted, restored: () => admission.openStatic() } : {}),
+      worktreeIdle: this.options.worktreeIdle
+    });
     return this.ownerPromise ??= source().then(owner => {
       this.unsubscribePublish = owner.onPublished(event => this.onPublished(event));
       return owner;
@@ -332,7 +337,8 @@ export class RepoRuntimeManager {
   async prewarmRepo(selector: RepoSelector, _options: { hydrate?: boolean } = {}): Promise<void> {
     const resolved = await this.resolver.resolve(selector);
     if (!resolved.lsp.enabled) return;
-    const entry = await this.getOrCreate(resolved);
+    let entry = await this.getOrCreate(resolved);
+    while (entry.retiring || entry.stoppedAt !== undefined) entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
     entry.refCount += 1;
     try {
@@ -354,12 +360,13 @@ export class RepoRuntimeManager {
   async withContext<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
+    options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     const requestOptions = options.requestOptions;
     const budget = this.createRequestBudget(requestOptions);
     const resolved = await budget.race("runtime.repo-resolve", this.resolver.resolve(selector));
-    const entry = await this.getOrCreate(resolved, budget);
+    let entry = await this.getOrCreate(resolved, budget);
+    while (entry.retiring || entry.stoppedAt !== undefined) entry = await this.getOrCreate(resolved, budget);
     this.refreshResource(entry);
     entry.refCount += 1;
     this.clearIdleTimers(entry);
@@ -373,7 +380,7 @@ export class RepoRuntimeManager {
           await this.reserveLspSlot(entry, request.budget);
         }
         return handler(context, request);
-      });
+      }, options.observeStaticRead);
     } finally {
       entry.refCount = Math.max(0, entry.refCount - 1);
       entry.lastUsedAt = Date.now();
@@ -413,7 +420,7 @@ export class RepoRuntimeManager {
   async withQuery<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
+    options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     return this.withContext(selector, async (context, request) => {
       const entry = this.runtimes.get(context.repoRoot);
@@ -427,7 +434,7 @@ export class RepoRuntimeManager {
   async withControl<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
+    options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     return this.withContext(selector, async (context, request) => {
       const entry = this.runtimes.get(context.repoRoot);
@@ -468,7 +475,8 @@ export class RepoRuntimeManager {
     budget: DeadlineBudget,
     signal: AbortSignal | undefined,
     start: boolean,
-    handler: (context: ManagedToolContext, view: RequestView | undefined) => Promise<T>
+    handler: (context: ManagedToolContext, view: RequestView | undefined) => Promise<T>,
+    observeStaticRead?: boolean
   ): Promise<T> {
     if (!owner) return handler(entry.context, undefined);
     return withRequestView({
@@ -481,7 +489,15 @@ export class RepoRuntimeManager {
         try {
           const context: ManagedToolContext = { ...entry.context, indexView: view.labels, javaIndexClient: runtime.javaIndexClient, javaIndex: runtime.javaIndex, router: runtime.router };
           // Reads that carry no explicit options still run under this request's deadline and signal.
-          return await withRequestDefaults({ budget, signal }, () => runtime.javaIndex.withRequestOptions({ budget, signal }, () => handler(context, view)));
+          let observed = false;
+          const workspaceId = view.labels.workspaceId;
+          const onStaticRead = observeStaticRead && owner.options.worktreeIdle && workspaceId ? () => {
+            if (observed || view.closed || budget.expired() || signal?.aborted) return;
+            observed = true;
+            owner.noteStaticRead(workspaceId);
+          } : undefined;
+          const options = { budget, signal, onStaticRead };
+          return await withRequestDefaults(options, () => runtime.javaIndex.withRequestOptions(options, () => handler(context, view)));
         } finally {
           runtime.users -= 1;
           this.trimSnapshotRuntimes(entry);
@@ -655,7 +671,11 @@ export class RepoRuntimeManager {
    */
   async shutdown(repoRoot: string): Promise<void> {
     const entry = this.runtimes.get(repoRoot);
-    if (!entry) return;
+    if (!entry || entry.stoppedAt !== undefined) return;
+    return entry.retiring ??= Promise.resolve().then(() => this.shutdownEntry(entry)).finally(() => { entry.retiring = undefined; });
+  }
+
+  private async shutdownEntry(entry: RuntimeEntry): Promise<void> {
     await this.stopEntry(entry);
     await this.retireIndex(entry);
     await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
@@ -731,6 +751,12 @@ export class RepoRuntimeManager {
   private async getOrCreate(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const existing = this.runtimes.get(resolved.repoRoot);
     if (existing) {
+      if (existing.retiring) {
+        const pending = existing.retiring.catch(() => undefined);
+        if (budget) await budget.race("runtime.retire", pending);
+        else await pending;
+        return this.getOrCreate(resolved, budget);
+      }
       if (existing.stoppedAt === undefined) {
         existing.context.aliases = resolved.aliases;
         existing.context.rootSource = resolved.rootSource;

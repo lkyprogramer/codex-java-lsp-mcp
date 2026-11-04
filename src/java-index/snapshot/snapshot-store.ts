@@ -8,7 +8,7 @@
 //      verdicts. A FAILED snapshot, and every unverified one built on it, is quarantined, never a base.
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readdir, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
 import { cloneSealedDatabase } from "../../mac-platform/clonefile.js";
@@ -62,6 +62,7 @@ export type BuildJob = {
 };
 
 export type ReclaimTarget = { snapshotId: string } | { jobId: string } | { workspaceId: string };
+type ExpiredBinding = { binding: WorkspaceBinding; stillEligible: () => boolean };
 /** `tracked`: a running tracker serves the binding's root; `root-live` / `root-unconfirmed`: the root still is, or may be, that workspace. */
 export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "tracked" | "root-live" | "root-unconfirmed";
 export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: ReclaimReason };
@@ -101,6 +102,9 @@ export class SnapshotStore {
   private readonly tracked = new Map<string, TrackedWorkspace>();
   private readonly leases = new Map<string, Set<SnapshotLease>>();
   private readonly reclaiming = new Set<string>();
+  /** Unlinked bindings are never served. Keep their snapshots until the unlink is durable. */
+  private readonly pendingUnlinks = new Map<string, string>();
+  private readonly workspaceUnlinking = new Set<string>();
   private readonly jobs = new Map<string, BuildJob>();
   /** Verdicts by snapshotId (verified/); absent: not verified yet. */
   private readonly verdicts = new Map<string, VerificationRecord>();
@@ -174,13 +178,28 @@ export class SnapshotStore {
   }
 
   /** The tracker stopped (retired workspace): its binding stays, judged by its root alone from now on. */
-  untrack(workspaceId: string): void {
-    this.tracked.delete(workspaceId);
+  untrack(workspaceId: string, trackerEpoch?: string): void {
+    if (trackerEpoch === undefined || this.tracked.get(workspaceId)?.trackerEpoch === trackerEpoch) this.tracked.delete(workspaceId);
   }
 
   binding(workspaceId: string): WorkspaceBinding | undefined {
     const binding = this.bindings.get(workspaceId);
     return binding && { ...binding, root: { ...binding.root } };
+  }
+
+  boundWorkspaces(): WorkspaceBinding[] {
+    return [...this.bindings.values()];
+  }
+
+  writeIdleObservation(workspaceId: string, observation: { observedAt: number; lastAccessAt?: number }): Promise<void> {
+    return this.serial(async () => {
+      if (!this.bindings.has(workspaceId)) return;
+      this.options.assertOwner?.();
+      const file = path.join(workspaceDir(this.layout, workspaceId), "observations.json");
+      const tmp = `${file}.tmp`;
+      await writeFile(tmp, JSON.stringify(observation) + "\n", { mode: 0o600 });
+      await rename(tmp, file);
+    });
   }
 
   /**
@@ -268,6 +287,7 @@ export class SnapshotStore {
 
   /** One acquire for a request: the workspace's verified binding, fixed for the lease's lifetime. */
   acquireBound(workspaceId: string, purpose: LeasePurpose): { lease: SnapshotLease; binding: WorkspaceBinding } | undefined {
+    if (this.workspaceUnlinking.has(workspaceId)) return undefined;
     const binding = this.binding(workspaceId);
     if (!binding) return undefined; // NOT_READY: never another workspace's unverified snapshot.
     // The root was replaced at the same path: the old binding is no longer this workspace's view.
@@ -484,6 +504,7 @@ export class SnapshotStore {
       throw error;
     }
     this.bindings.set(plan.workspaceId, binding);
+    this.pendingUnlinks.delete(plan.workspaceId);
     this.quarantined.delete(plan.workspaceId);
     await record("bound");
     return { ...binding, root: { ...binding.root } };
@@ -515,7 +536,8 @@ export class SnapshotStore {
       assertId("snapshotId", snapshotId);
       const dir = path.join(this.layout.snapshots, snapshotId);
       if (!existsSync(dir)) return { reclaimed: false, reason: "missing" };
-      if ([...this.bindings.values()].some(binding => binding.snapshotId === snapshotId) || [...this.quarantined.values()].some(entry => entry.snapshotId === snapshotId)) return { reclaimed: false, reason: "bound" };
+      if ([...this.bindings.values()].some(binding => binding.snapshotId === snapshotId) || [...this.quarantined.values()].some(entry => entry.snapshotId === snapshotId)
+        || [...this.pendingUnlinks.values()].includes(snapshotId)) return { reclaimed: false, reason: "bound" };
       if (this.leaseCount(snapshotId) > 0) return { reclaimed: false, reason: "leased" };
       if ([...this.jobs.values()].some(job => job.state !== "FINISHED" && job.snapshotId === snapshotId)) return { reclaimed: false, reason: "in-flight" };
       this.options.assertOwner?.();
@@ -530,6 +552,11 @@ export class SnapshotStore {
       } finally { this.reclaiming.delete(snapshotId); }
       return { reclaimed: true };
     });
+  }
+
+  /** Caller holds the owner-side workspace retirement claim; the final check runs at the commit boundary. */
+  reclaimExpired(candidate: ExpiredBinding): Promise<ReclaimResult> {
+    return this.serial(() => this.reclaimWorkspace(candidate.binding.workspaceId, candidate));
   }
 
   /**
@@ -584,7 +611,7 @@ export class SnapshotStore {
     await syncDir(this.layout.verified);
   }
 
-  private async reclaimWorkspace(workspaceId: string): Promise<ReclaimResult> {
+  private async reclaimWorkspace(workspaceId: string, expired?: ExpiredBinding): Promise<ReclaimResult> {
     const dir = workspaceDir(this.layout, workspaceId);
     if (!existsSync(dir)) return { reclaimed: false, reason: "missing" };
     const binding = this.bindings.get(workspaceId) ?? this.quarantined.get(workspaceId);
@@ -593,22 +620,45 @@ export class SnapshotStore {
     if (tracked && (!binding || sameRoot(tracked.root, binding.root))) return { reclaimed: false, reason: "tracked" };
     if ([...this.jobs.values()].some(job => job.workspaceId === workspaceId && job.state !== "FINISHED")) return { reclaimed: false, reason: "in-flight" };
     if (binding && this.leaseCount(binding.snapshotId) > 0) return { reclaimed: false, reason: "leased" };
-    if (binding) {
+    if (expired) {
+      const current = this.bindings.get(workspaceId);
+      if (!current || current.bindingVersion !== expired.binding.bindingVersion || current.snapshotId !== expired.binding.snapshotId
+        || !sameRoot(current.root, expired.binding.root) || await rootState(current.root) !== "live") {
+        return { reclaimed: false, reason: "root-unconfirmed" };
+      }
+    } else if (binding) {
       const state = await rootState(binding.root);
       if (state !== "gone") return { reclaimed: false, reason: state === "live" ? "root-live" : "root-unconfirmed" };
     } else if (existsSync(path.join(dir, BINDING_FILE))) {
       // A binding file recovery could not read names no root to judge: kept, never guessed.
       return { reclaimed: false, reason: "root-unconfirmed" };
     }
+    // Root verification awaited I/O. Synchronous leases and tracker registration may have arrived.
+    const currentTracker = this.tracked.get(workspaceId);
+    if (currentTracker && (expired || !binding || sameRoot(currentTracker.root, binding.root))) {
+      return { reclaimed: false, reason: "tracked" };
+    }
+    if ([...this.jobs.values()].some(job => job.workspaceId === workspaceId && job.state !== "FINISHED")) return { reclaimed: false, reason: "in-flight" };
+    if (binding && this.leaseCount(binding.snapshotId) > 0) return { reclaimed: false, reason: "leased" };
     this.options.assertOwner?.();
-    // The commit point goes first: a crash mid-removal leaves no binding, never half of one.
-    await rm(path.join(dir, BINDING_FILE), { force: true });
-    await syncDir(dir);
-    this.bindings.delete(workspaceId);
-    this.quarantined.delete(workspaceId);
-    await removeTree(dir);
-    await syncDir(this.layout.workspaces);
-    return { reclaimed: true };
+    // The native owner check can block while another process updates the pins.
+    if (expired && !expired.stillEligible()) return { reclaimed: false, reason: "root-live" };
+    this.workspaceUnlinking.add(workspaceId);
+    try {
+      // Unlink is the commit point. Keep the snapshot referenced until the directory sync succeeds.
+      await rm(path.join(dir, BINDING_FILE), { force: true });
+      if (binding) this.pendingUnlinks.set(workspaceId, binding.snapshotId);
+      this.bindings.delete(workspaceId);
+      this.quarantined.delete(workspaceId);
+      await this.options.faultAt?.("workspace-unlinked");
+      await syncDir(dir);
+      this.pendingUnlinks.delete(workspaceId);
+      await removeTree(dir);
+      await syncDir(this.layout.workspaces);
+      return { reclaimed: true };
+    } finally {
+      this.workspaceUnlinking.delete(workspaceId);
+    }
   }
 
   private serial<T>(work: () => Promise<T>): Promise<T> {

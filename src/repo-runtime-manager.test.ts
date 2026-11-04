@@ -727,6 +727,7 @@ type FakeWorkspace = { workspaceId: string; canonicalRoot: string; viewState: ()
 class FakeOwner {
   opens = 0;
   workspaceCalls = 0;
+  admitRequest(): () => void { return () => {}; }
   stops = 0;
   readonly retired: string[] = [];
   readonly workspaces = new Map<string, FakeWorkspace>();

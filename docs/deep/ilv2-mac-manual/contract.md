@@ -93,6 +93,8 @@ mac1/
 
 独立服务状态目录为`serviceStateRoot/jdt-gradle-home/`（绝对路径及隔离实例规则见§2.1），位于上述mac1缓存树之外。它保存Gradle发行版、依赖和daemon registry，不是快照可回收物；snapshot/workspace GC不得遍历或删除它。安装/回滚清单明确保留该目录；清理入口复用外部daemon停止与授权边界。
 
+已存在的 linked worktree 可以按 48 小时静态索引闲置期回收。默认关闭，`JAVA_LSP_STATIC_WORKTREE_GC=observe` 仅记录候选，`enforce` 才允许到期解绑。主仓库和配置中 `lspEnabled=true` 的精确路径受保护。实际前台静态事实读取续期，包括内存命中。状态读取、预热和后台构建不续期。`observations.json` 是批量写入的观测记录。owner 重启后无法证明上一次写入覆盖最后一次访问，因此首次重新确认时给足 48 小时。活跃请求、在途构建和共享快照租约可以延后解绑。解除绑定后，现有快照 GC 才判断能否删除 SQLite。Git worktree、未提交文件、JDT 和 Gradle 缓存不属于这项回收。
+
 发布次序：私有写入完成 → checkpoint/关闭所有写句柄 → integrity/外键/census/派生校验 → 保证无 WAL/SHM → 写封存 manifest → 同卷 rename 到 snapshots 并同步文件/目录 → 写临时 binding、同步并原子 rename → 同步 workspace 目录。失败结果不得进入绑定。SIGKILL 恢复与断电耐久分开报告；fsync API 调用过不等于做过断电试验。
 
 **2026-10-22 按用户要求修订（MAC-12 方案B）**：上一段的"integrity/外键/census/派生校验"对空库 full 构建照旧在绑定前完成，并同时写入 `verified/` 结论。克隆 base 的 delta/rescan 候选，绑定前只做与改动成比例的检查：checkpoint、无 sidecar、census/pipeline/schema 完整，以及本次构建写出的行。这些行是 generation 等于本次 indexedGeneration 的 file，挂在这些 file 下的 type、field、method、edge、type_ref_name，经 owner 索引查到的这些 file 拥有的 kg_node、kg_edge 及其 owner 行，再加上全部 mybatis_resource；检查内容为安全整数、引用存在和 facts 可解码。SQLite 页级 integrity、外键、未改动行和文件 sha256 移到后台校验。后台每次只查一个仍被绑定的快照，被新发布取代时放弃。结论为 FAILED 时：隔离该快照及其上派生、尚未校验的绑定，进入 NOT_READY；派生的在途作业拒绝发布（`base-failed`）；工作区下一轮必须 full 构建，不回退到旧快照。未校验快照可以作为零差量或 seed 的来源，FAILED 结论作用于共享它的全部绑定和由它克隆的作业；已校验快照做零差量绑定时，按结论中的 sha256 重新哈希比对。manifest 升级为 `mac3`（去掉 file.sha256），旧格式按严格读取规则隔离后重建。此修订只用于新运行；历史运行保留原口径和结论。

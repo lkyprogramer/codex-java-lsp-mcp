@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { AliasRegistry } from "./alias-registry.js";
@@ -76,4 +76,25 @@ test("deleting the config file clears aliases and any prior reload error", async
 
   assert.deepEqual(registry.aliases(), []);
   assert.equal(registry.status().lastReloadError, undefined, "deletion is a valid state, not a lingering error");
+});
+
+test("worktree reclaim keeps the binding when a fixed alias cannot be resolved", t => {
+  const { dir, configPath } = configPathFor();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const target = path.join(dir, "target");
+  const other = path.join(dir, "other");
+  const alias = path.join(dir, "alias");
+  mkdirSync(target);
+  mkdirSync(other);
+  symlinkSync(target, alias);
+  writeFileSync(configPath, JSON.stringify({ aliases: [{ id: "fixed", root: alias, lspEnabled: true }] }));
+  const registry = new AliasRegistry(configPath);
+  const canonicalTarget = realpathSync.native(target);
+  assert.equal(registry.isUnpinnedForReclaim(canonicalTarget), false);
+  assert.equal(registry.isUnpinnedForReclaim(realpathSync.native(other)), true);
+
+  rmSync(alias);
+  symlinkSync("alias", alias);
+  assert.throws(() => realpathSync.native(alias), { code: "ELOOP" });
+  assert.equal(registry.isUnpinnedForReclaim(canonicalTarget), false);
 });

@@ -15,7 +15,8 @@ import { probeLayout } from "../../layout-probe.js";
 import { ownerChildStdio } from "../../mac-platform/owner-lock.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
-import { IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
+import { deferred } from "../../test-support/fake-jdtls.test.js";
+import { idleWorktreeBatch, IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
 import type { QueryRequest } from "./query-ops.js";
 import { snapshotIndexStatus, SnapshotJavaIndexClient, withRequestView, type RequestView } from "./request-view.js";
 import { FSEVENT_FLAGS, type TrackerSourceFactory } from "./workspace-tracker.js";
@@ -92,6 +93,57 @@ async function bound(ctx: Ctx, root = ctx.repo) {
   await until(() => ctx.owner.store.binding(workspace.workspaceId) && workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, `first publish ${root}`, 120_000);
   return { workspace, binding: ctx.owner.store.binding(workspace.workspaceId)! };
 }
+
+test("worktree GC wraps its bounded batch when a linked binding becomes due after reopening", () => {
+  const fixedOnly = idleWorktreeBatch(["main"], 0);
+  assert.deepEqual(idleWorktreeBatch(["due-linked", "main"], fixedOnly.cursor).batch, ["due-linked", "main"]);
+  assert.deepEqual(idleWorktreeBatch(["due-linked", "main"], 1).batch, ["main", "due-linked"]);
+  const busy = idleWorktreeBatch([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 8);
+  assert.deepEqual(busy, { batch: [8, 9, 0, 1, 2, 3, 4, 5], cursor: 6 });
+});
+
+test("worktree retirement protects requests during prepare and gates reopen until the old tracker stops", async t => {
+  const enteringStop = deferred<void>();
+  const finishStop = deferred<void>();
+  const ctx = await setup(t, { verifyDelayMs: 60_000, trackerSource: () => async () => ({
+    epoch: randomBytes(16).toString("hex"), fence: async () => {},
+    stop: async () => { enteringStop.resolve(); await finishStop.promise; },
+    closed: new Promise(() => undefined)
+  }) });
+  const { workspace, binding } = await bound(ctx);
+  const enteringPrepare = deferred<void>();
+  const finishPrepare = deferred<void>();
+  const prepare = workspace.prepare.bind(workspace);
+  workspace.prepare = async (...args) => {
+    enteringPrepare.resolve();
+    await finishPrepare.promise;
+    return prepare(...args);
+  };
+  const first = request(ctx, ctx.repo, 10_000, async view => view.snapshotId).run;
+  try {
+    await enteringPrepare.promise;
+    assert.equal(ctx.owner.store.leaseCount(binding.snapshotId), 0);
+    await ctx.owner.retire(ctx.repo);
+    assert.equal(ctx.owner.peek(ctx.repo), workspace);
+    finishPrepare.resolve();
+    assert.equal(await first, binding.snapshotId);
+    const retiring = ctx.owner.retire(ctx.repo);
+    await enteringStop.promise;
+    const abort = new AbortController();
+    const cancelled = request(ctx, ctx.repo, 10_000, async () => assert.fail("aborted request entered"), { signal: abort.signal }).run;
+    const next = request(ctx, ctx.repo, 10_000, async view => view.snapshotId).run;
+    abort.abort();
+    await assert.rejects(cancelled, /Cancel/);
+    assert.equal(ctx.owner.peek(ctx.repo), undefined);
+    finishStop.resolve();
+    await retiring;
+    assert.equal(await next, binding.snapshotId);
+    assert.notEqual(ctx.owner.peek(ctx.repo)?.trackerEpoch, workspace.trackerEpoch);
+  } finally {
+    finishPrepare.resolve();
+    finishStop.resolve();
+  }
+});
 
 async function edit(ctx: Ctx, root: string, relative: string, transform: (text: string) => string) {
   const file = path.join(root, relative);

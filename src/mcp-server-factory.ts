@@ -74,6 +74,7 @@ export function createMcpServer(
     description: JAVA_IMPACT_TOOL_DESCRIPTION,
     inputSchema: impactSchema
   }, (args, signal) => withContext(args, (context, request) => javaImpact(context, args, request), {
+    observeStaticRead: true,
     mayStartLsp: args.semanticPolicy !== "fast",
     requireLspEnabled: args.semanticPolicy === "required",
     requestOptions: {
@@ -89,6 +90,7 @@ export function createMcpServer(
     description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: " + STATIC_QUERY_LIMIT_DESCRIPTION + ", terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). Matching is lexical over code identifiers, comments and framework keys: write the query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. preview=head (default: short declaration heads, small per-request cap) | window (12-line windows) | none; read the code for evidence. Static results name each declaration by symbolId (pass it back as symbolId instead of file/line/column, or as java_impact symbol) and carry indexView (workspaceId; state = index freshness); with scopeState PARTIAL or NOT_READY a miss is not proof of absence. operation=evidence (experimental, explicit): bounded XML source units linked to a located Java type/method at file/line/column; complete describes a source unit, not task coverage; no JDT. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and query with backend=jdt use live JDT.",
     inputSchema: symbolSchema
   }, (args, signal) => withContext(args, (context, request) => javaSymbol(context, args, request), {
+    observeStaticRead: true,
     // T06: the JDT admission predicate is computed per request and must match
     // the handler's own route, or a static query would be rejected by the
     // outer policy (or worse, start JDT the handler never uses).
@@ -193,6 +195,7 @@ export function createMcpServer(
       mayStartLsp?: boolean;
       requireLspEnabled?: boolean;
       control?: boolean;
+      observeStaticRead?: boolean;
       requestOptions?: RequestOptionsInput;
       signal?: AbortSignal;
     } = {}
@@ -204,7 +207,8 @@ export function createMcpServer(
         throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
       }
       return handler(context, request);
-    }, { mayStartLsp: contextOptions.mayStartLsp, requestOptions: contextOptions.requestOptions, signal: contextOptions.signal });
+    }, { mayStartLsp: contextOptions.mayStartLsp, observeStaticRead: contextOptions.observeStaticRead,
+      requestOptions: contextOptions.requestOptions, signal: contextOptions.signal });
   }
 
   function register<T extends z.ZodRawShape>(

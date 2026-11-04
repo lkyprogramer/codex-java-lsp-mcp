@@ -1,7 +1,7 @@
 // input: ~/.config/codex-java-lsp/projects.json.
 // output: Reloadable alias and LSP enablement registry.
 // pos: Shared registry for MCP server and hook gate.
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -91,6 +91,16 @@ export class AliasRegistry {
 
   aliases(): ProjectAliasConfig[] {
     return this.snapshot.aliases;
+  }
+
+  /** Destructive cache GC must use the current file, never the last-known-good request configuration. */
+  isUnpinnedForReclaim(canonicalRoot: string): boolean {
+    try {
+      const config = configSchema.parse(JSON.parse(readFileSync(this.configPath, "utf8")));
+      return !config.aliases.some(alias => alias.lspEnabled && realpathSync.native(path.resolve(alias.root)) === canonicalRoot);
+    } catch {
+      return false;
+    }
   }
 
   defaults(): Record<string, unknown> {

@@ -12,6 +12,7 @@ import { BuildScheduler, DELTA_CLOSURE_LIMIT, type BuildAttempt, type BuildGrant
 import type { BuilderJob } from "../../index-builder/incremental.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
+import { isLinkedWorktreeRoot } from "../../worktree-identity.js";
 import type { ContentEntry } from "../sql/snapshot-manifest.js";
 import type { WorkspaceBinding } from "./binding.js";
 import { builderFullReason, type FullBuildReason } from "./publication-history.js";
@@ -110,6 +111,13 @@ export type IndexOwnerOptions = {
   fullHashIntervalMs?: number;
   /** Quiet time before a published snapshot's background verification (default VERIFY_DELAY_MS). */
   verifyDelayMs?: number;
+  worktreeIdle?: {
+    mode: "observe" | "enforce";
+    /** A fresh, exact-path decision. Unknown config must return false. */
+    isUnpinned: (canonicalRoot: string) => boolean;
+    /** Test seam for the idle clock, not the request budget. */
+    now?: () => number;
+  };
 };
 
 type BuildStart = { repoRoot: string; dbPath: string; job: BuilderJob; grant: BuildGrant; onHeartbeat?: (beat: BuilderHeartbeat) => void };
@@ -122,6 +130,17 @@ const ROUND_DELAY_MS = 25;
 const ROUND_RETRY_MS = 1_000;
 /** The initial GC cycle (contract §2.7). */
 export const GC_CYCLE_MS = 30_000;
+export const WORKTREE_IDLE_MS = 48 * 60 * 60 * 1000;
+const WORKTREE_GC_BATCH = 8;
+type IdleObservation = { idleSince: number; observedAt?: number; lastAccessAt?: number; dirty: boolean };
+
+export function idleWorktreeBatch<T>(candidates: readonly T[], cursor: number): { batch: T[]; cursor: number } {
+  if (candidates.length === 0) return { batch: [], cursor: 0 };
+  const start = cursor % candidates.length;
+  const count = Math.min(WORKTREE_GC_BATCH, candidates.length);
+  const batch = Array.from({ length: count }, (_, index) => candidates[(start + index) % candidates.length]!);
+  return { batch, cursor: (start + count) % candidates.length };
+}
 /**
  * A native change source that never reports ready is killed by its 5 s ready timer and settles only
  * after the helper is reaped. stop() waits that long, so a pre-ready helper holding the owner lock fd
@@ -150,6 +169,13 @@ export class IndexOwner {
   readonly verifier: SnapshotVerifier;
   private readonly workspaces = new Map<string, WorkspaceIndex>();
   private readonly starting = new Map<string, Promise<WorkspaceIndex>>();
+  private readonly retiring = new Map<string, Promise<void>>();
+  private readonly requests = new Map<string, number>();
+  // A throttled write cannot prove that the previous process recorded its last read.
+  // Start a fresh monotonic grace period on first confirmation after each owner open.
+  private readonly idleObservations = new Map<string, IdleObservation>();
+  private idleCursor = 0;
+  private idleResults: Array<{ workspaceId: string; outcome: string }> = [];
   private readonly byId = new Map<string, WorkspaceIndex>();
   private readonly superseded = new Set<string>();
   /** Sealed snapshots never change: their content is read once (bounded, oldest first out). */
@@ -196,7 +222,7 @@ export class IndexOwner {
 
   /** The workspace index if one runs for this root. Pure: never starts a tracker or a build. */
   peek(canonicalRoot: string): WorkspaceIndex | undefined {
-    return this.workspaces.get(canonicalRoot);
+    return this.retiring.has(canonicalRoot) ? undefined : this.workspaces.get(canonicalRoot);
   }
 
   list(): WorkspaceIndex[] {
@@ -221,19 +247,47 @@ export class IndexOwner {
    * Stop one workspace's tracker and forget it. Its binding stays: a later workspace() starts a new
    * tracker whose first round verifies that binding (a noop when nothing changed).
    */
-  async retire(canonicalRoot: string): Promise<void> {
+  retire(canonicalRoot: string): Promise<void> {
+    return this.retiring.get(canonicalRoot)
+      ?? this.claimRetirement(canonicalRoot, () => this.stopWorkspace(canonicalRoot))
+      ?? Promise.resolve();
+  }
+
+  /** Reserves admission synchronously, or returns a wait without reserving anything. */
+  admitRequest(canonicalRoot: string): (() => void) | Promise<void> {
+    const retiring = this.retiring.get(canonicalRoot);
+    if (retiring) return retiring;
+    this.requests.set(canonicalRoot, (this.requests.get(canonicalRoot) ?? 0) + 1);
+    return () => {
+      const count = this.requests.get(canonicalRoot)!;
+      if (count === 1) this.requests.delete(canonicalRoot);
+      else this.requests.set(canonicalRoot, count - 1);
+    };
+  }
+
+  private claimRetirement(canonicalRoot: string, action: () => Promise<void>): Promise<void> | undefined {
+    if (this.retiring.has(canonicalRoot) || this.starting.has(canonicalRoot) || this.requests.has(canonicalRoot)) return;
+    const pending = Promise.resolve().then(action).finally(() => this.retiring.delete(canonicalRoot));
+    this.retiring.set(canonicalRoot, pending);
+    return pending;
+  }
+
+  private async stopWorkspace(canonicalRoot: string): Promise<void> {
     const workspace = this.workspaces.get(canonicalRoot);
     if (!workspace) return;
+    // The current round may still need the store queue and the scheduler's byId entry.
+    await workspace.stop();
     this.workspaces.delete(canonicalRoot);
     this.byId.delete(workspace.workspaceId);
-    await workspace.stop();
-    this.store.untrack(workspace.workspaceId);
+    this.store.untrack(workspace.workspaceId, workspace.trackerEpoch);
     this.pool.trim();
   }
 
   /** The workspace index for this root, starting its tracker (and so its first round) once. */
   workspace(canonicalRoot: string): Promise<WorkspaceIndex> {
     if (this.stopped) return Promise.reject(new JavaIntelligenceError("INDEX_PARTIAL", "index owner stopped"));
+    const retiring = this.retiring.get(canonicalRoot);
+    if (retiring) return retiring.then(() => this.workspace(canonicalRoot));
     const running = this.workspaces.get(canonicalRoot);
     if (running) return Promise.resolve(running);
     const pending = this.starting.get(canonicalRoot);
@@ -250,6 +304,85 @@ export class IndexOwner {
     }).finally(() => this.starting.delete(canonicalRoot));
     this.starting.set(canonicalRoot, started);
     return started;
+  }
+
+  noteStaticRead(workspaceId: string): void {
+    if (!this.options.worktreeIdle || !this.store.binding(workspaceId)) return;
+    const previous = this.idleObservations.get(workspaceId);
+    this.idleObservations.set(workspaceId, { observedAt: previous?.observedAt,
+      idleSince: this.idleNow(), lastAccessAt: Date.now(), dirty: true });
+  }
+
+  private idleNow(): number {
+    return this.options.worktreeIdle?.now?.() ?? performance.now();
+  }
+
+  private async sweepIdleWorktrees(): Promise<string[]> {
+    const policy = this.options.worktreeIdle;
+    if (!policy) return [];
+    const bindings = this.store.boundWorkspaces();
+    for (const id of this.idleObservations.keys()) {
+      if (!this.store.binding(id)) this.idleObservations.delete(id);
+    }
+    const candidates = bindings.filter(binding => {
+      const seen = this.idleObservations.get(binding.workspaceId);
+      return seen?.observedAt === undefined || seen.dirty || this.idleNow() - seen.idleSince >= WORKTREE_IDLE_MS;
+    });
+    const results: typeof this.idleResults = [];
+    const removed: string[] = [];
+    this.idleResults = results;
+    const { batch, cursor } = idleWorktreeBatch(candidates, this.idleCursor);
+    this.idleCursor = cursor;
+    for (const binding of batch) {
+      if (this.stopped) break;
+      const { workspaceId, root: { canonicalRoot } } = binding;
+      if (!policy.isUnpinned(canonicalRoot) || !await isLinkedWorktreeRoot(canonicalRoot)) continue;
+      // A query can complete during Git I/O. Use its current observation after the await.
+      let seen = this.idleObservations.get(workspaceId);
+      if (seen?.observedAt === undefined) {
+        seen = { idleSince: this.idleNow(), observedAt: Date.now(), lastAccessAt: seen?.lastAccessAt, dirty: true };
+        this.idleObservations.set(workspaceId, seen);
+      }
+      if (seen.dirty) {
+        try {
+          await this.store.writeIdleObservation(workspaceId, { observedAt: seen.observedAt!, lastAccessAt: seen.lastAccessAt });
+          seen.dirty = false;
+        } catch {
+          results.push({ workspaceId, outcome: "observation-write-failed" });
+          continue;
+        }
+      }
+      const eligible = () => {
+        const current = this.idleObservations.get(workspaceId);
+        return !this.stopped && current?.observedAt !== undefined && !current.dirty
+          && this.idleNow() - current.idleSince >= WORKTREE_IDLE_MS && policy.isUnpinned(canonicalRoot);
+      };
+      if (!eligible()) continue;
+      if (policy.mode === "observe") {
+        results.push({ workspaceId, outcome: "eligible" });
+        continue;
+      }
+      if (this.workspaces.get(canonicalRoot)?.roundInFlight) {
+        results.push({ workspaceId, outcome: "in-flight" });
+        continue;
+      }
+      const retired = this.claimRetirement(canonicalRoot, async () => {
+        await this.stopWorkspace(canonicalRoot);
+        if (!await isLinkedWorktreeRoot(canonicalRoot)) {
+          results.push({ workspaceId, outcome: "root-unconfirmed" });
+          return;
+        }
+        const result = await this.store.reclaimExpired({ binding, stillEligible: eligible });
+        results.push({ workspaceId, outcome: result.reclaimed ? "unbound" : result.reason });
+        if (result.reclaimed) {
+          removed.push(workspaceId);
+          this.idleObservations.delete(workspaceId);
+        }
+      });
+      if (!retired) results.push({ workspaceId, outcome: "active" });
+      else await retired.catch(() => { results.push({ workspaceId, outcome: "cleanup-failed" }); });
+    }
+    return removed;
   }
 
   /** One read on `snapshotId` through the query pool; the task holds its own query-worker lease. */
@@ -343,7 +476,9 @@ export class IndexOwner {
     const run = (async () => {
       if (this.stopped || (this.options.admitted && !this.options.admitted())) return undefined;
       try {
+        const expired = await this.sweepIdleWorktrees();
         const report = await this.store.sweep();
+        report.workspaces.unshift(...expired);
         for (const snapshotId of report.snapshots) this.superseded.delete(snapshotId);
         this.options.onEvent?.({ type: "sweep", report, elapsedMs: performance.now() - started });
         return report;
@@ -373,7 +508,8 @@ export class IndexOwner {
 
   status() {
     return { workspaces: this.list().map(workspace => workspace.status()), scheduler: this.scheduler.status(), pool: this.pool.status(),
-      verifier: this.verifier.status(), superseded: this.superseded.size, gcCycleMs: this.options.gcCycleMs ?? GC_CYCLE_MS };
+      verifier: this.verifier.status(), superseded: this.superseded.size, gcCycleMs: this.options.gcCycleMs ?? GC_CYCLE_MS,
+      ...(this.options.worktreeIdle ? { worktreeIdle: { mode: this.options.worktreeIdle.mode, lastSweep: [...this.idleResults] } } : {}) };
   }
 
   async stop(): Promise<void> {
@@ -385,8 +521,9 @@ export class IndexOwner {
     let graceTimer: NodeJS.Timeout | undefined;
     const grace = new Promise<void>(resolve => { graceTimer = setTimeout(resolve, this.options.startStopGraceMs ?? START_STOP_GRACE_MS); });
     // Together: a round waiting on a builder or a query ends when the scheduler and pool stop.
-    await Promise.all([...this.list().map(workspace => workspace.stop()), this.scheduler.stop(), this.pool.stop(), this.verifier.stop(),
-      Promise.race([Promise.all(starts), grace]).finally(() => clearTimeout(graceTimer)), this.sweeping]);
+    await Promise.all([...this.list().filter(workspace => !this.retiring.has(workspace.canonicalRoot)).map(workspace => workspace.stop()),
+      this.scheduler.stop(), this.pool.stop(), this.verifier.stop(),
+      Promise.race([Promise.all(starts), grace]).finally(() => clearTimeout(graceTimer)), this.sweeping, ...this.retiring.values()]);
   }
 }
 
@@ -413,6 +550,9 @@ export class WorkspaceIndex {
   private constructor(private readonly owner: IndexOwner, readonly canonicalRoot: string, readonly tracker: WorkspaceTracker) {
     this.workspaceId = tracker.workspaceId;
   }
+
+  get trackerEpoch(): string { return this.tracker.trackedState().trackerEpoch; }
+  get roundInFlight(): boolean { return this.round !== undefined; }
 
   static async start(owner: IndexOwner, canonicalRoot: string): Promise<WorkspaceIndex> {
     let index: WorkspaceIndex | undefined;

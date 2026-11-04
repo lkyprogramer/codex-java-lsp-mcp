@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { fork } from "node:child_process";
 import { createHash } from "node:crypto";
-import { constants, existsSync, readFileSync } from "node:fs";
+import { constants, existsSync, readFileSync, renameSync } from "node:fs";
 import { access, appendFile, chmod, copyFile, cp, mkdir, mkdtemp, open, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { AliasRegistry } from "../../alias-registry.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { close, openIndexDb } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
@@ -626,6 +627,57 @@ test("a workspace binding goes only when its root is gone and no tracker, job or
   assert.ok(store.binding("ws-live-0000001") && store.binding("ws-unmounted-01"));
   const reopened = await openStore(root);
   assert.deepEqual(reopened.recovery.bindings.map(entry => entry.workspaceId).sort(), ["ws-live-0000001", "ws-unmounted-01"]);
+});
+
+test("worktree reclaim rechecks fixed-project configuration after validating the owner lock", async () => {
+  const root = await cacheRoot();
+  const config = path.join(root, "projects.json");
+  const replacement = path.join(root, "projects.next.json");
+  const registry = new AliasRegistry(config);
+  let replaceOnLock = false;
+  const { store } = await openStore(root, { assertOwner: () => {
+    if (!replaceOnLock) return;
+    renameSync(replacement, config);
+    replaceOnLock = false;
+  } });
+  const binding = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  store.untrack(WS, EPOCH);
+  const stillEligible = () => registry.isUnpinnedForReclaim(binding.root.canonicalRoot);
+  for (const nextConfig of [
+    JSON.stringify({ aliases: [{ id: "fixed", root: binding.root.canonicalRoot, lspEnabled: true }] }),
+    "{broken"
+  ]) {
+    await writeFile(config, "{}");
+    await writeFile(replacement, nextConfig);
+    assert.equal(stillEligible(), true);
+    replaceOnLock = true;
+    assert.deepEqual(await store.reclaimExpired({ binding, stillEligible }), { reclaimed: false, reason: "root-live" });
+    assert.equal(replaceOnLock, false);
+    assert.deepEqual(await readBinding(store.layout, WS), binding);
+    assert.ok(existsSync(store.snapshotPath(binding.snapshotId)));
+  }
+});
+
+test("an unlinked live workspace stops serving before directory sync, but its snapshot stays protected", async () => {
+  const root = await cacheRoot();
+  let failSync = true;
+  const { store } = await openStore(root, { faultAt: step => {
+    if (step === "workspace-unlinked" && failSync) throw new Error("injected directory sync failure");
+  } });
+  const binding = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
+  store.untrack(WS, "a-different-epoch");
+  assert.deepEqual(await store.reclaimExpired({ binding, stillEligible: () => true }), { reclaimed: false, reason: "tracked" });
+  store.untrack(WS, EPOCH);
+  assert.deepEqual(await store.reclaimExpired({ binding, stillEligible: () => false }), { reclaimed: false, reason: "root-live" });
+  await assert.rejects(store.reclaimExpired({ binding, stillEligible: () => true }), /injected directory sync failure/);
+  assert.equal(await readBinding(store.layout, WS), undefined);
+  assert.equal(store.acquireBound(WS, "request"), undefined);
+  assert.deepEqual(await store.tryReclaim({ snapshotId: binding.snapshotId }), { reclaimed: false, reason: "bound" });
+  await store.writeIdleObservation(WS, { observedAt: 1 });
+  failSync = false;
+  const report = await store.sweep();
+  assert.deepEqual(report.workspaces, [WS]);
+  assert.deepEqual(report.snapshots, [binding.snapshotId]);
 });
 
 test("a shared snapshot lease preserves live and gone workspace bindings across sweeps until release", async t => {

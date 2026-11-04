@@ -61,11 +61,15 @@ export class JavaLspApplication {
     this.resolver = options.resolver ?? new RepoResolver(this.registry, options.resolverOptions ?? {
       cwdFallback: this.transportMode === "streamable_http" ? "reject" : "allow"
     });
+    const idleMode = process.env.JAVA_LSP_STATIC_WORKTREE_GC;
     this.runtimes = options.runtimes ?? new RepoRuntimeManager(
       this.resolver,
       {
         transportMode: this.transportMode,
         isProtectedRepo: root => this.lspEnabledPinRoots().has(canonicalPath(root)),
+        ...(idleMode === "observe" || idleMode === "enforce" ? { worktreeIdle: {
+          mode: idleMode, isUnpinned: (root: string) => this.registry.isUnpinnedForReclaim(root)
+        } } : {}),
         ...(options.index !== undefined ? { index: options.index } : {})
       },
       undefined,

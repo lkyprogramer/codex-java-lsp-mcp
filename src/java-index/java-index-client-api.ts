@@ -32,6 +32,8 @@ export type JavaIndexRequestOptions = {
   budget?: DeadlineBudget;
   signal?: AbortSignal;
   telemetry?: JavaIndexRpcTelemetrySink;
+  /** Request-scoped observation of a static facts read, including router memory hits. */
+  onStaticRead?: () => void;
 };
 
 export type JavaIndexRpcOperation =

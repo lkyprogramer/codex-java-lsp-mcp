@@ -177,29 +177,47 @@ export async function withRequestView<T>(input: {
     return budget.race(stage, signal ? abortable(operation, signal, stage) : operation);
   };
   const canonicalRoot = await guard("request.resolve", input.resolve());
-  let view: RequestView;
-  if (input.start === false) {
-    const running = owner.peek(canonicalRoot);
-    view = running ? RequestView.acquire(owner, running, budget, signal) : RequestView.notReady(owner, canonicalRoot, budget, signal);
-  } else {
-    // An expired or cancelled request never starts a workspace it cannot use.
-    if (signal?.aborted) throw new JavaIntelligenceError("CANCELLED", "Cancelled before request.create");
-    budget.throwIfExpired("request.create");
-    const workspace = await guard("request.create", owner.workspace(canonicalRoot));
-    if (input.prepare !== false) await guard("request.prepare", workspace.prepare(budget, signal));
-    budget.throwIfExpired("request.acquire");
-    view = RequestView.acquire(owner, workspace, budget, signal);
+  let release: (() => void) | undefined;
+  if (input.start !== false) {
+    for (;;) {
+      if (signal?.aborted) throw new JavaIntelligenceError("CANCELLED", "Cancelled before request.admit");
+      budget.throwIfExpired("request.admit");
+      const admission = owner.admitRequest(canonicalRoot);
+      if (typeof admission === "function") {
+        release = admission;
+        break;
+      }
+      // A failed cleanup releases its claim too. Reopen from the store's actual binding state.
+      await guard("request.admit", admission.catch(() => undefined));
+    }
   }
-  let work: Promise<T>;
-  try { work = input.handler(view); }
-  catch (error) { view.close(); throw error; }
-  void work.finally(() => view.close()).catch(() => undefined);
   try {
-    return await guard("request.handler", work);
-  } catch (error) {
-    // A handler that outlives its deadline or cancel keeps nothing: its reads now reject.
-    view.close();
-    throw error;
+    let view: RequestView;
+    if (input.start === false) {
+      const running = owner.peek(canonicalRoot);
+      view = running ? RequestView.acquire(owner, running, budget, signal) : RequestView.notReady(owner, canonicalRoot, budget, signal);
+    } else {
+      // An expired or cancelled request never starts a workspace it cannot use.
+      if (signal?.aborted) throw new JavaIntelligenceError("CANCELLED", "Cancelled before request.create");
+      budget.throwIfExpired("request.create");
+      const workspace = await guard("request.create", owner.workspace(canonicalRoot));
+      if (input.prepare !== false) await guard("request.prepare", workspace.prepare(budget, signal));
+      budget.throwIfExpired("request.acquire");
+      view = RequestView.acquire(owner, workspace, budget, signal);
+    }
+    let work: Promise<T>;
+    try { work = input.handler(view); }
+    catch (error) { view.close(); throw error; }
+    void work.finally(() => view.close()).catch(() => undefined);
+    try {
+      return await guard("request.handler", work);
+    } catch (error) {
+      // A handler that outlives its deadline or cancel keeps nothing: its reads now reject.
+      view.close();
+      throw error;
+    }
+  } finally {
+    release?.();
   }
 }
 
@@ -258,7 +276,12 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
   private run<K extends QueryOpName>(request: QueryRequest<K>, options?: JavaIndexRequestOptions): Promise<QueryOps[K]["result"]> {
     const { budget, signal } = narrowed(requestDefaults.getStore(), options);
     if (!budget) return Promise.reject(new JavaIntelligenceError("INVALID_INPUT", `${request.op} requires a request budget`));
-    return this.owner.query(this.snapshotId, request, budget, signal);
+    const onStaticRead = requestDefaults.getStore()?.onStaticRead;
+    const result = this.owner.query(this.snapshotId, request, budget, signal);
+    return onStaticRead ? result.then(value => {
+      if (!budget.expired() && !signal?.aborted) onStaticRead();
+      return value;
+    }) : result;
   }
 
   private toRelative(inputPath: string): string | undefined {
@@ -322,6 +345,8 @@ export class SnapshotJavaIndexClient implements JavaIndexClientApi {
     const { budget, signal } = narrowed(requestDefaults.getStore(), options);
     if (missing.length > 0 || !budget || budget.expired() || signal?.aborted) {
       for (const bundle of await this.run({ op: "files", args: { relativePaths: missing } }, options)) fetched.set(bundle.file.relativePath, deepFreeze(bundle));
+    } else if (held.size > 0) {
+      requestDefaults.getStore()?.onStaticRead?.();
     }
     const result: JavaFileBundle[] = [];
     for (const relativePath of relativePaths) {
