@@ -299,7 +299,8 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
 
     const session = new NoLspSession();
     const router = new AgentRouter(root, session as never, index, undefined, undefined, new EmptyRgRunner());
-    const context = { repoRoot: root, session, router } as unknown as ToolContext;
+    const indexView = { state: "FRESH", snapshotId: "test-snapshot" };
+    const context = { repoRoot: root, session, router, indexView } as unknown as ToolContext;
 
     const impactArgs = {
       anchors: [{ file: serviceFile, line: 6, column: 21 }],
@@ -314,6 +315,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
     };
 
     const standard = record(await javaImpact(context, { ...impactArgs, verbosity: "standard" }));
+    const compact = record(await javaImpact(context, { ...impactArgs, verbosity: "compact" }));
     const diagnostic = record(await javaImpact(context, { ...impactArgs, verbosity: "diagnostic" }));
 
     for (const key of ["version", "target", "contexts", "unresolved", "cost"]) {
@@ -329,6 +331,12 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
 
     const files = standard.contexts as Array<Record<string, unknown>>;
     assert.ok(files.length > 0, "the fixture's direct field-receiver call must produce at least one candidate, or the absence assertions below are untested");
+    assert.ok(files.some(file => (file.proof as string[]).includes("CALLS")), "standard proof uses the original provider reason");
+    assert.equal(Object.hasOwn(standard, "omittedContexts"), false);
+    assert.deepEqual(standard.indexView, indexView);
+    assert.deepEqual(diagnostic.indexView, indexView);
+    assert.deepEqual(compact.indexView, { state: "FRESH" });
+    assert.equal(compact.omittedContexts, files.length - (compact.contexts as unknown[]).length);
     for (const file of files) {
       assert.equal(Object.hasOwn(file, "score"), false);
       assert.equal(Object.hasOwn(file, "scoreBreakdown"), false);

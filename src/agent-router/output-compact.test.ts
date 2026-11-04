@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ImpactResultV6 } from "../agent-types.js";
 import { toCompactImpact, viewDistinctReadFiles, viewImpactFiles, viewSelectedRangesByFile } from "./output-compact.js";
+import { roleOf } from "./output-v6.js";
 
 function v6(): ImpactResultV6 {
   return {
@@ -89,4 +90,57 @@ test("compact serializer keeps file set and ranges and shrinks the wire", () => 
   assert.deepEqual(compact.contexts[0]?.proof, ["CALLS"]);
   assert.ok(compact.unresolved.some(gap => gap.includes("Lombok")));
   assert.ok(!JSON.stringify(compact).includes("calls or is called by the anchor"));
+});
+
+test("explicit compact preserves ranges, unreadable anchors and request gaps with bounded supplemental context", () => {
+  const source = v6();
+  const anchorReasons = ["target", "SPRING_INJECTION"];
+  const unreadableAnchors = Array.from({ length: 4 }, (_, index) => ({
+    ...source.files[0]!,
+    id: `F${index + 7}`,
+    path: `src/Anchor${index}.java`,
+    role: roleOf(anchorReasons),
+    reasons: anchorReasons
+  }));
+  source.files.push(
+    ...["C", "D", "E", "F"].map((name, i) => ({
+      ...source.files[1]!,
+      id: `F${i + 3}`,
+      path: `src/${name}.java`
+    })),
+    ...unreadableAnchors,
+    { ...source.files[1]!, id: "F11", path: "mapper.xml", role: "framework", reasons: ["MYBATIS_STATEMENT_METHOD"] }
+  );
+  source.readPlan.push(...unreadableAnchors.map(file => ({
+    ...source.readPlan[0]!,
+    fileId: file.id,
+    ranges: [],
+    estimatedBytes: 0
+  })));
+  source.evidenceGaps = [
+    "Semantic timed out; using JavaIndex plus rg.",
+    "Some source facts used fallback evidence.",
+    "Read range unavailable for anchor src/Anchor3.java.",
+    "Lombok agent missing; generated members may not resolve."
+  ];
+  source.metrics = { routingVersion: 6, elapsedMs: 10, generatedSemantics: "INCOMPLETE" };
+
+  const standard = toCompactImpact(source);
+  const compact = toCompactImpact(source, "compact");
+  assert.equal(standard.contexts.length, 11);
+  assert.equal(Object.hasOwn(standard, "omittedContexts"), false);
+  assert.deepEqual(viewImpactFiles(compact), [
+    "src/A.java", "src/B.java", "src/C.java", "src/D.java", ...unreadableAnchors.map(file => file.path), "mapper.xml"
+  ]);
+  for (const anchor of unreadableAnchors) {
+    const context = compact.contexts.find(item => item.path === anchor.path);
+    assert.equal(context?.role, "FW");
+    assert.deepEqual(context?.spans, []);
+  }
+  assert.equal(compact.omittedContexts, 2);
+  assert.deepEqual(viewSelectedRangesByFile(compact), viewSelectedRangesByFile(standard));
+  assert.deepEqual(compact.contexts.at(-1)?.proof, ["MYBATIS_STATEMENT_METHOD"]);
+  assert.deepEqual(compact.unresolved, source.evidenceGaps);
+  assert.equal(compact.metrics?.generatedSemantics, "INCOMPLETE");
+  assert.equal(compact.cost.resultBytes, Buffer.byteLength(JSON.stringify(compact), "utf8"));
 });

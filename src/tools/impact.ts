@@ -67,6 +67,7 @@ export const impactSchema = {
   taskKeywords: z.array(z.string().min(1)).max(20).default([]),
   crossModulePolicy: z.enum(["auto", "focused", "all"]).default("auto"),
   verbosity: z.enum(["compact", "standard", "diagnostic"]).default("standard")
+    .describe("compact keeps read ranges and a few supplemental candidates; omittedContexts counts candidates left out. Empty spans means no suggested read range. role/proof describe evidence, not a verified call chain. semantic.used=false means no live semantic evidence for this request.")
 };
 
 type ImpactArgs = z.input<z.ZodObject<typeof impactSchema>>;
@@ -155,7 +156,8 @@ function withPhaseMs(result: unknown, phases: Record<string, number>, verbosity:
   }
   // The labels this request's one snapshot acquire froze (§2.7): identity and indexFreshness (state).
   // Added before the cost converges, so resultBytes counts them.
-  const payload = (indexView ? { ...result, indexView } : result) as ImpactResult & { metrics?: { phaseMs?: Record<string, number> } };
+  const labels = indexView && verbosity === "compact" ? { state: indexView.state } : indexView;
+  const payload = (labels ? { ...result, indexView: labels } : result) as ImpactResult & { metrics?: { phaseMs?: Record<string, number> } };
   if (verbosity === "diagnostic" && payload.metrics && Object.keys(phases).length > 0) {
     const existingPhaseMs = payload.metrics.phaseMs ?? {};
     payload.metrics = {

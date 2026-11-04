@@ -7,6 +7,7 @@ import { roleOf } from "./output-v6.js";
 import { withConvergedCostV6 } from "./output-v6.js";
 
 export const COMPACT_IMPACT_VERSION = 1 as const;
+const SUPPLEMENTAL_CONTEXT_LIMIT = 3;
 
 const ROLE_CODE: Record<string, string> = {
   target: "TGT",
@@ -35,6 +36,8 @@ export type CompactImpact = {
   version: typeof COMPACT_IMPACT_VERSION;
   target: { file: string; symbol: string };
   contexts: CompactContext[];
+  /** Ranked candidates omitted from the explicit compact view. */
+  omittedContexts?: number;
   unresolved: string[];
   cost: ImpactCostV6;
   /** Slim cold-nolsp proof; not files[]/readPlan[] dual expression. */
@@ -59,7 +62,7 @@ export function asImpactResult(result: ImpactResult | CompactImpact): ImpactResu
   return result;
 }
 
-export function toCompactImpact(payload: ImpactResultV6): CompactImpact {
+export function toCompactImpact(payload: ImpactResultV6, verbosity: "standard" | "compact" = "standard"): CompactImpact {
   const byId = new Map(payload.files.map(file => [file.id, file]));
   const selected = new Map<string, CompactSpan[]>();
   for (const item of payload.readPlan) {
@@ -78,11 +81,14 @@ export function toCompactImpact(payload: ImpactResultV6): CompactImpact {
     proof: compactProof(file),
     spans: selected.get(file.path) ?? []
   }));
+  const slim = verbosity === "compact";
+  const visibleContexts = slim ? selectCompactContexts(contexts, payload.files) : contexts;
   const compact: CompactImpact = {
     version: COMPACT_IMPACT_VERSION,
     target: { file: payload.target.file, symbol: payload.target.symbol },
-    contexts,
-    unresolved: compactUnresolved(payload.evidenceGaps),
+    contexts: visibleContexts,
+    ...(slim ? { omittedContexts: contexts.length - visibleContexts.length } : {}),
+    unresolved: slim ? payload.evidenceGaps : compactUnresolved(payload.evidenceGaps),
     cost: payload.cost,
     freshness: {
       coverage: payload.freshness.coverage,
@@ -95,7 +101,7 @@ export function toCompactImpact(payload: ImpactResultV6): CompactImpact {
       completion: payload.semantic.completion
     }
   };
-  if (payload.metrics) {
+  if (payload.metrics && (!slim || payload.metrics.generatedSemantics === "INCOMPLETE")) {
     compact.metrics = {
       routingVersion: Number(payload.metrics.routingVersion ?? 6),
       elapsedMs: Number(payload.metrics.elapsedMs ?? 0),
@@ -107,15 +113,28 @@ export function toCompactImpact(payload: ImpactResultV6): CompactImpact {
   return withConvergedCostV6(compact, payload.cost.readBytes, payload.cost.suppressedRawBytes);
 }
 
+function selectCompactContexts(contexts: CompactContext[], files: ImpactFileV6[]): CompactContext[] {
+  // Framework evidence can set the display role of an explicit anchor to FW.
+  const anchorPaths = new Set(files
+    .filter(file => file.reasons?.some(reason => reason === "target" || reason === "anchor"))
+    .map(file => file.path));
+  const required = (context: CompactContext) => context.spans.length > 0 || anchorPaths.has(context.path);
+  // Reserve one slot for configuration/framework evidence outside the read plan.
+  const supplemental = contexts.filter(context => !required(context));
+  const wiring = supplemental.find(context => context.role === "CFG" || context.role === "FW");
+  const selected = supplemental.filter(context => context !== wiring).slice(0, SUPPLEMENTAL_CONTEXT_LIMIT - (wiring ? 1 : 0));
+  if (wiring) selected.push(wiring);
+  return contexts.filter(context => required(context) || selected.includes(context));
+}
+
 export function compactRole(file: Pick<ImpactFileV6, "role" | "reasons">): string {
   const role = file.role || roleOf(file.reasons ?? []);
   return ROLE_CODE[role] ?? "REL";
 }
 
-export function compactProof(file: Pick<ImpactFileV6, "reasons" | "evidence">): string[] {
+export function compactProof(file: Pick<ImpactFileV6, "reasons">): string[] {
   const kinds = (file.reasons ?? []).filter(kind => kind !== "target" && kind !== "anchor");
-  if (kinds.length > 0) return [...new Set(kinds)].slice(0, 3);
-  return (file.evidence ?? []).slice(0, 3).map(phrase => phrase.split(" ")[0]?.toUpperCase() ?? "EV");
+  return [...new Set(kinds)].slice(0, 3);
 }
 
 function compactUnresolved(gaps: string[]): string[] {

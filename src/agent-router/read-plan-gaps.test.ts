@@ -94,7 +94,32 @@ test("T08: an anchor line dropped by budget trimming is RANGE_MISS and names the
   });
   const classified = kinds(result, "50");
   assert.ok(classified.includes("RANGE_MISS"), `an uncovered anchor line is a range miss, got ${JSON.stringify(ledgerOf(result))}`);
-  assert.ok(ledgerOf(result).some(gap => gap.kind === "RANGE_MISS" && gap.message.includes("partial")), "the ledger message must keep the plan honest");
+  assert.ok(ledgerOf(result).some(gap => gap.kind === "RANGE_MISS" && gap.message.includes(`50 in ${anchor.path}`) && gap.message.includes("partial")));
+  assert.ok(result.evidenceGaps.every(gap => !gap.includes(anchor.absolutePath)));
+});
+
+test("T08: protected coverage gaps use repository-relative anchor paths for absolute input", async () => {
+  const anchors = ["First", "Second"].map(name => candidate({
+    absolutePath: `/repo/src/main/java/demo/${name}.java`,
+    path: `src/main/java/demo/${name}.java`,
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  }));
+  const files = [...anchors, candidate({
+    plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A2:${anchors[1]!.absolutePath}->definition` }]
+  })];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchors[0]!, {
+      anchors: anchors.map(file => ({ file: file.absolutePath, line: 1, column: 1 })),
+      readPlanMaxItems: 2
+    }),
+    javaIndex: rangeIndex(() => [{ startLine: 1, endLine: 4, kind: "method", estimatedBytes: 256 }])
+  });
+  assert.ok(result.evidenceGaps.includes("Protected core coverage omitted for anchor src/main/java/demo/Second.java: read-plan limits."));
+  assert.ok(result.evidenceGaps.every(gap => !gap.includes("/repo/")));
 });
 
 test("T08: a candidate dropped by shortlist capacity is EVICTED and ENTRY_ABSENT stays off-limits", async () => {
