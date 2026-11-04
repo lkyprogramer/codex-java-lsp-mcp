@@ -320,11 +320,16 @@ export class WorkspaceTracker {
     // Owed until a full walk at or after this cut is confirmed, even if this round is abandoned.
     if (layoutMoved) this.fullStatThrough = Math.max(this.fullStatThrough, cut);
     // The input boundary moved: results dispatched under the old environment are refused.
-    if (this.fingerprint && fingerprint !== this.fingerprint) this.generation += 1;
+    const fingerprintMoved = Boolean(this.fingerprint) && fingerprint !== this.fingerprint;
+    if (fingerprintMoved) {
+      this.generation += 1;
+      // A different build key can use a sibling base. Validate the entire census before comparing it.
+      this.fullHashThrough = Math.max(this.fullHashThrough, cut);
+    }
     this.layout = layout;
     this.layoutKey = layoutKey;
     this.fingerprint = fingerprint;
-    const mode: RoundMode = owedFullHash || !this.view || dispatchedAt - this.lastFullHashAt >= this.fullHashIntervalMs ? "full-hash"
+    const mode: RoundMode = owedFullHash || fingerprintMoved || !this.view || dispatchedAt - this.lastFullHashAt >= this.fullHashIntervalMs ? "full-hash"
       : owedFullStat || layoutMoved ? "full-stat" : "paths";
     const round: TrackerRound = { epoch, cut, workspaceGeneration: this.generation, root: { ...this.root }, layout, buildKey: currentBuildKey(fingerprint),
       bindingVersion: input.bindingVersion, captureId: `c-${randomUUID().replaceAll("-", "")}`, mode, dispatchedAt, pending, subtrees };

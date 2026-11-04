@@ -130,11 +130,11 @@ export const GC_CYCLE_MS = 30_000;
 const START_STOP_GRACE_MS = 6_000;
 /** Internal reads (the verification base) are bounded too. */
 const INTERNAL_QUERY_MS = 60_000;
-/** A workspace without a binding judges at most this many sibling snapshots as its seed base. */
+/** A workspace without a compatible binding judges at most this many sibling snapshots. */
 export const MAX_SEED_CANDIDATES = 16;
 
 type SnapshotContent = { entries: Map<string, ContentEntry>; status: SnapshotIndexStatus };
-/** A leased sibling snapshot a workspace without a binding was judged against; the caller releases the lease. */
+/** A leased sibling snapshot used as a candidate base; the caller releases the lease. */
 type SeedBase = SnapshotContent & { snapshotId: string; lease: SnapshotLease };
 
 function queryError(completion: Exclude<QueryCompletion<unknown>, { status: "ok" }>, op: string): JavaIntelligenceError {
@@ -287,7 +287,7 @@ export class IndexOwner {
   }
 
   /**
-   * Seed (contract §2.7): for a workspace without a binding of its own, the sibling snapshot under the
+   * Seed (contract §2.7): for a workspace without a compatible binding, the sibling snapshot under the
    * same buildKey whose content differs least from this capture, judged by hash. It is returned under a
    * candidate-scan lease, so no publish or GC can reclaim it before it is bound or cloned.
    */
@@ -562,9 +562,10 @@ export class WorkspaceIndex {
       await this.owner.options.faultAt?.(`round-${mode}`);
       const bound = store.binding(this.workspaceId);
       const own = bound ? await this.baseOf(bound.snapshotId) : undefined;
-      let verification = await timed("verifyMs", () => this.tracker.verify(round, own && { entries: own.entries, buildKey: bound!.buildKey }));
-      // No binding of its own: a sibling's sealed snapshot under the same buildKey is the base (seed).
-      if (!bound) {
+      const againstOwn = await timed("verifyMs", () => this.tracker.verify(round, own && { entries: own.entries, buildKey: bound!.buildKey }));
+      const keyChanged = Boolean(bound) && bound!.buildKey !== round.buildKey;
+      let verification = againstOwn;
+      if (!bound || keyChanged) {
         seed = await timed("seedMs", () => this.owner.seedFor(this.workspaceId, verification));
         if (seed) verification = rebase(verification, { entries: seed.entries, buildKey: round.buildKey });
       }
@@ -572,32 +573,35 @@ export class WorkspaceIndex {
         statted: verification.statted, ...(seed ? { seedFrom: seed.snapshotId } : {}) });
       if (verification.noop) {
         // Zero diff: the own binding only moves its watermark; a seed binds the sibling's snapshot after a full manifest/file check.
-        const binding = bound ? await store.confirmNoop(this.tracker.planFor(verification))
-          : await store.bindVerified(this.tracker.planFor(verification), seed!.snapshotId, {
-            indexedGeneration: seed!.status.indexedGeneration, plannedMode: "seed-bind",
-            actualBuildMode: "none", comparisonBaseSnapshotId: seed!.snapshotId
-          });
+        const plan = this.tracker.planFor(verification);
+        const binding = seed ? await timed("publishMs", () => store.bindVerified(plan, seed!.snapshotId, {
+          indexedGeneration: seed!.status.indexedGeneration, plannedMode: "seed-bind",
+          actualBuildMode: "none", comparisonBaseSnapshotId: seed!.snapshotId
+        })) : await store.confirmNoop(plan);
         this.tracker.complete(round, binding);
-        Object.assign(detail, { kind: bound ? "noop" : "seed-bind", snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
+        Object.assign(detail, { kind: seed ? "seed-bind" : "noop", snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
         this.finish("noop", mode, started, undefined, detail);
-        if (!bound) this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
-          indexedGeneration: seed!.status.indexedGeneration, changed: [], deleted: [], buildKeyChanged: false });
+        if (seed) {
+          this.base = undefined;
+          this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
+            ...(bound ? { previousSnapshotId: bound.snapshotId } : {}), indexedGeneration: seed.status.indexedGeneration,
+            changed: bound ? againstOwn.changed : [], deleted: bound ? againstOwn.deleted : [], buildKeyChanged: keyChanged });
+          if (bound) this.owner.supersede(bound.snapshotId);
+        }
         return;
       }
-      const base = own ?? seed;
-      const baseId = bound?.snapshotId ?? seed?.snapshotId;
+      const baseId = seed?.snapshotId ?? bound?.snapshotId;
       // Census members only (Java sources, resource XML): a path delta reads exactly these; anything else rescans.
       const pathsOnly = [...verification.changed, ...verification.deleted].every(file => file.endsWith(".java") || file.endsWith(".xml"));
-      const generation = (base?.status.indexedGeneration ?? 0) + 1;
+      const generation = Math.max(own?.status.indexedGeneration ?? 0, seed?.status.indexedGeneration ?? 0) + 1;
       const files = verification.changed.length + verification.deleted.length;
       // An explicit full on an empty job: no base; a difference above the delta closure limit (a seed's or the
       // workspace's own: the closure holds at least the changed files); changed build inputs; or the previous
       // delta ran out its job deadline (a misjudged small job goes to the full queue, never back into a delta slot).
-      const keyChanged = Boolean(bound) && bound!.buildKey !== round.buildKey;
       const fullReason: FullBuildReason | undefined = this.fullNext ?? (!baseId ? "no-base"
-        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : keyChanged ? "build-key-changed" : undefined);
+        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : keyChanged && !seed ? "build-key-changed" : undefined);
       const chosen: BuildHint = fullReason ? { workspaceId: this.workspaceId, kind: "full", generation }
-        : (bound ? round.mode === "paths" : true) && pathsOnly && (bound?.buildKey ?? round.buildKey) === round.buildKey
+        : (seed || round.mode === "paths") && pathsOnly
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }
           : { workspaceId: this.workspaceId, kind: "delta", generation, rescan: true };
       hint = chosen;
@@ -607,8 +611,8 @@ export class WorkspaceIndex {
       const cloned = chosen.kind === "full" ? undefined : baseId;
       const job = await store.createJob({ workspaceId: this.workspaceId, captureId: round.captureId });
       try {
-        if (cloned && bound) {
-          const baseLease = store.acquire(bound.snapshotId, "base");
+        if (cloned && !seed) {
+          const baseLease = store.acquire(cloned, "base");
           try { await timed("cloneMs", () => store.cloneBase(baseLease, job)); } finally { baseLease.release(); }
         } else if (cloned) await timed("cloneMs", () => store.cloneBase(seed!.lease, job));
         seed?.lease.release();
@@ -637,7 +641,8 @@ export class WorkspaceIndex {
         this.finish("published", mode, started, undefined, detail);
         this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
           ...(bound ? { previousSnapshotId: bound.snapshotId } : {}), indexedGeneration: completion.result?.indexedGeneration ?? generation,
-          changed: verification.changed, deleted: verification.deleted, buildKeyChanged: Boolean(bound) && bound!.buildKey !== binding.buildKey });
+          changed: bound ? againstOwn.changed : verification.changed, deleted: bound ? againstOwn.deleted : verification.deleted,
+          buildKeyChanged: keyChanged });
         if (bound && bound.snapshotId !== binding.snapshotId) this.owner.supersede(bound.snapshotId);
       } finally {
         this.prepared = undefined;

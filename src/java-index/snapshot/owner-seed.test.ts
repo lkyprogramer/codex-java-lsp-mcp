@@ -10,6 +10,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { startBuildProcess } from "../../index-builder/build-process.js";
+import type { BuildSchedulerEvent } from "../../index-builder/build-scheduler.js";
 import type { BuilderJob } from "../../index-builder/incremental.js";
 import { close, openImmutableIndexDb } from "../sql/driver.js";
 import { logicalDigest } from "../sql/logical-export.js";
@@ -277,6 +278,66 @@ test("a sibling under another buildKey is never a seed base: the worktree builds
   assert.deepEqual(ctx.jobsFor(other).map(job => job.kind), ["full"]);
   const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
   assert.deepEqual([round.kind, round.seedFrom], ["full", undefined]);
+});
+
+test("a worktree with an old build key uses a compatible sibling while the full slot is busy", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const exact = await repo(dir, "exact");
+  const edited = await repo(dir, "edited");
+  const blocker = await repo(dir, "blocker");
+  const pom = path.join(main, "pom.xml");
+  const currentPom = (await readFile(pom, "utf8")).replace("</project>", "  <!-- current configuration -->\n</project>");
+  await writeFile(pom, currentPom);
+  await writeFile(path.join(blocker, "pom.xml"), currentPom.replace("current configuration", "different configuration"));
+  const ctx = await openOwner(t, path.join(dir, "cache"), { startBuild: input => {
+    ctx.jobs.push({ repoRoot: input.repoRoot, job: input.job });
+    if (input.repoRoot !== blocker) return startBuildProcess(input);
+    return { child: spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }),
+      result: new Promise(() => {}) };
+  } });
+  const seed = await bound(ctx, main);
+  const oldExact = await bound(ctx, exact);
+  const oldEdited = await bound(ctx, edited);
+  const exactBuilds = ctx.jobsFor(exact).length;
+  const editedBuilds = ctx.jobsFor(edited).length;
+  assert.notEqual(oldExact.binding.buildKey, seed.binding.buildKey);
+  await ctx.owner.workspace(blocker);
+  await until(() => ctx.owner.scheduler.status().full === 1, "full slot occupied");
+  await addMethod(edited, "onlyInWorktree");
+  for (const root of [exact, edited]) {
+    await writeFile(path.join(root, "pom.xml"), currentPom);
+    ctx.sources.emit(root, "pom.xml");
+  }
+  const oldLease = ctx.owner.store.acquire(oldEdited.binding.snapshotId, "request");
+  try {
+    assert.equal(ctx.owner.store.binding(oldEdited.workspace.workspaceId)?.snapshotId, oldEdited.binding.snapshotId);
+    const nextExact = await bound(ctx, exact);
+    const nextEdited = await bound(ctx, edited);
+    assert.equal(nextExact.binding.snapshotId, seed.binding.snapshotId);
+    assert.equal(nextEdited.binding.buildKey, seed.binding.buildKey);
+    assert.notEqual(nextEdited.binding.snapshotId, seed.binding.snapshotId);
+    assert.ok(existsSync(oldLease.dbPath), "an outstanding request can still read the old snapshot");
+    assert.equal(ctx.owner.scheduler.status().full, 1);
+    const schedulerEvents = ctx.events.flatMap(e => e.type === "scheduler" ? [e.event as BuildSchedulerEvent] : [])
+      .filter(e => e.workspaceId === oldEdited.workspace.workspaceId);
+    const dispatched = schedulerEvents.filter(e => e.type === "dispatched").at(-1);
+    const result = schedulerEvents.filter(e => e.type === "result").at(-1);
+    assert.equal(dispatched?.kind, "delta");
+    assert.equal(result?.ok, true);
+    assert.deepEqual(ctx.jobsFor(exact).slice(exactBuilds), []);
+    assert.deepEqual(ctx.jobsFor(edited).slice(editedBuilds).map(job => job.kind), ["refresh"]);
+    const records = await publications(ctx.owner);
+    const rebound = records.find(r => r.workspaceId === oldExact.workspace.workspaceId && r.snapshotId === nextExact.binding.snapshotId);
+    const delta = records.find(r => r.workspaceId === oldEdited.workspace.workspaceId && r.snapshotId === nextEdited.binding.snapshotId);
+    assert.deepEqual([rebound?.plannedMode, rebound?.comparisonBaseSnapshotId, rebound?.cloneBaseSnapshotId],
+      ["seed-bind", seed.binding.snapshotId, undefined]);
+    assert.deepEqual([delta?.actualBuildMode, delta?.comparisonBaseSnapshotId, delta?.cloneBaseSnapshotId],
+      ["delta", seed.binding.snapshotId, seed.binding.snapshotId]);
+    const deltaRound = rounds(ctx, oldEdited.workspace.workspaceId).at(-1);
+    t.diagnostic(JSON.stringify({ dispatched, result, exact: rounds(ctx, oldExact.workspace.workspaceId).at(-1)?.timings,
+      delta: deltaRound?.timings }));
+  } finally { oldLease.release(); }
 });
 
 test("a snapshot bound by a seeded twin survives its first workspace's next publish and every sweep", async t => {

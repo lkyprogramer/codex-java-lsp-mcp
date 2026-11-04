@@ -571,8 +571,9 @@ test("a full-stat signal during a path round survives it, and an abandoned perio
     ctx.source.emit(F.ItemIsDir | 0x100, "docs/sql");
     const moved = await dispatch(ctx);
     assert.equal(moved.mode, "full-stat");
+    assert.equal(moved.buildKey, round.buildKey, "an empty resource root changes the layout, not the build key");
     ctx.tracker.abandon(moved);
-    assert.equal((await cycle(ctx, { noop: false })).round.mode, "full-stat");
+    assert.equal((await cycle(ctx, { noop: true })).round.mode, "full-stat");
     now += 10 * 60 * 1000;
     const periodic = await dispatch(ctx);
     assert.equal(periodic.mode, "full-hash");
