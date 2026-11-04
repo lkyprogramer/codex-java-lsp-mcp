@@ -14,6 +14,7 @@ import path from "node:path";
 import { cloneSealedDatabase } from "../../mac-platform/clonefile.js";
 import type { SnapshotManifest } from "../sql/snapshot-manifest.js";
 import { BINDING_FILE, BINDING_FORMAT, readBinding, removeStaleBindingTmp, sameRoot, workspaceDir, writeBinding, type RootIdentity, type WorkspaceBinding } from "./binding.js";
+import { recordSnapshotPublication, type PublicationDetails } from "./publication-history.js";
 import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, readVerification, sealJobDatabase, syncDir, verificationEntries,
   verificationFile, verifyDatabaseFile, writeVerification, type FaultHook, type Mac1Layout, type SealTimings, type VerificationRecord } from "./seal.js";
 
@@ -339,7 +340,7 @@ export class SnapshotStore {
   // ------------------------------------------------------------ binding CAS
 
   /** Publish a sealed candidate built for `plan`'s capture. */
-  async publish(plan: BindPlan, job: BuildJob): Promise<WorkspaceBinding> {
+  async publish(plan: BindPlan, job: BuildJob, publication?: PublicationDetails): Promise<WorkspaceBinding> {
     if (job.captureId !== plan.captureId || job.workspaceId !== plan.workspaceId) throw new BindRejected("capture", `job ${job.jobId} is for ${job.workspaceId}/${job.captureId}`);
     if (job.state === "OPEN") await this.seal(job);
     if (job.state !== "SEALED" || !job.manifest) throw new BindRejected("job-state", `job ${job.jobId} is ${job.state}`);
@@ -350,7 +351,7 @@ export class SnapshotStore {
         this.checkPlan(plan);
         this.checkContent(plan, manifest);
         if (this.failed(manifest.snapshotId)) throw new BindRejected("base-failed", `job ${job.jobId} was built on a snapshot that failed verification`);
-        const binding = await this.commit(plan, manifest);
+        const binding = await this.commit(plan, manifest, publication, job.baseSnapshotId);
         job.state = "FINISHED";
         return binding;
       });
@@ -374,7 +375,7 @@ export class SnapshotStore {
    * A verified snapshot's file is re-hashed against its verdict; an unverified one is shared as
    * it is served, and its verdict, when it comes, applies to every binding on it.
    */
-  async bindVerified(plan: BindPlan, snapshotId: string): Promise<WorkspaceBinding> {
+  async bindVerified(plan: BindPlan, snapshotId: string, publication?: PublicationDetails): Promise<WorkspaceBinding> {
     const lease = this.acquire(snapshotId, "candidate-scan");
     try {
       const manifest = await readSealedManifest(this.layout, snapshotId, { verifyFile: this.verdicts.has(snapshotId) });
@@ -382,7 +383,7 @@ export class SnapshotStore {
         this.checkPlan(plan);
         this.checkContent(plan, manifest);
         if (this.failed(snapshotId)) throw new BindRejected("base-failed", `snapshot ${snapshotId} failed verification`);
-        return this.commit(plan, manifest);
+        return this.commit(plan, manifest, publication);
       });
     } finally { lease.release(); }
   }
@@ -455,7 +456,8 @@ export class SnapshotStore {
     if (manifest.buildKey !== plan.buildKey) throw new BindRejected("build-key", `snapshot ${manifest.snapshotId} buildKey differs`);
   }
 
-  private async commit(plan: BindPlan, manifest: SnapshotManifest): Promise<WorkspaceBinding> {
+  private async commit(plan: BindPlan, manifest: SnapshotManifest, publication?: PublicationDetails,
+    cloneBaseSnapshotId?: string): Promise<WorkspaceBinding> {
     this.options.assertOwner?.();
     const binding: WorkspaceBinding = { formatVersion: BINDING_FORMAT, workspaceId: plan.workspaceId, root: { ...plan.root },
       workspaceGeneration: plan.workspaceGeneration, bindingVersion: plan.bindingVersion + 1, snapshotId: manifest.snapshotId,
@@ -465,16 +467,25 @@ export class SnapshotStore {
       await mkdir(directory);
       await syncDir(this.layout.workspaces);
     }
+    const record = async (bindingResult: "bound" | "bound-after-error") => {
+      if (!publication) return;
+      await recordSnapshotPublication(this.layout.root, { ...publication, at: Date.now(), workspaceId: binding.workspaceId,
+        bindingVersion: binding.bindingVersion, snapshotId: binding.snapshotId, cloneBaseSnapshotId, bindingResult });
+    };
     try {
       await writeBinding(this.layout, binding, this.options.faultAt);
     } catch (error) {
       // Past the rename the new binding is the commit even though a later sync failed: memory follows the disk.
       const onDisk = await readBinding(this.layout, plan.workspaceId).catch(() => undefined);
-      if (onDisk && onDisk.bindingVersion === binding.bindingVersion && onDisk.snapshotId === binding.snapshotId) this.bindings.set(plan.workspaceId, onDisk);
+      if (onDisk && onDisk.bindingVersion === binding.bindingVersion && onDisk.snapshotId === binding.snapshotId) {
+        this.bindings.set(plan.workspaceId, onDisk);
+        await record("bound-after-error");
+      }
       throw error;
     }
     this.bindings.set(plan.workspaceId, binding);
     this.quarantined.delete(plan.workspaceId);
+    await record("bound");
     return { ...binding, root: { ...binding.root } };
   }
 

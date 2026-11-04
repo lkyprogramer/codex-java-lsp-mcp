@@ -14,6 +14,7 @@ import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import type { ContentEntry } from "../sql/snapshot-manifest.js";
 import type { WorkspaceBinding } from "./binding.js";
+import { builderFullReason, type FullBuildReason } from "./publication-history.js";
 import type { QueryOpName, QueryOps, QueryRequest, SnapshotIndexStatus } from "./query-ops.js";
 import { QueryPool, type QueryCompletion } from "./query-pool.js";
 import { queryOpTask, spawnQueryWorker } from "./query-process.js";
@@ -405,7 +406,7 @@ export class WorkspaceIndex {
   private readonly settled = new Set<() => void>();
   private lastError?: string;
   /** The last delta ran out its job deadline: the next round is a full. */
-  private fullNext = false;
+  private fullNext?: "delta-deadline" | "verification-failed";
   private rounds = 0;
   private lastRound?: { outcome: string; at: number; elapsedMs: number };
 
@@ -572,7 +573,10 @@ export class WorkspaceIndex {
       if (verification.noop) {
         // Zero diff: the own binding only moves its watermark; a seed binds the sibling's snapshot after a full manifest/file check.
         const binding = bound ? await store.confirmNoop(this.tracker.planFor(verification))
-          : await store.bindVerified(this.tracker.planFor(verification), seed!.snapshotId);
+          : await store.bindVerified(this.tracker.planFor(verification), seed!.snapshotId, {
+            indexedGeneration: seed!.status.indexedGeneration, plannedMode: "seed-bind",
+            actualBuildMode: "none", comparisonBaseSnapshotId: seed!.snapshotId
+          });
         this.tracker.complete(round, binding);
         Object.assign(detail, { kind: bound ? "noop" : "seed-bind", snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
         this.finish("noop", mode, started, undefined, detail);
@@ -589,15 +593,17 @@ export class WorkspaceIndex {
       // An explicit full on an empty job: no base; a difference above the delta closure limit (a seed's or the
       // workspace's own: the closure holds at least the changed files); changed build inputs; or the previous
       // delta ran out its job deadline (a misjudged small job goes to the full queue, never back into a delta slot).
-      const fullNext = this.fullNext;
       const keyChanged = Boolean(bound) && bound!.buildKey !== round.buildKey;
-      const chosen: BuildHint = !baseId || files > DELTA_CLOSURE_LIMIT || keyChanged || fullNext ? { workspaceId: this.workspaceId, kind: "full", generation }
+      const fullReason: FullBuildReason | undefined = this.fullNext ?? (!baseId ? "no-base"
+        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : keyChanged ? "build-key-changed" : undefined);
+      const chosen: BuildHint = fullReason ? { workspaceId: this.workspaceId, kind: "full", generation }
         : (bound ? round.mode === "paths" : true) && pathsOnly && (bound?.buildKey ?? round.buildKey) === round.buildKey
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }
           : { workspaceId: this.workspaceId, kind: "delta", generation, rescan: true };
       hint = chosen;
-      detail.kind = chosen.kind === "full" ? "full" : chosen.rescan ? "rescan" : "delta";
-      if (chosen.kind === "full") this.fullNext = false;
+      const plannedMode = chosen.kind === "full" ? "full" : chosen.rescan ? "rescan" : "delta";
+      detail.kind = plannedMode;
+      if (chosen.kind === "full") this.fullNext = undefined;
       const cloned = chosen.kind === "full" ? undefined : baseId;
       const job = await store.createJob({ workspaceId: this.workspaceId, captureId: round.captureId });
       try {
@@ -612,7 +618,12 @@ export class WorkspaceIndex {
         const built = completion.result?.contentManifestId;
         if (!completion.ok || !built) throw new Error(completion.error ?? "builder reported no content identity");
         if (built !== verification.contentManifestId) detail.censusDiverged = true;
-        const binding = await timed("publishMs", () => store.publish(this.tracker.planFor(verification, built), job)).finally(() => {
+        const binding = await timed("publishMs", () => store.publish(this.tracker.planFor(verification, built), job, {
+          indexedGeneration: completion.result?.indexedGeneration ?? generation,
+          plannedMode, actualBuildMode: completion.result?.stages?.mode ?? completion.buildKind ?? chosen.kind,
+          comparisonBaseSnapshotId: baseId,
+          fullReason: completion.escalationReason === undefined ? fullReason : builderFullReason(completion.escalationReason)
+        })).finally(() => {
           if (job.sealTimings) timings.seal = job.sealTimings;
         });
         if (detail.censusDiverged) {
@@ -635,7 +646,7 @@ export class WorkspaceIndex {
       }
     } catch (error) {
       // Nothing is cleared: the old binding keeps serving, every hint stays owed.
-      if (hint?.kind === "delta" && error instanceof Error && /deadline exceeded/.test(error.message)) this.fullNext = true;
+      if (hint?.kind === "delta" && error instanceof Error && /deadline exceeded/.test(error.message)) this.fullNext = "delta-deadline";
       this.tracker.abandon(round);
       store.track(this.workspaceId, this.tracker.trackedState());
       this.finish("failed", mode, started, error, detail);
@@ -706,7 +717,7 @@ export class WorkspaceIndex {
    * The next round is a full build: no base, so nothing of the failed snapshot is carried forward.
    */
   verificationFailed(): void {
-    this.fullNext = true;
+    this.fullNext = "verification-failed";
     this.base = undefined;
     this.tracker.resume();
     this.owner.store.track(this.workspaceId, this.tracker.trackedState());

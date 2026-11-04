@@ -14,6 +14,7 @@ import type { BuilderJob } from "../../index-builder/incremental.js";
 import { close, openImmutableIndexDb } from "../sql/driver.js";
 import { logicalDigest } from "../sql/logical-export.js";
 import { IndexOwner, MAX_SEED_CANDIDATES, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
+import { PUBLICATION_HISTORY_FILE, type SnapshotPublication } from "./publication-history.js";
 import { readSnapshotContent } from "./seal.js";
 import { FSEVENT_FLAGS, type TrackerSourceFactory } from "./workspace-tracker.js";
 
@@ -81,6 +82,11 @@ function rounds(ctx: Awaited<ReturnType<typeof openOwner>>, workspaceId: string)
   return ctx.events.filter((event): event is Extract<OwnerEvent, { type: "round" }> => event.type === "round" && event.workspaceId === workspaceId);
 }
 
+async function publications(owner: IndexOwner): Promise<SnapshotPublication[]> {
+  const history = await readFile(path.join(owner.store.layout.root, PUBLICATION_HISTORY_FILE), "utf8");
+  return history.trimEnd().split("\n").map(row => JSON.parse(row));
+}
+
 function digestOf(owner: IndexOwner, snapshotId: string): string {
   const db = openImmutableIndexDb(owner.store.snapshotPath(snapshotId));
   try { return logicalDigest(db).digest; } finally { close(db); }
@@ -107,6 +113,10 @@ test("a worktree with a sibling's exact content binds the sibling's sealed snaps
   assert.deepEqual(await readdir(ctx.owner.store.layout.snapshots), [first.binding.snapshotId]);
   const round = rounds(ctx, second.workspace.workspaceId).at(-1)!;
   assert.deepEqual([round.outcome, round.kind, round.seedFrom, round.changed, round.deleted], ["noop", "seed-bind", first.binding.snapshotId, 0, 0]);
+  const [built, seeded] = await publications(ctx.owner);
+  assert.deepEqual([built.plannedMode, built.actualBuildMode, built.fullReason], ["full", "full", "no-base"]);
+  assert.deepEqual([seeded.plannedMode, seeded.actualBuildMode, seeded.comparisonBaseSnapshotId, seeded.cloneBaseSnapshotId],
+    ["seed-bind", "none", first.binding.snapshotId, undefined]);
 });
 
 test("an exact twin of the latest sibling seed-binds after the candidate limit is exceeded", async t => {
@@ -287,6 +297,9 @@ test("a bound workspace whose build inputs changed gets an explicit full on an e
   const round = rounds(ctx, first.workspace.workspaceId).at(-1)!;
   assert.deepEqual([round.outcome, round.kind, round.timings?.cloneMs], ["published", "full", undefined], "no base clone for an explicit full");
   assert.notEqual(ctx.owner.store.binding(first.workspace.workspaceId)!.buildKey, first.binding.buildKey);
+  const published = (await publications(ctx.owner)).at(-1)!;
+  assert.deepEqual([published.fullReason, published.comparisonBaseSnapshotId, published.cloneBaseSnapshotId],
+    ["build-key-changed", first.binding.snapshotId, undefined]);
 });
 
 test("a reopened workspace whose binding carries a later generation keeps publishing: the new tracker starts at that generation", async t => {
@@ -330,6 +343,35 @@ test("a delta that ran out its job deadline is followed by a full, not by the sa
   assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full", "refresh", "full"]);
   assert.deepEqual(rounds(ctx, first.workspace.workspaceId).filter(round => round.kind !== "noop").map(round => [round.kind, round.outcome]),
     [["full", "published"], ["delta", "failed"], ["full", "published"]]);
+  const history = await publications(ctx.owner);
+  assert.equal(history.length, 2);
+  assert.equal(history[1]?.fullReason, "delta-deadline");
+});
+
+test("publication history reports a full builder that escalated after cloning the comparison base", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const ctx = await openOwner(t, path.join(dir, "cache"), { startBuild: input => {
+    if (input.job.kind !== "refresh") return startBuildProcess(input);
+    return {
+      child: spawn(process.execPath, ["-e", ""], { stdio: "ignore" }),
+      result: Promise.resolve({ kind: "needs-full", captures: [], reason: "delta escalated to full: dependency closure 401 > 400 files" })
+    };
+  } });
+  const first = await bound(ctx, main);
+  await addMethod(main, "afterEscalation");
+  ctx.sources.emit(main, serviceRel);
+  const second = await until(() => {
+    const binding = ctx.owner.store.binding(first.workspace.workspaceId);
+    return binding && binding.snapshotId !== first.binding.snapshotId && !first.workspace.status().roundInFlight && binding;
+  }, "full publication after escalation");
+  const [initial, published] = await publications(ctx.owner);
+  assert.equal(initial.indexedGeneration, 1);
+  assert.deepEqual({ ...published, at: undefined }, {
+    at: undefined, workspaceId: second.workspaceId, bindingVersion: second.bindingVersion, snapshotId: second.snapshotId,
+    indexedGeneration: 2, plannedMode: "delta", actualBuildMode: "full", fullReason: "closure-limit",
+    comparisonBaseSnapshotId: first.binding.snapshotId, cloneBaseSnapshotId: first.binding.snapshotId, bindingResult: "bound"
+  });
 });
 
 test("a divergent builder census publishes usable content but owes a full hash before confirming freshness", async t => {
@@ -486,4 +528,5 @@ test("a delta publish is verified in the background; a FAILED verdict takes the 
   assert.equal(rounds(ctx, id).at(-1)!.kind, "full");
   assert.equal(ctx.owner.store.isVerified(rebuilt.snapshotId), true);
   assert.equal(rebuilt.bindingVersion, ctx.owner.store.bindingVersionOf(id));
+  assert.equal((await publications(ctx.owner)).at(-1)?.fullReason, "verification-failed");
 });

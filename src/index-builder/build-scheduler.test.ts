@@ -776,6 +776,8 @@ test("a delta whose own inputs exceed the closure limit reports escalation befor
   events.length = 0;
   const outcome = await scheduler.submit({ workspaceId: "wide", kind: "delta", generation: 2, changed });
   assert.equal(outcome.ok, true, outcome.error);
+  assert.equal(outcome.buildKind, "full");
+  assert.match(outcome.escalationReason ?? "", /401 changed\/deleted inputs > 400 files/);
   const results = events.filter((event): event is Extract<BuildSchedulerEvent, { type: "result" }> => event.type === "result");
   assert.deepEqual(results.map(event => event.kind), ["delta", "full"], "the delta escalates, the full publishes");
   assert.match(results[0]!.escalation ?? "", /401 changed\/deleted inputs > 400 files/, "escalated on its inputs, before any parse or closure");

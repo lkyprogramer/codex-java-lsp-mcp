@@ -15,6 +15,7 @@ import { logicalDigest } from "../sql/logical-export.js";
 import { deflateRawSync } from "node:zlib";
 import { buildKeyOf, contentManifestId } from "../sql/snapshot-manifest.js";
 import { BINDING_FILE, readBinding, type RootIdentity } from "./binding.js";
+import { PUBLICATION_HISTORY_FILE, PUBLICATION_HISTORY_LIMIT, recordSnapshotPublication, type PublicationDetails, type SnapshotPublication } from "./publication-history.js";
 import { DB_FILE, MANIFEST_FILE, openSealedDatabase, readSealedManifest } from "./seal.js";
 import { BindRejected, SnapshotStore, type BindPlan, type BuildJob, type RejectReason } from "./snapshot-store.js";
 
@@ -238,12 +239,33 @@ test("an in-process failure at every seal, rename and binding boundary leaves th
     const first = await store.publish(plan(fixture.a), await jobFrom(store, fixture.a));
     failAt = step;
     const job = await jobFrom(store, fixture.b, "cap-00000002");
-    await assert.rejects(store.publish(plan(fixture.b, { bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-00000002" }), job), new RegExp(`fault ${step}`));
+    const details: PublicationDetails = { indexedGeneration: 2, plannedMode: "full", actualBuildMode: "full" };
+    await assert.rejects(store.publish(plan(fixture.b, { bindingVersion: 1, coveredThroughSeq: 2, captureId: "cap-00000002" }), job, details), new RegExp(`fault ${step}`));
     // Memory follows the disk: the served binding is what a restart would see.
     assert.deepEqual(store.binding(WS), await readBinding(store.layout, WS), step);
+    const history = path.join(store.layout.root, PUBLICATION_HISTORY_FILE);
+    if (NEW_BINDING.has(step)) {
+      const row = JSON.parse(await readFile(history, "utf8")) as SnapshotPublication;
+      assert.deepEqual([row.bindingResult, row.bindingVersion, row.snapshotId], ["bound-after-error", 2, job.snapshotId], step);
+    } else {
+      assert.equal(existsSync(history), false, step);
+    }
     store.finishJob(job);
     await assertRecovered(root, step, first.snapshotId, { newSnapshot: job.snapshotId, jobId: job.jobId });
   }
+});
+
+test("snapshot publication history keeps only the newest records on disk", async () => {
+  const root = await cacheRoot();
+  const history = path.join(root, PUBLICATION_HISTORY_FILE);
+  const row: SnapshotPublication = { at: 1, workspaceId: WS, snapshotId: "snapshot-01", bindingVersion: 1,
+    indexedGeneration: 1, plannedMode: "full", actualBuildMode: "full", bindingResult: "bound" };
+  await writeFile(history, Array.from({ length: PUBLICATION_HISTORY_LIMIT }, (_, i) => JSON.stringify({ ...row, bindingVersion: i + 1 })).join("\n") + "\n");
+  await recordSnapshotPublication(root, { ...row, bindingVersion: PUBLICATION_HISTORY_LIMIT + 1 });
+  const versions = (await readFile(history, "utf8")).trimEnd().split("\n").map(line => JSON.parse(line).bindingVersion);
+  assert.deepEqual(versions, Array.from({ length: PUBLICATION_HISTORY_LIMIT }, (_, i) => i + 2));
+  assert.equal(await mode(history), 0o600);
+  assert.equal(existsSync(`${history}.tmp`), false);
 });
 
 test("a SIGKILL at every publish boundary recovers the complete old or new binding", async () => {

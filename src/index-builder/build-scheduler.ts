@@ -33,6 +33,8 @@ export type BuildCompletion = {
   error?: string;
   result?: BuilderJobResult;
   baseId?: string;
+  buildKind?: BuildKind;
+  escalationReason?: string;
   /** The result arrived, but the builder did not exit within the grace period and was killed. */
   forcedExit?: boolean;
 };
@@ -79,7 +81,7 @@ type Entry = {
   changes: Map<string, Change>;
   waiters: Array<(result: BuildCompletion) => void>;
   captures: readonly SourceCapture[];
-  escalated?: boolean;
+  escalationReason?: string;
   attempt?: Attempt;
   baseId?: string;
   done: Promise<void>;
@@ -224,7 +226,7 @@ export class BuildScheduler {
           this.complete(entry, { ok: false, error: "scheduler stopped" });
           continue;
         }
-        if (entry.escalated && selection.kind !== "full") throw new Error("escalated build requires a full selection");
+        if (entry.escalationReason !== undefined && selection.kind !== "full") throw new Error("escalated build requires a full selection");
         if (selection.kind === "full" && fullBusy) {
           this.release(selection);
           this.active.delete(entry.hint.workspaceId);
@@ -328,12 +330,12 @@ export class BuildScheduler {
       return;
     }
     if (outcome.kind === "needs-full") {
-      if (attempt.kind === "full" || entry.escalated) { this.complete(entry, { ok: false, error: "full builder requested another full" }); return; }
+      if (attempt.kind === "full" || entry.escalationReason !== undefined) { this.complete(entry, { ok: false, error: "full builder requested another full" }); return; }
       if (this.stopped) { this.complete(entry, { ok: false, error: "scheduler stopped" }); return; }
       this.active.delete(entry.hint.workspaceId);
       entry.attempt = undefined;
       entry.captures = outcome.captures;
-      entry.escalated = true;
+      entry.escalationReason = outcome.reason;
       entry.hint.kind = "full";
       entry.queuedAt = performance.now();
       const pending = this.queue.find(item => item.hint.workspaceId === entry.hint.workspaceId);
@@ -348,6 +350,7 @@ export class BuildScheduler {
       return;
     }
     this.complete(entry, { ok: outcome.result.ok, result: outcome.result, baseId: entry.baseId,
+      buildKind: attempt.kind, escalationReason: entry.escalationReason,
       ...(outcome.result.error ? { error: outcome.result.error } : {}), ...(attempt.forcedExit ? { forcedExit: true } : {}) });
   }
 
