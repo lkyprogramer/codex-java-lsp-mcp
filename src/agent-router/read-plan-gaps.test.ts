@@ -122,6 +122,42 @@ test("T08: protected coverage gaps use repository-relative anchor paths for abso
   assert.ok(result.evidenceGaps.every(gap => !gap.includes("/repo/")));
 });
 
+test("T08: only ordinary unselected position gaps are marked for compact summary", async () => {
+  const file = (name: string, overrides: Partial<CandidateFile>) => candidate({
+    absolutePath: `/repo/src/main/java/demo/${name}.java`,
+    path: `src/main/java/demo/${name}.java`,
+    ...overrides
+  });
+  const anchor = file("Anchor", { reasons: ["target"], positions: [{ line: 50, column: 1 }] });
+  const selected = file("Selected", {
+    reasons: ["DEFINITION"], score: 900,
+    positions: [{ line: 1, column: 1 }, { line: 42, column: 1 }]
+  });
+  const protectedCore = file("ProtectedCore", { reasons: ["DEFINITION"], score: 80 });
+  const protectedPath = file("ProtectedPath", { reasons: ["rg:java"], score: 60 });
+  const ordinary = file("Ordinary", { reasons: ["rg:java"], score: 40 });
+  const files = [anchor, selected, protectedCore, protectedPath, ordinary];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, {
+      anchors: [{ file: anchor.absolutePath, line: 50, column: 1 }],
+      verbosity: "compact", readPlanMaxItems: 2
+    }),
+    protectedPaths: new Set([protectedPath.absolutePath]),
+    javaIndex: rangeIndex(() => [{ startLine: 1, endLine: 4, kind: "method", estimatedBytes: 256 }])
+  });
+  assert.deepEqual(result.selectedPaths, [anchor.absolutePath, selected.absolutePath]);
+  const ordinaryGap = result.evidenceGaps.find(gap => gap.includes(ordinary.path!));
+  assert.ok(ordinaryGap);
+  assert.deepEqual([...result.compactPositionGaps].filter(([, value]) => value === null).map(([gap]) => gap), [ordinaryGap]);
+  for (const [expectedFile, line] of [[anchor, 50], [selected, 42], [protectedCore, 1], [protectedPath, 1]] as const) {
+    const gap = result.evidenceGapLedger.find(gap => gap.kind === "RANGE_MISS" && gap.message.includes(`${line} in ${expectedFile.path}`));
+    assert.ok(gap);
+    assert.equal(result.compactPositionGaps.get(gap.message), `Uncovered lines ${line} in ${expectedFile.path}; read plan partial.`);
+  }
+});
+
 test("T08: a candidate dropped by shortlist capacity is EVICTED and ENTRY_ABSENT stays off-limits", async () => {
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const core = Array.from({ length: 6 }, (_, index) => candidate({

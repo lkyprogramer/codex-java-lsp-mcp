@@ -26,6 +26,7 @@ type BuildImpactResultInput = {
   readonly rgExecution: RgExecutionResult;
   readonly suppressed: Record<string, number>;
   readonly evidenceGaps: string[];
+  readonly compactPositionGaps: ReadonlyMap<string, string | null>;
   readonly freshness: ImpactFreshnessV6;
   readonly semanticCompletion: Completion;
   readonly semanticReadiness?: string;
@@ -91,9 +92,19 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult |
   if (verbosity === "diagnostic") {
     return withConvergedCostV6(payload, payload.cost.readBytes, payload.cost.suppressedRawBytes);
   }
-  payload.evidenceGaps = verbosity === "compact"
-    ? payload.evidenceGaps.map(shortEvidenceGap)
-    : publicEvidenceGaps(payload.evidenceGaps, 3);
+  if (verbosity === "compact") {
+    let ordinaryCount = 0;
+    const gaps: string[] = [];
+    for (const gap of payload.evidenceGaps) {
+      const compact = input.compactPositionGaps.get(gap);
+      if (compact === null) ordinaryCount += 1;
+      else gaps.push(compact ?? shortEvidenceGap(gap));
+    }
+    if (ordinaryCount > 0) gaps.push(`Unselected candidates with uncovered positions: ${ordinaryCount}. See diagnostic for paths and lines.`);
+    payload.evidenceGaps = gaps;
+  } else {
+    payload.evidenceGaps = publicEvidenceGaps(payload.evidenceGaps, 3);
+  }
   return toCompactImpact(payload, verbosity);
 }
 

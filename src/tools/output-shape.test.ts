@@ -359,6 +359,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
     // the top-level V6 fields are unchanged.
     const diagnosticFiles = diagnostic.files as Array<Record<string, unknown>>;
     assert.ok(diagnosticFiles.some(file => Object.hasOwn(file, "reasons")), "diagnostic mode must expose provider attribution the standard mode hides");
+    assert.equal(Object.hasOwn((diagnostic.metrics as { readPlan: object }).readPlan, "compactPositionGaps"), false);
   } finally {
     await index.close();
     await rm(root, { recursive: true, force: true });
