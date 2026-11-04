@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { chmod, cp, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import test, { type TestContext } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { startBuildProcess } from "../../index-builder/build-process.js";
 import type { BuilderJob } from "../../index-builder/incremental.js";
 import { close, openImmutableIndexDb } from "../sql/driver.js";
@@ -98,10 +98,21 @@ async function addMethod(root: string, name: string): Promise<void> {
   await writeFile(file, text.replace(/}\s*$/, `  public String ${name}() { return "${name}"; }\n}\n`));
 }
 
-test("a worktree with a sibling's exact content binds the sibling's sealed snapshot: no build, no new snapshot", async t => {
+test("a clean worktree without the main checkout's empty roots binds the sibling's sealed snapshot", async t => {
   const dir = await base(t);
   const main = await repo(dir, "main");
-  const twin = await repo(dir, "twin");
+  const twin = path.join(dir, "twin");
+  await mkdir(path.join(main, "empty-module"));
+  await writeFile(path.join(main, "empty-module", "pom.xml"), "<project><artifactId>empty-module</artifactId></project>");
+  const git = (...args: string[]) => execFileSync("git", ["-C", main, "-c", "core.hooksPath=/dev/null",
+    "-c", "commit.gpgSign=false", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { stdio: "pipe" });
+  git("init");
+  git("add", ".");
+  git("commit", "-m", "Fixture");
+  await mkdir(path.join(main, "empty-module", "src/main/java/deep"), { recursive: true });
+  await mkdir(path.join(main, "empty-module", "src/main/resources"), { recursive: true });
+  git("worktree", "add", "--detach", twin);
+  assert.equal(existsSync(path.join(twin, "empty-module", "src")), false);
   const ctx = await openOwner(t, path.join(dir, "cache"));
   const first = await bound(ctx, main);
   assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full"]);
@@ -253,8 +264,12 @@ test("a sibling under another buildKey is never a seed base: the worktree builds
   const dir = await base(t);
   const main = await repo(dir, "main");
   const other = await repo(dir, "other-build");
-  const pom = path.join(other, "pom.xml");
-  await writeFile(pom, (await readFile(pom, "utf8")).replace("</project>", "  <!-- another build input -->\n</project>"));
+  for (const [root, version] of [[main, "17"], [other, "21"]]) {
+    const moduleDir = path.join(root, "empty-module");
+    await mkdir(moduleDir);
+    await writeFile(path.join(moduleDir, "pom.xml"),
+      `<project><properties><maven.compiler.release>${version}</maven.compiler.release></properties></project>`);
+  }
   const ctx = await openOwner(t, path.join(dir, "cache"));
   const first = await bound(ctx, main);
   const second = await bound(ctx, other);

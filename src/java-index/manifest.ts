@@ -18,7 +18,7 @@ export async function discoverMyBatisResourceFiles(repoRoot: string, layout: Lay
   await realpath(repoRoot);
   const files: DiscoveredResourceFile[] = [];
   for (const resourceRoot of layout.resourceRoots) {
-    await walkResourceDirectory(path.join(repoRoot, resourceRoot), repoRoot, resourceRoot, files);
+    for await (const file of walkIndexDirectory(repoRoot, resourceRoot, ".xml")) files.push(file);
   }
   files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   return files;
@@ -39,32 +39,6 @@ export function resourceMemberRoot(relativePath: string, layout: LayoutContext):
   const root = resourceSourceRoot(normalized, layout);
   if (!root || normalized === root) return undefined;
   return normalized.slice(root.length + 1).split("/").slice(0, -1).some(part => IGNORED_DIRECTORY_NAMES.has(part)) ? undefined : root;
-}
-
-async function walkResourceDirectory(
-  absoluteDir: string,
-  repoRoot: string,
-  sourceRoot: string,
-  files: DiscoveredResourceFile[]
-): Promise<void> {
-  let dir;
-  try {
-    const readable = await sourcePathWithinRoot(repoRoot, absoluteDir);
-    dir = await opendir(readable);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw error;
-  }
-  for await (const entry of dir) {
-    if (entry.isDirectory()) {
-      if (IGNORED_DIRECTORY_NAMES.has(entry.name)) continue;
-      await walkResourceDirectory(path.join(absoluteDir, entry.name), repoRoot, sourceRoot, files);
-    } else if (entry.isFile() && entry.name.endsWith(".xml")) {
-      const absolutePath = path.join(absoluteDir, entry.name);
-      const relativePath = path.relative(repoRoot, absolutePath).split(path.sep).join("/");
-      files.push({ absolutePath, relativePath, sourceRoot });
-    }
-  }
 }
 
 export type DiscoveredJavaFile = {
@@ -88,18 +62,20 @@ export async function discoverJavaFiles(repoRoot: string, layout: LayoutContext)
   await realpath(repoRoot);
   const files: DiscoveredJavaFile[] = [];
   for (const sourceRoot of layout.sourceRoots) {
-    await walkDirectory(path.join(repoRoot, sourceRoot.relativePath), repoRoot, sourceRoot.relativePath, files);
+    for await (const file of walkIndexDirectory(repoRoot, sourceRoot.relativePath, ".java")) files.push(file);
   }
   files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   return files;
 }
 
-async function walkDirectory(
-  absoluteDir: string,
-  repoRoot: string,
-  sourceRoot: string,
-  files: DiscoveredJavaFile[]
-): Promise<void> {
+/** Inspect only as far as the first census member when computing root presence. */
+export async function hasIndexableFiles(repoRoot: string, sourceRoot: string, extension: ".java" | ".xml"): Promise<boolean> {
+  for await (const _ of walkIndexDirectory(repoRoot, sourceRoot, extension)) return true;
+  return false;
+}
+
+async function* walkIndexDirectory(repoRoot: string, sourceRoot: string, extension: ".java" | ".xml",
+  absoluteDir = path.join(repoRoot, sourceRoot)): AsyncGenerator<DiscoveredJavaFile> {
   let dir;
   try {
     const readable = await sourcePathWithinRoot(repoRoot, absoluteDir);
@@ -109,13 +85,13 @@ async function walkDirectory(
     throw error;
   }
   for await (const entry of dir) {
+    const absolutePath = path.join(absoluteDir, entry.name);
     if (entry.isDirectory()) {
       if (IGNORED_DIRECTORY_NAMES.has(entry.name)) continue;
-      await walkDirectory(path.join(absoluteDir, entry.name), repoRoot, sourceRoot, files);
-    } else if (entry.isFile() && entry.name.endsWith(".java")) {
-      const absolutePath = path.join(absoluteDir, entry.name);
+      yield* walkIndexDirectory(repoRoot, sourceRoot, extension, absolutePath);
+    } else if (entry.isFile() && entry.name.endsWith(extension)) {
       const relativePath = path.relative(repoRoot, absolutePath).split(path.sep).join("/");
-      files.push({ absolutePath, relativePath, sourceRoot });
+      yield { absolutePath, relativePath, sourceRoot };
     }
   }
 }

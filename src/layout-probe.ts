@@ -19,6 +19,7 @@ export type LayoutContext = {
   sourceRoots: SourceRootInfo[];
   resourceRoots: string[];
   broadRoots: string[];
+  moduleBases: string[];
   /**
    * Source/resource roots reached through a symlink: neither indexed nor tracked. The tracker's
    * census never follows links, so discovery must not either; publishes report them as a
@@ -35,13 +36,15 @@ export function probeLayout(repoRoot: string, layoutProfile = "generic-java"): L
     if (symlinked) linked.add(relativePath);
     return symlinked === false;
   };
-  const sourceRoots = sourceRootInfos(repoRoot, contentRoot);
-  const resourceRoots = resourceRootInfos(repoRoot, contentRoot);
+  const moduleBases = moduleBaseRelatives(repoRoot);
+  const sourceRoots = sourceRootInfos(moduleBases, contentRoot);
+  const resourceRoots = resourceRootInfos(moduleBases, contentRoot);
   return {
     layout: detectLayout(repoRoot, sourceRoots),
     layoutProfile,
     sourceRoots,
     resourceRoots,
+    moduleBases: moduleBases.filter(base => throughSymlink(repoRoot, base) === false),
     broadRoots: broadRoots(repoRoot, sourceRoots),
     ...(linked.size ? { symlinkedRoots: [...linked].sort() } : {})
   };
@@ -101,7 +104,7 @@ function throughSymlink(repoRoot: string, relativePath: string): boolean | undef
   return false;
 }
 
-function sourceRootInfos(repoRoot: string, contentRoot: (relativePath: string) => boolean): SourceRootInfo[] {
+function sourceRootInfos(moduleBases: readonly string[], contentRoot: (relativePath: string) => boolean): SourceRootInfo[] {
   const roots = new Map<string, SourceRootInfo>();
   const addJavaRoots = (baseRelative: string, moduleName: string) => {
     for (const sourceSet of ["main", "test"] as const) {
@@ -112,13 +115,13 @@ function sourceRootInfos(repoRoot: string, contentRoot: (relativePath: string) =
     }
   };
 
-  for (const baseRelative of moduleBaseRelatives(repoRoot)) {
+  for (const baseRelative of moduleBases) {
     addJavaRoots(baseRelative, baseRelative === "" ? "." : path.basename(baseRelative));
   }
   return [...roots.values()].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function resourceRootInfos(repoRoot: string, contentRoot: (relativePath: string) => boolean): string[] {
+function resourceRootInfos(moduleBases: readonly string[], contentRoot: (relativePath: string) => boolean): string[] {
   const roots = new Set<string>();
   const addResourceRoot = (baseRelative: string) => {
     const relativePath = path.join(baseRelative, "src", "main", "resources");
@@ -127,7 +130,7 @@ function resourceRootInfos(repoRoot: string, contentRoot: (relativePath: string)
     }
   };
 
-  for (const baseRelative of moduleBaseRelatives(repoRoot)) {
+  for (const baseRelative of moduleBases) {
     addResourceRoot(baseRelative);
   }
   if (contentRoot(path.join("docs", "sql"))) {
@@ -136,7 +139,7 @@ function resourceRootInfos(repoRoot: string, contentRoot: (relativePath: string)
   return [...roots].sort();
 }
 
-function detectLayout(repoRoot: string, sourceRoots: SourceRootInfo[]): LayoutKind {
+export function detectLayout(repoRoot: string, sourceRoots: SourceRootInfo[]): LayoutKind {
   if (pathExists(path.join(repoRoot, "settings.gradle")) || pathExists(path.join(repoRoot, "settings.gradle.kts"))) {
     return sourceRoots.some(root => root.relativePath.startsWith("modules/") || root.relativePath.startsWith("apps/")) ? "gradle-multi" : "single";
   }

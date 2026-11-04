@@ -82,6 +82,7 @@ test("probeLayout reports roots reached through a symlink instead of walking the
 
   assert.deepEqual(layout.sourceRoots.map(item => item.relativePath), [path.join("src", "main", "java")]);
   assert.deepEqual(layout.resourceRoots, []);
+  assert.equal(layout.moduleBases.includes("linkedmod"), false, "linked module is not a build marker base");
   assert.deepEqual(layout.symlinkedRoots, [
     path.join("alias", "src", "main", "java"),
     path.join("ext", "src", "main", "java"),

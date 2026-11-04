@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
-import type { LayoutContext } from "../layout-probe.js";
+import { detectLayout, type LayoutContext } from "../layout-probe.js";
+import { hasIndexableFiles } from "./manifest.js";
+import { sourcePathWithinRoot } from "./source-capture.js";
 
 const require = createRequire(import.meta.url);
 
@@ -51,32 +53,42 @@ export function computeExtractorVersion(): string {
  * only content and repo shape can change the result.
  */
 export async function computeBuildFingerprintEntries(repoRoot: string, layout: LayoutContext): Promise<string[]> {
-  const moduleDirs = new Set<string>([""]);
-  for (const sourceRoot of layout.sourceRoots) {
-    moduleDirs.add(sourceRoot.module ?? "");
-  }
+  const activeSources: LayoutContext["sourceRoots"] = [];
   const entries: string[] = [];
-  for (const moduleDir of moduleDirs) {
+  for (const sourceRoot of layout.sourceRoots) {
+    if (await hasIndexableFiles(repoRoot, sourceRoot.relativePath, ".java")) activeSources.push(sourceRoot);
+  }
+  const hasRootSource = activeSources.some(root => root.module === ".");
+  for (const moduleDir of layout.moduleBases) {
+    // Configuration belongs to the module even when the checkout has no source directory.
+    const names: string[] = await readdir(path.join(repoRoot, moduleDir)).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    });
     for (const marker of BUILD_MARKER_RELATIVE_PATHS) {
+      if (!names.includes(marker.split("/", 1)[0])) continue;
       const relativePath = moduleDir ? `${moduleDir}/${marker}` : marker;
       let content: Buffer;
       try {
-        content = await readFile(path.join(repoRoot, relativePath));
+        content = await readFile(await sourcePathWithinRoot(repoRoot, path.join(repoRoot, relativePath)));
       } catch (error) {
         if((error as NodeJS.ErrnoException).code!=="ENOENT") throw error;
         continue;
       }
       const contentHash = createHash("sha256").update(content).digest("hex");
       entries.push(`build:${relativePath}:${contentHash}`);
+      // The previous fingerprint also keyed root markers under "." when root Java sources exist.
+      if (moduleDir === "" && hasRootSource) entries.push(`build:./${marker}:${contentHash}`);
     }
   }
-  for (const sourceRoot of layout.sourceRoots) {
+  for (const sourceRoot of activeSources) {
     entries.push(`sourceRoot:${sourceRoot.relativePath}:${sourceRoot.module}:${sourceRoot.sourceSet}`);
   }
   for (const resourceRoot of layout.resourceRoots) {
-    entries.push(`resourceRoot:${resourceRoot}`);
+    if (await hasIndexableFiles(repoRoot, resourceRoot, ".xml")) entries.push(`resourceRoot:${resourceRoot}`);
   }
-  entries.push(`layout:${layout.layout}`, `layoutProfile:${layout.layoutProfile}`);
+  for (const root of layout.symlinkedRoots ?? []) entries.push(`symlinkedRoot:${root}`);
+  entries.push(`layout:${detectLayout(repoRoot, activeSources)}`, `layoutProfile:${layout.layoutProfile}`);
   entries.sort();
   return entries;
 }
