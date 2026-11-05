@@ -7,7 +7,6 @@ import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
 import { buildSearchDocuments, searchDocumentId } from "../../discovery/search-document.js";
-import type { SearchDocument } from "../../discovery/search-document.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
@@ -216,20 +215,41 @@ test("K18: a secret value never enters any document, token, or search response",
   }
 });
 
-test("T05: document ids are deterministic over declaration, kind, range, hash and version", () => {
+test("K18: a short secret assigned to a secret-named key is redacted in document text, as in previews", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t05-k18-short-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const source = [
+      "package demo;",
+      "public class Svc {",
+      "    /** default token: 'zq7short' */",
+      "    public void init() { String password = \"s3cr3t!\"; }",
+      "}"
+    ].join("\n");
+    const bundle = await writeAndParse(root, backend, source);
+    const docs = buildSearchDocuments({ bundle, content: source });
+    const texts = docs.map(doc => doc.normalizedText).join("\n");
+    assert.ok(texts.includes("password"), `the key name stays searchable: ${texts}`);
+    for (const value of ["s3cr3t!", "zq7short"]) {
+      assert.ok(!texts.includes(value), `the value ${value} must not enter any document: ${texts}`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T05/R08: document ids are deterministic over target, kind, source path/range/hash and version", () => {
   const base = {
     declarationId: "method:demo.Svc#refund()",
-    path: "src/Svc.java",
-    contentHash: "h1",
-    representationVersion: 1 as const,
     sourceKind: "comment" as const,
-    startLine: 3,
-    endLine: 3,
-    normalizedText: "执行冲正步骤"
+    source: { relativePath: "src/Svc.java", contentHash: "h1", startLine: 3, endLine: 3 },
+    representationVersion: 2 as const
   };
-  assert.equal(searchDocumentId(base), "method:demo.Svc#refund()|comment|3|3|h1|1");
-  const other: SearchDocument = { documentId: "", ...base, contentHash: "h2" };
-  assert.notEqual(searchDocumentId(other), searchDocumentId(base), "a content change produces a new document identity");
+  assert.equal(searchDocumentId(base), "method:demo.Svc#refund()|comment|src/Svc.java|3|3|h1|2");
+  assert.notEqual(searchDocumentId({ ...base, source: { ...base.source, contentHash: "h2" } }), searchDocumentId(base),
+    "a content change produces a new document identity");
+  assert.notEqual(searchDocumentId({ ...base, source: { ...base.source, relativePath: "src/main/resources/Svc.xml" } }), searchDocumentId(base),
+    "the same target and lines from another source file is another document");
 });
 test("T05: a body comment inside the previous method never migrates to the next declaration", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t05-misbind-"));

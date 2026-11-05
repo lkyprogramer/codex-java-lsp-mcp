@@ -1,0 +1,6 @@
+{
+  "task_id": "JSB-ADMISSIONS-03",
+  "path": "src/main/java/lab/admissions/AdmissionService.java",
+  "before": "return score > minimum;",
+  "after": "return score >= minimum;"
+}

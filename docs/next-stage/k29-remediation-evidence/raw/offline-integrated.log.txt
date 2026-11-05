@@ -1,0 +1,1334 @@
+Cloning into '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/candidate'...
+done.
+HEAD is now at 04058e4 revert(discovery): drop declaration ranges after the evidence pilot
+{"isolation":"detached-local-clone","candidateRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/candidate","cacheRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/cache","jdtlsBin":"/usr/bin/false","executableTree":"2c325eb108864b46b6aaea0e929631f7037b96a5"}
+TAP version 13
+# (node:44229) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:44229) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: K29/R09: step load at 20 concurrent stays queue-bounded and fully settled; updates make answers PARTIAL, never mixed
+ok 1 - K29/R09: step load at 20 concurrent stays queue-bounded and fully settled; updates make answers PARTIAL, never mixed
+  ---
+  duration_ms: 843.763209
+  type: 'test'
+  ...
+# Subtest: T03: a mid-method anchor keeps an anchor-centered window inside an extreme method
+ok 2 - T03: a mid-method anchor keeps an anchor-centered window inside an extreme method
+  ---
+  duration_ms: 0.529541
+  type: 'test'
+  ...
+# Subtest: T03: multiple anchors inside one extreme method all survive
+ok 3 - T03: multiple anchors inside one extreme method all survive
+  ---
+  duration_ms: 0.749417
+  type: 'test'
+  ...
+# Subtest: T03: overlapping anchor windows merge into one inclusive span
+ok 4 - T03: overlapping anchor windows merge into one inclusive span
+  ---
+  duration_ms: 0.156041
+  type: 'test'
+  ...
+# Subtest: T03: adjacent windows merge and anchor order does not matter
+ok 5 - T03: adjacent windows merge and anchor order does not matter
+  ---
+  duration_ms: 0.532917
+  type: 'test'
+  ...
+# Subtest: T03: anchors at method bounds clamp instead of escaping the method
+ok 6 - T03: anchors at method bounds clamp instead of escaping the method
+  ---
+  duration_ms: 0.089542
+  type: 'test'
+  ...
+# Subtest: T03: invalid bounds, radius, and out-of-range anchors throw
+ok 7 - T03: invalid bounds, radius, and out-of-range anchors throw
+  ---
+  duration_ms: 0.410042
+  type: 'test'
+  ...
+# Subtest: exact search with generics throws a structured unsupported-shape error
+ok 8 - exact search with generics throws a structured unsupported-shape error
+  ---
+  duration_ms: 0.986416
+  type: 'test'
+  ...
+# Subtest: auto mode with generics stays on the text route instead of erroring
+ok 9 - auto mode with generics stays on the text route instead of erroring
+  ---
+  duration_ms: 0.397334
+  type: 'test'
+  ...
+# (node:44276) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a comment claiming HALF_UP is never indexed as a HALF_UP symbol
+ok 10 - a comment claiming HALF_UP is never indexed as a HALF_UP symbol
+  ---
+  duration_ms: 0.4285
+  type: 'test'
+  ...
+# (node:44276) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: exact HALF_UP finds no declaration and does not fabricate one
+ok 11 - exact HALF_UP finds no declaration and does not fabricate one
+  ---
+  duration_ms: 81.905709
+  type: 'test'
+  ...
+# Subtest: text route retrieves the comment but keeps it separate from the AST facts
+ok 12 - text route retrieves the comment but keeps it separate from the AST facts
+  ---
+  duration_ms: 19.986417
+  type: 'test'
+  ...
+# (node:44277) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:44277) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: locator selection is the declaration name, past multi-line and same-line annotations
+ok 13 - locator selection is the declaration name, past multi-line and same-line annotations
+  ---
+  duration_ms: 105.164708
+  type: 'test'
+  ...
+# Subtest: the preview of an identifier hit still starts at the declaration head, annotations included
+ok 14 - the preview of an identifier hit still starts at the declaration head, annotations included
+  ---
+  duration_ms: 21.608333
+  type: 'test'
+  ...
+# Subtest: default preview: a short declaration head per candidate, inside a small per-request cap
+ok 15 - default preview: a short declaration head per candidate, inside a small per-request cap
+  ---
+  duration_ms: 13.829458
+  type: 'test'
+  ...
+# Subtest: preview=window keeps the full window; preview=none returns verified locators only
+ok 16 - preview=window keeps the full window; preview=none returns verified locators only
+  ---
+  duration_ms: 16.274666
+  type: 'test'
+  ...
+# Subtest: QueryWorkBudget rejects invalid work limits
+ok 17 - QueryWorkBudget rejects invalid work limits
+  ---
+  duration_ms: 0.819208
+  type: 'test'
+  ...
+# Subtest: QueryWorkBudget permits work while time and postings remain
+ok 18 - QueryWorkBudget permits work while time and postings remain
+  ---
+  duration_ms: 0.111667
+  type: 'test'
+  ...
+# Subtest: QueryWorkBudget stops at the deadline before counting postings
+ok 19 - QueryWorkBudget stops at the deadline before counting postings
+  ---
+  duration_ms: 0.069459
+  type: 'test'
+  ...
+# Subtest: QueryWorkBudget reports the postings verdict once the cap is exhausted even with time left
+ok 20 - QueryWorkBudget reports the postings verdict once the cap is exhausted even with time left
+  ---
+  duration_ms: 0.060083
+  type: 'test'
+  ...
+# Subtest: QueryWorkBudget starts at the deadline when the parent budget is already spent
+ok 21 - QueryWorkBudget starts at the deadline when the parent budget is already spent
+  ---
+  duration_ms: 0.059292
+  type: 'test'
+  ...
+# Subtest: R07: terms supplement the raw query and force text intent
+ok 22 - R07: terms supplement the raw query and force text intent
+  ---
+  duration_ms: 1.213666
+  type: 'test'
+  ...
+# Subtest: R07: auto intent is exact only when the whole raw query is one selector
+ok 23 - R07: auto intent is exact only when the whole raw query is one selector
+  ---
+  duration_ms: 0.486584
+  type: 'test'
+  ...
+# Subtest: R07: one limit contract - default 8, 1..20, never silently clamped
+ok 24 - R07: one limit contract - default 8, 1..20, never silently clamped
+  ---
+  duration_ms: 0.687667
+  type: 'test'
+  ...
+# Subtest: R07: query and term lengths are UTF-16 code units, with exact boundaries
+ok 25 - R07: query and term lengths are UTF-16 code units, with exact boundaries
+  ---
+  duration_ms: 0.503
+  type: 'test'
+  ...
+# Subtest: R07: exact outcome and selectionLimited are reported, never hidden
+ok 26 - R07: exact outcome and selectionLimited are reported, never hidden
+  ---
+  duration_ms: 0.586917
+  type: 'test'
+  ...
+# (node:44281) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Q03/R09: an exact request that is expired on entry reports deadline and runs no SQL
+ok 27 - Q03/R09: an exact request that is expired on entry reports deadline and runs no SQL
+  ---
+  duration_ms: 50.28625
+  type: 'test'
+  ...
+# Subtest: R09: an expired discovery request reads no status and sends no query
+ok 28 - R09: an expired discovery request reads no status and sends no query
+  ---
+  duration_ms: 0.772833
+  type: 'test'
+  ...
+# Subtest: R09: a scan that never read a snapshot is labelled deadline/queue_full; one that did still reports a generation change
+ok 29 - R09: a scan that never read a snapshot is labelled deadline/queue_full; one that did still reports a generation change
+  ---
+  duration_ms: 0.504917
+  type: 'test'
+  ...
+# Subtest: R09: a deadline passing during postings stops the remaining routes and keeps the bounded top-K
+ok 30 - R09: a deadline passing during postings stops the remaining routes and keeps the bounded top-K
+  ---
+  duration_ms: 124.778541
+  type: 'test'
+  ...
+# Subtest: R09: an exact lookup interrupted by the deadline reports no exact outcome (not a miss)
+ok 31 - R09: an exact lookup interrupted by the deadline reports no exact outcome (not a miss)
+  ---
+  duration_ms: 25.391917
+  type: 'test'
+  ...
+# Subtest: R09: every stage is traced with begin/end/remaining/visited and nothing prefetches the graph
+ok 32 - R09: every stage is traced with begin/end/remaining/visited and nothing prefetches the graph
+  ---
+  duration_ms: 49.914625
+  type: 'test'
+  ...
+# Subtest: R09: top-K by score tiers equals a full (score desc, id asc) sort, including ties across the cut
+ok 33 - R09: top-K by score tiers equals a full (score desc, id asc) sort, including ties across the cut
+  ---
+  duration_ms: 2.978333
+  type: 'test'
+  ...
+# Subtest: T04: a mixed string with class name and natural language is text intent
+ok 34 - T04: a mixed string with class name and natural language is text intent
+  ---
+  duration_ms: 0.510042
+  type: 'test'
+  ...
+# Subtest: T04: exact code shapes stay exact in auto mode
+ok 35 - T04: exact code shapes stay exact in auto mode
+  ---
+  duration_ms: 0.7685
+  type: 'test'
+  ...
+# Subtest: T04: plain lowercase English words and CJK default to text in auto mode
+ok 36 - T04: plain lowercase English words and CJK default to text in auto mode
+  ---
+  duration_ms: 0.122916
+  type: 'test'
+  ...
+# Subtest: T04: explicit mode wins over auto classification
+ok 37 - T04: explicit mode wins over auto classification
+  ---
+  duration_ms: 0.066459
+  type: 'test'
+  ...
+# Subtest: T04: empty and over-length queries are rejected
+ok 38 - T04: empty and over-length queries are rejected
+  ---
+  duration_ms: 0.347708
+  type: 'test'
+  ...
+# Subtest: T04: complex unsupported generic signatures are not faked into exact in auto mode
+ok 39 - T04: complex unsupported generic signatures are not faked into exact in auto mode
+  ---
+  duration_ms: 0.05925
+  type: 'test'
+  ...
+# Subtest: Q08: a file changed (or deleted) after indexing never yields a READY stale locator
+ok 40 - Q08: a file changed (or deleted) after indexing never yields a READY stale locator
+  ---
+  duration_ms: 7.46925
+  type: 'test'
+  ...
+# Subtest: K20: hits from another generation than the status are not stitched into READY
+ok 41 - K20: hits from another generation than the status are not stitched into READY
+  ---
+  duration_ms: 1.533291
+  type: 'test'
+  ...
+# Subtest: Q09 (preview=window): a preview has a 4 KiB byte cap and whole lines; the range is recomputed from the kept lines
+ok 42 - Q09 (preview=window): a preview has a 4 KiB byte cap and whole lines; the range is recomputed from the kept lines
+  ---
+  duration_ms: 4.174084
+  type: 'test'
+  ...
+# Subtest: R08 (preview=window): preview bytes are capped per request (16 KiB); later candidates keep safe locators
+ok 43 - R08 (preview=window): preview bytes are capped per request (16 KiB); later candidates keep safe locators
+  ---
+  duration_ms: 5.677208
+  type: 'test'
+  ...
+# Subtest: R08: a file over 2 MiB is hash-verified by streaming (READY, no preview); the 8 MiB request cap leaves unverified locators
+ok 44 - R08: a file over 2 MiB is hash-verified by streaming (READY, no preview); the 8 MiB request cap leaves unverified locators
+  ---
+  duration_ms: 89.531
+  type: 'test'
+  ...
+# Subtest: R08: the request deadline stops source reads (locator kept, PARTIAL deadline)
+ok 45 - R08: the request deadline stops source reads (locator kept, PARTIAL deadline)
+  ---
+  duration_ms: 1.370667
+  type: 'test'
+  ...
+# Subtest: R08: each unique file is read once per request and its hash is recomputed every request
+ok 46 - R08: each unique file is read once per request and its hash is recomputed every request
+  ---
+  duration_ms: 3.248959
+  type: 'test'
+  ...
+# Subtest: K09/R08: CRLF, lone CR, UTF-8/emoji and EOF ranges use the parser's LF line numbering
+ok 47 - K09/R08: CRLF, lone CR, UTF-8/emoji and EOF ranges use the parser's LF line numbering
+  ---
+  duration_ms: 3.752125
+  type: 'test'
+  ...
+# Subtest: R08: a recognised credential is redacted and the preview is not source evidence
+ok 48 - R08: a recognised credential is redacted and the preview is not source evidence
+  ---
+  duration_ms: 3.160792
+  type: 'test'
+  ...
+# Subtest: R08 review: preview redaction covers setter/call, quoted-key and single-quote shapes; identifier words that merely contain a key word stay source
+ok 49 - R08 review: preview redaction covers setter/call, quoted-key and single-quote shapes; identifier words that merely contain a key word stay source
+  ---
+  duration_ms: 0.687625
+  type: 'test'
+  ...
+# Subtest: P01/R08: a document hit previews its own evidence source (XML), verified against the XML hash
+ok 50 - P01/R08: a document hit previews its own evidence source (XML), verified against the XML hash
+  ---
+  duration_ms: 3.395792
+  type: 'test'
+  ...
+# Subtest: R06 review: an unknown module is a complete EMPTY only when nothing on disk is unindexed
+ok 51 - R06 review: an unknown module is a complete EMPTY only when nothing on disk is unindexed
+  ---
+  duration_ms: 7.614
+  type: 'test'
+  ...
+# Subtest: R06 review: a Maven artifactId names a module whose directory differs; the parent artifactId does not
+ok 52 - R06 review: a Maven artifactId names a module whose directory differs; the parent artifactId does not
+  ---
+  duration_ms: 4.467625
+  type: 'test'
+  ...
+# Subtest: R07 review: the java_symbol static-query limit text comes from the shared constants
+ok 53 - R07 review: the java_symbol static-query limit text comes from the shared constants
+  ---
+  duration_ms: 0.194625
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: returns the same bounded rows as the in-process scan
+ok 54 - R09 worker: returns the same bounded rows as the in-process scan
+  ---
+  duration_ms: 110.443917
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: an expired request never queues; a full queue rejects with queue_full; queuePeak stays <= 32
+ok 55 - R09 worker: an expired request never queues; a full queue rejects with queue_full; queuePeak stays <= 32
+  ---
+  duration_ms: 221.917
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: waiters whose deadline passes leave the queue without running
+ok 56 - R09 worker: waiters whose deadline passes leave the queue without running
+  ---
+  duration_ms: 351.92775
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: a JS-side stall past deadline+grace is terminated; it settles after the thread exited and the writer can checkpoint
+ok 57 - R09 worker: a JS-side stall past deadline+grace is terminated; it settles after the thread exited and the writer can checkpoint
+  ---
+  duration_ms: 127.014167
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: a long scan does not block the main event loop
+ok 58 - R09 worker: a long scan does not block the main event loop
+  ---
+  duration_ms: 308.701834
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: release() resolves only after the worker closed its reader connection
+ok 59 - R09 worker: release() resolves only after the worker closed its reader connection
+  ---
+  duration_ms: 722.246417
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R09 worker: while a stalled thread is being terminated, no second thread starts and releases settle per thread
+ok 60 - R09 worker: while a stalled thread is being terminated, no second thread starts and releases settle per thread
+  ---
+  duration_ms: 520.53525
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: worker queue: waiting exact lookups run before waiting broad scans
+ok 61 - worker queue: waiting exact lookups run before waiting broad scans
+  ---
+  duration_ms: 264.962583
+  type: 'test'
+  ...
+# (node:44299) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: worker queue: text the classifier rejects is queued as a scan, not a rejection
+ok 62 - worker queue: text the classifier rejects is queued as a scan, not a rejection
+  ---
+  duration_ms: 54.026875
+  type: 'test'
+  ...
+# Subtest: R06: module and sourceSet are an AND over layout roots
+ok 63 - R06: module and sourceSet are an AND over layout roots
+  ---
+  duration_ms: 1.03225
+  type: 'test'
+  ...
+# Subtest: R06: unknown, ambiguous and source-set-less modules are explicit EMPTY, never widened
+ok 64 - R06: unknown, ambiguous and source-set-less modules are explicit EMPTY, never widened
+  ---
+  duration_ms: 0.132375
+  type: 'test'
+  ...
+# Subtest: R06: discovery sends the resolved root ids and reports the scope
+ok 65 - R06: discovery sends the resolved root ids and reports the scope
+  ---
+  duration_ms: 0.772667
+  type: 'test'
+  ...
+# Subtest: R06: an unknown module answers with its reason and never queries the whole repository
+ok 66 - R06: an unknown module answers with its reason and never queries the whole repository
+  ---
+  duration_ms: 0.288667
+  type: 'test'
+  ...
+# Subtest: R06: without layout roots the conventional scope is used but the result is PARTIAL
+ok 67 - R06: without layout roots the conventional scope is used but the result is PARTIAL
+  ---
+  duration_ms: 0.1585
+  type: 'test'
+  ...
+# (node:44466) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:44466) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: an all-CJK question over English code gets an explicit no-vocabulary-overlap diagnosis
+ok 68 - an all-CJK question over English code gets an explicit no-vocabulary-overlap diagnosis
+  ---
+  duration_ms: 111.392583
+  type: 'test'
+  ...
+# Subtest: no diagnosis when the vocabulary overlaps: mixed query, CJK comment, or an empty scope
+ok 69 - no diagnosis when the vocabulary overlaps: mixed query, CJK comment, or an empty scope
+  ---
+  duration_ms: 33.369334
+  type: 'test'
+  ...
+# (node:44495) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: T07 scope is applied before the result cap
+ok 70 - T07 scope is applied before the result cap
+  ---
+  duration_ms: 25.965625
+  type: 'test'
+  ...
+# Subtest: T07 the posting budget yields an explicit partial, not a silent topK
+ok 71 - T07 the posting budget yields an explicit partial, not a silent topK
+  ---
+  duration_ms: 7.823375
+  type: 'test'
+  ...
+# Subtest: T07 an exhausted parent deadline stops before any posting row
+ok 72 - T07 an exhausted parent deadline stops before any posting row
+  ---
+  duration_ms: 5.3925
+  type: 'test'
+  ...
+# Subtest: T07 exact lookups never consume the posting budget
+ok 73 - T07 exact lookups never consume the posting budget
+  ---
+  duration_ms: 6.870625
+  type: 'test'
+  ...
+# Subtest: T07 writer-maintained entity stats stay consistent under replace and match the scan fallback
+ok 74 - T07 writer-maintained entity stats stay consistent under replace and match the scan fallback
+  ---
+  duration_ms: 9.152792
+  type: 'test'
+  ...
+# Subtest: T07 in-memory and SQL detailed results agree with no budget
+ok 75 - T07 in-memory and SQL detailed results agree with no budget
+  ---
+  duration_ms: 7.313542
+  type: 'test'
+  ...
+# Subtest: R06: scope precedes every route's ranking and cap (limit 1, 20+ outside candidates)
+ok 76 - R06: scope precedes every route's ranking and cap (limit 1, 20+ outside candidates)
+  ---
+  duration_ms: 6.792125
+  type: 'test'
+  ...
+# Subtest: R06: prefix siblings and LIKE metacharacters never widen the scope
+ok 77 - R06: prefix siblings and LIKE metacharacters never widen the scope
+  ---
+  duration_ms: 2.676041
+  type: 'test'
+  ...
+# Subtest: R06: the posting budget is only spent on in-scope postings
+ok 78 - R06: the posting budget is only spent on in-scope postings
+  ---
+  duration_ms: 3.501167
+  type: 'test'
+  ...
+# Subtest: scope-filtered postings are counted as examined work and stop at the deadline
+ok 79 - scope-filtered postings are counted as examined work and stop at the deadline
+  ---
+  duration_ms: 3260.364167
+  type: 'test'
+  ...
+# Subtest: R07: an exact miss is a miss - never a fuzzy BM25 hit
+ok 80 - R07: an exact miss is a miss - never a fuzzy BM25 hit
+  ---
+  duration_ms: 1.779542
+  type: 'test'
+  ...
+# Subtest: R07: exact match, ambiguous duplicates and camelCase method selectors
+ok 81 - R07: exact match, ambiguous duplicates and camelCase method selectors
+  ---
+  duration_ms: 1.299
+  type: 'test'
+  ...
+# Subtest: R07: limit 20 returns 20 and selectionLimited says when more matched (cap+1)
+ok 82 - R07: limit 20 returns 20 and selectionLimited says when more matched (cap+1)
+  ---
+  duration_ms: 9.116
+  type: 'test'
+  ...
+# Subtest: scoped keyset pages neither skip nor repeat rows at a page boundary
+ok 83 - scoped keyset pages neither skip nor repeat rows at a page boundary
+  ---
+  duration_ms: 244.052292
+  type: 'test'
+  ...
+# Subtest: legacy search() honors the caller deadline and the default posting cap
+ok 84 - legacy search() honors the caller deadline and the default posting cap
+  ---
+  duration_ms: 2667.749792
+  type: 'test'
+  ...
+# Subtest: K29 bounded ranking preserves locale ties across posting batches and fresh generations
+ok 85 - K29 bounded ranking preserves locale ties across posting batches and fresh generations
+  ---
+  duration_ms: 20.19475
+  type: 'test'
+  ...
+# Subtest: K29 document ranking refills after whole score tiers with missing entities
+ok 86 - K29 document ranking refills after whole score tiers with missing entities
+  ---
+  duration_ms: 2.427916
+  type: 'test'
+  ...
+# (node:44663) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: T04: a mixed query surfaces the relevant method instead of short-circuiting on the type
+ok 87 - T04: a mixed query surfaces the relevant method instead of short-circuiting on the type
+  ---
+  duration_ms: 4.195125
+  type: 'test'
+  ...
+# Subtest: T04: exact owner\#method still hits deterministically without the text route
+ok 88 - T04: exact owner\#method still hits deterministically without the text route
+  ---
+  duration_ms: 1.392708
+  type: 'test'
+  ...
+# Subtest: T04: pure chunk words behave as before (text route)
+ok 89 - T04: pure chunk words behave as before (text route)
+  ---
+  duration_ms: 1.53875
+  type: 'test'
+  ...
+# Subtest: T04: explicit text mode never short-circuits on an FQN layer
+ok 90 - T04: explicit text mode never short-circuits on an FQN layer
+  ---
+  duration_ms: 1.550417
+  type: 'test'
+  ...
+# Subtest: T04: explicit exact mode keeps the legacy layered chain
+ok 91 - T04: explicit exact mode keeps the legacy layered chain
+  ---
+  duration_ms: 1.284417
+  type: 'test'
+  ...
+# (node:44664) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SqlEntitySearch matches searchEntities on java-index-v2 for ≥50 tasks
+ok 92 - SqlEntitySearch matches searchEntities on java-index-v2 for ≥50 tasks
+  ---
+  duration_ms: 303.388083
+  type: 'test'
+  ...
+# Subtest: after each tool round the model sees received lines/bytes against the task budget
+ok 93 - after each tool round the model sees received lines/bytes against the task budget
+  ---
+  duration_ms: 3.909958
+  type: 'test'
+  ...
+# Subtest: the ledger is arm-independent and absent without a budget
+ok 94 - the ledger is arm-independent and absent without a budget
+  ---
+  duration_ms: 3.685458
+  type: 'test'
+  ...
+# Subtest: read without maxLines returns a bounded default window
+ok 95 - read without maxLines returns a bounded default window
+  ---
+  duration_ms: 1.008291
+  type: 'test'
+  ...
+# Subtest: E01: strict QA types do not coerce string to boolean or number
+ok 96 - E01: strict QA types do not coerce string to boolean or number
+  ---
+  duration_ms: 0.837833
+  type: 'test'
+  ...
+# Subtest: E02: strict QA rejects extra keys
+ok 97 - E02: strict QA rejects extra keys
+  ---
+  duration_ms: 0.116292
+  type: 'test'
+  ...
+# Subtest: E03: strict QA rejects duplicate keys, including nested
+ok 98 - E03: strict QA rejects duplicate keys, including nested
+  ---
+  duration_ms: 0.573417
+  type: 'test'
+  ...
+# Subtest: E04: contract QA cannot succeed with no received required source
+ok 99 - E04: contract QA cannot succeed with no received required source
+  ---
+  duration_ms: 0.313833
+  type: 'test'
+  ...
+# Subtest: E05: failed scheduled runs remain in the success-rate denominator
+ok 100 - E05: failed scheduled runs remain in the success-rate denominator
+  ---
+  duration_ms: 0.337791
+  type: 'test'
+  ...
+# Subtest: E06: wrong QA answer is rejected (positive guard)
+ok 101 - E06: wrong QA answer is rejected (positive guard)
+  ---
+  duration_ms: 0.086041
+  type: 'test'
+  ...
+# Subtest: repair verdicts: only the frozen judge's validatedSuccess === true is a success
+ok 102 - repair verdicts: only the frozen judge's validatedSuccess === true is a success
+  ---
+  duration_ms: 0.192292
+  type: 'test'
+  ...
+# Subtest: usage: unknown stays null, provider raw preserved with hash
+ok 103 - usage: unknown stays null, provider raw preserved with hash
+  ---
+  duration_ms: 0.081625
+  type: 'test'
+  ...
+# Subtest: adapter: usage mapping to kit rows
+ok 104 - adapter: usage mapping to kit rows
+  ---
+  duration_ms: 0.346125
+  type: 'test'
+  ...
+# Subtest: adapter: only SOURCE_RECEIVED rows become kit read_events, with the file hash
+ok 105 - adapter: only SOURCE_RECEIVED rows become kit read_events, with the file hash
+  ---
+  duration_ms: 0.437208
+  type: 'test'
+  ...
+# Subtest: adapter: full plan - missing synthesized as MISSING, duplicates throw
+ok 106 - adapter: full plan - missing synthesized as MISSING, duplicates throw
+  ---
+  duration_ms: 0.638333
+  type: 'test'
+  ...
+# Subtest: adapter: scheduled denominator summary matches the gate metric
+ok 107 - adapter: scheduled denominator summary matches the gate metric
+  ---
+  duration_ms: 0.183583
+  type: 'test'
+  ...
+# Subtest: adapter end-to-end: frozen kit CLI scores the adapter's own pack
+ok 108 - adapter end-to-end: frozen kit CLI scores the adapter's own pack
+  ---
+  duration_ms: 509.118625
+  type: 'test'
+  ...
+# Subtest: buildPlannedAttempts is one flat row per task x arm x repeat
+ok 109 - buildPlannedAttempts is one flat row per task x arm x repeat
+  ---
+  duration_ms: 0.518208
+  type: 'test'
+  ...
+# Subtest: armOrder is seeded, reproducible and balanced across consecutive repeats
+ok 110 - armOrder is seeded, reproducible and balanced across consecutive repeats
+  ---
+  duration_ms: 1.063625
+  type: 'test'
+  ...
+# (node:44757) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] MCP server ready
+# (node:44757) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] shutting down (stdio_end)
+# (node:44841) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] MCP server ready
+# (node:44841) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] shutting down (stdio_end)
+# (node:44944) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] MCP server ready
+# [codex-java-lsp] shutting down (stdio_end)
+# (node:45013) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] MCP server ready
+# (node:45013) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] shutting down (stdio_end)
+# (node:45349) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] MCP server ready
+# [codex-java-lsp] shutting down (stdio_end)
+# (node:45418) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] MCP server ready
+# (node:45418) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [codex-java-lsp] shutting down (stdio_end)
+# {
+#   "status": "MEASURED",
+#   "scorer": "frozen-kit",
+#   "denominator": 8,
+#   "taskSuccessRate": 0.5,
+#   "byArm": {
+#     "product": {
+#       "scheduled": 4,
+#       "successes": 3,
+#       "successRate": 0.75,
+#       "measured": 4,
+#       "conditionalAccuracy": 0.75
+#     },
+#     "control": {
+#       "scheduled": 4,
+#       "successes": 1,
+#       "successRate": 0.25,
+#       "measured": 4,
+#       "conditionalAccuracy": 0.25
+#     }
+#   },
+#   "output": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/tmp/eval live e2e fuEFye/run out/results-pack.json"
+# }
+# Subtest: live main(): scripted agent through the real loop, MCP server, native tools and frozen kit
+ok 111 - live main(): scripted agent through the real loop, MCP server, native tools and frozen kit
+  ---
+  duration_ms: 13400.064625
+  type: 'test'
+  ...
+# Subtest: symmetric arms: native names are identical; only java_symbol differs
+ok 112 - symmetric arms: native names are identical; only java_symbol differs
+  ---
+  duration_ms: 10.190917
+  type: 'test'
+  ...
+# Subtest: per-attempt workspaces: distinct roots, isolated copies
+ok 113 - per-attempt workspaces: distinct roots, isolated copies
+  ---
+  duration_ms: 10.839125
+  type: 'test'
+  ...
+# Subtest: canonical containment: traversal, prefix-sibling, symlink, windows separators
+ok 114 - canonical containment: traversal, prefix-sibling, symlink, windows separators
+  ---
+  duration_ms: 57.659208
+  type: 'test'
+  ...
+# Subtest: write (repair kind) is confined to the candidate and re-readable
+ok 115 - write (repair kind) is confined to the candidate and re-readable
+  ---
+  duration_ms: 7.219458
+  type: 'test'
+  ...
+# Subtest: after a write, a rebound session observes the modification on the next query
+ok 116 - after a write, a rebound session observes the modification on the next query
+  ---
+  duration_ms: 10.302125
+  type: 'test'
+  ...
+# Subtest: R03 isolation: symlinked directory cannot carry a NEW-file write outside the workspace
+ok 117 - R03 isolation: symlinked directory cannot carry a NEW-file write outside the workspace
+  ---
+  duration_ms: 11.354042
+  type: 'test'
+  ...
+# Subtest: R03 isolation: workspaces never merge, keys never collide, .git dirs only are skipped
+ok 118 - R03 isolation: workspaces never merge, keys never collide, .git dirs only are skipped
+  ---
+  duration_ms: 20.549375
+  type: 'test'
+  ...
+# Subtest: R01/R03 read: exact line bytes (CRLF kept), no phantom line, file hash, byte cap by whole lines
+ok 119 - R01/R03 read: exact line bytes (CRLF kept), no phantom line, file hash, byte cap by whole lines
+  ---
+  duration_ms: 18.265375
+  type: 'test'
+  ...
+# Subtest: R03 rg: maxResults caps the TOTAL lines and truncation is flagged
+ok 120 - R03 rg: maxResults caps the TOTAL lines and truncation is flagged
+  ---
+  duration_ms: 28.83475
+  type: 'test'
+  ...
+# Subtest: R03 test tool: compile check reports diagnostics and never touches the candidate tree
+ok 121 - R03 test tool: compile check reports diagnostics and never touches the candidate tree
+  ---
+  duration_ms: 780.101875
+  type: 'test'
+  ...
+# Subtest: native dispatch rejects unknown, missing and incorrectly typed parameters before execution
+ok 122 - native dispatch rejects unknown, missing and incorrectly typed parameters before execution
+  ---
+  duration_ms: 2.048583
+  type: 'test'
+  ...
+# Subtest: replace_file preserves unrelated bytes and fails without writing for ambiguous or unsafe targets
+ok 123 - replace_file preserves unrelated bytes and fails without writing for ambiguous or unsafe targets
+  ---
+  duration_ms: 3.968292
+  type: 'test'
+  ...
+# Subtest: Maven root uses production sources and release, ignoring unrelated duplicate modules and test sources
+ok 124 - Maven root uses production sources and release, ignoring unrelated duplicate modules and test sources
+  ---
+  duration_ms: 1324.034584
+  type: 'test'
+  ...
+# Subtest: declared Maven modules compile separately; unsupported dependencies and unsafe roots are explicit
+ok 125 - declared Maven modules compile separately; unsupported dependencies and unsafe roots are explicit
+  ---
+  duration_ms: 971.5085
+  type: 'test'
+  ...
+# Subtest: standalone compile refuses a source-root symlink outside the candidate
+ok 126 - standalone compile refuses a source-root symlink outside the candidate
+  ---
+  duration_ms: 1.193
+  type: 'test'
+  ...
+# Subtest: summarizeArm: success rate is over every scheduled attempt
+ok 127 - summarizeArm: success rate is over every scheduled attempt
+  ---
+  duration_ms: 0.942
+  type: 'test'
+  ...
+# Subtest: medianPromptTokens: exact median; missing usage is not a median
+ok 128 - medianPromptTokens: exact median; missing usage is not a median
+  ---
+  duration_ms: 0.172917
+  type: 'test'
+  ...
+# Subtest: pilotReport keeps only pilot rows and drops the whole-split summary
+ok 129 - pilotReport keeps only pilot rows and drops the whole-split summary
+  ---
+  duration_ms: 0.434459
+  type: 'test'
+  ...
+# Subtest: eval-tool-wire driver: payload delivered; RECEIVED comes only from attached slices
+ok 130 - eval-tool-wire driver: payload delivered; RECEIVED comes only from attached slices
+  ---
+  duration_ms: 2.328083
+  type: 'test'
+  ...
+# Subtest: W01: read source survives the final model-message boundary
+ok 131 - W01: read source survives the final model-message boundary
+  ---
+  duration_ms: 0.457875
+  type: 'test'
+  ...
+# Subtest: W02: every java_symbol field survives (locators, completeness flags, previews)
+ok 132 - W02: every java_symbol field survives (locators, completeness flags, previews)
+  ---
+  duration_ms: 0.871667
+  type: 'test'
+  ...
+# Subtest: W03: write acknowledgement survives the final model-message boundary
+ok 133 - W03: write acknowledgement survives the final model-message boundary
+  ---
+  duration_ms: 0.255291
+  type: 'test'
+  ...
+# Subtest: replace_file acknowledgements and errors reach the model without source credit; raw records remain intact
+ok 134 - replace_file acknowledgements and errors reach the model without source credit; raw records remain intact
+  ---
+  duration_ms: 0.673
+  type: 'test'
+  ...
+# Subtest: W04: a lossy payload credits exactly the retained whole lines
+ok 135 - W04: a lossy payload credits exactly the retained whole lines
+  ---
+  duration_ms: 0.880917
+  type: 'test'
+  ...
+# Subtest: W05: evaluation prompt does not reference an unavailable tool
+ok 136 - W05: evaluation prompt does not reference an unavailable tool
+  ---
+  duration_ms: 0.082667
+  type: 'test'
+  ...
+# Subtest: protocol: tool replies directly follow tool_calls; the nudge comes after all of them
+ok 137 - protocol: tool replies directly follow tool_calls; the nudge comes after all of them
+  ---
+  duration_ms: 0.491791
+  type: 'test'
+  ...
+# Subtest: receipts: every request is a boundary, including the forced final-answer request
+ok 138 - receipts: every request is a boundary, including the forced final-answer request
+  ---
+  duration_ms: 0.518958
+  type: 'test'
+  ...
+# Subtest: receipts: a tool result that never reaches a request is never received
+ok 139 - receipts: a tool result that never reaches a request is never received
+  ---
+  duration_ms: 0.579125
+  type: 'test'
+  ...
+# Subtest: serializer: CRLF, emoji, empty, errors and MCP envelopes
+ok 140 - serializer: CRLF, emoji, empty, errors and MCP envelopes
+  ---
+  duration_ms: 0.476375
+  type: 'test'
+  ...
+# Subtest: serializer: an oversized single line is an explicit budget error, never half a line
+ok 141 - serializer: an oversized single line is an explicit budget error, never half a line
+  ---
+  duration_ms: 1.6425
+  type: 'test'
+  ...
+# Subtest: serializer: java_symbol slices use evidenceRange; over budget, candidates are admitted in rank order (preview, else locator)
+ok 142 - serializer: java_symbol slices use evidenceRange; over budget, candidates are admitted in rank order (preview, else locator)
+  ---
+  duration_ms: 1.166209
+  type: 'test'
+  ...
+# Subtest: serializer: content is always valid JSON within maxBytes, for every tool shape
+ok 143 - serializer: content is always valid JSON within maxBytes, for every tool shape
+  ---
+  duration_ms: 37.116167
+  type: 'test'
+  ...
+# Subtest: R08: a java_symbol preview is credited against its evidence source; a redacted preview never
+ok 144 - R08: a java_symbol preview is credited against its evidence source; a redacted preview never
+  ---
+  duration_ms: 0.2185
+  type: 'test'
+  ...
+# Subtest: v1.3 anchor paths become file locators and both arms receive generic answer conventions
+ok 145 - v1.3 anchor paths become file locators and both arms receive generic answer conventions
+  ---
+  duration_ms: 0.910208
+  type: 'test'
+  ...
+# Subtest: compact discovery keeps ambiguous identities and exact received source receipts
+ok 146 - compact discovery keeps ambiguous identities and exact received source receipts
+  ---
+  duration_ms: 0.929
+  type: 'test'
+  ...
+# Subtest: remaining source budget clips whole CRLF/UTF-8 lines and preserves file hash and range
+ok 147 - remaining source budget clips whole CRLF/UTF-8 lines and preserves file hash and range
+  ---
+  duration_ms: 0.353416
+  type: 'test'
+  ...
+# Subtest: discovery budget charges each preview again and omits zero-line previews explicitly
+ok 148 - discovery budget charges each preview again and omits zero-line previews explicitly
+  ---
+  duration_ms: 1.029625
+  type: 'test'
+  ...
+# Subtest: candidate receipts validate exact before/after snapshots separately from the final tree
+ok 149 - candidate receipts validate exact before/after snapshots separately from the final tree
+  ---
+  duration_ms: 7.276333
+  type: 'test'
+  ...
+# Subtest: live control enforces cumulative source budget, logs raw/model/completion, and normalizes anchor
+ok 150 - live control enforces cumulative source budget, logs raw/model/completion, and normalizes anchor
+  ---
+  duration_ms: 8.373167
+  type: 'test'
+  ...
+# {
+#   "status": "MEASURED",
+#   "scorer": "preliminary-js",
+#   "denominator": 1,
+#   "taskSuccessRate": 0,
+#   "byArm": {
+#     "control": {
+#       "scheduled": 1,
+#       "successes": 0,
+#       "successRate": 0,
+#       "measured": 1,
+#       "conditionalAccuracy": 0
+#     }
+#   },
+#   "output": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/tmp/eval-main-config-5q8tep/run/results-pack.json"
+# }
+# Subtest: main forwards env reasoning settings to actual request and audited config
+ok 151 - main forwards env reasoning settings to actual request and audited config
+  ---
+  duration_ms: 6.218834
+  type: 'test'
+  ...
+# Subtest: live repair exposes replace success and validates both source versions without rescoring
+ok 152 - live repair exposes replace success and validates both source versions without rescoring
+  ---
+  duration_ms: 6.693916
+  type: 'test'
+  ...
+# Subtest: backend detection: no credentials is null, OpenAI triple is openai-api, codex cli wins otherwise
+ok 153 - backend detection: no credentials is null, OpenAI triple is openai-api, codex cli wins otherwise
+  ---
+  duration_ms: 0.401583
+  type: 'test'
+  ...
+# Subtest: backendDeficit lists exactly the missing authorizations
+ok 154 - backendDeficit lists exactly the missing authorizations
+  ---
+  duration_ms: 0.433625
+  type: 'test'
+  ...
+# {
+#   "status": "BLOCKED_AUTH",
+#   "denominator": 12,
+#   "taskSuccessRate": 0,
+#   "output": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK/tmp/eval-blocked-HkZxMI/out/results-pack.json"
+# }
+# Subtest: BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0
+ok 155 - BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0
+  ---
+  duration_ms: 2.178083
+  type: 'test'
+  ...
+# Subtest: SOURCE_FETCHED: java_symbol preview becomes a raw tool_response event with sha256 + range
+ok 156 - SOURCE_FETCHED: java_symbol preview becomes a raw tool_response event with sha256 + range
+  ---
+  duration_ms: 0.181792
+  type: 'test'
+  ...
+# Subtest: SOURCE_FETCHED: the read tool is explicit_read, no phantom line; summaries create no event
+ok 157 - SOURCE_FETCHED: the read tool is explicit_read, no phantom line; summaries create no event
+  ---
+  duration_ms: 0.123417
+  type: 'test'
+  ...
+# Subtest: SOURCE_FETCHED: a pre-parsed discovery payload (live session path) still records
+ok 158 - SOURCE_FETCHED: a pre-parsed discovery payload (live session path) still records
+  ---
+  duration_ms: 0.130792
+  type: 'test'
+  ...
+# Subtest: Q-track scoring: strict JSON, exact keys, no partial credit
+ok 159 - Q-track scoring: strict JSON, exact keys, no partial credit
+  ---
+  duration_ms: 0.1605
+  type: 'test'
+  ...
+# Subtest: scoreRunOutcome: failures stay UNMEASURED in the denominator; qa outcomes are external
+ok 160 - scoreRunOutcome: failures stay UNMEASURED in the denominator; qa outcomes are external
+  ---
+  duration_ms: 0.295541
+  type: 'test'
+  ...
+# Subtest: recorded-run replay: pack invariants hold for a mix of measured and failed runs
+ok 161 - recorded-run replay: pack invariants hold for a mix of measured and failed runs
+  ---
+  duration_ms: 0.277292
+  type: 'test'
+  ...
+# Subtest: task and gold loaders read the frozen jsonl pair
+ok 162 - task and gold loaders read the frozen jsonl pair
+  ---
+  duration_ms: 1.888416
+  type: 'test'
+  ...
+# Subtest: deadline covers a stalled response header
+ok 163 - deadline covers a stalled response header
+  ---
+  duration_ms: 51.545917
+  type: 'test'
+  ...
+# Subtest: deadline covers a stalled response body
+ok 164 - deadline covers a stalled response body
+  ---
+  duration_ms: 51.559084
+  type: 'test'
+  ...
+# Subtest: a normal response parses and the key stays in the header only
+ok 165 - a normal response parses and the key stays in the header only
+  ---
+  duration_ms: 0.480916
+  type: 'test'
+  ...
+# Subtest: default request stays at 2048 and explicit next off settings reach the body
+ok 166 - default request stays at 2048 and explicit next off settings reach the body
+  ---
+  duration_ms: 0.773708
+  type: 'test'
+  ...
+# Subtest: completion audit preserves partial tool arguments and measured usage without provider auth metadata
+ok 167 - completion audit preserves partial tool arguments and measured usage without provider auth metadata
+  ---
+  duration_ms: 0.632625
+  type: 'test'
+  ...
+# Subtest: live project cache is shared across arms so create can load a prewarmed snapshot
+ok 168 - live project cache is shared across arms so create can load a prewarmed snapshot
+  ---
+  duration_ms: 0.606792
+  type: 'test'
+  ...
+# Subtest: selectLiveTasks with maxTasks 6 and onePerProject false returns all six holdouts
+ok 169 - selectLiveTasks with maxTasks 6 and onePerProject false returns all six holdouts
+  ---
+  duration_ms: 0.529958
+  type: 'test'
+  ...
+# Subtest: selectLiveTasks picks the first holdout of each project
+ok 170 - selectLiveTasks picks the first holdout of each project
+  ---
+  duration_ms: 0.094917
+  type: 'test'
+  ...
+# Subtest: T01: coverage proxy is renamed and can never claim task success
+ok 171 - T01: coverage proxy is renamed and can never claim task success
+  ---
+  duration_ms: 0.312333
+  type: 'test'
+  ...
+# Subtest: T01: complete paths with a wrong answer never write PASS and empty observations stay UNMEASURED
+ok 172 - T01: complete paths with a wrong answer never write PASS and empty observations stay UNMEASURED
+  ---
+  duration_ms: 0.871875
+  type: 'test'
+  ...
+# Subtest: T01: live result scopes are separated and source reports cannot overwrite runtime identity or outcome
+ok 173 - T01: live result scopes are separated and source reports cannot overwrite runtime identity or outcome
+  ---
+  duration_ms: 0.226291
+  type: 'test'
+  ...
+# Subtest: coverage success requires every required path and does not use model text
+ok 174 - coverage success requires every required path and does not use model text
+  ---
+  duration_ms: 0.150625
+  type: 'test'
+  ...
+# Subtest: compact context uses selected spans and never includes scores or mustHit
+ok 175 - compact context uses selected spans and never includes scores or mustHit
+  ---
+  duration_ms: 0.262208
+  type: 'test'
+  ...
+# Subtest: C2 slim context P50 is at most 1.2 of impact compact on six first-call shapes
+ok 176 - C2 slim context P50 is at most 1.2 of impact compact on six first-call shapes
+  ---
+  duration_ms: 1.2215
+  type: 'test'
+  ...
+# Subtest: live java_context args default to search and never send scenarioId as task
+ok 177 - live java_context args default to search and never send scenarioId as task
+  ---
+  duration_ms: 0.406541
+  type: 'test'
+  ...
+# Subtest: E2 arm prompts are symmetric and drop navigate suppression
+ok 178 - E2 arm prompts are symmetric and drop navigate suppression
+  ---
+  duration_ms: 0.263708
+  type: 'test'
+  ...
+# Subtest: serena unavailable is unscored UNMEASURED, never TaskSuccess 0
+ok 179 - serena unavailable is unscored UNMEASURED, never TaskSuccess 0
+  ---
+  duration_ms: 0.138666
+  type: 'test'
+  ...
+# Subtest: jin arm records coverage from java_context spans
+ok 180 - jin arm records coverage from java_context spans
+  ---
+  duration_ms: 0.774792
+  type: 'test'
+  ...
+# Subtest: jin candidatePaths count as coverage hits after E3
+ok 181 - jin candidatePaths count as coverage hits after E3
+  ---
+  duration_ms: 0.206625
+  type: 'test'
+  ...
+# Subtest: compact impact never includes golden names and truncates large payloads
+ok 182 - compact impact never includes golden names and truncates large payloads
+  ---
+  duration_ms: 0.085875
+  type: 'test'
+  ...
+# Subtest: missing usage stays UNMEASURED instead of 0
+ok 183 - missing usage stays UNMEASURED instead of 0
+  ---
+  duration_ms: 0.037708
+  type: 'test'
+  ...
+# Subtest: openai client disables Qwen thinking via chat_template_kwargs
+ok 184 - openai client disables Qwen thinking via chat_template_kwargs
+  ---
+  duration_ms: 0.23425
+  type: 'test'
+  ...
+# Subtest: FAILED_RUNTIME and FAILED_CONTEXT_CAP are excluded from TaskSuccess mean
+ok 185 - FAILED_RUNTIME and FAILED_CONTEXT_CAP are excluded from TaskSuccess mean
+  ---
+  duration_ms: 0.247084
+  type: 'test'
+  ...
+# Subtest: matrix and live report schemas are v2
+ok 186 - matrix and live report schemas are v2
+  ---
+  duration_ms: 0.033334
+  type: 'test'
+  ...
+# Subtest: candidates and path-like unresolved enter observed paths
+ok 187 - candidates and path-like unresolved enter observed paths
+  ---
+  duration_ms: 0.111583
+  type: 'test'
+  ...
+# Subtest: miss labels follow pool then single-arm then discovery-gap
+ok 188 - miss labels follow pool then single-arm then discovery-gap
+  ---
+  duration_ms: 0.055708
+  type: 'test'
+  ...
+# Subtest: paired hit-rate is per-task and reports unreachable-excluding mean
+ok 189 - paired hit-rate is per-task and reports unreachable-excluding mean
+  ---
+  duration_ms: 0.296084
+  type: 'test'
+  ...
+# Subtest: T2 N5-02 replay keeps v1 fields and adds paired hit-rate
+ok 190 - T2 N5-02 replay keeps v1 fields and adds paired hit-rate
+  ---
+  duration_ms: 4.427667
+  type: 'test'
+  ...
+# Subtest: execute-live is required after authorization; key alone still does not send
+ok 191 - execute-live is required after authorization; key alone still does not send
+  ---
+  duration_ms: 12.420833
+  type: 'test'
+  ...
+# Subtest: live agent task stops with FAILED_CONTEXT_CAP before calling chat when prompt is already over cap
+ok 192 - live agent task stops with FAILED_CONTEXT_CAP before calling chat when prompt is already over cap
+  ---
+  duration_ms: 0.251458
+  type: 'test'
+  ...
+# Subtest: impact error is returned to the model and does not drop measured usage
+ok 193 - impact error is returned to the model and does not drop measured usage
+  ---
+  duration_ms: 0.422042
+  type: 'test'
+  ...
+# Subtest: live agent task records coverage from tool results without sending mustHit to the model
+ok 194 - live agent task records coverage from tool results without sending mustHit to the model
+  ---
+  duration_ms: 0.63075
+  type: 'test'
+  ...
+# Subtest: forced packaging preserves primary MAX_COMPLETION_TOKENS and raw completion
+ok 195 - forced packaging preserves primary MAX_COMPLETION_TOKENS and raw completion
+  ---
+  duration_ms: 0.503208
+  type: 'test'
+  ...
+# Subtest: forced packaging preserves primary MODEL_STOP and raw completion
+ok 196 - forced packaging preserves primary MODEL_STOP and raw completion
+  ---
+  duration_ms: 0.132834
+  type: 'test'
+  ...
+# Subtest: round exhaustion keeps its primary cause and forced request attaches the final tool receipt
+ok 197 - round exhaustion keeps its primary cause and forced request attaches the final tool receipt
+  ---
+  duration_ms: 0.505
+  type: 'test'
+  ...
+# Subtest: normal model answer and failed runtime remain separate from forced packaging
+ok 198 - normal model answer and failed runtime remain separate from forced packaging
+  ---
+  duration_ms: 0.163041
+  type: 'test'
+  ...
+# Subtest: discovery MCP forwards every advertised argument and keeps none/window source receipts exact
+ok 199 - discovery MCP forwards every advertised argument and keeps none/window source receipts exact
+  ---
+  duration_ms: 0.391292
+  type: 'test'
+  ...
+1..199
+# tests 199
+# suites 0
+# pass 199
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 31399.897708
+preserved isolated validation root: /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-snfAeK

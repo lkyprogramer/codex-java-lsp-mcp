@@ -80,8 +80,11 @@ matrix-summary.json
 sh scripts/run-isolated-node.sh scripts/verify-three-repo-cold-matrix.mjs \
   --matrix-dir /tmp/codex-java-lsp-matrix-<run-id>/matrix \
   --expected-runs 5 \
-  --p95-limit 1.25
+  --p95-limit 1.25 \
+  --require-p95-contract ilv2-p95-strict-ratio-v1
 ```
+
+`--require-p95-contract` 用于新门：manifest 不是该合同版本时直接拒绝，旧合同的矩阵不能冒充严格门。复验历史矩阵时不加此参数，按其原合同判定。
 
 校验器要求完整 18 cells，并检查每个 cell 的 `projectId`、`cold-nolsp`、`impact`、`standard`、5 attempts/场景，以及同项目 old/new 的 `scenarioFile` 完全一致；同时校验 candidate TAP/stderr 的 bytes、SHA-256、测试/通过/失败/取消摘要，以及私有依赖树 inventory 合同。该复验验证已记录证据的完整性，不会重新执行测试或矩阵。
 
@@ -94,8 +97,11 @@ sh scripts/run-isolated-node.sh scripts/verify-three-repo-cold-matrix.mjs \
 | Must 读取 | 每个 candidate attempt 的 `R_read_must = 1.0000` |
 | 候选质量 | candidate recall 不低于 old |
 | 读取质量 | candidate `P_read` 不低于 old |
-| 延迟 | `P95(candidate) <= max(1.25 × P95(old), P95(old) + 50ms)` |
+| 延迟 | 按 manifest `comparisonPolicy.p95ContractVersion` 判定，见下 |
 
-P95 以每个项目三个 round 的所有 scenario attempts 汇合后，按 `ceil(n × 0.95) - 1` 计算。`50ms` 绝对 slack 避免极低基线被调度噪声放大；它不能替代比例门，也不能用总平均、单个 scenario、绝对 300ms 阈值或 shadow 数据代替正式 P95。
+P95 以每个项目三个 round 的所有 scenario attempts 汇合后，按 `ceil(n × 0.95) - 1` 计算，不能用总平均、单个 scenario、绝对 300ms 阈值或 shadow 数据代替正式 P95。延迟合同按版本适用，不混用：
+
+- `ilv2-p95-strict-ratio-v1`（MAC-08C 起 runner 写入的唯一版本）：`P95(candidate) <= 1.25 × P95(old)`，没有绝对 slack，比例固定为 1.25（runner 拒绝其他 `--p95-limit`）。old P95 为 0 或无效时项目和整体标为 `INVALID_EXPERIMENT`，不除零、不放宽。summary 的 `projects[].p95Contract` 记录 old/new/ratio/阈值/判定策略。
+- 无版本字段（历史 manifest，`p95AbsoluteSlackMs: 50`）：`P95(candidate) <= max(1.25 × P95(old), P95(old) + 50ms)`。只用于复验历史报告；历史结论保持原式，不重标，也不能用来解释新的 PASS。
 
 若脚本返回非零：保留 output 原始 JSON 和 `matrix-summary.json`，先检查 `goldenAttribution` 中的 `absent` / `readplan-full` 和相关 timing，再做通用事实、排序或预算修复。不得用仓库名、路径名、文件名或 golden 项添加定制规则；修复后必须重新运行完整矩阵。

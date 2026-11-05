@@ -7,20 +7,15 @@ import {
   myBatisStatementId,
   type MyBatisMapperResourceFacts
 } from "../java-index/mybatis-types.js";
-import type { KnowledgeGraphStore } from "./graph-reader.js";
-import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeFileId, knowledgeTypeId } from "./entity-id.js";
+import type { GraphSink } from "./graph-fragment.js";
+import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeFileId, knowledgeIdForType } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
-
-function knowledgeIdForType(type: JavaTypeFacts): string {
-  const path = type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId;
-  return knowledgeTypeId(path, type.fqn || type.simpleName);
-}
 import type { NodeKind } from "./schema.js";
 
 const JPA_RELATIONS = new Set(["OneToMany", "ManyToOne", "OneToOne", "ManyToMany", "JoinColumn"]);
 
 function push(
-  graph: KnowledgeGraphStore,
+  graph: GraphSink,
   kind: EdgeKind,
   fromId: string,
   toId: string,
@@ -38,7 +33,7 @@ function push(
 }
 
 function upsert(
-  graph: KnowledgeGraphStore,
+  graph: GraphSink,
   id: string,
   kind: NodeKind,
   generation: number,
@@ -50,8 +45,11 @@ function upsert(
 
 function resolveNamedType(name: string | undefined, store: FactsReader): string | undefined {
   if (!name) return undefined;
-  const byFqn = store.typeByFqn(name);
-  if (byFqn) return knowledgeIdForType(byFqn);
+  // Several repo declarations of one FQN and no referring location here:
+  // stay unbound rather than guess (and never call it external).
+  const byFqn = store.typesByFqn(name);
+  if (byFqn.length === 1) return knowledgeIdForType(byFqn[0]!);
+  if (byFqn.length > 1) return undefined;
   const simple = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : name;
   const hits = store.typesBySimpleNameOrFqn(simple, name);
   if (hits.length === 1) return knowledgeIdForType(hits[0]!);
@@ -79,8 +77,22 @@ function isRepositoryLike(type: JavaTypeFacts): boolean {
   return type.simpleName.endsWith("Template") || type.simpleName.endsWith("Repository");
 }
 
+/** Simple names this file's repository types look up repo-wide (typeArgEntity), whatever the argument resolved to. */
+export function repositoryEntityNames(bundle: JavaFileBundle): string[] {
+  const names: string[] = [];
+  for (const type of bundle.types) {
+    if (!isRepositoryLike(type)) continue;
+    for (const ref of [type.extends[0], type.implements[0]]) {
+      const argument = ref?.typeArguments[0];
+      const name = argument ? argument.qualifiedName ?? argument.simpleName ?? argument.text : undefined;
+      if (name) names.push(name.slice(name.lastIndexOf(".") + 1));
+    }
+  }
+  return names;
+}
+
 function addMapperBindings(
-  graph: KnowledgeGraphStore,
+  graph: GraphSink,
   type: JavaTypeFacts,
   bundle: JavaFileBundle,
   resource: MyBatisMapperResourceFacts,
@@ -88,17 +100,21 @@ function addMapperBindings(
   generation: number,
   resolve: (javaIndexId: string) => string | undefined
 ): void {
+  // The mapper file owns what its binding derives from the XML: an XML edit
+  // resyncs every declaration of the namespace, and a mapper that stops
+  // binding drops these rows with its own (MAC-05; owning them by the XML
+  // path left them behind when the Java side changed).
   const ownerFile = bundle.file.relativePath;
   const xmlPath = resource.relativePath;
-  upsert(graph, knowledgeFileId(xmlPath), "JAVA_RESOURCE", generation, { relativePath: xmlPath, simpleName: xmlPath.split("/").pop() }, xmlPath);
-  upsert(graph, `mybatis-ns:${resource.namespace}`, "MYBATIS_NAMESPACE", generation, { simpleName: resource.namespace }, xmlPath);
+  upsert(graph, knowledgeFileId(xmlPath), "JAVA_RESOURCE", generation, { relativePath: xmlPath, simpleName: xmlPath.split("/").pop() }, ownerFile);
+  upsert(graph, `mybatis-ns:${resource.namespace}`, "MYBATIS_NAMESPACE", generation, { simpleName: resource.namespace }, ownerFile);
   for (const statement of resource.statements) {
     const statementNodeId = myBatisStatementId(statement.namespace, statement.id);
     upsert(graph, statementNodeId, "MYBATIS_STATEMENT", generation, {
       relativePath: xmlPath,
       simpleName: statement.id,
       javaIndexId: statement.statementId
-    }, xmlPath);
+    }, ownerFile);
     const method = bundle.methods.find(item => item.ownerTypeId === type.typeId && item.name === statement.id);
     const methodId = method ? resolve(method.methodId) : undefined;
     if (methodId) push(graph, "MYBATIS_METHOD_BINDS_STATEMENT", methodId, statementNodeId, generation, ownerFile);
@@ -107,12 +123,12 @@ function addMapperBindings(
       ?? (statement.resultMap
         ? resolveNamedType(resource.resultMaps.find(map => map.id === statement.resultMap)?.type, store)
         : undefined);
-    if (entity) push(graph, "MYBATIS_STATEMENT_USES_ENTITY", statementNodeId, entity, generation, xmlPath);
+    if (entity) push(graph, "MYBATIS_STATEMENT_USES_ENTITY", statementNodeId, entity, generation, ownerFile);
   }
 }
 
 export function addPersistenceEdges(
-  graph: KnowledgeGraphStore,
+  graph: GraphSink,
   bundle: JavaFileBundle,
   store: FactsReader,
   generation: number,

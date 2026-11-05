@@ -69,6 +69,8 @@ export class DeadlineBudget {
   ): Promise<T> {
     const timeoutMs = this.remainingMs(capMs);
     if (timeoutMs <= 0) {
+      // The operation has already started. Cleanup can reject it even though we cannot wait.
+      void operation.catch(() => undefined);
       onTimeout?.();
       throw new JavaIntelligenceError(
         "DEADLINE_EXCEEDED",

@@ -1,0 +1,10 @@
+{
+  "schema": "locked-exposure/v1",
+  "dataset_hash": null,
+  "owner_has_labels": true,
+  "executor_has_seen_locked_labels": null,
+  "executor_has_seen_reference_patches": null,
+  "locked_is_cryptographically_hidden": false,
+  "classification": "NOT_ASSESSED",
+  "events": []
+}

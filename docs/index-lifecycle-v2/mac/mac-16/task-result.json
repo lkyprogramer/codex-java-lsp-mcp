@@ -1,0 +1,156 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-16",
+  "gateId": "G16",
+  "status": "NOT_RUN",
+  "dependency": {
+    "G14": "PASS",
+    "head": "e0245aac14deafb30b77462961ce2373ad2b60cc"
+  },
+  "identity": {
+    "sourceDigest": "26fdb1279342d83a7b06fda187b5dc6586835b2b134ab468b7b68e7a68ac935c",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "c0456ad98feecafd219a49ceaf2fc5c04098b827c036dc17d0441bc220a65474",
+    "nativeSourceDigest": "5cf63981c0c0433a25c28e44410edaabc2ea5c609fe5b68efe84739748c47561",
+    "buildStampSha256": "44370612db9565800ba27c96f310c4b0a702fb0356fd0a2c4b57e2f44341ca25",
+    "distInventorySha256": "7e5cb8f0a2a74cfbe6a2c8effcb655021a79c86cc28536929fe03fcc2940e31b",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "targeted-g16",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/targeted-g16/result.json",
+      "sourceDigest": "26fdb1279342d83a7b06fda187b5dc6586835b2b134ab468b7b68e7a68ac935c",
+      "commands": 1,
+      "tests": 139,
+      "pass": 139,
+      "fail": 0,
+      "elapsedMs": 54003,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/release-jdt-contracts.test.mjs",
+        "scripts/run-release-contracts.test.mjs",
+        "scripts/run-isolated-jdt-benchmark.test.mjs",
+        "dist/jdtls-session.test.js",
+        "dist/semantic-gateway.test.js",
+        "dist/jdtls-transport.test.js",
+        "dist/jdt-process-tree.test.js",
+        "dist/jdt-restart-backoff.test.js",
+        "dist/jdtls-runtime-paths.test.js",
+        "dist/jdtls-hierarchy.test.js",
+        "dist/semantic-edge-store.test.js",
+        "dist/semantic-location.test.js"
+      ]
+    },
+    {
+      "name": "rerun-g16",
+      "role": "independent-rerun",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/rerun-g16/result.json",
+      "sourceDigest": "26fdb1279342d83a7b06fda187b5dc6586835b2b134ab468b7b68e7a68ac935c",
+      "commands": 1,
+      "tests": 139,
+      "pass": 139,
+      "fail": 0,
+      "elapsedMs": 55376,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/release-jdt-contracts.test.mjs",
+        "scripts/run-release-contracts.test.mjs",
+        "scripts/run-isolated-jdt-benchmark.test.mjs",
+        "dist/jdtls-session.test.js",
+        "dist/semantic-gateway.test.js",
+        "dist/jdtls-transport.test.js",
+        "dist/jdt-process-tree.test.js",
+        "dist/jdt-restart-backoff.test.js",
+        "dist/jdtls-runtime-paths.test.js",
+        "dist/jdtls-hierarchy.test.js",
+        "dist/semantic-edge-store.test.js",
+        "dist/semantic-location.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "real-jdt-isolation",
+      "file": "real-jdt-evidence.json",
+      "sha256": "37e07169b280537a8baea0c47ddbdcee3630447ea7669ecbc17bfccd95b270c1",
+      "status": null,
+      "provenance": "Existing real-jdt-g16, owner-path K26/K28 PASS, 12 interleaved rounds, 0 crosstalk."
+    },
+    {
+      "name": "rerun-real-jdt-isolation",
+      "file": "rerun-real-jdt-evidence.json",
+      "sha256": "557e1c3ef0144e9c243a626f3dcc7eb5411c95dffc9c103632242230c0e0582a",
+      "status": null,
+      "provenance": "Existing fresh-build rerun-real-jdt-g16, distinct owner, same isolation assertions."
+    },
+    {
+      "name": "k-contract-results",
+      "file": "k-contract-results.json",
+      "sha256": "18e448ecd6633440c5548e07f3848cff98166dbda4f7548a8405f0a8727afd1d",
+      "status": null,
+      "provenance": "Existing k-contracts-g16, K01-K32 32 PASS."
+    },
+    {
+      "name": "semantic-gap-decision",
+      "file": "semantic-gap-evidence.json",
+      "sha256": "910f30890e5440587812cbc7d59b38eeeda90bf2d62d24a0b1afc8479f24e4a5",
+      "status": null,
+      "provenance": "Conditional precision architecture experiment NOT_RUN: observed misses are retrieval depth/budget/range gaps; no task-impacting compiler-resolution defect established. No holdout reopened."
+    },
+    {
+      "name": "source-identity-bridge",
+      "file": "source-identity-bridge.json",
+      "sha256": "49b2ff665f4e654c4fe83716fb0b05f90317b55e7764d81783e16fb2627610ea",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "8f69496747a8bff6854c318509f8ba703241b912bac81f7d15037d4144c0cf0f",
+    "registeredPids": 22,
+    "ownedGroups": 1,
+    "launchdJobs": 1,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-16/20261029T170720Z/closeout/raw-evidence.tar.gz",
+      "sha256": "2bb5f90a89faf021fed7d4665e900acbb553067404c93637b573e98d84e0e4fe",
+      "fileCount": 140,
+      "bytes": 1073403,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "5737cd2d9a7be2dd3aa604c238122e5f8186e60f18616d679b948af01c2c963a",
+      "source": "26fdb1279342d83a7b06fda187b5dc6586835b2b134ab468b7b68e7a68ac935c",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "0ccefd0c4a04f2b4254511fbf7d249e3cb490c9abaa242b92f1a8b0bf4f078eb",
+  "notClaimed": [
+    "NOT_RUN applies only to the conditional semantic precision architecture experiment. Existing per-workspace JDT capability remains; the required isolation evidence passed twice with 12 interleaved rounds and 0 crosstalk.",
+    "No >=200-symbol, >=98% precision experiment was run; no precision-improvement claim.",
+    "All workload/build/test results were produced on 2026-10-30 by the previous executor and reused; this followup ran no new workloads. Independent review is raw/source inspection, not another test execution.",
+    "The optional MAC-15 paid model evaluation is not run.",
+    "Production launch topology, TCC grants and deployment are not verified by these fixtures."
+  ],
+  "next": "MAC-17 installation topology and isolated canary, bounded through 2026-11-03T18:00:00+08:00; no push or production changes.",
+  "authorization": "User 2026-10-31: execute the assessed plan, first MAC-16 closeout, then MAC-17 installation and isolated canary; reuse evidence; no optimization expansion, no push, no production; at most two working days.",
+  "notes": "Existing six broker records retained. Main and rerun targeted suites each139/139; K32/32; real JDT twice12 interleaved rounds and0 crosstalk. Conditional experiment NOT_RUN, isolation sub-result PASS.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-16/20261029T170720Z"
+}

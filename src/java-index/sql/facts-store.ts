@@ -15,10 +15,11 @@ import type {
   StaticEdge,
   StaticEdgeKind
 } from "../index-types.js";
-import { javaFileId, splitOwnerMemberKey } from "../stable-id.js";
-import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
+import { javaFileId, javaMethodId, splitOwnerMemberKey } from "../stable-id.js";
+import { JavaNameResolver, locationOfFile, type DeclarationLocation, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
+import { BoundedCache } from "./bounded-cache.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { decodeFacts, readBundle, STATIC_EDGE_SELECT, staticEdgeFromSqlRow } from "./rows.js";
 import { internSym, symId } from "./sym.js";
@@ -26,6 +27,7 @@ import { internSym, symId } from "./sym.js";
 export { decodeFacts };
 
 const LRU_LIMIT = 2048;
+type CacheKind = "type" | "method" | "field" | "file" | "fqn" | "simple" | "owner" | "methodsOf";
 
 export type PointLookup<V> = {
   get(key: string): V | undefined;
@@ -92,31 +94,32 @@ export class SqlFactsStore {
   readonly methodsById: PointLookup<JavaMethodFacts>;
   readonly fieldsById: PointLookup<JavaFieldFacts>;
   readonly filesByPath: PointLookup<JavaFileFacts>;
-  readonly typeIdByFqn: PointLookup<string>;
+  readonly typeIdsByFqn: PointLookup<readonly string[]>;
   readonly typeIdsBySimpleName: PointLookup<ReadonlySet<string>>;
   readonly methodIdsByOwnerAndName: PointLookup<ReadonlySet<string>>;
   private readonly db: IndexDatabase;
-  private readonly lru = new Map<string, unknown>();
+  // One LRU per kind, keyed by the id itself: an id string read from facts keeps its hash, a
+  // "kind:" + id key was built and hashed again at every lookup (most of edge building's cost).
+  private readonly lru = new Map<CacheKind, BoundedCache<string, unknown>>();
 
-  constructor(db: IndexDatabase) {
+  constructor(db: IndexDatabase, private readonly options: { factsAreImmutable?: boolean } = {}) {
     this.db = db;
-    this.typesById = new PointMap(id => this.cached(`type:${id}`, () => this.selectMemberFacts("type", id)), () => this.countTable("type"));
-    this.methodsById = new PointMap(id => this.cached(`method:${id}`, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
-    this.fieldsById = new PointMap(id => this.cached(`field:${id}`, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
-    this.filesByPath = new PointMap(path => this.cached(`file:${path}`, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
-    this.typeIdByFqn = new PointMap(fqn => this.cached(`fqn:${fqn}`, () => {
-      // A FQN can name several declarations (same FQN in different source
-      // roots). The winner is deterministic: the lowest v2 id text, which is
-      // scoped by source path - so the same store always resolves the same
-      // declaration, regardless of write order.
-      const row = prepareCached(
+    this.typesById = new PointMap(id => this.cached("type", id, () => this.selectMemberFacts("type", id)), () => this.countTable("type"));
+    this.methodsById = new PointMap(id => this.cached("method", id, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
+    this.fieldsById = new PointMap(id => this.cached("field", id, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
+    this.filesByPath = new PointMap(path => this.cached("file", path, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
+    this.typeIdsByFqn = new PointMap(fqn => this.cached("fqn", fqn, () => {
+      // Every declaration of the FQN (the same FQN can be declared in several
+      // source roots). Which one a reference binds to is decided by the
+      // resolver from the referring location, never here.
+      const ids = prepareCached(
         this.db,
-        "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=? ORDER BY s.text LIMIT 1"
-      ).get(fqn);
-      return typeof row?.id === "string" ? row.id : undefined;
+        "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=? ORDER BY s.text"
+      ).all(fqn).map(row => row.id).filter((id): id is string => typeof id === "string");
+      return ids.length > 0 ? ids : undefined;
     }), () => asCount(prepareCached(this.db, "SELECT count(DISTINCT fqn) AS n FROM type WHERE fqn IS NOT NULL").get()));
     this.typeIdsBySimpleName = new PointMap(
-      name => this.loadIdSet(`simple:${name}`, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name=?", name),
+      name => this.loadIdSet("simple", name, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name=?", name),
       () => asCount(prepareCached(this.db, "SELECT count(DISTINCT simple_name) AS n FROM type").get())
     );
     this.methodIdsByOwnerAndName = new PointMap(key => {
@@ -127,7 +130,8 @@ export class SqlFactsStore {
       const owner = symId(this.db, split.owner);
       if (owner === undefined) return undefined;
       return this.loadIdSet(
-        `owner:${key}`,
+        "owner",
+        key,
         "SELECT s.text AS id FROM method m JOIN sym s ON s.id=m.sym WHERE m.owner_sym=? AND m.name=?",
         owner,
         split.member
@@ -137,20 +141,31 @@ export class SqlFactsStore {
 
   clearRequestCache(): void { this.lru.clear(); }
 
-  private cached<T>(key: string, load: () => T | undefined): T | undefined {
-    if (this.lru.has(key)) {
-      const hit = this.lru.get(key) as T;
-      this.lru.delete(key);
-      this.lru.set(key, hit);
-      return hit;
+  private lruOf(kind: CacheKind): BoundedCache<string, unknown> {
+    let cache = this.lru.get(kind);
+    if (!cache) { cache = new BoundedCache(LRU_LIMIT); this.lru.set(kind, cache); }
+    return cache;
+  }
+
+  /** Drops what one file's rows fed after its facts were rewritten in place
+   * (updateBundleFacts): phase-1 resolution changes facts, never which
+   * declarations exist, their names, owners or fqns. */
+  forgetFile(bundle: JavaFileBundle): void {
+    this.lru.get("file")?.delete(bundle.file.relativePath);
+    for (const type of bundle.types) {
+      this.lru.get("type")?.delete(type.typeId);
+      this.lru.get("methodsOf")?.delete(type.typeId);
     }
+    for (const method of bundle.methods) this.lru.get("method")?.delete(method.methodId);
+    for (const field of bundle.fields) this.lru.get("field")?.delete(field.fieldId);
+  }
+
+  private cached<T>(kind: CacheKind, key: string, load: () => T | undefined): T | undefined {
+    const cache = this.lruOf(kind);
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit as T;
     const value = load();
-    if (value === undefined) return undefined;
-    this.lru.set(key, value);
-    if (this.lru.size > LRU_LIMIT) {
-      const oldest = this.lru.keys().next().value;
-      if (oldest !== undefined) this.lru.delete(oldest);
-    }
+    if (value !== undefined) cache.set(key, value);
     return value;
   }
 
@@ -166,9 +181,18 @@ export class SqlFactsStore {
     return results;
   }
 
-  typeByFqn(fqn: string): JavaTypeFacts | undefined {
-    const typeId = this.typeIdByFqn.get(fqn);
-    return typeId ? this.typesById.get(typeId) : undefined;
+  /** Every declaration of `fqn`, id order. */
+  typesByFqn(fqn: string): JavaTypeFacts[] {
+    return (this.typeIdsByFqn.get(fqn) ?? [])
+      .map(id => this.typesById.get(id))
+      .filter((type): type is JavaTypeFacts => type !== undefined);
+  }
+
+  /** Compilation location of a declaration, from its file's layout facts. */
+  declarationLocation(typeId: string): DeclarationLocation | undefined {
+    const type = this.typesById.get(typeId);
+    const file = type ? this.filesByPath.get(relativePathOfFileId(type.fileId)) : undefined;
+    return file ? locationOfFile(file) : undefined;
   }
 
   nestedTypeId(ownerTypeId: string, simpleName: string): string | undefined {
@@ -178,13 +202,35 @@ export class SqlFactsStore {
     return typeof row?.id === "string" ? row.id : undefined;
   }
 
+  /** Call resolution asks this once per call site; the list lives as long as its type's facts. */
   methodsOfOwner(typeId: string): JavaMethodFacts[] {
+    return this.cached("methodsOf", typeId, () => {
+      const type = this.typesById.get(typeId);
+      if (!type) return [];
+      const methods: JavaMethodFacts[] = [];
+      for (const methodId of type.methodIds) {
+        const method = this.methodsById.get(methodId);
+        if (method) methods.push(method);
+      }
+      return methods;
+    }) ?? [];
+  }
+
+  /** methodsOfOwner(typeId) named `name`, in order. Method ids are
+   * `method:v3:<owner>#<name>(...)` (`<init>` for constructors), so only those
+   * facts are decoded. */
+  methodsNamed(typeId: string, name: string): JavaMethodFacts[] {
     const type = this.typesById.get(typeId);
     if (!type) return [];
+    // Every id in type.methodIds already belongs to this type. Comparing its
+    // long path/owner prefix again at every call site dominated edge building.
+    const memberOffset = javaMethodId(typeId, "").length;
+    const named = `${name}(`, constructors = "<init>(";
     const methods: JavaMethodFacts[] = [];
     for (const methodId of type.methodIds) {
+      if (!methodId.startsWith(named, memberOffset) && !methodId.startsWith(constructors, memberOffset)) continue;
       const method = this.methodsById.get(methodId);
-      if (method) methods.push(method);
+      if (method?.name === name) methods.push(method);
     }
     return methods;
   }
@@ -218,7 +264,7 @@ export class SqlFactsStore {
     const toSym = symId(this.db, typeId);
     const kindIds = this.existingSymIds(["IMPLEMENTS", "EXTENDS"]);
     if (toSym === undefined || kindIds.length === 0) {
-      this.clearRequestCache();
+      if (!this.options.factsAreImmutable) this.clearRequestCache();
       return [];
     }
     for (const row of prepareCached(
@@ -233,7 +279,7 @@ export class SqlFactsStore {
       results.push(type);
     }
     results.sort(compareTypes);
-    this.clearRequestCache();
+    if (!this.options.factsAreImmutable) this.clearRequestCache();
     return results.slice(0, limit);
   }
 
@@ -291,6 +337,7 @@ export class SqlFactsStore {
     type Candidate = {
       range: SourceRange;
       isMember: boolean;
+      isName: boolean;
       depth: number;
       symbolKind: AnchorFacts["symbolKind"];
       symbolId: string;
@@ -306,12 +353,12 @@ export class SqlFactsStore {
       let depth = 0;
       for (let owner = type.enclosingTypeId; owner; owner = this.typesById.get(owner)?.enclosingTypeId) depth += 1;
       if (rangeContains(type.range, position)) {
-        candidates.push({ range: type.range, isMember: false, depth, symbolKind: "TYPE", symbolId: type.typeId, symbolName: type.simpleName, type });
+        candidates.push({ range: type.range, isMember: false, isName: !!type.nameRange && rangeContains(type.nameRange, position), depth, symbolKind: "TYPE", symbolId: type.typeId, symbolName: type.simpleName, type });
       }
       for (const fieldId of type.fieldIds) {
         const field = this.fieldsById.get(fieldId);
         if (field && rangeContains(field.range, position)) {
-          candidates.push({ range: field.range, isMember: true, depth: depth + 1, symbolKind: "FIELD", symbolId: field.fieldId, symbolName: field.name, type, field });
+          candidates.push({ range: field.range, isMember: true, isName: false, depth: depth + 1, symbolKind: "FIELD", symbolId: field.fieldId, symbolName: field.name, type, field });
         }
       }
       for (const methodId of type.methodIds) {
@@ -320,6 +367,7 @@ export class SqlFactsStore {
           candidates.push({
             range: method.range,
             isMember: true,
+            isName: !!method.nameRange && rangeContains(method.nameRange, position),
             depth: depth + 1,
             symbolKind: method.constructor ? "CONSTRUCTOR" : "METHOD",
             symbolId: method.methodId,
@@ -342,7 +390,10 @@ export class SqlFactsStore {
         confidence: 1
       };
     }
-    candidates.sort((a, b) => (a.isMember !== b.isMember ? (a.isMember ? -1 : 1) : b.depth - a.depth));
+    // A local class name sits inside an outer method range. The exact
+    // declaration name wins there; body positions retain nearest-member rules.
+    candidates.sort((a, b) => a.isName !== b.isName ? (a.isName ? -1 : 1)
+      : a.isMember !== b.isMember ? (a.isMember ? -1 : 1) : b.depth - a.depth);
     const best = candidates[0]!;
     return {
       file,
@@ -361,7 +412,8 @@ export class SqlFactsStore {
   typeLookup(typeText: string, scopeFile?: string): JavaTypeLookupResult {
     const registry: TypeRegistryView = {
       byId: this.typesById as unknown as TypeRegistryView["byId"],
-      byFqn: this.typeIdByFqn as unknown as TypeRegistryView["byFqn"],
+      byFqn: this.typeIdsByFqn,
+      locationOf: typeId => this.declarationLocation(typeId),
       bySimpleName: this.typeIdsBySimpleName as unknown as TypeRegistryView["bySimpleName"],
       nestedByOwnerAndSimpleName: new Map(),
       methodsByOwnerTypeId: new Map()
@@ -372,7 +424,8 @@ export class SqlFactsStore {
       packageName: file?.packageName ?? "",
       imports: file?.imports ?? [],
       enclosingTypeIds: [],
-      typeParameterNames: new Set()
+      typeParameterNames: new Set(),
+      ...(file ? { location: locationOfFile(file) } : {})
     }).resolution;
     this.clearRequestCache();
     switch (resolution.state) {
@@ -516,10 +569,9 @@ export class SqlFactsStore {
   }
 
   private selectMemberFacts<T>(table: "type" | "field" | "method", id: string): T | undefined {
-    const row = prepareCached(
-      this.db,
-      `SELECT t.facts FROM ${table} t JOIN sym s ON s.id=t.sym WHERE s.text=?`
-    ).get(id);
+    const sym = symId(this.db, id);
+    if (sym === undefined) return undefined;
+    const row = prepareCached(this.db, `SELECT facts FROM ${table} WHERE sym=?`).get(sym);
     return row ? decodeFacts<T>(row.facts) : undefined;
   }
 
@@ -536,8 +588,8 @@ export class SqlFactsStore {
     return asCount(prepareCached(this.db, `SELECT count(*) AS n FROM ${table}`).get());
   }
 
-  private loadIdSet(cacheKey: string, sql: string, ...params: Array<string | number>): ReadonlySet<string> | undefined {
-    return this.cached(cacheKey, () => {
+  private loadIdSet(kind: CacheKind, key: string, sql: string, ...params: Array<string | number>): ReadonlySet<string> | undefined {
+    return this.cached(kind, key, () => {
       const ids = new Set<string>();
       for (const row of prepareCached(this.db, sql).all(...params)) {
         if (typeof row.id === "string") ids.add(row.id);

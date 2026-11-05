@@ -3,6 +3,10 @@ import type { SourceRange } from "../runtime/source-range.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 export type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 
+/** Workspace filesystem stat; a cache key for skipping a re-hash, never a fact. Size, nanosecond
+ * mtime/ctime and inode/device (§2.4), the bigints as decimal strings. */
+export type FileStat = { size: number; mtimeNs: string; ctimeNs: string; ino: string; dev: string };
+
 export type JavaSourceSet = "main" | "test" | "generated" | "unknown";
 export type JavaParseState = "COMPLETE" | "RECOVERED" | "FAILED";
 export type JavaTypeKind = "class" | "interface" | "record" | "enum" | "annotation";
@@ -94,12 +98,16 @@ export type JavaLeadingComment = {
 };
 
 export type JavaMethodFacts = {
+  /** Bounded declaration text captured with the parsed bytes. */
+  capturedSignature?: string;
   methodId: string;
   ownerTypeId: string;
   name: string;
   constructor: boolean;
   signatureKey: string;
   range: SourceRange;
+  /** The name identifier (the locator / LSP selection); range starts at the first annotation. */
+  nameRange?: SourceRange;
   bodyRange?: SourceRange;
   modifiers: string[];
   annotations: JavaAnnotationFact[];
@@ -114,6 +122,8 @@ export type JavaMethodFacts = {
 };
 
 export type JavaTypeFacts = {
+  /** Bounded declaration text captured with the parsed bytes. */
+  capturedSignature?: string;
   typeId: string;
   fqn?: string;
   simpleName: string;
@@ -121,6 +131,8 @@ export type JavaTypeFacts = {
   fileId: string;
   enclosingTypeId?: string;
   range: SourceRange;
+  /** The name identifier (the locator / LSP selection); range starts at the first annotation. */
+  nameRange?: SourceRange;
   modifiers: string[];
   annotations: JavaAnnotationFact[];
   typeParameters: JavaTypeParameterFact[];
@@ -146,9 +158,6 @@ export type JavaFileFacts = {
   allTypeIds: string[];
   contentHash: string;
   size: number;
-  mtimeMs: number;
-  /** Filesystem change time persisted for metadata-only own-snapshot validation. */
-  ctimeMs?: number;
   parseState: JavaParseState;
   parseErrorCount: number;
   generation: number;
@@ -312,6 +321,8 @@ export type JavaFileBundle = {
   fields: JavaFieldFacts[];
   methods: JavaMethodFacts[];
   edges: StaticEdge[];
+  /** Stat observed when this bundle was parsed; workspace-local and never written to the facts database. */
+  observed?: FileStat;
 };
 
 export type AnchorFacts = {
@@ -358,4 +369,6 @@ export type IndexedReadRangeResult = {
   extremeMethod?: boolean;
   /** Requested anchor lines that no returned range covers (budget trimming); presence means the plan is not complete. */
   uncoveredAnchorLines?: number[];
+  /** The live file's bytes differ from the held snapshot's captured bytes: no ranges, an explicit gap (contract §2.6). */
+  sourceChanged?: boolean;
 };

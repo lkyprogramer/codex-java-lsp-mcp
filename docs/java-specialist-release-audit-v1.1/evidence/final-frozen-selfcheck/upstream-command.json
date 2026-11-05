@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/opt/pyvenv/bin/python",
+    "-m",
+    "harness.verify_upstream"
+  ],
+  "exit_code": 0,
+  "timeout": false,
+  "output_limit": false,
+  "elapsed_ms": 641.931,
+  "stdout": "{\n  \"schema\": \"upstream-byte-verification/v1\",\n  \"passed\": true,\n  \"files\": [\n    {\n      \"corpus\": \"petclinic\",\n      \"path\": \"src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java\",\n      \"pass\": true,\n      \"git_blob_sha1\": \"db847c8385d3434b001ddf579ae82bf250a21348\",\n      \"commit\": \"818c4136ea971c21674525f9053de0d9c7ad8cfe\"\n    },\n    {\n      \"corpus\": \"mybatis\",\n      \"path\": \"src/main/java/org/apache/ibatis/reflection/ParamNameResolver.java\",\n      \"pass\": true,\n      \"git_blob_sha1\": \"53d0c82702c33fb56b750973e472689c5c906e6f\",\n      \"commit\": \"78bb677e2bf04b43386d3f1544cec51ff47662a2\"\n    },\n    {\n      \"corpus\": \"hikari\",\n      \"path\": \"src/main/java/com/zaxxer/hikari/util/FastList.java\",\n      \"pass\": true,\n      \"git_blob_sha1\": \"ef384a422c60320114df5a338f27b157b77d3e10\",\n      \"commit\": \"98bd21c8fe506cfb6f329002669b2129bdb847db\"\n    },\n    {\n      \"corpus\": \"gson\",\n      \"path\": \"gson/src/main/java/com/google/gson/FieldNamingPolicy.java\",\n      \"pass\": true,\n      \"git_blob_sha1\": \"e6d452d1a939d1aa164f87cd45a53698e9b9bceb\",\n      \"commit\": \"828a97be0f8d58108b140b77df8dc76b657f4a87\"\n    }\n  ]\n}\n",
+  "stderr": ""
+}

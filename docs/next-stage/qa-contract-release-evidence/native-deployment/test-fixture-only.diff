@@ -1,0 +1,12 @@
+diff --git a/src/jdtls-session.test.ts b/src/jdtls-session.test.ts
+index a78de5a..ed83fdc 100644
+--- a/src/jdtls-session.test.ts
++++ b/src/jdtls-session.test.ts
+@@ -1396,6 +1396,7 @@ test("a short first semantic caller does not become the shared backend hard cap"
+   const { session, repoRoot } = harness(factory);
+   const file = path.join(repoRoot, "A.java");
+   writeFileSync(file, "class A {}\n");
++  await session.ensureStarted();
+ 
+   const short = session.semanticLocations(file, 1, 1, DeadlineBudget.fromTimeout(10));
+   const long = session.semanticLocations(file, 1, 1, DeadlineBudget.fromTimeout(500));

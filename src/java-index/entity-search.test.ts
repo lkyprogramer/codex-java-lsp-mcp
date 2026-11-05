@@ -212,7 +212,6 @@ test("recordsFromBundle plus searchEntities ranks a file bundle", () => {
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1

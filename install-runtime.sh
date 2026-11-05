@@ -1,28 +1,38 @@
 #!/usr/bin/env bash
-# input: Source checkout, local Node/JDT LS, and explicit optional HTTP activation request.
-# output: Immutable release, managed loopback daemon, and only after health success an optional Codex URL registration.
+# input: Source checkout and frozen Node/native identity.
+# output: Immutable release and native-owner managed loopback daemon.
 # pos: User-level installer; it never mutates a running release or changes Codex MCP transport by default.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVER_NAME="${SERVER_NAME:-codex-java-lsp}"
 RUNTIME_DIR="${CODEX_JAVA_LSP_RUNTIME_DIR:-$HOME/Library/Application Support/codex-java-lsp-mcp}"
 LAUNCH_AGENTS_DIR="${CODEX_JAVA_LSP_LAUNCH_AGENTS_DIR:-$HOME/Library/LaunchAgents}"
 LOG_DIR="${CODEX_JAVA_LSP_LOG_DIR:-$HOME/Library/Logs/codex-java-lsp-mcp}"
 LAUNCH_AGENT_LABEL="${CODEX_JAVA_LSP_LAUNCH_AGENT_LABEL:-com.lky.codex-java-lsp-mcp}"
 HTTP_PORT="${JAVA_LSP_HTTP_PORT:-38456}"
 HTTP_CANARY_PORT="${JAVA_LSP_HTTP_CANARY_PORT:-38457}"
-ACTIVATE_HTTP="false"
-HTTP_ACTIVATION_ATTESTATION="${CODEX_JAVA_LSP_HTTP_ACTIVATION_ATTESTATION:-}"
+PREFLIGHT_RUNTIME="false"
+GRADLE_PREPARATION_PLAN=""
+GRADLE_PREPARATION_PROXY_PORT=""
+PREPARED_JAR_INDEX_DIR=""
+INSTALL_WITH_GRADLE="false"
+FORMAL_INSTALL="false"
+SEALED_RELEASE=""
+SEALED_RELEASE_SHA=""
 
 usage() {
   cat <<'EOF'
-Usage: ./install-runtime.sh [--activate-http <attestation.json>] [--port <fixed-port>] [--canary-port <candidate-port>]
+Usage: ./install-runtime.sh [--port <fixed-port>] [--canary-port <candidate-port>]
+       ./install-runtime.sh --preflight-runtime
+       ./install-runtime.sh --prepare-gradle <isolated-plan.json>
+       ./install-runtime.sh --install-with-gradle <isolated-plan.json> --port <isolated-port> --canary-port <isolated-port>
+           [--sealed-release <acceptance.json> <sha256>]
+       ./install-runtime.sh --formal --install-with-gradle <plan.json> --sealed-release <acceptance.json> <sha256>
+           --canary-port <unused-port>
 
-By default this installs an immutable release and starts the launchd-managed HTTP daemon,
-but preserves the existing Codex MCP registration. --activate-http is a separate,
-no-install transport switch that requires a fresh build-and-instance-bound Codex
-CLI/Desktop attestation for the already running daemon.
+ILV2_NODE_BIN and ILV2_RUNTIME_MANIFEST must identify the frozen runtime.
+ILV2_CODESIGN_IDENTITY must identify a stable launcher signing identity.
+The installer never changes Codex MCP registration.
 
 A release copy excludes eval dumps (artifacts/, graphify-out/, .workflow/). After a
 successful current switch the installer keeps current plus previous-current and
@@ -32,18 +42,30 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --activate-http)
-      ACTIVATE_HTTP="true"
-      HTTP_ACTIVATION_ATTESTATION="${2:-}"
-      if [[ -z "$HTTP_ACTIVATION_ATTESTATION" || "$HTTP_ACTIVATION_ATTESTATION" == --* ]]; then
-        echo "--activate-http requires an absolute attestation JSON path." >&2
-        exit 2
-      fi
+    --preflight-runtime)
+      PREFLIGHT_RUNTIME="true"
+      shift
+      ;;
+    --prepare-gradle|--install-with-gradle)
+      [[ -z "$GRADLE_PREPARATION_PLAN" ]] || { usage >&2; exit 2; }
+      if [[ "$1" == "--install-with-gradle" ]]; then INSTALL_WITH_GRADLE="true"; fi
+      GRADLE_PREPARATION_PLAN="${2:-}"
+      [[ -n "$GRADLE_PREPARATION_PLAN" ]] || { usage >&2; exit 2; }
       shift 2
       ;;
     --port)
       HTTP_PORT="${2:-}"
       shift 2
+      ;;
+    --sealed-release)
+      [[ -z "$SEALED_RELEASE" && -n "${2:-}" && "${3:-}" =~ ^[a-f0-9]{64}$ ]] || { usage >&2; exit 2; }
+      SEALED_RELEASE="$2"
+      SEALED_RELEASE_SHA="$3"
+      shift 3
+      ;;
+    --formal)
+      FORMAL_INSTALL="true"
+      shift
       ;;
     --canary-port)
       HTTP_CANARY_PORT="${2:-}"
@@ -64,6 +86,24 @@ OS_NAME="$(uname -s 2>/dev/null || printf 'unknown')"
 if [[ "$OS_NAME" != "Darwin" ]]; then
   echo "codex-java-lsp currently supports macOS only; detected $OS_NAME." >&2
   exit 1
+fi
+
+if [[ -n "$SEALED_RELEASE" && "$INSTALL_WITH_GRADLE" != "true" ]]; then
+  echo "Sealed release installation requires --install-with-gradle." >&2
+  exit 2
+fi
+if [[ "$FORMAL_INSTALL" == "true" && ( "$INSTALL_WITH_GRADLE" != "true" || -z "$SEALED_RELEASE" || -n "${JAVA_LSP_ISOLATED_VALIDATION:-}" ) ]]; then
+  echo "Formal installation requires a sealed release and a real-project preparation plan." >&2
+  exit 2
+fi
+if [[ -n "$GRADLE_PREPARATION_PLAN" ]]; then
+  if [[ "$PREFLIGHT_RUNTIME" == "true" || ( "$FORMAL_INSTALL" != "true" && "${JAVA_LSP_ISOLATED_VALIDATION:-}" != "1" ) ]]; then
+    echo "Gradle preparation requires its isolated installation phase." >&2
+    exit 2
+  fi
+  if [[ "$INSTALL_WITH_GRADLE" == "false" ]]; then
+    exec sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-gradle-prepare.mjs" --plan "$GRADLE_PREPARATION_PLAN"
+  fi
 fi
 
 require_command() {
@@ -101,23 +141,29 @@ validate_port() {
   fi
 }
 
-for command_name in node npm curl rsync launchctl; do
+unset NODE_OPTIONS NODE_PATH NODE_REPL_HISTORY NODE_V8_COVERAGE NODE_COMPILE_CACHE NODE_REDIRECT_WARNINGS
+unset JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT
+if [[ "$PREFLIGHT_RUNTIME" == "true" ]]; then
+  exec sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-runtime.mjs" --identity
+fi
+sh "$SCRIPT_DIR/scripts/run-isolated-node.sh" "$SCRIPT_DIR/scripts/ilv2-mac-runtime.mjs" --verify
+NODE_BIN="$ILV2_NODE_BIN"
+NPM_BIN="$(dirname "$NODE_BIN")/../lib/node_modules/npm/bin/npm-cli.js"
+if [[ ! -r "$NPM_BIN" ]]; then
+  echo "The frozen Node installation must provide npm-cli.js." >&2
+  exit 2
+fi
+export ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST
+for command_name in curl rsync launchctl; do
   require_command "$command_name"
 done
-if [[ "$ACTIVATE_HTTP" == "true" ]]; then
-  require_command codex
-  normalize_absolute_path HTTP_ACTIVATION_ATTESTATION
-fi
-
-NODE_BIN="$(command -v node)"
-NPM_BIN="$(command -v npm)"
 JDTLS_BIN="${JDTLS_BIN:-$(command -v jdtls || true)}"
 if [[ -z "$JDTLS_BIN" || "$JDTLS_BIN" != /* || ! -x "$JDTLS_BIN" ]]; then
   echo "jdtls was not found as an executable absolute path. Install it with: brew install jdtls" >&2
   exit 1
 fi
 
-JAVA_LSP_CACHE_BASE="${JAVA_LSP_CACHE_BASE:-$HOME/Library/Caches/codex-java-lsp}"
+JAVA_LSP_CACHE_BASE="${JAVA_LSP_CACHE_BASE:-$HOME/Library/Caches/codex-java-lsp-ilv2}"
 JAVA_LSP_OWNERSHIP_BASE="${JAVA_LSP_OWNERSHIP_BASE:-$JAVA_LSP_CACHE_BASE/.ownership}"
 for path_env_name in JAVA_LSP_PROJECTS_JSON JAVA_LSP_CACHE_BASE JAVA_LSP_OWNERSHIP_BASE; do
   normalize_absolute_path "$path_env_name"
@@ -139,9 +185,15 @@ fi
 
 RELEASES_DIR="$RUNTIME_DIR/releases"
 STATE_DIR="$RUNTIME_DIR/state"
+MANAGED_GRADLE_HOME="$STATE_DIR/jdt-gradle-home"
 CURRENT_LINK="$RUNTIME_DIR/current"
 LAUNCH_AGENT_PLIST="$LAUNCH_AGENTS_DIR/$LAUNCH_AGENT_LABEL.plist"
 BUILD_SHA="$(git -C "$SCRIPT_DIR" rev-parse --short=12 HEAD 2>/dev/null || printf 'source')"
+SEAL_SUFFIX=""
+if [[ "$FORMAL_INSTALL" == "true" ]]; then SEAL_SUFFIX="-formal"; fi
+if [[ -n "$SEALED_RELEASE" ]]; then
+  BUILD_SHA="$("$NODE_BIN" "$SCRIPT_DIR/scripts/ilv2-mac-sealed-release.mjs" "--verify$SEAL_SUFFIX" "$SEALED_RELEASE" "$SEALED_RELEASE_SHA")"
+fi
 BUILD_ID="${BUILD_SHA}-$(date -u +%Y%m%dT%H%M%SZ)"
 RELEASE_DIR="$RELEASES_DIR/$BUILD_ID"
 CANDIDATE_LOG="$STATE_DIR/candidate-$BUILD_ID.log"
@@ -202,10 +254,12 @@ cleanup_installer() {
   cleanup_candidate
   cleanup_candidate_test_environment
   cleanup_install_test_environment
+  if [[ -n "${RELEASE_DIR:-}" && -n "${BUILD_ID:-}" ]]; then
+    rm -rf "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID"
+    rm -f "$STATE_DIR/.daemon.env.candidate.$BUILD_ID" "$STATE_DIR/.agent.plist.candidate.$BUILD_ID"
+  fi
   release_install_lock
 }
-
-trap cleanup_installer EXIT
 
 acquire_install_lock() {
   if ! mkdir "$INSTALL_LOCK_DIR" 2>/dev/null; then
@@ -320,20 +374,6 @@ prune_unreferenced_releases() {
   done
 }
 
-copy_legacy_release_if_needed() {
-  if [[ -e "$CURRENT_LINK" || ! -f "$RUNTIME_DIR/dist/server.js" ]]; then
-    return
-  fi
-  local legacy_id="legacy-$(date -u +%Y%m%dT%H%M%SZ)"
-  local legacy_dir="$RELEASES_DIR/$legacy_id"
-  mkdir -p "$legacy_dir"
-  rsync_source_tree "$RUNTIME_DIR/" "$legacy_dir/" \
-    --exclude releases \
-    --exclude state \
-    --exclude current
-  ln -s "releases/$legacy_id" "$STATE_DIR/previous-current"
-}
-
 assert_clean_release_source() {
   "$NODE_BIN" "$SCRIPT_DIR/scripts/verify-clean-source-tree.mjs" "$SCRIPT_DIR"
 }
@@ -348,11 +388,12 @@ copy_release() {
   (
     cd "$RELEASE_DIR"
     if [[ -f package-lock.json ]]; then
-      "$NPM_BIN" ci
+      "$NODE_BIN" "$NPM_BIN" ci
     else
-      "$NPM_BIN" install
+      "$NODE_BIN" "$NPM_BIN" install
     fi
-    CODEX_JAVA_LSP_BUILD_SHA="$BUILD_SHA" "$NPM_BIN" run build
+    "$NODE_BIN" "$RELEASE_DIR/scripts/ilv2-mac-dependencies.mjs" check --repo-root "$RELEASE_DIR"
+    CODEX_JAVA_LSP_BUILD_SHA="$BUILD_SHA" "$NODE_BIN" "$NPM_BIN" run build
   )
   run_release_tests_in_isolated_environment
   chmod +x "$RELEASE_DIR/run.sh" "$RELEASE_DIR/run-daemon.sh" "$RELEASE_DIR/run-stdio.sh" "$RELEASE_DIR/run-hook-gate.sh" \
@@ -373,7 +414,7 @@ merge_project_jdk_env() {
       existing_value="${entry#*=}"
       if [[ "$existing_key" == "$key" ]]; then
         if [[ "$existing_value" != "$value" ]]; then
-          echo "Conflicting project JDK override for $key between installer environment and existing stdio MCP registration." >&2
+          echo "Conflicting project JDK override for $key between installer environment and managed daemon state." >&2
           return 1
         fi
         return 0
@@ -391,16 +432,7 @@ collect_project_jdk_env() {
       merge_project_jdk_env "$env_name" "${!env_name}" || return 1
     fi
   done < <(env)
-  if ! command -v codex >/dev/null 2>&1; then
-    return 0
-  fi
-  if ! existing_registration="$(codex mcp get "$SERVER_NAME" --json 2>/dev/null)"; then
-    return 0
-  fi
-  while IFS=$'\t' read -r key value; do
-    [[ -z "$key" ]] && continue
-    merge_project_jdk_env "$key" "$value" || return 1
-  done < <(printf '%s' "$existing_registration" | "$NODE_BIN" "$RELEASE_DIR/scripts/extract-stdio-project-jdk-env.mjs")
+
 }
 
 run_release_tests_in_isolated_environment() {
@@ -428,7 +460,7 @@ run_release_tests_in_isolated_environment() {
       "XDG_CONFIG_HOME=$INSTALL_TEST_ROOT/config" \
       "CODEX_HOME=$INSTALL_TEST_ROOT/codex-home" \
       "HOME=$INSTALL_TEST_ROOT/home" \
-      "$NPM_BIN" test
+      "$NODE_BIN" "$NPM_BIN" test
   ); then
     cleanup_install_test_environment
     return 1
@@ -448,20 +480,29 @@ run_candidate_smoke() {
     cleanup_candidate_test_environment
     return 1
   fi
+  candidate_cache="$(cd "$candidate_cache" && pwd -P)"
   candidate_build="$("$NODE_BIN" -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).gitSha)' "$RELEASE_DIR/dist/build-stamp.json")"
+  local candidate_command=("$RUNTIME_DIR/.launcher.candidate.$BUILD_ID/dist/native/ilv2-mac" owner "$candidate_cache" "$RELEASE_DIR/dist/http-server.js")
+  if [[ "${JAVA_LSP_ISOLATED_VALIDATION:-}" == "1" ]]; then
+    # Full installer acceptance shares the same two-fixture admission as its tests.
+    candidate_command=("$NODE_BIN" "$RELEASE_DIR/scripts/ilv2-mac-fixture-exec.mjs" "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID/dist/native/ilv2-mac" "$candidate_cache" "$RELEASE_DIR/dist/http-server.js")
+  fi
   (
     cd "$RELEASE_DIR"
     exec env -u JDTLS_DATA_DIR -u JDTLS_LOG_DIR \
       "JAVA_LSP_HTTP_PORT=$HTTP_CANARY_PORT" \
       "JAVA_LSP_HTTP_INSTANCE_ID=$CANDIDATE_INSTANCE_ID" \
       "JAVA_LSP_CACHE_BASE=$candidate_cache" \
+      "JAVA_LSP_CACHE_ROOT=$candidate_cache" \
+      "JAVA_LSP_SERVICE_STATE_ROOT=$CANDIDATE_TEST_ROOT/service-state" \
+      "GRADLE_USER_HOME=$CANDIDATE_TEST_ROOT/service-state/jdt-gradle-home" \
       "JAVA_LSP_OWNERSHIP_BASE=$candidate_ownership" \
       "JAVA_LSP_PROJECTS_JSON=$candidate_projects" \
       "XDG_CONFIG_HOME=$CANDIDATE_TEST_ROOT/config" \
       "CODEX_HOME=$CANDIDATE_TEST_ROOT/codex-home" \
       "HOME=$CANDIDATE_TEST_ROOT/home" \
       "JDTLS_BIN=$JDTLS_BIN" \
-      "$NODE_BIN" --disable-warning=ExperimentalWarning dist/http-server.js
+      "${candidate_command[@]}"
   ) >"$CANDIDATE_LOG" 2>&1 &
   CANDIDATE_PID="$!"
   if ! wait_for_candidate_ready "$candidate_url/readyz"; then
@@ -479,6 +520,10 @@ run_candidate_smoke() {
 }
 
 assert_existing_managed_config_is_compatible() {
+  if [[ ( -f "$STATE_DIR/daemon.env" || -e "$CURRENT_LINK" || -L "$CURRENT_LINK" ) && ! -d "$RUNTIME_DIR/launcher" ]]; then
+    echo "Existing runtime has no verified MAC-17 owner bundle; use a new ILV2 runtime directory and retain the old runtime unchanged." >&2
+    exit 2
+  fi
   if [[ ! -f "$STATE_DIR/daemon.env" ]]; then
     return
   fi
@@ -532,6 +577,13 @@ backup_link_for_rollback() {
 
 backup_managed_configuration() {
   mkdir -p "$ROLLBACK_DIR"
+  if [[ -d "$RUNTIME_DIR/launcher" ]]; then
+    "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" verify "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID" "$RUNTIME_DIR/launcher" || return 1
+    cp -Rp "$RUNTIME_DIR/launcher" "$ROLLBACK_DIR/launcher" || return 1
+    printf 'present\n' >"$ROLLBACK_DIR/launcher.marker"
+  else
+    printf 'absent\n' >"$ROLLBACK_DIR/launcher.marker"
+  fi
   backup_file_for_rollback \
     "$STATE_DIR/daemon.env" \
     "$ROLLBACK_DIR/daemon.env" \
@@ -626,6 +678,15 @@ restore_link_from_rollback() {
 }
 
 restore_previous_managed_configuration() {
+  if [[ "$(<"$ROLLBACK_DIR/launcher.marker")" == "present" ]]; then
+    local staged_bundle="$RUNTIME_DIR/.launcher.restore.$$"
+    cp -Rp "$ROLLBACK_DIR/launcher" "$staged_bundle" || return 1
+    "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" replace "$staged_bundle" "$RUNTIME_DIR/launcher" || return 1
+  elif [[ "$(<"$ROLLBACK_DIR/launcher.marker")" == "absent" ]]; then
+    rm -rf "$RUNTIME_DIR/launcher" || return 1
+  else
+    return 1
+  fi
   restore_file_from_rollback \
     "$STATE_DIR/daemon.env" \
     "$ROLLBACK_DIR/daemon.env" \
@@ -668,19 +729,20 @@ restore_previous_managed_configuration() {
   fi
 }
 
-inherit_operator_idle_ttl() {
-  if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
-    return
-  fi
-  if [[ ! -f "$STATE_DIR/daemon.env" ]]; then
-    return
-  fi
-  local previous
-  previous="$(bash -c 'source "$1"; printf "%s" "${JAVA_LSP_IDLE_TTL_MS:-}"' _ "$STATE_DIR/daemon.env" || true)"
-  if [[ -n "$previous" ]]; then
-    JAVA_LSP_IDLE_TTL_MS="$previous"
-    export JAVA_LSP_IDLE_TTL_MS
-  fi
+inherit_managed_environment() {
+  local key previous
+  if [[ ! -f "$STATE_DIR/daemon.env" ]]; then return; fi
+  for key in JAVA_LSP_IDLE_TTL_MS JAVA_HOME JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JDTLS_INDEX_TIMEOUT_MS JAVA_LSP_JDTLS_XMX; do
+    if [[ -z "${!key:-}" ]]; then
+      previous="$(bash -c 'source "$1"; printf "%s" "${!2:-}"' _ "$STATE_DIR/daemon.env" "$key")"
+      if [[ -n "$previous" ]]; then printf -v "$key" '%s' "$previous"; export "$key"; fi
+    fi
+  done
+  local entry
+  while IFS=$'\t' read -r key previous; do
+    [[ -z "$key" ]] && continue
+    merge_project_jdk_env "$key" "$previous" || return 1
+  done < <(bash -c 'source "$1"; while IFS= read -r key; do printf "%s\t%s\n" "$key" "${!key}"; done < <(compgen -A variable JAVA_LSP_PROJECT_JAVA_HOME)' _ "$STATE_DIR/daemon.env")
 }
 
 write_state() {
@@ -695,7 +757,26 @@ write_state() {
       printf 'JAVA_LSP_HTTP_INSTANCE_ID=%q\n' "$MANAGED_INSTANCE_ID"
       printf 'JAVA_LSP_CACHE_BASE=%q\n' "$JAVA_LSP_CACHE_BASE"
       printf 'JAVA_LSP_OWNERSHIP_BASE=%q\n' "$JAVA_LSP_OWNERSHIP_BASE"
+      printf 'ILV2_NODE_BIN=%q\n' "$ILV2_NODE_BIN"
+      printf 'ILV2_RUNTIME_MANIFEST=%q\n' "$ILV2_RUNTIME_MANIFEST"
       printf 'NODE_BIN=%q\n' "$NODE_BIN"
+      printf 'JAVA_LSP_CACHE_ROOT=%q\n' "$JAVA_LSP_CACHE_BASE"
+      printf 'JAVA_LSP_SERVICE_STATE_ROOT=%q\n' "$STATE_DIR"
+      printf 'GRADLE_USER_HOME=%q\n' "$MANAGED_GRADLE_HOME"
+      if [[ -n "$GRADLE_PREPARATION_PROXY_PORT" ]]; then
+        printf 'JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT=%q\n' "$GRADLE_PREPARATION_PROXY_PORT"
+      fi
+      if [[ -n "$PREPARED_JAR_INDEX_DIR" ]]; then
+        printf 'JAVA_LSP_PREPARED_JAR_INDEX_DIR=%q\n' "$PREPARED_JAR_INDEX_DIR"
+      fi
+      if [[ "$FORMAL_INSTALL" == "true" ]]; then
+        printf 'JAVA_LSP_PREPARED_GRADLE_REPO=%q\n' "$JAVA_LSP_PREPARED_GRADLE_REPO"
+        printf 'JAVA_LSP_PREPARED_GRADLE_PROXY_PORT=%q\n' "$GRADLE_PREPARATION_PROXY_PORT"
+      fi
+      local key
+      for key in JAVA_HOME JDTLS_BIN JDTLS_JAVA_HOME JAVA_LSP_GRADLE_DISTRIBUTIONS JAVA_LSP_PROJECTS_JSON JDTLS_EXTRA_ARGS JDTLS_INDEX_TIMEOUT_MS JAVA_LSP_JDTLS_XMX; do
+        if [[ -n "${!key:-}" ]]; then printf '%s=%q\n' "$key" "${!key}"; fi
+      done
       if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
         printf 'JAVA_LSP_IDLE_TTL_MS=%q\n' "$JAVA_LSP_IDLE_TTL_MS"
       fi
@@ -707,8 +788,8 @@ write_state() {
       fi
     } >"$staged"
   ) || return 1
-  mv -f "$staged" "$STATE_DIR/daemon.env" || return 1
-  chmod 600 "$STATE_DIR/daemon.env" || return 1
+  chmod 600 "$staged" || return 1
+  mv -f "$staged" "${1:-$STATE_DIR/daemon.env}" || return 1
 }
 
 write_launch_agent() {
@@ -721,14 +802,37 @@ write_launch_agent() {
     "JAVA_LSP_HTTP_PORT=$HTTP_PORT"
     "JAVA_LSP_HTTP_INSTANCE_ID=$MANAGED_INSTANCE_ID"
     "JAVA_LSP_CACHE_BASE=$JAVA_LSP_CACHE_BASE"
+    "JAVA_LSP_CACHE_ROOT=$JAVA_LSP_CACHE_BASE"
+    "JAVA_LSP_SERVICE_STATE_ROOT=$STATE_DIR"
+    "GRADLE_USER_HOME=$MANAGED_GRADLE_HOME"
     "JAVA_LSP_OWNERSHIP_BASE=$JAVA_LSP_OWNERSHIP_BASE"
   )
   local env_name
+  if [[ "${JAVA_LSP_ISOLATED_VALIDATION:-}" == "1" ]]; then
+    for env_name in HOME TMPDIR XDG_CACHE_HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME CODEX_HOME ILV2_RUN_ROOT ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST JAVA_LSP_ISOLATED_VALIDATION; do
+      if [[ -n "${!env_name:-}" ]]; then environment+=("$env_name=${!env_name}"); fi
+    done
+    if [[ -n "$GRADLE_PREPARATION_PROXY_PORT" ]]; then
+      environment+=("JAVA_LSP_ISOLATED_GRADLE_PROXY_PORT=$GRADLE_PREPARATION_PROXY_PORT")
+    fi
+    if [[ -n "$PREPARED_JAR_INDEX_DIR" ]]; then
+      environment+=("JAVA_LSP_PREPARED_JAR_INDEX_DIR=$PREPARED_JAR_INDEX_DIR")
+    fi
+  fi
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then
+    environment+=("JAVA_LSP_PREPARED_GRADLE_REPO=$JAVA_LSP_PREPARED_GRADLE_REPO"
+      "JAVA_LSP_PREPARED_GRADLE_PROXY_PORT=$GRADLE_PREPARATION_PROXY_PORT")
+    if [[ -n "$PREPARED_JAR_INDEX_DIR" ]]; then
+      environment+=("JAVA_LSP_PREPARED_JAR_INDEX_DIR=$PREPARED_JAR_INDEX_DIR")
+    fi
+  fi
   for env_name in \
+    JAVA_LSP_GRADLE_DISTRIBUTIONS \
     JAVA_HOME \
     JDTLS_JAVA_HOME \
     JAVA_LSP_PROJECTS_JSON \
     JDTLS_EXTRA_ARGS \
+    JDTLS_INDEX_TIMEOUT_MS \
     JAVA_LSP_JDTLS_XMX \
     JAVA_LSP_MAX_ACTIVE_REPOS \
     JAVA_LSP_IDLE_TTL_MS \
@@ -761,12 +865,14 @@ write_launch_agent() {
     "$RELEASE_DIR/macos/com.lky.codex-java-lsp-mcp.plist.template" \
     "$staged" \
     "$LAUNCH_AGENT_LABEL" \
-    "$RUNTIME_DIR/run-daemon.sh" \
+    "$RUNTIME_DIR/launcher/dist/native/ilv2-mac" \
     "$RUNTIME_DIR" \
     "$LOG_DIR" \
+    "$JAVA_LSP_CACHE_BASE" \
+    "$RELEASE_DIR/dist/http-server.js" \
     "${environment[@]}" || return 1
   chmod 600 "$staged" || return 1
-  mv -f "$staged" "$LAUNCH_AGENT_PLIST" || return 1
+  mv -f "$staged" "${1:-$LAUNCH_AGENT_PLIST}" || return 1
 }
 
 install_stable_entrypoints() {
@@ -819,84 +925,6 @@ restore_previous_release() {
   mv -f -h "$staged" "$CURRENT_LINK" || return 1
 }
 
-activate_http_registration() {
-  local backup="$STATE_DIR/mcp-before-http-$BUILD_ID.json"
-  local rollback="$STATE_DIR/rollback-stdio-mcp.sh"
-  local reverse_rollback="$STATE_DIR/rollback-http-mcp.sh"
-  local managed_url="http://127.0.0.1:$HTTP_PORT/mcp"
-  if codex mcp get "$SERVER_NAME" --json >"$backup" 2>/dev/null; then
-    chmod 600 "$backup"
-    "$NODE_BIN" "$CURRENT_LINK/scripts/write-mcp-rollback.mjs" "$backup" "$rollback"
-  else
-    echo "No existing Codex MCP registration named $SERVER_NAME; HTTP activation has no stdio rollback artifact." >&2
-  fi
-  codex mcp remove "$SERVER_NAME" >/dev/null 2>&1 || true
-  if ! codex mcp add "$SERVER_NAME" --url "$managed_url"; then
-    if [[ -x "$rollback" ]]; then "$rollback"; fi
-    echo "HTTP MCP registration failed; previous stdio registration was restored when available." >&2
-    exit 1
-  fi
-  if ! codex mcp get "$SERVER_NAME" --json | "$NODE_BIN" -e '
-    const expected = process.argv[1];
-    let value = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", chunk => { value += chunk; });
-    process.stdin.on("end", () => {
-      const config = JSON.parse(value);
-      if (config.transport?.type !== "streamable_http" || config.transport?.url !== expected) process.exitCode = 1;
-    });
-  ' "$managed_url"; then
-    if [[ -x "$rollback" ]]; then "$rollback"; fi
-    echo "HTTP MCP registration verification failed; previous stdio registration was restored when available." >&2
-    exit 1
-  fi
-  if ! "$NODE_BIN" "$CURRENT_LINK/scripts/write-mcp-rollback.mjs" \
-    --http "$SERVER_NAME" "$managed_url" "$reverse_rollback"; then
-    if [[ -x "$rollback" ]]; then "$rollback"; fi
-    echo "Could not save the HTTP reverse-recovery command; previous stdio registration was restored when available." >&2
-    exit 1
-  fi
-}
-
-verify_http_activation_gate() {
-  if [[ -z "$HTTP_ACTIVATION_ATTESTATION" || ! -f "$HTTP_ACTIVATION_ATTESTATION" ]]; then
-    echo "HTTP activation requires a readable Codex CLI/Desktop attestation JSON produced by the release gate." >&2
-    return 1
-  fi
-  local managed_instance expected_build
-  managed_instance="$(bash -c 'source "$1"; printf "%s" "${JAVA_LSP_HTTP_INSTANCE_ID:-}"' _ "$STATE_DIR/daemon.env")"
-  expected_build="$("$NODE_BIN" -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).gitSha)' "$CURRENT_LINK/dist/build-stamp.json")"
-  "$NODE_BIN" "$CURRENT_LINK/scripts/verify-http-activation-attestation.mjs" \
-    "$HTTP_ACTIVATION_ATTESTATION" "$expected_build" "$managed_instance"
-}
-
-verify_stdio_handoff_environment() {
-  local existing_registration key value
-  if ! existing_registration="$(codex mcp get "$SERVER_NAME" --json 2>/dev/null)"; then
-    echo "HTTP activation requires reading the existing Codex MCP registration before it can replace stdio." >&2
-    return 1
-  fi
-  # daemon.env is installer-owned mode 0600 state. Source it only after its
-  # existence was checked above so the exact daemon namespace is authoritative.
-  # shellcheck disable=SC1090
-  source "$STATE_DIR/daemon.env"
-  if [[ -z "${JAVA_LSP_OWNERSHIP_BASE:-}" ]]; then
-    echo "Managed daemon state does not record JAVA_LSP_OWNERSHIP_BASE; reinstall before HTTP activation." >&2
-    return 1
-  fi
-  if ! printf '%s' "$existing_registration" \
-    | "$NODE_BIN" "$CURRENT_LINK/scripts/verify-stdio-ownership-handoff.mjs" "$JAVA_LSP_OWNERSHIP_BASE"; then
-    return 1
-  fi
-  while IFS=$'\t' read -r key value; do
-    [[ -z "$key" ]] && continue
-    if [[ "${!key+x}" != "x" || "${!key}" != "$value" ]]; then
-      echo "Managed daemon is missing the existing stdio project JDK override $key; reinstall with the same override before activation." >&2
-      return 1
-    fi
-  done < <(printf '%s' "$existing_registration" | "$NODE_BIN" "$CURRENT_LINK/scripts/extract-stdio-project-jdk-env.mjs")
-}
-
 managed_daemonctl() {
   CODEX_JAVA_LSP_RUNTIME_DIR="$RUNTIME_DIR" "$RUNTIME_DIR/daemonctl.sh" "$@"
 }
@@ -904,6 +932,10 @@ managed_daemonctl() {
 restore_before_daemon_restart() {
   local phase="$1"
   local current_switched="$2"
+  if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+    echo "Install failed during $phase; leaving the new service stopped." >&2
+    exit 1
+  fi
   echo "Install failed during $phase; restoring managed files before any daemon restart." >&2
   local rollback_failed="false"
   if [[ "$current_switched" == "true" ]] && ! restore_previous_release; then
@@ -915,68 +947,104 @@ restore_before_daemon_restart() {
   if [[ "$rollback_failed" == "true" ]]; then
     echo "Managed-file rollback failed; the existing daemon was not restarted." >&2
   fi
+  if [[ "$rollback_failed" == "false" && -f "$STATE_DIR/daemon.env" && -L "$CURRENT_LINK" ]]; then
+    managed_daemonctl start && managed_daemonctl smoke || true
+  fi
   prune_unreferenced_releases || true
   exit 1
 }
-
-activate_existing_http_registration() {
-  if [[ ! -L "$CURRENT_LINK" || ! -f "$STATE_DIR/daemon.env" || ! -x "$RUNTIME_DIR/daemonctl.sh" ]]; then
-    echo "HTTP activation requires an existing managed release; run install-runtime.sh without --activate-http first." >&2
-    return 1
-  fi
-  if ! acquire_install_lock; then
-    return 1
-  fi
-  if ! managed_daemonctl status || ! managed_daemonctl smoke; then
-    echo "HTTP activation requires the already installed daemon to be healthy; registration remains unchanged." >&2
-    return 1
-  fi
-  if ! verify_stdio_handoff_environment; then
-    echo "HTTP MCP registration remains unchanged because the existing stdio environment cannot safely hand off to this daemon." >&2
-    return 1
-  fi
-  if ! verify_http_activation_gate; then
-    echo "HTTP MCP registration remains unchanged because the production release gate is incomplete." >&2
-    return 1
-  fi
-  activate_http_registration
-  echo "HTTP MCP registration activated without changing the installed release. Restart Codex/Desktop before opening a new task." >&2
-}
-
-if [[ "$ACTIVATE_HTTP" == "true" ]]; then
-  activate_existing_http_registration
-  exit $?
-fi
 
 echo "Java: $(java -version 2>&1 | head -n 1 || true)" >&2
 echo "JDT LS: $JDTLS_BIN" >&2
 echo "Runtime root: $RUNTIME_DIR" >&2
 echo "Fixed HTTP port: $HTTP_PORT; isolated candidate port: $HTTP_CANARY_PORT" >&2
 
+if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+  preparation_validation="--validate-install"
+  if [[ -n "$SEALED_RELEASE" ]]; then preparation_validation="--validate-sealed-install"; fi
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then preparation_validation="--validate-formal-install"; fi
+  GRADLE_PREPARATION_PROXY_PORT="$(GRADLE_USER_HOME="$MANAGED_GRADLE_HOME" JDTLS_BIN="$JDTLS_BIN" "$NODE_BIN" "$SCRIPT_DIR/scripts/ilv2-mac-gradle-prepare.mjs" \
+    "$preparation_validation" "$GRADLE_PREPARATION_PLAN" "$RUNTIME_DIR" "$LAUNCH_AGENT_PLIST" "$LOG_DIR" \
+    "$JAVA_LSP_CACHE_BASE" "$JAVA_LSP_OWNERSHIP_BASE" "$LAUNCH_AGENT_LABEL" "$HTTP_PORT" "$HTTP_CANARY_PORT")"
+  if job_state="$(/bin/launchctl print "gui/$UID/$LAUNCH_AGENT_LABEL" 2>&1)" \
+    || [[ "$job_state" != *"Could not find service"* && "$job_state" != *"No such process"* ]]; then
+    echo "Isolated Gradle installation requires a confirmed unused LaunchAgent label." >&2
+    exit 2
+  fi
+  if [[ -e "$LAUNCH_AGENT_PLIST" || -L "$LAUNCH_AGENT_PLIST" ]]; then
+    echo "Isolated Gradle installation requires a new LaunchAgent plist path." >&2
+    exit 2
+  fi
+  if [[ "$FORMAL_INSTALL" == "true" && -e "$HOME/Library/LaunchAgents/com.lky.codex-java-lsp-mcp.plist" ]]; then
+    if ! /bin/launchctl print-disabled "gui/$UID" | /usr/bin/grep -E '"com\.lky\.codex-java-lsp-mcp"[[:space:]]*=>[[:space:]]*disabled' >/dev/null \
+      || /bin/launchctl print "gui/$UID/com.lky.codex-java-lsp-mcp" >/dev/null 2>&1; then
+      echo "The legacy LaunchAgent must be stopped and disabled before reusing port 38456." >&2
+      exit 2
+    fi
+  fi
+  mkdir "$RUNTIME_DIR"
+fi
+trap cleanup_installer EXIT
 mkdir -p "$RUNTIME_DIR" "$RELEASES_DIR" "$STATE_DIR" "$LAUNCH_AGENTS_DIR" "$LOG_DIR"
 chmod 700 "$STATE_DIR"
 acquire_install_lock
-assert_clean_release_source
-copy_legacy_release_if_needed
 assert_existing_managed_config_is_compatible
-copy_release
+mkdir -p "$JAVA_LSP_CACHE_BASE"
+JAVA_LSP_CACHE_BASE="$(cd "$JAVA_LSP_CACHE_BASE" && pwd -P)"
+export JAVA_LSP_CACHE_BASE JAVA_LSP_CACHE_ROOT="$JAVA_LSP_CACHE_BASE"
+if [[ -n "$SEALED_RELEASE" ]]; then
+  "$NODE_BIN" "$SCRIPT_DIR/scripts/ilv2-mac-sealed-release.mjs" "--materialize$SEAL_SUFFIX" "$SEALED_RELEASE" "$SEALED_RELEASE_SHA" "$RELEASE_DIR"
+else
+  assert_clean_release_source
+  copy_release
+fi
+"$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" prepare "$RELEASE_DIR" "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID"
 run_candidate_smoke
+if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+  mkdir "$MANAGED_GRADLE_HOME"
+  prep_args=(--plan "$GRADLE_PREPARATION_PLAN")
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then prep_args=(--prepare-formal "${prep_args[@]}"); fi
+  GRADLE_USER_HOME="$MANAGED_GRADLE_HOME" sh "$RELEASE_DIR/scripts/run-isolated-node.sh" \
+    "$RELEASE_DIR/scripts/ilv2-mac-gradle-prepare.mjs" "${prep_args[@]}"
+  if [[ -d "$MANAGED_GRADLE_HOME/jdt-shared-index" ]]; then
+    PREPARED_JAR_INDEX_DIR="$MANAGED_GRADLE_HOME/jdt-shared-index"
+  fi
+  if [[ "$FORMAL_INSTALL" == "true" ]]; then
+    cp "$JAVA_LSP_GRADLE_DISTRIBUTIONS" "$STATE_DIR/gradle-distributions.json"
+    export JAVA_LSP_GRADLE_DISTRIBUTIONS="$STATE_DIR/gradle-distributions.json"
+    cp "$ILV2_RUNTIME_MANIFEST" "$STATE_DIR/runtime.json"
+    export ILV2_RUNTIME_MANIFEST="$STATE_DIR/runtime.json"
+  fi
+fi
 collect_project_jdk_env
-backup_managed_configuration
-inherit_operator_idle_ttl
+inherit_managed_environment
+CANDIDATE_STATE="$STATE_DIR/.daemon.env.candidate.$BUILD_ID"
+CANDIDATE_PLIST="$STATE_DIR/.agent.plist.candidate.$BUILD_ID"
+write_state "$CANDIDATE_STATE"
+write_launch_agent "$CANDIDATE_PLIST"
+bash -n "$CANDIDATE_STATE"
+/usr/bin/plutil -lint "$CANDIDATE_PLIST"
+if [[ "$INSTALL_WITH_GRADLE" == "false" ]]; then backup_managed_configuration; fi
+if [[ -f "$STATE_DIR/daemon.env" ]]; then managed_daemonctl stop; fi
 current_switched="false"
-if ! write_state; then restore_before_daemon_restart "daemon state update" "$current_switched"; fi
-if ! write_launch_agent; then restore_before_daemon_restart "LaunchAgent update" "$current_switched"; fi
+if ! "$NODE_BIN" "$RELEASE_DIR/scripts/managed-owner-launcher.mjs" replace "$RUNTIME_DIR/.launcher.candidate.$BUILD_ID" "$RUNTIME_DIR/launcher"; then restore_before_daemon_restart "launcher update" "$current_switched"; fi
+if ! mv -f "$CANDIDATE_STATE" "$STATE_DIR/daemon.env"; then restore_before_daemon_restart "daemon state update" "$current_switched"; fi
+if ! mv -f "$CANDIDATE_PLIST" "$LAUNCH_AGENT_PLIST"; then restore_before_daemon_restart "LaunchAgent update" "$current_switched"; fi
 if ! install_stable_entrypoints; then restore_before_daemon_restart "stable entrypoint update" "$current_switched"; fi
 if ! switch_current; then restore_before_daemon_restart "immutable release switch" "$current_switched"; fi
 current_switched="true"
 
-if ! managed_daemonctl restart || ! managed_daemonctl smoke; then
-  echo "New fixed-port daemon failed after current switch; attempting immutable release rollback." >&2
+if ! managed_daemonctl start || ! managed_daemonctl smoke; then
+  echo "New fixed-port daemon failed after current switch." >&2
   if ! managed_daemonctl stop; then
     echo "The failed release could not be confirmed stopped; refusing to restore a different release/configuration over a loaded daemon." >&2
     exit 1
   fi
+  if [[ "$INSTALL_WITH_GRADLE" == "true" ]]; then
+    echo "The new service is stopped. Install files remain available for inspection." >&2
+    exit 1
+  fi
+  echo "Attempting immutable release rollback." >&2
   restored_release="false"
   if restore_previous_release; then
     restored_release="true"
@@ -998,6 +1066,5 @@ fi
 prune_unreferenced_releases || true
 
 echo "HTTP daemon is healthy, but existing Codex MCP registration was preserved." >&2
-echo "After the full Codex CLI/Desktop gate, switch explicitly with: $SCRIPT_DIR/install-runtime.sh --activate-http /absolute/path/to/attestation.json" >&2
 echo "Current immutable release: $RUNTIME_DIR/current -> $(readlink "$CURRENT_LINK")" >&2
 echo "HTTP smoke: $RUNTIME_DIR/daemonctl.sh smoke" >&2

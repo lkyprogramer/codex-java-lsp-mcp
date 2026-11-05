@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
-import type { LayoutContext } from "../layout-probe.js";
+import { detectLayout, type LayoutContext } from "../layout-probe.js";
+import { hasIndexableFiles } from "./manifest.js";
+import { sourcePathWithinRoot } from "./source-capture.js";
 
 const require = createRequire(import.meta.url);
 
@@ -11,7 +13,7 @@ const require = createRequire(import.meta.url);
 // intentionally omitted: they only affect JDT/Maven JVM selection, not
 // tree-sitter facts or layout. A parser/extractor code fix invalidates the
 // AST cache via extractorVersion (below), not via this list.
-const BUILD_MARKER_RELATIVE_PATHS = [
+export const BUILD_MARKER_RELATIVE_PATHS: readonly string[] = [
   "pom.xml",
   "settings.gradle",
   "settings.gradle.kts",
@@ -24,8 +26,16 @@ const BUILD_MARKER_RELATIVE_PATHS = [
 // Bumped whenever ast-extractor.ts's fact shape changes in a way that isn't
 // already covered by a schemaVersion bump. Do not put gitSha in extractorVersion:
 // a telemetry/runtime install must not discard every repo's JavaIndex snapshot.
-const JAVA_FACTS_REVISION = 2;
-const LEGACY_EXTRACTOR_CODE_SUFFIX = /\|extractor-code-[0-9a-f]{7,40}$/i;
+// 3: duplicate FQNs resolve by module/source-set visibility or stay
+// AMBIGUOUS (R05) - refs/edges written by revision 2 bound the lowest id.
+// The SQLite index records it in meta and is dropped/rebuilt on mismatch
+// (schema.ts schemaVersionsMatch), like a schema version.
+// Revision 4: type/method facts carry nameRange, the declaration name the
+// discovery locator points at (range starts at the first annotation).
+// Revision 5: local types/compact record constructors and concrete/super call resolution.
+// Revision 6: parameter arrays count declaration/type brackets once, annotated
+// varargs retain their element type, and method keys use the v3 namespace.
+export const JAVA_FACTS_REVISION = 6;
 
 // Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION
 // bumps still invalidate snapshots; daemon gitSha does not.
@@ -33,12 +43,6 @@ export function computeExtractorVersion(): string {
   const treeSitterVersion = (require("tree-sitter/package.json") as { version: string }).version;
   const treeSitterJavaVersion = (require("tree-sitter-java/package.json") as { version: string }).version;
   return `schema-3|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}`;
-}
-
-/** Snapshots written when extractorVersion still ended with extractor-code-<gitSha>. */
-export function extractorVersionsCompatible(snapshot: string, expected: string): boolean {
-  if (snapshot === expected) return true;
-  return snapshot.startsWith(`${expected}|`) && LEGACY_EXTRACTOR_CODE_SUFFIX.test(snapshot.slice(expected.length));
 }
 
 /**
@@ -49,31 +53,42 @@ export function extractorVersionsCompatible(snapshot: string, expected: string):
  * only content and repo shape can change the result.
  */
 export async function computeBuildFingerprintEntries(repoRoot: string, layout: LayoutContext): Promise<string[]> {
-  const moduleDirs = new Set<string>([""]);
-  for (const sourceRoot of layout.sourceRoots) {
-    moduleDirs.add(sourceRoot.module ?? "");
-  }
+  const activeSources: LayoutContext["sourceRoots"] = [];
   const entries: string[] = [];
-  for (const moduleDir of moduleDirs) {
+  for (const sourceRoot of layout.sourceRoots) {
+    if (await hasIndexableFiles(repoRoot, sourceRoot.relativePath, ".java")) activeSources.push(sourceRoot);
+  }
+  const hasRootSource = activeSources.some(root => root.module === ".");
+  for (const moduleDir of layout.moduleBases) {
+    // Configuration belongs to the module even when the checkout has no source directory.
+    const names: string[] = await readdir(path.join(repoRoot, moduleDir)).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw error;
+    });
     for (const marker of BUILD_MARKER_RELATIVE_PATHS) {
+      if (!names.includes(marker.split("/", 1)[0])) continue;
       const relativePath = moduleDir ? `${moduleDir}/${marker}` : marker;
       let content: Buffer;
       try {
-        content = await readFile(path.join(repoRoot, relativePath));
-      } catch {
+        content = await readFile(await sourcePathWithinRoot(repoRoot, path.join(repoRoot, relativePath)));
+      } catch (error) {
+        if((error as NodeJS.ErrnoException).code!=="ENOENT") throw error;
         continue;
       }
       const contentHash = createHash("sha256").update(content).digest("hex");
       entries.push(`build:${relativePath}:${contentHash}`);
+      // The previous fingerprint also keyed root markers under "." when root Java sources exist.
+      if (moduleDir === "" && hasRootSource) entries.push(`build:./${marker}:${contentHash}`);
     }
   }
-  for (const sourceRoot of layout.sourceRoots) {
+  for (const sourceRoot of activeSources) {
     entries.push(`sourceRoot:${sourceRoot.relativePath}:${sourceRoot.module}:${sourceRoot.sourceSet}`);
   }
   for (const resourceRoot of layout.resourceRoots) {
-    entries.push(`resourceRoot:${resourceRoot}`);
+    if (await hasIndexableFiles(repoRoot, resourceRoot, ".xml")) entries.push(`resourceRoot:${resourceRoot}`);
   }
-  entries.push(`layout:${layout.layout}`, `layoutProfile:${layout.layoutProfile}`);
+  for (const root of layout.symlinkedRoots ?? []) entries.push(`symlinkedRoot:${root}`);
+  entries.push(`layout:${detectLayout(repoRoot, activeSources)}`, `layoutProfile:${layout.layoutProfile}`);
   entries.sort();
   return entries;
 }

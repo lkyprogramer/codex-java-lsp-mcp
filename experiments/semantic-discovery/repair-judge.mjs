@@ -1,176 +1,157 @@
 // input:  candidate repo（agent 运行后的拷贝）+ 原始 fixture repo + 冻结 repair
 //         manifest 条目（allowed_edits/test_file/test_class/java_release/timeout）。
-// output: docs/07 判断器协议：candidate 与原始 fixture 全文件 hash 对比，非
-//         allowed_edits 变动即拒绝；干净原工程 + 仅覆盖允许源码 + 注入
-//         evaluator-owned 冻结测试到外部 judge 目录；javac -proc:none 编译、
-//         java -Xmx128m 执行；测试 main 抛 AssertionError = 业务失败；回执
-//         文件是完成性检查（缺失即失败），不是安全沙箱。
-import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+// output: 判定报告 {passed, status, detail, policy, judgeWorkspace, compile, run}。
+//         策略与进程边界复用 scripts/eval-repair-adapter.mjs 的同一实现；
+//         validated_success 的权威来源仍是原 Python frozen judge
+//         （scripts/eval-repair-adapter.mjs -> python -m harness repair）。
+// pos:    R04：本文件是无 Python 时的离线兜底判定器，与冻结判定器同一策略口径：
+//         allowed 源码被候选删除 = REJECTED_MISSING_ALLOWED_FILE（绝不恢复原
+//         文件假装候选）；额外/越权文件与 symlink 一律核查；编译器缺失或
+//         --release 不支持 = BLOCKED_ENV，不是业务 RED；子进程有 128KiB 输出
+//         上限、绝对 timeout 和进程树清理；完成回执带 nonce，内容必须匹配。
+//         回执仍是完成性检查，不是同权限恶意代码的操作系统沙箱。
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import {
+  MAX_OUTPUT_BYTES,
+  REPAIR_STATE,
+  diffCandidateTrees,
+  runBounded,
+  probeJavaToolchain,
+  stageCandidateTree,
+  walkTree
+} from "../../scripts/eval-repair-adapter.mjs";
 
-function walkFiles(root) {
-  const out = [];
-  const walk = dir => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile()) out.push(full);
-    }
-  };
-  walk(root);
-  return out;
-}
-
-function fileHash(file) {
-  return createHash("sha256").update(readFileSync(file)).digest("hex");
-}
-
-function snapshot(root) {
-  const map = new Map();
-  for (const file of walkFiles(root)) {
-    map.set(path.relative(root, file).split(path.sep).join("/"), fileHash(file));
-  }
-  return map;
-}
+export { REPAIR_STATE };
 
 /**
- * 判断器主流程。receiptPath 由调用方放在 repo 外的 judge 回执目录。
- * 返回 {passed, status, detail, diffReport}。
+ * 判断器主流程。workDir 由调用方放在 repo 外的隔离运行目录。
  */
 export async function judgeRepair({ task, manifestEntry, fixtureRoot, candidateRoot, workDir, javaHome, testSourceFile }) {
   const report = {
     task: task.id,
-    schema: "frozen-repair-judge/v1",
+    schema: "frozen-repair-judge/v2",
     testClass: manifestEntry.test_class,
     javaRelease: manifestEntry.java_release,
-    timeoutSeconds: manifestEntry.timeout_seconds
+    timeoutSeconds: manifestEntry.timeout_seconds,
+    maxOutputBytes: MAX_OUTPUT_BYTES
+  };
+  const reject = (status, detail) => {
+    report.passed = false;
+    report.status = status;
+    report.detail = detail;
+    return report;
   };
 
-  // 1) 全文件 hash 对比：非 allowed_edits 变动直接拒绝。
-  const before = snapshot(fixtureRoot);
-  const after = snapshot(candidateRoot);
-  const changed = [];
-  const removed = [];
-  for (const [rel, hash] of before) {
-    if (!after.has(rel)) removed.push(rel);
-    else if (after.get(rel) !== hash) changed.push(rel);
+  // 1) 候选策略：全文件 hash 对比 + 删除/越权/symlink 检查（与冻结判定器同一实现）。
+  const policy = diffCandidateTrees({ fixtureRoot, candidateRoot, allowedEdits: manifestEntry.allowed_edits });
+  report.policy = policy;
+  if (policy.symlinks.length > 0) {
+    return reject(REPAIR_STATE.REJECTED_UNSAFE_PATH, `non-regular entries in the trees: ${policy.symlinks.join(", ")}`);
   }
-  for (const rel of after.keys()) {
-    if (!before.has(rel)) changed.push(`+${rel}`);
+  if (policy.missingAllowed.length > 0) {
+    return reject(
+      REPAIR_STATE.REJECTED_MISSING_ALLOWED_FILE,
+      `candidate deleted allowed source file(s): ${policy.missingAllowed.join(", ")}; the judge never restores the pristine copy`
+    );
   }
-  const allowed = new Set(manifestEntry.allowed_edits);
-  const violations = [...removed, ...changed.filter(c => !c.startsWith("+")).map(c => c), ...changed.filter(c => c.startsWith("+"))]
-    .filter(rel => !allowed.has(rel) && !allowed.has(rel.replace(/^\+/, "")));
-  report.diffReport = { changed, removed };
-  if (violations.length > 0) {
-    report.passed = false;
-    report.status = "REJECTED_UNALLOWED_EDIT";
-    report.detail = `files outside allowed_edits: ${violations.join(", ")}`;
-    return report;
+  if (policy.violations.length > 0) {
+    return reject(REPAIR_STATE.REJECTED_DISALLOWED_EDIT, `files outside allowed_edits: ${policy.violations.join(", ")}`);
   }
 
-  // 2) 干净原工程 + 仅覆盖允许源码 + 注入冻结测试到外部 judge 目录。
-  rmSync(workDir, { recursive: true, force: true });
-  mkdirSync(workDir, { recursive: true });
+  // 2) 编译器缺失或 --release 不支持 = BLOCKED_ENV，不能冒充业务 RED/COMPILE_FAILED。
+  const toolchain = await probeJavaToolchain({ javaHome, release: manifestEntry.java_release });
+  report.toolchain = toolchain;
+  if (!toolchain.available) return reject(REPAIR_STATE.BLOCKED_ENV, toolchain.reason);
+
+  // 3) 干净原工程 + 仅覆盖允许源码（候选删除的文件在这里同样被删除）+
+  //    注入 evaluator-owned 冻结测试到 judge 目录。
   const judgeRepo = path.join(workDir, "judge-repo");
-  cpSync(fixtureRoot, judgeRepo, { recursive: true });
-  for (const rel of manifestEntry.allowed_edits) {
-    const src = path.join(candidateRoot, ...rel.split("/"));
-    const dst = path.join(judgeRepo, ...rel.split("/"));
-    if (existsSync(src)) cpSync(src, dst);
-  }
+  const staged = stageCandidateTree({
+    fixtureRoot,
+    candidateRoot,
+    allowedEdits: manifestEntry.allowed_edits,
+    dest: judgeRepo
+  });
+  report.judgeWorkspace = { path: staged.dest, applied: staged.applied, deleted: staged.deleted, files: staged.files };
+
   const testClass = manifestEntry.test_class; // e.g. lab.ledger.FrozenLedgerTest
   const parts = testClass.split(".");
   const className = parts.pop();
   const testDir = path.join(judgeRepo, "judge", ...parts);
   mkdirSync(testDir, { recursive: true });
   writeFileSync(path.join(testDir, `${className}.java`), readFileSync(testSourceFile, "utf8"), "utf8");
-  // 外部 FrozenJudgeRunner：反射调用冻结测试 main，正常返回后才写完成回执。
-  // 回执是完成性检查，不是同权限恶意代码的安全沙箱（docs/07）。
+  // 外部 FrozenJudgeRunner：反射调用冻结测试 main，正常返回后才写带 nonce 的完成回执。
   writeFileSync(
     path.join(judgeRepo, "judge", "FrozenJudgeRunner.java"),
     `public class FrozenJudgeRunner {
   public static void main(String[] a) throws Exception {
     Class.forName("${testClass}").getMethod("main", String[].class).invoke(null, (Object) new String[]{});
-    java.nio.file.Files.write(java.nio.file.Paths.get(a[0]), "OK".getBytes("UTF-8"));
+    java.nio.file.Files.write(java.nio.file.Paths.get(a[0]), a[1].getBytes("UTF-8"));
   }
 }
 `,
     "utf8"
   );
 
-  // 3) 编译：产品源码 + 冻结测试；-proc:none 禁注解处理。release 用 --release
-  // 双横线形态（对 JDK 9+ 与旧 javac 都成立），兼容本机 javac 25。
+  // 4) 编译：产品源码 + 冻结测试；-proc:none 禁注解处理；--release 需要 JDK9+。
   const sourceFiles = [];
   for (const root of manifestEntry.source_roots) {
-    for (const file of walkFiles(path.join(judgeRepo, root))) {
-      if (file.endsWith(".java")) sourceFiles.push(file);
+    for (const rel of walkTree(path.join(judgeRepo, root)).keys()) {
+      if (rel.endsWith(".java")) sourceFiles.push(path.join(judgeRepo, root, ...rel.split("/")));
     }
   }
   sourceFiles.push(path.join(testDir, `${className}.java`));
   sourceFiles.push(path.join(judgeRepo, "judge", "FrozenJudgeRunner.java"));
   const classes = path.join(workDir, "classes");
   mkdirSync(classes, { recursive: true });
-  const javacArgs = ["-proc:none", "-d", classes, "--release", String(manifestEntry.java_release), ...sourceFiles];
-  const javac = await runJava(javacArgs, { javaHome, timeoutMs: 60_000, tool: "javac" });
+  const javac = await runBounded(
+    [toolchain.javac, "-proc:none", "-encoding", "UTF-8", "-d", classes, "--release", String(manifestEntry.java_release), ...sourceFiles],
+    { cwd: workDir, timeoutMs: 60_000, maxBytes: MAX_OUTPUT_BYTES }
+  );
+  report.compile = {
+    exit_code: javac.exitCode,
+    timeout: javac.timedOut,
+    output_limit: javac.outputLimit,
+    stdout: javac.stdout.slice(0, 2000),
+    stderr: javac.stderr.slice(0, 2000)
+  };
+  if (javac.timedOut) return reject(REPAIR_STATE.TIMEOUT, `javac exceeded its timeout; process tree killed`);
+  if (javac.outputLimit) return reject(REPAIR_STATE.OUTPUT_LIMIT, `javac exceeded ${MAX_OUTPUT_BYTES} bytes of output; process tree killed`);
   if (javac.exitCode !== 0) {
-    report.passed = false;
-    report.status = "COMPILE_FAILED";
-    report.detail = (javac.stderr || javac.stdout).slice(0, 600);
-    return report;
+    const text = `${javac.stderr}\n${javac.stdout}`;
+    if (/release version .*not supported|invalid source release|invalid target release/i.test(text)) {
+      return reject(REPAIR_STATE.BLOCKED_ENV, `toolchain cannot compile --release ${manifestEntry.java_release}: ${text.slice(0, 400)}`);
+    }
+    return reject(REPAIR_STATE.COMPILE_FAILED, text.slice(0, 600));
   }
 
-  // 4) 执行 FrozenJudgeRunner（反射调冻结测试）；回执缺失 = 失败（即使 JVM 退出码 0）。
+  // 5) 执行 FrozenJudgeRunner（反射调冻结测试）；回执缺失或 nonce 不匹配 = 失败，
+  //    即使 JVM 退出码 0。
   const receipt = path.join(workDir, "receipt.txt");
-  const testArgs = ["-Xmx128m", "-cp", classes, "FrozenJudgeRunner", receipt];
-  const test = await runJava(testArgs, { javaHome, timeoutMs: manifestEntry.timeout_seconds * 1000 });
-  report.exitCode = test.exitCode;
+  const nonce = `${task.id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  const test = await runBounded(
+    [javaHome ? path.join(javaHome, "bin", "java") : "java", "-Xmx128m", "-cp", classes, "FrozenJudgeRunner", receipt, nonce],
+    { cwd: workDir, timeoutMs: manifestEntry.timeout_seconds * 1000, maxBytes: MAX_OUTPUT_BYTES }
+  );
+  report.run = {
+    exit_code: test.exitCode,
+    timeout: test.timedOut,
+    output_limit: test.outputLimit,
+    stdout: test.stdout.slice(0, 2000),
+    stderr: test.stderr.slice(0, 2000)
+  };
+  const completed = existsSync(receipt) && readFileSync(receipt, "utf8") === nonce;
+  report.frozenTestCompleted = completed;
+  if (test.timedOut) return reject(REPAIR_STATE.TIMEOUT, "frozen test exceeded its timeout; the process tree was killed");
+  if (test.outputLimit) return reject(REPAIR_STATE.OUTPUT_LIMIT, `frozen test exceeded ${MAX_OUTPUT_BYTES} bytes of output; the process tree was killed`);
   if (test.exitCode !== 0) {
-    report.passed = false;
-    report.status = /timed out/i.test(test.stderr || "") ? "TIMEOUT" : "TEST_FAILED";
-    report.detail = (test.stderr || test.stdout).slice(0, 600);
-    return report;
+    return reject(REPAIR_STATE.TEST_FAILED, (test.stderr || test.stdout).slice(0, 600));
   }
-  if (!existsSync(receipt)) {
-    report.passed = false;
-    report.status = "MISSING_RECEIPT";
-    report.detail = "JVM exited 0 but the completion receipt is absent";
-    return report;
+  if (!completed) {
+    return reject(REPAIR_STATE.MISSING_RECEIPT, "JVM exited 0 but the nonce receipt is absent or mismatched");
   }
   report.passed = true;
   report.status = "PASS";
   return report;
-}
-
-async function runJava(args, { javaHome, timeoutMs, tool = "java" }) {
-  const bin = javaHome ? path.join(javaHome, "bin", tool) : tool;
-  return new Promise(resolve => {
-    let settled = false;
-    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        child.kill("SIGKILL");
-        resolve({ exitCode: -1, stdout, stderr: `${stderr}\n[timed out after ${timeoutMs}ms]` });
-      }
-    }, timeoutMs);
-    child.stdout.on("data", d => (stdout += d));
-    child.stderr.on("data", d => (stderr += d));
-    child.on("close", code => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ exitCode: code, stdout, stderr });
-    });
-    child.on("error", err => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ exitCode: -1, stdout, stderr: String(err.message ?? err) });
-    });
-  });
 }

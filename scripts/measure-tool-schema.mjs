@@ -6,23 +6,26 @@
 // smoke.ts) rather than re-registering tools in-process: the SDK's zod-to-
 // JSON-Schema conversion is what a real agent's context actually pays for,
 // and duplicating that conversion here could silently drift from it.
+import { mkdtempSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { startOwnerDaemon } from "./owner-daemon.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 const BYTES_PER_TOKEN = 4;
+const serverJs = path.join(projectDir, "dist", "server.js");
 
+// stdio only relays: tools/list is served by an isolated owner on a throwaway cache.
+const owner = await startOwnerDaemon({ serverJs, cacheRoot: mkdtempSync(path.join(os.tmpdir(), "java-lsp-schema-cache-")), ephemeralCache: true });
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: [path.join(projectDir, "dist", "server.js")],
-  cwd: projectDir,
-  env: {
-    ...process.env,
-    JAVA_LSP_REPO_ROOT: process.env.JAVA_LSP_REPO_ROOT || projectDir
-  },
+  args: [serverJs],
+  cwd: process.env.JAVA_LSP_REPO_ROOT || projectDir,
+  env: owner.relayEnv,
   stderr: "inherit"
 });
 
@@ -45,5 +48,5 @@ try {
     perTool
   }, null, 2));
 } finally {
-  await client.close();
+  try { await client.close(); } finally { await owner.stop(); }
 }

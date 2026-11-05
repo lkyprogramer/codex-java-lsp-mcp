@@ -1,0 +1,8 @@
+{
+ "schema": "ilv2-mac13-guidance-diff/v1",
+ "target": "~/.codex/AGENTS.md",
+ "applied": false,
+ "applyNeeds": "user authorization after G13",
+ "sha256": "eeb806196504c5acc77bbec8c6ce69554776ac0ad0f8544828db0d86c7b3bc5b",
+ "diff": "--- a/.codex/AGENTS.md\n+++ b/.codex/AGENTS.md\n@@ -122,9 +122,9 @@\n ## 12 · Java 语义工具\n \n - 在 Java 任务涉及符号、继承、实现、引用或修改影响面时，优先使用可用的 codex-java-lsp MCP；纯文本搜索、配置和文档读取继续使用 `rg` 和文件工具。\n-- 首次使用或切换仓库 / worktree 时，显式传当前绝对 `repoRoot`，用 `java_status(start=false)` 核对返回的根目录；已确认的上下文可复用。\n-- 未知符号位置时，先用 `java_symbol(operation=query)` 静态定位。优先使用代码标识符，必要时限定 `module` / `sourceSet`；取得真实位置后再使用锚点。\n-- 有真实 `file` / `line` / `column` 后，用 `java_impact` 分析影响面。需要精确实现或引用时，用 `java_symbol` 的 `position` / `references`，或显式选择 `semanticPolicy=required`。\n+- 每次调用都显式传当前绝对 `repoRoot`，直接调用目标工具，不需要先调 `java_status`（worktree 嵌在另一个 Maven/Gradle 工程目录下时，先用 `java_status` 核对解析出的 `repoRoot`）；静态结果的 `indexView` 标明所用的索引视图。`indexView.state` 是索引新鲜度：`STALE` 或 `scopeState=PARTIAL` / `NOT_READY` 时，未命中不能当作不存在，按提示稍后重试。\n+- 未知符号位置时，先用 `java_symbol(operation=query)` 静态定位，或直接 `java_impact({symbol:\"Type#method\"})`（重载可写 `Type#method(ParamType, ...)`）。优先使用代码标识符，必要时限定 `module` / `sourceSet`。结果用 `symbolId` 命名声明，后续调用直接传回（`java_symbol` 的 `symbolId`、`java_impact` 的 `symbol`）；返回 `AMBIGUOUS` 时从候选里选一个 `symbolId`，不要自己猜重载。`REJECTED` / `NOT_FOUND` 表示 ID 已失效，按提示重新定位。\n+- 有 `symbolId` 或真实 `file` / `line` / `column` 后，用 `java_impact` 分析影响面。需要精确实现或引用时，用 `java_symbol` 的 `position` / `references`，或显式选择 `semanticPolicy=required`。\n - JDT 按任务需要启动。`started=false` 不代表静态查询不可用；`semanticPolicy=auto` 也不代表已经取得完整语义结果。\n - 根据定位和 read plan 定向读取实际源码。导航摘要和短预览不足以替代对关键实现、字段、helper 和 XML 的核实。\n - 遇到 `PARTIAL`、歧义、索引未完成或超时，说明证据缺口并补充检查；不据此断言目标不存在或没有影响。\n"
+}

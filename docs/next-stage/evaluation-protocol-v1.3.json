@@ -1,0 +1,111 @@
+{
+  "attempt_states": [
+    "COMPLETED",
+    "FAILED_RUNTIME",
+    "TIMEOUT",
+    "MISSING_RESULT",
+    "BLOCKED_SETUP"
+  ],
+  "denominator": {
+    "blocked_auth": "an unauthorized full round reports BLOCKED_AUTH and does NOT fabricate a zero-score benchmark",
+    "conditional_accuracy": "successes / actually-scored; reported as context only, never as the gate metric",
+    "rule": "successRate = successes / scheduled attempts (full frozen plan task x variant x arm x repeat); failures, timeouts, missing and blocked rows stay in the denominator with taskSuccess null or false",
+    "zero_scheduled": "successRate = null (never 0/0 as a number)"
+  },
+  "kit_status_mapping": {
+    "BLOCKED_SETUP": "BLOCKED",
+    "COMPLETED": "OK",
+    "FAILED_RUNTIME": "ERROR",
+    "MISSING_RESULT": "MISSING",
+    "TIMEOUT": "ERROR"
+  },
+  "purpose": "Execution protocol v1.3: correct forwarding, bounded model delivery, compact discovery, explicit request/response metadata and common native edit/build fixes. Frozen scorer, labels, task budgets and release thresholds are unchanged; v1.2 remains archived separately.",
+  "qa_success": {
+    "answer_alone_is_not_an_answer": true,
+    "authoritative": "when --kit-root is given, the frozen kit's qa_contract_pass replaces the preliminary JS outcome (kept as `preliminary`); without a kit the pack says scorer.kind=preliminary-js",
+    "requires_all": [
+      "strict answer equal to frozen gold",
+      "gold.required_evidence non-empty",
+      "every frozen required line (path,start_line..end_line) covered by a SOURCE_RECEIVED event of this attempt (payload-attached slices only)",
+      "received source within the task budget (max_lines/max_bytes summed over all SOURCE_RECEIVED rows, as the frozen kit computes it)"
+    ]
+  },
+  "receipts": {
+    "MODEL_PAYLOAD_ATTACHED": "minted at the chat request boundary (every request, including the forced final-answer request) for each tool message that request newly carries; contentHash = model-payload hash, rawHash = raw tool result hash",
+    "SOURCE_FETCHED": "raw tool output (read window / java_symbol preview) as the tool returned it; diagnostics only, never credited",
+    "SOURCE_RECEIVED": "one row per slice retained in an attached tool message: exact lines (terminators kept, no phantom line, no truncation marker), sliceHash in contentHash, whole-file sha256 in fileContentHash; rg/list output is navigation text and is never a slice",
+    "attention": "never claimed; only answer/test results measure understanding",
+    "never_received": "tool results that no dispatched request carried (context cap, loop end) stay FETCHED"
+  },
+  "repair_success": {
+    "failure": "TEST_FAILED, COMPILE_FAILED, REJECTED_*, MISSING_RECEIPT, TIMEOUT, OUTPUT_LIMIT -> taskSuccess false",
+    "judged_even_if_loop_failed": "the candidate tree is judged even when the agent loop failed",
+    "source": "frozen Python judge only (scripts/eval-repair-adapter.mjs evaluateRepair -> python -m harness repair --mode candidate) on the attempt's own candidate tree; patchApplied self-report is never a success",
+    "success": "validatedSuccess === true (VALIDATED_SUCCESS)",
+    "unmeasured": "BLOCKED_ENV, BLOCKED_SETUP, JUDGE_ERROR -> taskSuccess null, row stays in the denominator; no other judge implementation substitutes"
+  },
+  "repeat_index": "0-based in the kit (java-specialist-results/v1); 1-based in internal task-eval packs - the adapter converts",
+  "schedule": {
+    "arm_order": "armOrder(seed, taskId, repeat): seeded per-task offset rotated by repeat, so the starting arm alternates and the order is reproducible",
+    "plan": "buildPlannedAttempts: one flat row per task x arm x repeat (variant primary), written to schedule.jsonl before any attempt runs",
+    "workspace": "one fresh candidate per attempt (createAttemptWorkspace refuses an existing root); it is the single read/write/test/java_symbol root; the product session is reopened on a fresh index after every successful write_file or replace_file mutation"
+  },
+  "schema": "java-specialist-evaluation-protocol/v1.3",
+  "scorer": {
+    "adapter": "scripts/eval-frozen-adapter.mjs converts scheduled attempts + SOURCE_RECEIVED rows + provider usage into java-specialist-results/v1; attempts outside the plan and duplicate plan rows are protocol errors",
+    "corpus_mode": "bundled-scoped when the kit's own corpora are used; external-full only for a hydrated full checkout; never mixed",
+    "invoke": "python3 -m harness --dataset <kit>/dataset score --input <arm>-results.json --split <dev|locked|all> --output <arm>-report.json (run from the kit root; evaluate-java-task --kit-root does this per arm)",
+    "kit_root": "docs/java-specialist-release-audit-v1.1/baseline-kit (the original frozen kit; docs/java-specialist-devkit-v1 is byte-identical for dataset/harness after R00)",
+    "no_second_comparator": "no String() coercion, no fence stripping, no gold mutation; markdown fences are a format failure (INVALID_ANSWER)",
+    "single_scorer": "the frozen kit scorer is authoritative; node-side scoreQaAnswer/receivedLineCoverage are a preliminary mirror locked by tests"
+  },
+  "strict_json": {
+    "fences": "rejected (strict JSON only in this audit round)",
+    "keys": "exact key set equality with frozen gold; extra and missing keys both fail",
+    "max_input_chars": 262144,
+    "parser": "JSON.parse + findDuplicateJsonKeys state machine (equivalent to Python json.loads with object_pairs_hook; nested duplicate keys rejected; NaN/Infinity literals rejected by the JSON grammar)",
+    "top_level": "object (arrays/null rejected)",
+    "values": "type identity + deep equality (JS has one number type: int/float not distinguishable - recorded limitation)"
+  },
+  "tools": {
+    "both_arms": [
+      "list",
+      "rg",
+      "read"
+    ],
+    "model_tool_message_max_bytes": 32768,
+    "product_only": [
+      "java_symbol"
+    ],
+    "read_cap": "<=400 lines and <=16000 source bytes per call, whole lines; a single over-cap line is an explicit error",
+    "repair_both_arms": [
+      "write_file",
+      "replace_file (exactly one before occurrence; candidate confined; preserve unrelated bytes)",
+      "test (public production build roots and Java release; unsupported complex build is explicit)"
+    ],
+    "argument_validation": "Native schemas and execution reject unknown, missing or incorrectly typed parameters. java_symbol preview is forwarded unchanged.",
+    "source_budget": "QA preview/read results are limited before model delivery to whole source lines within the remaining original max_lines/max_bytes. Repeated slices remain charged. Fetched-but-not-dispatched source is not SOURCE_RECEIVED.",
+    "discovery_projection": "Evaluation-only compact candidate projection removes duplicate id/sourceRoot/matchedBy and repeated hashes while preserving locators, disambiguation and exact source ranges; original raw response is journaled separately."
+  },
+  "usage": {
+    "kit_row": "{source: 'provider', input_tokens?, output_tokens?, cached_input_tokens?} - only measured int fields; all-null becomes null",
+    "provider_raw": "rawUsage (provider usage object; credentials never appear in it) + rawUsageHash (sha256 of canonical JSON) stored per attempt",
+    "unmeasured": "null per field, never 0, never bytes/4 estimates"
+  },
+  "model_protocol": {
+    "model": "configured Pi openclaw/Qwen3.8-next",
+    "max_rounds": 16,
+    "max_completion_tokens": 2048,
+    "seed": 1984,
+    "requested_reasoning_effort": "none (configured off mapping; new explicit field versus historical run)",
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "observed_behavior": "request metadata records settings; provider compliance is not assumed",
+    "stop_reporting": "legacy stopReason retained; primaryStopReason and finalAnswerMode distinguish loop termination from forced answer packaging",
+    "response_recording": "model-completions.jsonl preserves whitelisted response message/tool arguments/finish_reason/usage without authorization or connection fields"
+  },
+  "public_answer_instructions": "Both arms receive identical generic value-format and retrieval instructions. No gold-derived per-task vocabulary, hidden-test hints or answer-value normalization.",
+  "repair_receipt_diagnostics": "candidateReceiptValidation checks received source against exact file snapshots captured at fetch; distinct from immutable-base discovery scorer. Frozen invalid diagnostics and external repair judge result are both preserved.",
+  "comparison": "Historical v1.2 versus v1.3 measures the full intervention; within-v1.3 product/control is paired. Previously exposed tasks are regression evidence, not independent generalization."
+}

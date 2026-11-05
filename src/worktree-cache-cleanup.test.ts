@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -293,6 +293,36 @@ test("cleanupStaleWorktreeCaches reclaims a dead owner but fails closed on unrea
   assert.equal(existsSync(path.join(cacheBase, "unknown-owner")), true);
 });
 
+test("touchRepoCache does not probe Git while stamping request metadata", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-touch-no-git-"));
+  const bin = path.join(root, "bin");
+  const marker = path.join(root, "git-called");
+  const previous = {
+    PATH: process.env.PATH,
+    JAVA_LSP_CACHE_BASE: process.env.JAVA_LSP_CACHE_BASE,
+    ILV2_TEST_GIT_MARKER: process.env.ILV2_TEST_GIT_MARKER
+  };
+  t.after(async () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(bin);
+  await writeFile(path.join(bin, "git"), '#!/bin/sh\nprintf "called\\n" >> "$ILV2_TEST_GIT_MARKER"\nexit 1\n', { mode: 0o755 });
+  process.env.PATH = `${bin}${path.delimiter}${previous.PATH ?? ""}`;
+  process.env.JAVA_LSP_CACHE_BASE = path.join(root, "cache");
+  process.env.ILV2_TEST_GIT_MARKER = marker;
+
+  touchRepoCache(root, { ownerPid: process.pid, ownerToken: "request-owner", touchLastRequest: true });
+  const meta = JSON.parse(await readFile(path.join(repoCacheRoot(root), "repo-meta.json"), "utf8"));
+  assert.equal(meta.ownerPid, process.pid);
+  assert.equal(meta.ownerToken, "request-owner");
+  assert.equal(typeof meta.lastRequestAt, "string");
+  assert.equal(existsSync(marker), false, "request metadata must not launch Git on the owner thread");
+});
+
 test("touchRepoCache preserves ownership metadata and clears stopped JDT identity", async t => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-touch-cache-root-"));
   const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-touch-cache-base-"));
@@ -374,6 +404,27 @@ test("the janitor never deletes the telemetry/ directory even when it has no rep
     assert.equal(existsSync(telemetry), true, "telemetry/ must survive L1 no-meta reclaim");
     assert.equal(existsSync(path.join(telemetry, "impact-20260101.jsonl")), true);
     assert.equal(result.removedDirs.includes(telemetry), false);
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
+test("the janitor never touches the owner snapshot store (mac1/) even when it has no repo-meta and is old", async () => {
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-worktree-mac1-"));
+  const now = Date.parse("2026-06-21T00:00:00.000Z");
+  try {
+    const store = path.join(cacheBase, "mac1");
+    const binding = path.join(store, "workspaces", "w-0123456789abcdef", "binding.json");
+    await mkdir(path.dirname(binding), { recursive: true });
+    await mkdir(path.join(store, "jobs", "j-0123456789abcdef"), { recursive: true });
+    await writeFile(binding, "{}\n");
+    const old = new Date(now - 7 * 3600000);
+    await utimes(store, old, old);
+    const result = cleanupStaleWorktreeCaches({ cacheBase, now, noMetaGraceMs: 3600000 });
+    assert.equal(existsSync(binding), true, "mac1/ must survive L1 no-meta reclaim");
+    assert.equal(existsSync(path.join(store, "jobs", "j-0123456789abcdef")), true);
+    assert.equal(result.removedDirs.includes(store), false);
+    assert.equal(result.scanned, 0, "mac1/ is not scanned as a repo cache");
   } finally {
     await rm(cacheBase, { recursive: true, force: true });
   }

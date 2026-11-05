@@ -1,0 +1,190 @@
+{
+  "schema": "mac17-reference-index-diagnosis-summary/v1",
+  "status": "ROOTCAUSE_CONFIRMED",
+  "diagnosticOnly": true,
+  "productAcceptance": "FAIL_RETAINED",
+  "facts": {
+    "schema": "mac17-reference-root-cause/v1",
+    "status": "ROOTCAUSE_CONFIRMED",
+    "diagnosticOnly": true,
+    "productAcceptance": "FAIL",
+    "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "rootCause": "ServiceReady commits client READY before the JDT search-index queue drains. In this reproduction the reference thread is still waiting for the IndexManager queue at4s and8s; at10s the original request is canceled without a result. Two snapshots do not establish every moment of the full interval.",
+    "scope": "Confirmed in this same-context reproduction; earlier original PID had no stack and remains historical failure. Not a claim of unique global cause or repaired product.",
+    "jdt": {
+      "pid": 5991,
+      "spawnAt": "2026-11-02T16:20:13.859Z",
+      "serviceReadyAt": "2026-11-02T16:20:47.360Z",
+      "readyMs": 33501,
+      "referenceSentAt": "2026-11-02T16:20:52.191Z",
+      "referenceRequests": 1,
+      "referenceReply": {
+        "code": -32800,
+        "message": "The request (id: 4, method: 'textDocument/references') has been cancelled"
+      },
+      "backendMs": 10004.03691699999
+    },
+    "stacks": [
+      {
+        "offsetMs": 4000,
+        "targetJdtPid": 5991,
+        "capturePid": 6064,
+        "captureMs": 261.1112079999875,
+        "bytes": 59179,
+        "sha256": "bef1f92861ceefc587d0780cb88f02833e43549c95ad64334bbefa6e35bdc5e0",
+        "referenceState": "TIMED_WAITING_JOBMANAGER_WAIT_UNTIL_READY",
+        "referenceThread": "\"ForkJoinPool.commonPool-worker-3\" #174 [77827] daemon prio=5 os_prio=31 cpu=1935.79ms elapsed=6.47s tid=0x00000008a8ec8800 nid=77827 in Object.wait()  [0x00000001764d5000]",
+        "indexThread": "\"Java indexing\" #56 [81155] daemon prio=5 os_prio=31 cpu=8740.17ms elapsed=40.55s tid=0x00000008a6f31800 nid=81155 runnable  [0x0000000173ffe000]",
+        "indexCpuMs": 8740.17,
+        "indexStage": "AddJarFileToIndex.execute/ZipFile read"
+      },
+      {
+        "offsetMs": 8000,
+        "targetJdtPid": 5991,
+        "capturePid": 6066,
+        "captureMs": 133.20516700000735,
+        "bytes": 66666,
+        "sha256": "88d7806f93505f10967c197aff56efb9f2956797d7c5fbbe127740ede03365ba",
+        "referenceState": "TIMED_WAITING_JOBMANAGER_WAIT_UNTIL_READY",
+        "referenceThread": "\"ForkJoinPool.commonPool-worker-3\" #174 [77827] daemon prio=5 os_prio=31 cpu=1939.79ms elapsed=10.35s tid=0x00000008a8ec8800 nid=77827 in Object.wait()  [0x00000001764d5000]",
+        "indexThread": "\"Java indexing\" #56 [81155] daemon prio=5 os_prio=31 cpu=12334.29ms elapsed=44.43s tid=0x00000008a6f31800 nid=81155 runnable  [0x0000000173ffc000]",
+        "indexCpuMs": 12334.29,
+        "indexStage": "SourceIndexer.resolveDocument/BinaryTypeBinding"
+      }
+    ],
+    "indexProgress": {
+      "cpuDeltaMs": 3594.120000000001,
+      "stageAdvanced": true,
+      "deadlock": "NOT_SUPPORTED"
+    },
+    "observerBoundary": "Snapshot process elapsed261/133ms does not measure all target pause/perturbation cost. Original no-observer case already failed. Diagnostic run is not an SLO/acceptance measurement.",
+    "installation": {
+      "status": "PASS",
+      "elapsedMs": 61035,
+      "artifacts": 1395,
+      "artifactBytes": 324604180,
+      "identity": "Same1395 files/path/hash/size as original"
+    },
+    "firstUse": {
+      "status": "FAIL",
+      "startCalls": 1,
+      "newArtifacts": 0,
+      "firstStaticStageMs": 118264.23025000001,
+      "firstFailure": {
+        "phase": "first-static",
+        "message": "MCP tool error"
+      },
+      "terminal": "Reference request.handler10000ms deadline; initial static firstFailure is not terminal"
+    },
+    "proofs": {
+      "buildProperties": "PASS",
+      "javaHome": "PASS",
+      "mavenHome": "PASS",
+      "sourcePolicy": "PASS",
+      "distDependencies": "UNCHANGED"
+    },
+    "resourceExit": {
+      "status": "PASS",
+      "pids": 20,
+      "groups": 7,
+      "quota": {
+        "fixture_slots": 0,
+        "external_fixture_jobs": 0
+      }
+    },
+    "notRun": [
+      "product fix",
+      "second runtime case",
+      "full tests",
+      "normal installer",
+      "production",
+      "push",
+      "compatibility",
+      "rollback"
+    ]
+  },
+  "solution": {
+    "schema": "mac17-search-index-fix-plan/v1",
+    "status": "PROPOSED_NOT_IMPLEMENTED",
+    "rootCause": "CONFIRMED_IN_SAME_CONTEXT_REPRODUCTION",
+    "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+    "implementationBoundary": "JdtlsSession startup transaction only; existing frozen JDT1.56 read-only command, no new bundle/module/dependency/compatibility path",
+    "command": {
+      "method": "workspace/executeCommand",
+      "params": {
+        "command": "java.project.getAll",
+        "arguments": []
+      },
+      "basis": "Frozen JDTLanguageServer.executeCommand synchronously calls IndexManager.waitForIndex(true,null) before command dispatch; ProjectCommand.getAllJavaProjects only reads project directory URIs"
+    },
+    "placement": {
+      "file": "src/jdtls-session.ts",
+      "after": "existing jdtls.project.import wait on ServiceReady",
+      "before": "heartbeat/lifecycle-attempt commit and importState/lifecycle READY",
+      "connection": "current startAttempt/attempt.connection, not this.request which requires a committed connection"
+    },
+    "deadline": "Use existing startBudget and budget.race; whole startup120s unchanged, reference10s/public15s unchanged",
+    "replyValidation": "Require an array of file URI strings with an imported project under the actual canonical repo; reject malformed/empty/foreign-only results. Retain existing current-attempt/lifecycle checks before READY.",
+    "failure": "Failure or startup budget expiry uses existing owned-JDT stop/reap and lease release; no READY fallback or extra retry. No claim built-in command accepts cooperative cancellation during synchronous prewait; outer120s and owned-process cleanup provide the bound.",
+    "notRequired": [
+      "new JDT bundle",
+      "new readiness state",
+      "new public API",
+      "fixed sleep",
+      "query warmup",
+      "cached oracle answer",
+      "partial-reference success",
+      "timeout increase",
+      "full tests",
+      "normal installer rerun",
+      "rollback/compatibility",
+      "JDT upgrade"
+    ],
+    "validationPlan": [
+      "Focused lifecycle tests: ServiceReady plus pending getAll must remain STARTING; valid response commits READY; failed/timeout/stale attempt never commits.",
+      "One separately authorized isolated real acceptance, preserving original120s/10s/15s and exact definition/reference oracle, fixed PID/gatewaymiss checks. Reuse actual candidate/installation evidence and already prepared identity; no fullsuite."
+    ],
+    "validationStatus": "NOT_RUN; this diagnostic did not modify product code or execute the proposed command. Eliminating measured index-queue wait does not guarantee every search finishes within10s; original exact real oracle must pass before repair claim.",
+    "readyMeaning": "Startup attempt passed current queued-index barrier; later file edits can enqueue fresh indexing work as usual."
+  },
+  "independent": {
+    "status": "PASS",
+    "scope": "Original same-PID evidence, minimal frozen-API solution and actual complete resource exit; not product acceptance",
+    "rawReadersStopped": true
+  },
+  "closeout": {
+    "status": "PASS",
+    "pids": 20,
+    "ownedGroups": 7,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T161200Z-reference-timeout-evidence/closeout/raw-evidence.tar.gz",
+      "sha256": "0a07e75e0694bb88bc7c902c9c35cbd13efd5a76114131e202ade0af14d769ed",
+      "fileCount": 51,
+      "bytes": 10114607,
+      "physicalVerification": "PASS"
+    }
+  },
+  "candidate": {
+    "sourceDigest": "48253f3cc857bb9313c883bd5857247cabdc70a2a673dbabd3e23dd0ba20035a",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "archive": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T150500Z-install-gradle-prepare/review-candidate-48253f3cc857.tar.gz",
+    "archiveSha256": "b5849e32d5f04c94de29c97357692f8e7e313f05a370ba2663f83f85bc66d0f6",
+    "qualification": "NOT_READY; product unchanged, no new package/build"
+  },
+  "notRun": [
+    "product fix",
+    "new startup fence runtime validation",
+    "second runtime case",
+    "full tests",
+    "normal installer",
+    "production TCC/business read",
+    "push",
+    "compatibility",
+    "rollback"
+  ],
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T161200Z-reference-timeout-evidence"
+}

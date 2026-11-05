@@ -114,6 +114,8 @@ export async function collectSemanticSeed(input: SemanticSeedInput): Promise<Sem
         break;
       }
       try {
+        // semanticLocations() degrades every failure to absent: a closed semantic domain fails this anchor instead.
+        input.session.assertSemanticAdmission?.();
         const context = await input.session.semanticLocations(
           anchor.absolutePath,
           anchor.line,

@@ -1,0 +1,108 @@
+{
+  "schema": "mac17-astra-diagnostic-summary/v1",
+  "status": "FAIL",
+  "classification": "MARKER_FAILURE_NOT_REPRODUCED; FULL_MODEL_NOT_COMPLETED_WITHIN_120S",
+  "candidateStatus": "NOT_READY",
+  "sourceCommit": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5",
+  "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+  "probeAttempts": 1,
+  "probeType": "Actual TAPI8.9 EclipseProject model; same frozen6286-file business input; empty private Gradlehome; five original JVM arguments; beforeSettings whitelist; --debug/--stacktrace diagnostic only; no JDT/MCP semantic acceptance",
+  "probeCommand": {
+    "exitCode": 143,
+    "signal": null,
+    "elapsedMs": 120330,
+    "startedAt": "2026-11-02T07:32:33.158Z",
+    "endedAt": "2026-11-02T07:34:33.488Z"
+  },
+  "actualBuildPid": 39950,
+  "actualBuildProperties": {
+    "org.gradle.parallel": "false",
+    "jdk.tls.client.protocols": "TLSv1.2",
+    "https.protocols": "TLSv1.2",
+    "https.proxyHost": "127.0.0.1",
+    "https.proxyPort": "8888",
+    "java.net.useSystemProxies": "null"
+  },
+  "propertyLogLines": {
+    "org.gradle.parallel": 166,
+    "jdk.tls.client.protocols": 167,
+    "https.protocols": 168,
+    "https.proxyHost": 169,
+    "https.proxyPort": 170,
+    "http.nonProxyHosts": 171,
+    "https.nonProxyHosts": 172,
+    "java.net.useSystemProxies": 173
+  },
+  "bypassBoundary": "Only values recorded privately; marker host not in bypass list",
+  "proxyRoute": {
+    "line": 176,
+    "value": "[HTTP @ 127.0.0.1/<unresolved>:8888]"
+  },
+  "markerGet": [
+    {
+      "line": 478,
+      "message": "2026-11-02T15:32:50.843+0800 [DEBUG] [org.gradle.internal.resource.transport.http.HttpClientHelper] Performing HTTP GET: https://plugins.gradle.org/m2/org/springframework/boot/org.springframework.boot.gradle.plugin/4.0.6/org.springframework.boot.gradle.plugin-4.0.6.pom"
+    },
+    {
+      "line": 611,
+      "message": "2026-11-02T15:32:51.438+0800 [DEBUG] [org.apache.http.impl.execchain.MainClientExec] Executing request GET /m2/org/springframework/boot/org.springframework.boot.gradle.plugin/4.0.6/org.springframework.boot.gradle.plugin-4.0.6.pom HTTP/1.1"
+    },
+    {
+      "line": 615,
+      "message": "2026-11-02T15:32:52.225+0800 [INFO] [org.gradle.internal.resource.transfer.DefaultCacheAwareExternalResourceAccessor] Downloading https://plugins.gradle.org/m2/org/springframework/boot/org.springframework.boot.gradle.plugin/4.0.6/org.springframework.boot.gradle.plugin-4.0.6.pom to <private-path>"
+    }
+  ],
+  "logCounts": {
+    "SSLHandshakeException": 0,
+    "PKIX": 0,
+    "UnknownHostException": 0,
+    "could not resolve plugin artifact": 0,
+    "MAC17_MODEL_SUCCESS": 0
+  },
+  "lastLog": {
+    "line": 109978,
+    "message": "2026-11-02T15:34:33.138+0800 [DEBUG] [org.apache.http.impl.execchain.MainClientExec] Target auth state: UNCHALLENGED"
+  },
+  "cache": {
+    "files": 4177,
+    "logicalBytes": 640152946,
+    "allocatedBytes": 651038720,
+    "jars": 647,
+    "sourceJars": 237,
+    "boundary": "Generated/cache/download mix; source jars show optional download activity, not proven sole cause of budget exhaustion",
+    "allocationBoundary": "651038720 was the first summary sampling value. Reviewer later observed650375168 with unchanged4177files/640152946logicalBytes; filesystem allocation is a changing snapshot, not network bytes."
+  },
+  "confirmedStaticDefects": [
+    "Private harness requires mutable JVM-D flags in daemon commandline, causing false-negative gate",
+    "JDT1.56 unauthenticated proxy path selects Eclipse Native; bundled core.net lacks macOS Native provider; startup https properties alone are not effective proxy proof"
+  ],
+  "notConfirmed": [
+    "Historical integrated JDT/Buildship marker failure network cause",
+    "Current full model completion",
+    "Final empty-home Java definition/reference semantics",
+    "ProductionTCC/read/deploy"
+  ],
+  "resourceReadback": "resource-closeout-observation.json",
+  "closeout": {
+    "status": "PASS",
+    "registeredPids": 5,
+    "ownedGroups": 2,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/closeout/raw-evidence.tar.gz",
+      "sha256": "8ab39c463f24b289c35dcd49e1cdef88d09ba0f3011a48c40c1f97823a00014c",
+      "fileCount": 10,
+      "bytes": 50156701,
+      "physicalVerification": "PASS"
+    }
+  },
+  "singleProbeStopped": "120-second cap; no retry; original Gradle-stop exit0 followed by later complete actual exit readback",
+  "noProductChanges": true,
+  "review": {
+    "status": "PASS",
+    "scope": "Independent Astra xhigh review of diagnostic facts and actual resource exit; no acceptance PASS",
+    "allocationSnapshotClarified": true
+  }
+}

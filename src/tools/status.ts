@@ -5,13 +5,16 @@ import { z } from "zod";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readRuntimeBuild, type RuntimeBuildInfo } from "../build-info.js";
-import { probeLayout, type LayoutContext } from "../layout-probe.js";
+import { probeLayoutOffThread, type LayoutContext } from "../layout-probe.js";
 import type { JdtlsProgressStatus } from "../jdtls-session.js";
 import type { GeneratedCodeStatus } from "../generated-code.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
 import { summarizeCoverage } from "../java-index/java-index-view.js";
 import type { ProjectJdkStatus } from "../project-jdk.js";
+import type { ResolvedRepo } from "../repo-resolver.js";
+import type { ViewLabels } from "../java-index/snapshot/request-view.js";
 import type { RequestContext } from "../runtime/request-context.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { ToolContext } from "./context.js";
 import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
@@ -26,7 +29,7 @@ type SessionStatus = ReturnType<ToolContext["session"]["status"]>;
  * session state, only on options.semanticPolicy/mode/anchor.profile.
  */
 const AUTO_SEMANTIC_POLICY_EXPLANATION =
-  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors, never merely because JDT reports READY (READY precedes real project import, which can take tens of seconds on a cold workspace - see docs/phase-v3/phase5-semantic-first-touch-decision.md). semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
+  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors. READY follows the initial project import and search index barrier; later edits can trigger more indexing. semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
 
 type DisabledStatus = {
   readonly repoRoot: string;
@@ -64,7 +67,7 @@ export async function javaStatus(
   _args: z.infer<z.ZodObject<typeof statusSchema>>,
   request?: Pick<RequestContext, "budget">
 ): Promise<Record<string, unknown>> {
-  const layout = probeLayout(context.repoRoot, context.layoutProfile);
+  const layout = await probeLayoutOffThread(context.repoRoot, context.layoutProfile);
   const runtimeBuild = readRuntimeBuild();
   const warnings = rootWarnings(context.repoRoot);
   if (_args.start) {
@@ -87,8 +90,7 @@ export async function javaStatus(
     try {
       await context.session.ensureStarted(request?.budget);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/deadline exceeded|timed out/i.test(message)) throw error;
+      if (!(error instanceof JavaIntelligenceError) || error.code !== "DEADLINE_EXCEEDED") throw error;
     }
   }
   const sessionStatus = context.session.status();
@@ -107,7 +109,7 @@ export async function javaStatus(
     lsp: context.lsp,
     repoRoot: context.repoRoot,
     javaIndex,
-    watcher: context.watcher,
+    indexView: context.indexView,
     rgCache: context.router.rgCacheStatus(),
     semanticAutoPolicy: AUTO_SEMANTIC_POLICY_EXPLANATION,
     note: "This MCP server is read-only and exposes the Java impact router."
@@ -128,7 +130,8 @@ export function summarizeSessionStatus(status: SessionStatus): Record<string, un
       consecutiveFailures: status.restartBackoff.consecutiveFailures || undefined,
       retryAfterMs: status.restartBackoff.retryAfterMs,
       blockedUntilExplicitReset: status.restartBackoff.blockedUntilExplicitReset || undefined,
-      lastErrorCode: status.restartBackoff.lastErrorCode
+      lastErrorCode: status.restartBackoff.lastErrorCode,
+      lastErrorMessage: status.restartBackoff.lastErrorMessage
     }),
     startedAt: status.startedAt,
     knownDiagnostics: status.knownDiagnostics,
@@ -179,8 +182,53 @@ function statusSummary(input: StatusSummaryInput): Record<string, unknown> {
     lsp: input.context.lsp,
     repoRoot: input.context.repoRoot,
     javaIndex: input.javaIndex && summarizeJavaIndex(input.javaIndex),
-    watcher: input.context.watcher && summarizeWatcher(input.context.watcher)
+    indexView: input.context.indexView && summarizeView(input.context.indexView)
   });
+}
+
+/**
+ * java_status(start=false) (contract §2.6): only what this process already holds in memory. An
+ * unknown repo is NOT_READY with no runtime; nothing is probed, scanned, read from an index or started.
+ */
+export function javaStatusFromMemory(
+  state: { resolved: ResolvedRepo; context?: ToolContext; labels: ViewLabels; javaIndex?: JavaIndexStatus; layout?: LayoutContext },
+  args: z.infer<z.ZodObject<typeof statusSchema>>
+): Record<string, unknown> {
+  const { resolved, context } = state;
+  const sessionStatus = context?.session.status();
+  const full = compact({
+    ...(sessionStatus ?? { state: "NEW", started: false }),
+    repoRoot: resolved.repoRoot,
+    repoHash: resolved.repoHash,
+    rootSource: resolved.rootSource,
+    aliases: resolved.aliases,
+    layoutProfile: resolved.layoutProfile,
+    layout: state.layout,
+    lsp: resolved.lsp,
+    runtime: context ? "ACTIVE" : "NONE",
+    indexView: state.labels,
+    javaIndex: state.javaIndex,
+    note: "Status without start reads memory only; it does not start a workspace index or JDT LS."
+  });
+  if (isDiagnosticDetail(args.detail)) return full;
+  return compact({
+    ...(sessionStatus ? summarizeSessionStatus(sessionStatus) : { state: "NEW", started: false }),
+    repoRoot: resolved.repoRoot,
+    repoHash: resolved.repoHash,
+    rootSource: resolved.rootSource,
+    aliases: resolved.aliases,
+    layoutProfile: resolved.layoutProfile,
+    layout: state.layout && summarizeLayout(state.layout),
+    lsp: resolved.lsp,
+    runtime: context ? "ACTIVE" : "NONE",
+    indexView: summarizeView(state.labels),
+    javaIndex: state.javaIndex && summarizeJavaIndex(state.javaIndex)
+  });
+}
+
+function summarizeView(view: ViewLabels): Record<string, unknown> {
+  return compact({ state: view.state, workspaceId: view.workspaceId, snapshotId: view.snapshotId, contentManifestId: view.contentManifestId,
+    bindingVersion: view.bindingVersion, coveredThroughSeq: view.coveredThroughSeq });
 }
 
 function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
@@ -192,19 +240,6 @@ function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
     pendingBackground: status.pendingBackground,
     db: status.db,
     builder: status.builder
-  });
-}
-
-function summarizeWatcher(watcher: NonNullable<ToolContext["watcher"]>): Record<string, unknown> {
-  return compact({
-    ready: watcher.ready,
-    degraded: watcher.degraded,
-    pending: watcher.pending,
-    lastStorm: watcher.lastStorm && compact({
-      observedAt: watcher.lastStorm.observedAt,
-      changeCount: watcher.lastStorm.changeCount,
-      affectedRoots: watcher.lastStorm.affectedRoots
-    })
   });
 }
 
@@ -273,6 +308,8 @@ function summarizeProgress(progress: JdtlsProgressStatus): Record<string, unknow
     active: progress.active,
     activeMessageCount: progress.activeMessages.length,
     lastProgressAt: progress.lastProgressAt,
-    lastLanguageStatus: progress.lastLanguageStatus
+    lastLanguageStatus: progress.lastLanguageStatus,
+    importState: progress.importState,
+    indexBarrier: progress.indexBarrier
   });
 }

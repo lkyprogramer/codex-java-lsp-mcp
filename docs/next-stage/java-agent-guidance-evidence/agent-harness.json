@@ -1,0 +1,30 @@
+{
+  "cliVersion": "codex-cli 0.162.1",
+  "configuredModel": "gpt-6-luna",
+  "configuredReasoningEffort": "max",
+  "configuredProvider": "openai",
+  "modelOverrideInTest": null,
+  "mcpUrl": "http://127.0.0.1:38456/mcp",
+  "features": {
+    "hooks": true,
+    "plugin_hooks": true
+  },
+  "userPromptSubmit": [
+    {
+      "matcher": ".*",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "'/Users/luo/Library/Application Support/codex-java-lsp-mcp/run-hook-gate.sh'",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "hookState": {
+    "trusted_hash": "sha256:12f180842b9b06da51391a1beee8828a0d8aa09391baa4730c5252aaecf89a93",
+    "enabled": true
+  },
+  "configSha256": "ae4612b96199c097f906be30633fe374d6508297d112d307fef15e7f02cbb8b9",
+  "globalAgentsSha256": "4cfc3ace7e7b2e457196269139f596049faa13ddd51687dad4e9d8f650f1417d"
+}

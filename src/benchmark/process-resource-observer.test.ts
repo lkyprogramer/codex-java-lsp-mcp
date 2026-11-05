@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   startBenchmarkProcessResourceObserver,
   startBenchmarkProcessResourceObserverFromEnvironment,
@@ -21,7 +22,8 @@ test("in-process resource observer records event-loop, GC capability and queue d
       isolated: true
     })!;
     observer.recordQueueDepth("java-index-rpc", 2);
-    await new Promise(resolve => setTimeout(resolve, 15));
+    // An overdue timer can fire before the histogram records its first sample.
+    for (let turn = 0; turn < 3; turn += 1) await delay(5);
     const payload = await observer.stop();
     assert.equal((payload.observations as { queueDepth: { status: string } }).queueDepth.status, "MEASURED");
     const persisted = JSON.parse(await readFile(output, "utf8"));

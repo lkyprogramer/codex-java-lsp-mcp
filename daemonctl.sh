@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # input: Installed immutable runtime state, LaunchAgent plist, and one daemon control command.
-# output: Controlled launchd lifecycle, readiness checks, and explicit release/stdio rollback actions.
+# output: Controlled launchd lifecycle, readiness checks, and explicit release rollback actions.
 # pos: User-level daemon control plane; never starts a second ad-hoc production daemon.
 set -euo pipefail
 
@@ -21,6 +21,7 @@ fi
 # The installer owns this mode-0600 file and writes shell-escaped assignments only.
 # shellcheck disable=SC1090
 source "$STATE_FILE"
+export ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST
 
 if [[ "${RUNTIME_DIR_FROM_STATE:-}" != "$RUNTIME_DIR" ]]; then
   echo "Daemon state runtime directory does not match CODEX_JAVA_LSP_RUNTIME_DIR." >&2
@@ -45,7 +46,7 @@ READY_URL="http://127.0.0.1:$JAVA_LSP_HTTP_PORT/readyz"
 
 usage() {
   cat <<'EOF'
-Usage: daemonctl.sh <status|start|stop|restart|wait-ready|smoke|rollback-release|rollback-stdio>
+Usage: daemonctl.sh <status|start|stop|restart|wait-ready|smoke|rollback-release>
 
 Commands:
   status            Print LaunchAgent and health status without starting a daemon.
@@ -55,7 +56,6 @@ Commands:
   wait-ready        Wait for the already managed daemon; never starts a process.
   smoke             Connect to the already managed daemon and validate HTTP MCP tools.
   rollback-release  Stop, atomically restore the previous release and its managed config, then start it.
-  rollback-stdio    Stop HTTP first, restore saved stdio registration, or reverse to HTTP+smoke if that restoration fails.
 EOF
 }
 
@@ -254,6 +254,7 @@ rollback_release() {
   rollback_dir="$RUNTIME_DIR/state/rollback-$current_build"
   assert_release_rollback_backup "$rollback_dir"
   assert_predecessor_managed_state "$rollback_dir/daemon.env"
+  "$NODE_BIN" "$RUNTIME_DIR/current/scripts/managed-owner-launcher.mjs" verify "$rollback_dir/launcher"
   stop_daemon
   local staged="$RUNTIME_DIR/.current.rollback.$$"
   ln -s "$(readlink "$RUNTIME_DIR/state/previous-current")" "$staged"
@@ -267,6 +268,7 @@ rollback_release() {
   # with the already-loaded safe rollback implementation.
   # shellcheck disable=SC1090
   source "$STATE_FILE"
+  export ILV2_NODE_BIN ILV2_RUNTIME_MANIFEST
   if [[ "${RUNTIME_DIR_FROM_STATE:-}" != "$RUNTIME_DIR" ]]; then
     echo "Restored daemon state runtime directory does not match CODEX_JAVA_LSP_RUNTIME_DIR." >&2
     exit 1
@@ -279,6 +281,7 @@ assert_release_rollback_backup() {
   local rollback_dir="$1"
   local required_marker
   for required_marker in \
+    launcher.marker \
     daemon.env.marker \
     target-launch-agent.plist.marker \
     run-daemon.sh.marker \
@@ -345,6 +348,9 @@ restore_release_link() {
 
 restore_release_managed_configuration() {
   local rollback_dir="$1"
+  local staged_bundle="$RUNTIME_DIR/.launcher.rollback.$$"
+  cp -Rp "$rollback_dir/launcher" "$staged_bundle" || return 1
+  "$NODE_BIN" "$RUNTIME_DIR/current/scripts/managed-owner-launcher.mjs" replace "$staged_bundle" "$RUNTIME_DIR/launcher" || return 1
   restore_release_file \
     "$RUNTIME_DIR/state/daemon.env" \
     "$rollback_dir/daemon.env" \
@@ -382,36 +388,6 @@ restore_release_managed_configuration() {
   fi
 }
 
-rollback_stdio() {
-  local rollback_script="$RUNTIME_DIR/state/rollback-stdio-mcp.sh"
-  local reverse_rollback="$RUNTIME_DIR/state/rollback-http-mcp.sh"
-  if [[ ! -x "$rollback_script" ]]; then
-    echo "No saved stdio rollback command is available: $rollback_script" >&2
-    exit 2
-  fi
-  stop_daemon
-  if "$rollback_script"; then
-    echo "Stdio registration restored. Restart Codex/Desktop before opening a new task."
-    return
-  fi
-
-  echo "Stdio registration restoration failed after HTTP daemon stop; attempting bounded HTTP reverse recovery." >&2
-  if [[ ! -x "$reverse_rollback" ]]; then
-    echo "No saved HTTP reverse-recovery command is available: $reverse_rollback. Daemon remains stopped." >&2
-    exit 1
-  fi
-  if ! "$reverse_rollback"; then
-    echo "HTTP MCP registration could not be restored. Daemon remains stopped." >&2
-    exit 1
-  fi
-  if ! start_daemon || ! smoke; then
-    echo "HTTP registration was restored, but the managed daemon could not be restarted and smoked. Daemon state requires manual repair." >&2
-    exit 1
-  fi
-  echo "Stdio restoration failed; HTTP configuration and managed daemon were restored." >&2
-  exit 1
-}
-
 command_name="${1:-}"
 case "$command_name" in
   status) status ;;
@@ -421,7 +397,6 @@ case "$command_name" in
   wait-ready) wait_ready ;;
   smoke) smoke ;;
   rollback-release) rollback_release ;;
-  rollback-stdio) rollback_stdio ;;
   --help|-h|"") usage ;;
   *) usage >&2; exit 2 ;;
 esac

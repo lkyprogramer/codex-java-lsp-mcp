@@ -1,7 +1,11 @@
-// input: Resolved repo roots.
-// output: Per-repo runtime contexts.
-// pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
-import { existsSync, statSync } from "node:fs";
+// input: Resolved repo roots and per-request budgets.
+// output: Per-repo runtime contexts whose index reads run on one held snapshot per request.
+// pos: Runtime manager (MAC-08B): one context per canonical repoRoot with small LRU/idle control
+//      for JDT; the index is the daemon's single IndexOwner (tracker, scheduler, snapshots, query
+//      pool). A request prepares for at most min(1000 ms, remaining), acquires once, and keeps
+//      that snapshot's labels; it never builds, reconciles or seeds from a sibling. MAC-09: under the
+//      owner launcher, static admission opens once the owner restored its bindings, and JDT waits for
+//      the private Gradle domain's cleanup (at start, and again at a normal stop).
 import os from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
@@ -13,15 +17,26 @@ import {
   type LeaseHandle
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
-import { BuilderSupervisor } from "./java-index/builder-supervisor.js";
-import type { JavaIndexClientApi } from "./java-index/java-index-client-api.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
-import { SqlJavaIndexClient } from "./java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
-import { LayoutManager, type LayoutSource } from "./layout-manager.js";
-import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
-import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
-import { repoCacheBase, repoCacheRoot, scanFamilySiblingIndex } from "./repo-layout.js";
+import { IndexOwner, type IndexOwnerOptions, type PublishEvent } from "./java-index/snapshot/index-owner.js";
+import { ownerTelemetrySink } from "./java-index/snapshot/owner-telemetry.js";
+import {
+  NotReadyJavaIndexClient,
+  snapshotIndexStatus,
+  SnapshotJavaIndexClient,
+  withRequestDefaults,
+  withRequestView,
+  type RequestView,
+  type ViewLabels
+} from "./java-index/snapshot/request-view.js";
+import { probeLayoutOffThread, type LayoutContext } from "./layout-probe.js";
+import { OwnerAdmission, type OwnerAdmissionStatus } from "./index-builder/owner-admission.js";
+import { faultBarrier } from "./mac-platform/fault-barrier.js";
+import { serviceGradleDomain, type GradleDomain } from "./mac-platform/gradle-domain.js";
+import { assertOwnerLock, ownerCacheRoot } from "./mac-platform/owner-lock.js";
+import { GenerationClock, isStormBatch, type RepoChange, type RepoChangeBatch } from "./repo-generation.js";
+import { repoCacheBase } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import {
   DEFAULT_FREEMEM_PRESSURE_BYTES,
@@ -29,6 +44,7 @@ import {
   resourceDefaults,
   type ResourceDefaults
 } from "./resource-defaults.js";
+import { resolveRoutingPolicy } from "./routing-policy.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import {
   createRequestContext,
@@ -39,6 +55,8 @@ import {
   type RequestMode,
   type SemanticPolicy
 } from "./runtime/request-context.js";
+import { RgRunner } from "./search/rg-runner.js";
+import { FileSemanticEdgeStoreV2, type SemanticEdgeStoreV2 } from "./semantic-edge-store.js";
 import type { ToolContext } from "./tools/context.js";
 import { touchRepoCache, type RepoCacheTouch } from "./worktree-cache-cleanup.js";
 import { RuntimeLifecycleGate } from "./runtime-lifecycle-gate.js";
@@ -56,33 +74,13 @@ export type RequestOptionsInput = {
   deadlineMs?: number;
 };
 
-/** How long a watcher-ready wait may borrow from the request budget. */
-const WATCHER_READY_CAP_MS = 2000;
-/** Per pinned repo: cover one cold-build child (lishuedu ~106s) plus hydrate/flush. */
+/** Per pinned repo: cover one cold full build (lishuedu ~106s) plus sealing. */
 const PREWARM_INDEX_MS = 300_000;
-
-/** The subset of RepoChangeCoordinator the runtime manager depends on. */
-export interface RuntimeCoordinator {
-  start(): Promise<void>;
-  flushNow(): Promise<void>;
-  awaitReadyWithin(ms: number): Promise<boolean>;
-  close(): Promise<void>;
-  onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void;
-  status(): {
-    ready: boolean;
-    degraded: boolean;
-    pending: number;
-    lastStorm?: { observedAt: string; changeCount: number; affectedRoots: string[] };
-  };
-}
-
-export type RuntimeCoordination = {
-  generation: GenerationClock;
-  coordinator: RuntimeCoordinator;
-  layout: LayoutSource;
-};
-
-export type CoordinationFactory = (resolved: ResolvedRepo, indexedFileCount: () => number) => RuntimeCoordination;
+const PREWARM_POLL_MS = 250;
+/** The janitor's lastRequestAt resolution: its idle TTL is minutes, so one stamp per interval is enough. */
+const CACHE_TOUCH_INTERVAL_MS = 60_000;
+/** Held views pin their own runtime; beyond those only the newest snapshots keep router caches. */
+const RETAINED_SNAPSHOT_RUNTIMES = 2;
 
 export type ManagedToolContext = ToolContext & {
   repoHash: string;
@@ -90,6 +88,24 @@ export type ManagedToolContext = ToolContext & {
   aliases: string[];
   layoutProfile: string;
   lsp: ResolvedRepo["lsp"];
+};
+
+/** Index reads of one sealed snapshot. Router caches are snapshot-scoped, so a held view is never upgraded. */
+type SnapshotRuntime = {
+  snapshotId: string;
+  status: JavaIndexStatus;
+  javaIndexClient: SnapshotJavaIndexClient;
+  javaIndex: RouterJavaIndex;
+  router: AgentRouter;
+  users: number;
+  lastUsedAt: number;
+};
+
+/** What every router of one repo shares: its layout probe, rg runner and the one semantic edge store file. */
+export type SharedRouterState = {
+  layout: LayoutContext;
+  rgRunner: RgRunner;
+  edgeStore: SemanticEdgeStoreV2;
 };
 
 /**
@@ -100,19 +116,19 @@ export type ManagedToolContext = ToolContext & {
 type LspReservation = "NONE" | "STARTING" | "READY";
 
 type RuntimeEntry = {
+  /** The NOT_READY context: session plus a router whose index reads refuse. */
   context: ManagedToolContext;
   generation: GenerationClock;
-  coordinator: RuntimeCoordinator;
-  layout: LayoutSource;
-  ready: Promise<void>;
+  shared: SharedRouterState;
+  snapshots: Map<string, SnapshotRuntime>;
   refCount: number;
   lastUsedAt: number;
   idleTimer?: NodeJS.Timeout;
   lspReservation: LspReservation;
   unsubscribeLifecycle?: () => void;
-  reconcilePromise?: Promise<void>;
   /** Set once `shutdown()` has retired this entry; undefined while active. */
   stoppedAt?: number;
+  retiring?: Promise<void>;
   /**
    * Best-effort: a degraded/unopened lease store must never block runtime
    * creation, so a failed acquire simply leaves this undefined and the repo
@@ -121,6 +137,8 @@ type RuntimeEntry = {
   runtimeLease?: LeaseHandle;
   gate: RuntimeLifecycleGate;
   ownership?: RepoOwnershipLease;
+  /** Last cache-meta stamp (refreshResource): it does synchronous file I/O. */
+  cacheTouch?: { at: number; ownerToken?: string };
 };
 
 type SlotWaiter = {
@@ -129,6 +147,9 @@ type SlotWaiter = {
   grant(): void;
   cancel(): void;
 };
+
+/** false: no index (unit tests of JDT capacity); every view is NOT_READY. */
+export type IndexOwnerSource = false | (() => Promise<IndexOwner>);
 
 type RuntimeManagerOptions = {
   maxActiveRepos: number;
@@ -141,12 +162,35 @@ type RuntimeManagerOptions = {
   transportMode: RepoOwnerTransport;
   /** Pin roots keep their index runtime after JDT idle-stop. */
   isProtectedRepo?: (repoRoot: string) => boolean;
+  worktreeIdle?: IndexOwnerOptions["worktreeIdle"];
+  index?: IndexOwnerSource;
+  /** The private Gradle domain gating JDT (default: the service domain under the owner launcher, else none). */
+  gradleDomain?: GradleDomain | false;
+  /** Test seam: the retry floor after a blocked cleanup (default SEMANTIC_RETRY_MS). */
+  semanticRetryMs?: number;
 };
+
+/** A blocked Gradle cleanup is retried only on semantic demand, and not sooner than this (no busy retry). */
+const SEMANTIC_RETRY_MS = 30_000;
+
+/**
+ * The daemon's one owner over `<owner cache root>/mac1`; the launcher's lock is checked before every
+ * binding write. Without the launcher there is no lock, so there is no GC cycle either.
+ */
+export function defaultIndexOwner(overrides: Partial<IndexOwnerOptions> = {}): () => Promise<IndexOwner> {
+  const faultAt = faultBarrier();
+  // Isolated validation only: a short GC cycle, so convergence within two cycles is observable.
+  const gcCycleMs = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.JAVA_LSP_GC_CYCLE_MS
+    ? positiveInteger(process.env.JAVA_LSP_GC_CYCLE_MS, 0) || undefined : undefined;
+  const owned = ownerCacheRoot() !== undefined;
+  const onEvent = ownerTelemetrySink();
+  return () => IndexOwner.open({ cacheRoot: ownerCacheRoot() ?? repoCacheBase(), assertOwner: () => assertOwnerLock(), gc: owned,
+    ...(faultAt ? { faultAt } : {}), ...(gcCycleMs ? { gcCycleMs } : {}), ...(onEvent ? { onEvent } : {}), ...overrides });
+}
 
 export class RepoRuntimeManager {
   private readonly runtimes = new Map<string, RuntimeEntry>();
   private readonly creating = new Map<string, Promise<RuntimeEntry>>();
-  private readonly familyGates = new Map<string, Promise<void>>();
   private readonly slotWaiters: SlotWaiter[] = [];
   private servicingWaiters = false;
   private readonly options: RuntimeManagerOptions;
@@ -156,12 +200,18 @@ export class RepoRuntimeManager {
   private leaseInitError?: string;
   private pressureTimer?: NodeJS.Timeout;
   private relievingPressure = false;
+  private ownerPromise?: Promise<IndexOwner | undefined>;
+  private ownerError?: string;
+  private unsubscribePublish?: () => void;
+  private readonly gradleDomain?: GradleDomain;
+  private readonly admission?: OwnerAdmission;
+  private semanticFailedAt?: number;
 
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
     options: Partial<RuntimeManagerOptions> = {},
-    runtimeFactory?: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore) => ManagedToolContext,
-    coordinationOrOwnership: CoordinationFactory | RepoOwnershipProvider = createCoordination,
+    runtimeFactory?: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore, shared: SharedRouterState) => ManagedToolContext,
+    private readonly ownership?: RepoOwnershipProvider,
     leasesOrTouch: CrossProcessLeaseStore | ((repoRoot: string, extra?: RepoCacheTouch) => void) = createDefaultLeaseStore()
   ) {
     this.defaults = resourceDefaults();
@@ -181,14 +231,14 @@ export class RepoRuntimeManager {
       transportMode: "stdio",
       ...options
     };
-    this.startPressureWatch();
-    this.runtimeFactory = runtimeFactory ?? ((resolved, leases) => createRuntime(resolved, leases, this.options.transportMode));
-    if (isOwnershipProvider(coordinationOrOwnership)) {
-      this.coordinationFactory = createCoordination;
-      this.ownership = coordinationOrOwnership;
-    } else {
-      this.coordinationFactory = coordinationOrOwnership;
+    this.gradleDomain = this.options.gradleDomain === false ? undefined
+      : this.options.gradleDomain ?? (ownerCacheRoot() ? serviceGradleDomain() : undefined);
+    if (ownerCacheRoot() || this.gradleDomain) {
+      this.admission = new OwnerAdmission(ownerCacheRoot() ? () => assertOwnerLock() : () => {}, this.gradleDomain);
     }
+    this.startPressureWatch();
+    this.runtimeFactory = runtimeFactory ?? ((resolved, leases, shared) =>
+      createRuntime(resolved, leases, shared, this.options.transportMode, undefined, this.gradleDomain));
     if (typeof leasesOrTouch === "function" && !isLeaseStore(leasesOrTouch)) {
       this.leases = createDefaultLeaseStore();
     } else {
@@ -196,10 +246,8 @@ export class RepoRuntimeManager {
     }
   }
 
-  private readonly runtimeFactory: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore) => ManagedToolContext;
-  private readonly coordinationFactory: CoordinationFactory;
+  private readonly runtimeFactory: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore, shared: SharedRouterState) => ManagedToolContext;
   private readonly leases: CrossProcessLeaseStore;
-  private readonly ownership?: RepoOwnershipProvider;
 
   /**
    * Opens the shared machine-wide capacity once per process (singleflighted).
@@ -209,6 +257,7 @@ export class RepoRuntimeManager {
    * `assertOpen()` guard), so no separate gate is needed here.
    */
   initialize(): Promise<void> {
+    if (!this.leaseReady) this.recoverSemantic();
     return this.leaseReady ??= this.leases
       .open({
         jdtSlots: this.options.maxActiveRepos,
@@ -225,6 +274,54 @@ export class RepoRuntimeManager {
     return { ...status, initError: this.leaseInitError };
   }
 
+  /**
+   * The private Gradle domain's cleanup, in the background: semantic admission stays closed until it
+   * proved this domain's daemons gone. No JDT session can exist yet: admission was never READY before
+   * this cleanup, or the previous one failed.
+   */
+  private recoverSemantic(): void {
+    this.gradleDomain?.recover(async () => {}).catch(error => {
+      this.semanticFailedAt = Date.now();
+      console.error(`[codex-java-lsp] Gradle domain cleanup blocked semantic admission: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  /** A semantic request after a failed cleanup starts one more (single-flight, at most once per SEMANTIC_RETRY_MS). */
+  private retrySemanticRecovery(): void {
+    if (this.gradleDomain?.status().semanticState !== "RECOVERY_BLOCKED") return;
+    if (this.semanticFailedAt !== undefined && Date.now() - this.semanticFailedAt < (this.options.semanticRetryMs ?? SEMANTIC_RETRY_MS)) return;
+    this.recoverSemantic();
+  }
+
+  /** Static and semantic admission (contract §2.1); undefined outside the owner launcher without a Gradle domain. */
+  semanticStatus(): OwnerAdmissionStatus | undefined {
+    return this.admission?.status();
+  }
+
+  /** The index owner, opened once. A failed open leaves the index NOT_READY with the reason on status. */
+  private indexOwner(): Promise<IndexOwner | undefined> {
+    if (this.options.index === false) return Promise.resolve(undefined);
+    if (this.ownerPromise) return this.ownerPromise;
+    const admission = this.admission;
+    const source = this.options.index ?? defaultIndexOwner({
+      ...(admission ? { admitted: admission.admitted, restored: () => admission.openStatic() } : {}),
+      worktreeIdle: this.options.worktreeIdle
+    });
+    return this.ownerPromise ??= source().then(owner => {
+      this.unsubscribePublish = owner.onPublished(event => this.onPublished(event));
+      return owner;
+    }, error => {
+      this.ownerError = error instanceof Error ? error.message : String(error);
+      console.error(`[codex-java-lsp] index owner unavailable: ${this.ownerError}`);
+      return undefined;
+    });
+  }
+
+  /** The owner if it is already open; never opens it (status-only). */
+  private openedOwner(): Promise<IndexOwner | undefined> {
+    return this.ownerPromise ?? Promise.resolve(undefined);
+  }
+
   async contextFor(selector: RepoSelector): Promise<ManagedToolContext> {
     const resolved = await this.resolver.resolve(selector);
     const entry = await this.getOrCreate(resolved);
@@ -233,24 +330,24 @@ export class RepoRuntimeManager {
   }
 
   /**
-   * Open JavaIndex for a pinned repo and wait until that repo's rebuild is
-   * durable (or the per-repo budget expires). Does not start JDT. The next
-   * pinned repo must not be opened until this returns, or cold-build children
-   * stampede the machine-wide BUILD_SLOT.
+   * Start a pinned repo's workspace and wait until it has its own verified binding (or the per-repo
+   * budget expires). Does not start JDT. The next pin is not started before this returns, so cold
+   * full builds queue in the scheduler instead of all capturing at once.
    */
   async prewarmRepo(selector: RepoSelector, _options: { hydrate?: boolean } = {}): Promise<void> {
     const resolved = await this.resolver.resolve(selector);
     if (!resolved.lsp.enabled) return;
-    const entry = await this.getOrCreate(resolved);
+    let entry = await this.getOrCreate(resolved);
+    while (entry.retiring || entry.stoppedAt !== undefined) entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
     entry.refCount += 1;
     try {
-      const client = entry.context.javaIndexClient;
-      if (!client) return;
+      const owner = await this.indexOwner();
+      if (!owner) return;
       const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
-      const status = await client.status({ budget }).catch(() => undefined);
-      if (status?.state === "BUILDING") {
-        await client.awaitPrewarmReady({ budget });
+      const workspace = await budget.race("prewarm.create", owner.workspace(entry.context.repoRoot));
+      while (!owner.store.binding(workspace.workspaceId) && !budget.expired()) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(PREWARM_POLL_MS, budget.remainingMs())));
       }
     } catch (error) {
       console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
@@ -263,23 +360,27 @@ export class RepoRuntimeManager {
   async withContext<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+    options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
-    const resolved = await this.resolver.resolve(selector);
-    const requestOptions = this.requestOptionsForRuntime(resolved.repoRoot, options.requestOptions);
+    const requestOptions = options.requestOptions;
     const budget = this.createRequestBudget(requestOptions);
-    budget.throwIfExpired("runtime.repo-resolve");
-    const entry = await this.getOrCreate(resolved, budget);
+    const resolved = await budget.race("runtime.repo-resolve", this.resolver.resolve(selector));
+    let entry = await this.getOrCreate(resolved, budget);
+    while (entry.retiring || entry.stoppedAt !== undefined) entry = await this.getOrCreate(resolved, budget);
     this.refreshResource(entry);
     entry.refCount += 1;
     this.clearIdleTimers(entry);
     try {
-      const request = await this.prepareRequestContext(entry, requestOptions, budget);
-      if (options.mayStartLsp) {
-        idlePrewarmTracker.recordFirstSemanticRequest(resolved.repoRoot);
-        await this.reserveLspSlot(entry, request.budget);
-      }
-      return await handler(entry.context, request);
+      const owner = await budget.race("runtime.index-owner", this.indexOwner());
+      return await this.withView(entry, owner, budget, options.signal, true, async (context, view) => {
+        const request = this.requestContextFor(entry, view, requestOptions, budget);
+        if (options.mayStartLsp) {
+          this.retrySemanticRecovery();
+          idlePrewarmTracker.recordFirstSemanticRequest(resolved.repoRoot);
+          await this.reserveLspSlot(entry, request.budget);
+        }
+        return handler(context, request);
+      }, options.observeStaticRead);
     } finally {
       entry.refCount = Math.max(0, entry.refCount - 1);
       entry.lastUsedAt = Date.now();
@@ -289,31 +390,58 @@ export class RepoRuntimeManager {
     }
   }
 
+  /**
+   * Status without start (contract §2.6): reads memory only. An unknown repo gets no entry, no
+   * workspace, no scan and no build; a known one reports its current labels without preparing.
+   */
+  async statusOnly<T>(
+    selector: RepoSelector,
+    handler: (state: { resolved: ResolvedRepo; context?: ManagedToolContext; labels: ViewLabels; javaIndex?: JavaIndexStatus; layout?: LayoutContext }) => Promise<T>,
+    options: { deadlineMs?: number; signal?: AbortSignal } = {}
+  ): Promise<T> {
+    const budget = DeadlineBudget.fromTimeout(Math.min(MAX_REQUEST_DEADLINE_MS, options.deadlineMs ?? defaultDeadlineMs("balanced", "auto")));
+    const resolved = await budget.race("status.resolve", this.resolver.resolve(selector));
+    const entry = this.runtimes.get(resolved.repoRoot);
+    const owner = await this.openedOwner();
+    if (!entry || entry.stoppedAt !== undefined || !owner?.peek(resolved.repoRoot)) {
+      return handler({ resolved, context: entry?.stoppedAt === undefined ? entry?.context : undefined, labels: { state: "NOT_READY" } });
+    }
+    // Memory only: no cache stamp (meta file I/O); status is not use for the janitor.
+    entry.context.resource = this.resourceStatus();
+    return withRequestView({
+      owner, budget, signal: options.signal, start: false, resolve: async () => resolved.repoRoot,
+      handler: async view => {
+        const runtime = view.snapshotId ? entry.snapshots.get(view.snapshotId) : undefined;
+        return handler({ resolved, context: entry.context, labels: view.labels, javaIndex: runtime?.status, layout: entry.shared.layout });
+      }
+    });
+  }
+
   async withQuery<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+    options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     return this.withContext(selector, async (context, request) => {
       const entry = this.runtimes.get(context.repoRoot);
       if (!entry) {
         return handler(context, request);
       }
-      return entry.gate.withQuery(() => handler(context, request), request.budget.remainingMs());
+      return entry.gate.withQuery(() => handler(context, request), request.budget.remainingMs(), options.signal);
     }, options);
   }
 
   async withControl<T>(
     selector: RepoSelector,
-    handler: (context: ManagedToolContext, request?: RequestContext) => Promise<T>,
-    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+    handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
+    options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     return this.withContext(selector, async (context, request) => {
       const entry = this.runtimes.get(context.repoRoot);
       if (!entry) {
         return handler(context, request);
       }
-      return entry.gate.withControl(() => handler(context, request), request.budget.remainingMs());
+      return entry.gate.withControl(() => handler(context, request), request.budget.remainingMs(), options.signal);
     }, options);
   }
 
@@ -340,100 +468,102 @@ export class RepoRuntimeManager {
     }));
   }
 
-  /**
-   * The freshness barrier: settle the watcher, reconcile if dirty, then fix the
-   * request's generation and cache policy. A watcher-ready timeout is not a
-   * failure — the request proceeds DEGRADED with caches and negative answers off.
-   */
-  private async prepareRequestContext(
+  /** One view for the whole request; the handler sees the context of the snapshot it holds. */
+  private withView<T>(
     entry: RuntimeEntry,
+    owner: IndexOwner | undefined,
+    budget: DeadlineBudget,
+    signal: AbortSignal | undefined,
+    start: boolean,
+    handler: (context: ManagedToolContext, view: RequestView | undefined) => Promise<T>,
+    observeStaticRead?: boolean
+  ): Promise<T> {
+    if (!owner) return handler(entry.context, undefined);
+    return withRequestView({
+      owner, budget, signal, start, resolve: async () => entry.context.repoRoot,
+      handler: async view => {
+        const runtime = view.snapshotId ? await this.snapshotRuntime(entry, view) : undefined;
+        if (!runtime) return handler({ ...entry.context, indexView: view.labels }, view);
+        runtime.users += 1;
+        runtime.lastUsedAt = Date.now();
+        try {
+          const context: ManagedToolContext = { ...entry.context, indexView: view.labels, javaIndexClient: runtime.javaIndexClient, javaIndex: runtime.javaIndex, router: runtime.router };
+          // Reads that carry no explicit options still run under this request's deadline and signal.
+          let observed = false;
+          const workspaceId = view.labels.workspaceId;
+          const onStaticRead = observeStaticRead && owner.options.worktreeIdle && workspaceId ? () => {
+            if (observed || view.closed || budget.expired() || signal?.aborted) return;
+            observed = true;
+            owner.noteStaticRead(workspaceId);
+          } : undefined;
+          const options = { budget, signal, onStaticRead };
+          return await withRequestDefaults(options, () => runtime.javaIndex.withRequestOptions(options, () => handler(context, view)));
+        } finally {
+          runtime.users -= 1;
+          this.trimSnapshotRuntimes(entry);
+        }
+      }
+    });
+  }
+
+  private async snapshotRuntime(entry: RuntimeEntry, view: RequestView): Promise<SnapshotRuntime> {
+    const snapshotId = view.snapshotId!;
+    const existing = entry.snapshots.get(snapshotId);
+    if (existing) return existing;
+    const status = snapshotIndexStatus(await view.snapshotStatus(), snapshotId);
+    const raced = entry.snapshots.get(snapshotId);
+    if (raced) return raced;
+    const shared = entry.shared;
+    const javaIndexClient = new SnapshotJavaIndexClient(view.owner, snapshotId, entry.context.repoRoot, status, shared.layout);
+    const javaIndex = new RouterJavaIndex(entry.context.repoRoot, javaIndexClient, {}, shared.layout);
+    await javaIndex.open(status.indexedGeneration);
+    const router = new AgentRouter(entry.context.repoRoot, entry.context.session, javaIndex, shared.layout,
+      resolveRoutingPolicy(entry.context.repoRoot), shared.rgRunner, shared.edgeStore);
+    const runtime: SnapshotRuntime = { snapshotId, status, javaIndexClient, javaIndex, router, users: 0, lastUsedAt: Date.now() };
+    entry.snapshots.set(snapshotId, runtime);
+    return runtime;
+  }
+
+  /** Keep runtimes in use plus the newest few; a dropped one only loses its caches. */
+  private trimSnapshotRuntimes(entry: RuntimeEntry): void {
+    const idle = [...entry.snapshots.values()].filter(runtime => runtime.users === 0)
+      .sort((left, right) => right.status.indexedGeneration - left.status.indexedGeneration);
+    for (const runtime of idle.slice(RETAINED_SNAPSHOT_RUNTIMES)) {
+      entry.snapshots.delete(runtime.snapshotId);
+      runtime.router.dispose();
+    }
+  }
+
+  /**
+   * The request's freshness comes from its one acquire: FRESH serves caches and confident
+   * negatives (with complete coverage); STALE and NOT_READY answer from what they hold, uncached.
+   */
+  private requestContextFor(
+    entry: RuntimeEntry,
+    view: RequestView | undefined,
     requestOptions: RequestOptionsInput | undefined,
     budget: DeadlineBudget
-  ): Promise<RequestContext> {
+  ): RequestContext {
     const mode = requestOptions?.mode ?? "balanced";
     const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
     const deadlineMs = Math.min(
       MAX_REQUEST_DEADLINE_MS,
       requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
     );
-    if (budget.expired()) {
-      return this.degradedRequestContext(entry, mode, semanticPolicy, deadlineMs, budget);
-    }
-
-    const ready = await entry.coordinator.awaitReadyWithin(
-      Math.min(WATCHER_READY_CAP_MS, budget.remainingMs())
-    );
-
-    let freshnessMode: RequestFreshnessMode;
-    let cacheReadAllowed = false;
-    let cacheWriteAllowed = false;
-
-    if (ready) {
-      await entry.coordinator.flushNow();      // already-delivered debounced events
-      await this.reconcileIfDirty(entry, budget);      // no-op unless a reconcile is pending
-      await entry.coordinator.flushNow();      // events delivered during reconcile
-      const clock = entry.generation.snapshot();
-      freshnessMode = clock.dirty ? "WATCHER_DEGRADED" : "NORMAL";
-      cacheReadAllowed = !clock.dirty;
-      cacheWriteAllowed = !clock.dirty;
-    } else {
-      freshnessMode = entry.generation.snapshot().dirty ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY";
-    }
-
-    if (budget.expired()) {
-      return this.degradedRequestContext(entry, mode, semanticPolicy, deadlineMs, budget, {
-        freshnessMode,
-        cacheReadAllowed: false,
-        cacheWriteAllowed: false
-      });
-    }
-    const generationBeforeIndexStatus = entry.generation.snapshot().value;
-    let javaIndexStatus: JavaIndexStatus | undefined;
-    try {
-      javaIndexStatus = await entry.context.javaIndexClient?.status({ budget });
-    } catch {
-      // JavaIndex is an optional accelerator; a failed status probe is
-      // degraded evidence, not a reason to fail an otherwise lexical request.
-    }
-    const finalClock = entry.generation.snapshot();
-    if (finalClock.dirty) {
-      freshnessMode = "WATCHER_DEGRADED";
-      cacheReadAllowed = false;
-      cacheWriteAllowed = false;
-    }
-    const negativeLookupAllowed = this.negativeLookupAllowed(
-      freshnessMode,
-      entry.coordinator.status(),
-      javaIndexStatus,
-      finalClock.value,
-      finalClock.value === generationBeforeIndexStatus && !finalClock.dirty
-    );
-    budget.throwIfExpired("runtime.request-context");
-
-    let indexOpenSource: RequestContext["indexOpenSource"];
-    try {
-      const routerIndex = entry.context.javaIndex;
-      const statusOperation = routerIndex.withRequestOptions
-        ? routerIndex.withRequestOptions({ budget }, () => routerIndex.routerStatus())
-        : routerIndex.routerStatus();
-      const status = await budget.race("runtime.router-status", statusOperation);
-      indexOpenSource = status.openSource;
-    } catch {
-      // Router status is diagnostic evidence. A backend failure degrades only
-      // this field; an exhausted absolute request budget is rethrown below.
-    }
-    budget.throwIfExpired("runtime.router-status");
-
+    const state = view?.labels.state ?? "NOT_READY";
+    const status = view?.snapshotId ? entry.snapshots.get(view.snapshotId)?.status : undefined;
+    const fresh = state === "FRESH" && status !== undefined;
+    const freshnessMode: RequestFreshnessMode = state === "FRESH" ? "NORMAL" : state === "STALE" ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY";
     return createRequestContext({
       repoRoot: entry.context.repoRoot,
       repoHash: entry.context.repoHash,
       familyHash: entry.context.worktree?.familyHash,
-      generation: finalClock.value,
+      generation: status?.indexedGeneration ?? entry.generation.snapshot().value,
       freshnessMode,
-      cacheReadAllowed,
-      cacheWriteAllowed,
-      negativeLookupAllowed,
-      indexOpenSource,
+      cacheReadAllowed: fresh,
+      cacheWriteAllowed: fresh,
+      negativeLookupAllowed: fresh && negativeLookupAllowed(status),
+      indexOpenSource: status ? "own-snapshot" : undefined,
       mode,
       semanticPolicy,
       deadlineMs,
@@ -441,77 +571,20 @@ export class RepoRuntimeManager {
     });
   }
 
-  private degradedRequestContext(
-    entry: RuntimeEntry,
-    mode: RequestMode,
-    semanticPolicy: SemanticPolicy,
-    deadlineMs: number,
-    budget: DeadlineBudget,
-    overrides: {
-      freshnessMode?: RequestFreshnessMode;
-      cacheReadAllowed?: boolean;
-      cacheWriteAllowed?: boolean;
-      negativeLookupAllowed?: boolean;
-      generation?: number;
-    } = {}
-  ): RequestContext {
-    const clock = entry.generation.snapshot();
-    return createRequestContext({
-      repoRoot: entry.context.repoRoot,
-      repoHash: entry.context.repoHash,
-      familyHash: entry.context.worktree?.familyHash,
-      generation: overrides.generation ?? clock.value,
-      freshnessMode: overrides.freshnessMode
-        ?? (clock.dirty ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY"),
-      cacheReadAllowed: overrides.cacheReadAllowed ?? false,
-      cacheWriteAllowed: overrides.cacheWriteAllowed ?? false,
-      negativeLookupAllowed: overrides.negativeLookupAllowed ?? false,
-      mode,
-      semanticPolicy,
-      deadlineMs,
-      budget
+  /** A publish reaches the JDT session and the router caches as one change batch at the new generation. */
+  private onPublished(event: PublishEvent): void {
+    const entry = this.runtimes.get(event.canonicalRoot);
+    if (!entry || entry.stoppedAt !== undefined) return;
+    const generation = entry.generation.rebaseAtLeast(Math.max(entry.generation.snapshot().value + 1, event.indexedGeneration));
+    const batch = changeBatchFor(event, generation);
+    void entry.context.session.applyRepoChangeBatch(batch).catch(error => {
+      console.error("[codex-java-lsp] JDT change batch failed", error);
     });
-  }
-
-  /** Negative answers are safe only when watcher and both index coverages agree on this generation. */
-  private negativeLookupAllowed(
-    freshnessMode: RequestFreshnessMode,
-    watcher: ReturnType<RuntimeCoordinator["status"]>,
-    status: JavaIndexStatus | undefined,
-    generation: number,
-    generationStableDuringStatusProbe: boolean
-  ): boolean {
-    const sourceCoverage = status?.coverage ?? [];
-    const resourceCoverage = status?.resourceCoverage ?? [];
-    if (
-      freshnessMode !== "NORMAL"
-      || !generationStableDuringStatusProbe
-      || !watcher.ready
-      || watcher.degraded
-      || watcher.pending > 0
-      || !status
-      || status.state !== "READY"
-      || status.lastError !== undefined
-      || status.indexedGeneration !== generation
-      || status.pendingForeground !== 0
-      || status.pendingBackground !== 0
-      || status.snapshotVerificationPending === true
-      || sourceCoverage.length === 0
-    ) {
-      return false;
-    }
-    const sourceComplete = sourceCoverage.every(entry =>
-      entry.generation === generation
-      && entry.state === "COMPLETE"
-      && entry.failedFiles === 0
-      && entry.recoveredFiles === 0
-    );
-    const resourcesComplete = resourceCoverage.every(entry =>
-      entry.generation === generation
-      && entry.state === "COMPLETE"
-      && entry.failedFiles === 0
-    );
-    return sourceComplete && resourcesComplete;
+    const runtimes = [...entry.snapshots.values()];
+    // The edge store and build fingerprint are shared: one router applies the batch, the rest drop older rg results.
+    (runtimes.find(runtime => runtime.snapshotId === event.snapshotId) ?? runtimes[0])?.router.onRepoChanged(batch);
+    for (const runtime of runtimes) runtime.router.invalidateGeneration(generation);
+    entry.context.router.invalidateGeneration(generation);
   }
 
   private createRequestBudget(requestOptions?: RequestOptionsInput): DeadlineBudget {
@@ -524,69 +597,19 @@ export class RepoRuntimeManager {
     return DeadlineBudget.fromTimeout(deadlineMs);
   }
 
-  /**
-   * Idle-close leaves a stopped placeholder (hasRuntime still true). A true
-   * cold start is "no live entry", and that path always gets the 15s public budget.
-   */
-  private hasLiveRuntime(repoRoot: string): boolean {
-    const entry = this.runtimes.get(repoRoot);
-    return entry !== undefined && entry.stoppedAt === undefined;
-  }
-
-  private requestOptionsForRuntime(
-    repoRoot: string,
-    requestOptions?: RequestOptionsInput
-  ): RequestOptionsInput {
-    const mode = requestOptions?.mode ?? "balanced";
-    const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
-    if (this.hasLiveRuntime(repoRoot) || requestOptions?.deadlineMs !== undefined) {
-      return requestOptions ?? { mode, semanticPolicy };
-    }
-    return { mode, semanticPolicy, deadlineMs: MAX_REQUEST_DEADLINE_MS };
-  }
-
-  /**
-   * Singleflight: two concurrent requests against a dirty runtime share one
-   * reconcile. A failure leaves `dirty` set (clearDirty is never reached), so
-   * the runtime stays DEGRADED and the next request tries again rather than
-   * silently believing the index is clean.
-   */
-  private async reconcileIfDirty(entry: RuntimeEntry, budget?: DeadlineBudget): Promise<void> {
-    if (!entry.generation.snapshot().dirty) return;
-    if (!entry.reconcilePromise) {
-      // Reconciliation belongs to the shared runtime, not to the first caller
-      // that happens to observe it dirty. Keep the shared work bounded by the
-      // manager hard cap, while every caller independently races its own
-      // absolute request budget below.
-      const operationBudget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
-      const operation = (async () => {
-        const generationAtStart = entry.generation.snapshot().value;
-        try {
-          await entry.context.javaIndexClient?.reconcile(
-            generationAtStart,
-            { budget: operationBudget }
-          );
-          entry.generation.clearDirty(generationAtStart);
-        } catch {
-          // Reconcile failure must not fail the request: output coverage stays
-          // DEGRADED and the next dirty request retries the reconcile.
-        }
-      })().finally(() => {
-        if (entry.reconcilePromise === operation) entry.reconcilePromise = undefined;
-      });
-      entry.reconcilePromise = operation;
-    }
-    await (budget
-      ? budget.race("runtime.reconcile", entry.reconcilePromise)
-      : entry.reconcilePromise);
-  }
-
   reservedCount(): number {
     return this.reservedEntries().length;
   }
 
   hasRuntime(repoRoot: string): boolean {
     return this.runtimes.has(repoRoot);
+  }
+
+  /** Memory-only owner state for status and tests. */
+  async indexStatus(): Promise<ReturnType<IndexOwner["status"]> | { unavailable: string } | undefined> {
+    const owner = await this.openedOwner();
+    if (owner) return owner.status();
+    return this.ownerError ? { unavailable: this.ownerError } : undefined;
   }
 
   activeRepos(): Array<{
@@ -640,17 +663,21 @@ export class RepoRuntimeManager {
   /**
    * The coarse, single-repo retirement path: unlike the JDT-capacity teardown
    * in `stopEntry` (used to free an LSP slot for a waiting repo, which must
-   * leave the watcher and in-memory caches intact for a quick resume), this
-   * fully closes the coordinator and retires the entry. It stays in the map
-   * as a bounded, inert placeholder — `getOrCreate` never reuses one — purely
-   * so `activeRepos()`/`hasRuntime()` can still see it until eviction.
+   * leave the tracker and in-memory caches intact for a quick resume), this
+   * stops the workspace tracker and retires the entry. Its binding stays on
+   * disk; a later request starts a new tracker whose first round verifies it.
+   * The entry stays in the map as a bounded, inert placeholder — `getOrCreate`
+   * never reuses one — purely so `activeRepos()`/`hasRuntime()` can still see it.
    */
   async shutdown(repoRoot: string): Promise<void> {
     const entry = this.runtimes.get(repoRoot);
-    if (!entry) return;
+    if (!entry || entry.stoppedAt !== undefined) return;
+    return entry.retiring ??= Promise.resolve().then(() => this.shutdownEntry(entry)).finally(() => { entry.retiring = undefined; });
+  }
+
+  private async shutdownEntry(entry: RuntimeEntry): Promise<void> {
     await this.stopEntry(entry);
-    await entry.coordinator.close();
-    await entry.context.javaIndexClient?.close().catch(() => undefined);
+    await this.retireIndex(entry);
     await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
     await entry.runtimeLease?.release();
     entry.runtimeLease = undefined;
@@ -662,6 +689,13 @@ export class RepoRuntimeManager {
     entry.unsubscribeLifecycle = undefined;
     entry.stoppedAt = Date.now();
     this.evictStoppedBeyondLimit();
+  }
+
+  private async retireIndex(entry: RuntimeEntry): Promise<void> {
+    for (const runtime of entry.snapshots.values()) runtime.router.dispose();
+    entry.snapshots.clear();
+    const owner = await this.openedOwner();
+    await owner?.retire(entry.context.repoRoot).catch(() => undefined);
   }
 
   private evictStoppedBeyondLimit(): void {
@@ -679,13 +713,17 @@ export class RepoRuntimeManager {
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
     }
-    await Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
-    // A prior shutdown(repoRoot) may have already closed some coordinators;
-    // RepoChangeCoordinator.close() is idempotent, so closing the rest here
-    // (and re-closing the already-closed ones) is safe either way.
+    let closing: Promise<unknown> | undefined;
+    const closeSessions = () => closing ??= Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
+    // Normal stop (contract §2.1): recover() closes semantic admission before any session starts
+    // closing, waits for them, then stops and confirms every Gradle version this domain used.
+    const semantic = options.terminal ? this.gradleDomain?.recover(async () => { await closeSessions(); }) : undefined;
+    // The original rejection is returned after the other shutdown work.
+    void semantic?.catch(() => undefined);
+    await closeSessions();
     await Promise.all([...this.runtimes.values()].map(async entry => {
-      await entry.coordinator.close();
-      await entry.context.javaIndexClient?.close().catch(() => undefined);
+      for (const runtime of entry.snapshots.values()) runtime.router.dispose();
+      entry.snapshots.clear();
       await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
       await entry.runtimeLease?.release();
       entry.runtimeLease = undefined;
@@ -703,12 +741,22 @@ export class RepoRuntimeManager {
       entry.unsubscribeLifecycle?.();
       entry.unsubscribeLifecycle = undefined;
     }
+    // The owner stops last: its builders, query workers and trackers are this process's children.
+    this.unsubscribePublish?.();
+    const owner = await this.openedOwner();
+    await Promise.all([owner?.stop(), semantic]);
   }
 
-  /** Singleflight so two concurrent requests share one runtime/coordinator/watcher. */
+  /** Singleflight so two concurrent requests share one runtime entry. */
   private async getOrCreate(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const existing = this.runtimes.get(resolved.repoRoot);
     if (existing) {
+      if (existing.retiring) {
+        const pending = existing.retiring.catch(() => undefined);
+        if (budget) await budget.race("runtime.retire", pending);
+        else await pending;
+        return this.getOrCreate(resolved, budget);
+      }
       if (existing.stoppedAt === undefined) {
         existing.context.aliases = resolved.aliases;
         existing.context.rootSource = resolved.rootSource;
@@ -717,15 +765,12 @@ export class RepoRuntimeManager {
         existing.context.worktree = resolved.worktree;
         return existing;
       }
-      // A retained-but-stopped placeholder's coordinator is already closed
-      // (its startPromise is settled, so start() would be a no-op); reusing
-      // it would silently leave freshness tracking dead for this repo.
+      // A retired placeholder's index runtimes are gone; a new entry starts a new tracker.
       this.runtimes.delete(resolved.repoRoot);
     }
     const pending = this.creating.get(resolved.repoRoot);
     if (pending) return budget ? budget.race("runtime.create", pending) : pending;
-    const family = this.familyKey(resolved.worktree, resolved.repoHash);
-    const started = this.startFamilyCreate(family, resolved);
+    const started = this.createEntry(resolved, DeadlineBudget.fromTimeout(this.options.requestTimeoutMs));
     this.creating.set(resolved.repoRoot, started);
     started.finally(() => {
       if (this.creating.get(resolved.repoRoot) === started) this.creating.delete(resolved.repoRoot);
@@ -733,33 +778,21 @@ export class RepoRuntimeManager {
     return budget ? budget.race("runtime.create", started) : started;
   }
 
-  private async startFamilyCreate(family: string, resolved: ResolvedRepo): Promise<RuntimeEntry> {
-    const prev = this.familyGates.get(family) ?? Promise.resolve();
-    let release!: () => void;
-    const gate = new Promise<void>(resolve => {
-      release = resolve;
-    });
-    this.familyGates.set(family, prev.then(() => gate));
-    await prev;
-    try {
-      return await this.createEntry(resolved, DeadlineBudget.fromTimeout(this.options.requestTimeoutMs));
-    } finally {
-      release();
-    }
-  }
-
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const ownership = this.ownership?.acquire(resolved.repoRoot);
-    const context = this.runtimeFactory(resolved, this.leases);
+    const shared: SharedRouterState = {
+      // Off the owner thread: the walk is synchronous fs and stalled every request on a busy disk.
+      layout: await probeLayoutOffThread(resolved.repoRoot, resolved.layoutProfile),
+      rgRunner: new RgRunner(),
+      edgeStore: new FileSemanticEdgeStoreV2(resolved.repoRoot)
+    };
+    const context = this.runtimeFactory(resolved, this.leases, shared);
     context.session.bindOwnershipLifecycle?.(ownership);
     context.runBackgroundTask = operation => {
       void operation().catch(() => undefined);
       return true;
     };
-    const { generation, coordinator, layout } = this.coordinationFactory(
-      resolved,
-      () => context.javaIndexClient?.localStatus().files ?? 0
-    );
+    const generation = new GenerationClock();
     context.session.bindGenerationClock?.(generation);
     const leaseOperation = this.leases.acquireRuntime(resolved.worktree).catch(() => undefined);
     let leaseTimedOut = false;
@@ -776,9 +809,8 @@ export class RepoRuntimeManager {
     const entry: RuntimeEntry = {
       context,
       generation,
-      coordinator,
-      layout,
-      ready: Promise.resolve(),
+      shared,
+      snapshots: new Map(),
       refCount: 0,
       lastUsedAt: Date.now(),
       lspReservation: "NONE",
@@ -792,155 +824,24 @@ export class RepoRuntimeManager {
       if (state === "STARTING") entry.lspReservation = "STARTING";
       else if (state === "READY") entry.lspReservation = "READY";
       else {
-        entry.lspReservation = "NONE";
-        this.drainSlotWaiters();
-        // BROKEN used to drop the slot and assume the JVM had already exited.
-        // Reap here so a child that survived SIGKILL cannot outlive the session.
+        this.releaseUnusedReservation(entry);
+        // A BROKEN child can survive SIGKILL. Keep its machine slot reserved
+        // until reaping or the later exit notification proves it is gone.
         if (state === "BROKEN") void this.reapSession(entry);
       }
-    });
-    // Register invalidation before start() so the first event cannot be lost.
-    // The coordinator starts before JavaIndex OPEN because sibling snapshot
-    // validation has a real filesystem race: batches observed while OPEN is
-    // reading its target manifest are buffered here, then applied before this
-    // runtime becomes visible to a request.
-    const bufferedJavaIndexBatches: RepoChangeBatch[] = [];
-    let javaIndexReady = entry.context.javaIndexClient === undefined;
-    coordinator.onBatch(async batch => {
-      entry.context.router.onRepoChanged(batch);
-      let sessionFailure: unknown;
-      let sessionFailed = false;
-      try {
-        await entry.context.session.applyRepoChangeBatch(batch);
-      } catch (error) {
-        sessionFailed = true;
-        sessionFailure = error;
-      }
-      if (!javaIndexReady) {
-        bufferedJavaIndexBatches.push(batch);
-        if (sessionFailed) throw sessionFailure;
-        return;
-      }
-      try {
-        await this.applyBatchToJavaIndex(entry.context.javaIndexClient, batch);
-      } catch (indexFailure) {
-        if (sessionFailed) {
-          throw new AggregateError([sessionFailure, indexFailure], "session and JavaIndex repo-change consumers failed");
-        }
-        throw indexFailure;
-      }
-      if (sessionFailed) throw sessionFailure;
-    });
-    // Do not await the watcher-ready scan here: requests retain their bounded
-    // readiness barrier below, while OPEN already gets a live coordinator and
-    // can flush any events that have arrived so far.
-    entry.ready = coordinator.start();
-    // Best-effort: chokidar's initial scan (ignoreInitial: true) never emits
-    // an onBatch for pre-existing files, so the Java index's first full
-    // discovery is kicked off explicitly here rather than waiting for one.
-    // A failed open must not fail runtime creation; the client self-degrades.
-    const validationGeneration = generation.snapshot().value;
-    await entry.context.javaIndexClient?.open(validationGeneration, {
-      leaseRoot: path.join(repoCacheBase(), "leases"),
-      worktree: resolved.worktree,
-      siblingCacheBase: repoCacheBase(),
-      siblingDbPath: this.findSiblingDb(resolved)
-    }, budget ? { budget } : undefined).then(async openStatus => {
-      // A restored-and-verified snapshot (Task 21 Step 6a) reports its own
-      // (possibly higher) generation; the repo's clock must never regress
-      // behind facts the Java index has already verified as current.
-      generation.rebaseAtLeast(openStatus.indexedGeneration);
-      javaIndexReady = true;
-      // Step 21a 4.8: replay batches observed during target manifest
-      // validation, then flush any event that arrived in the narrow gap. The
-      // batch's own generation is preserved, so only its changed/deleted Java
-      // paths are refreshed; no stale seeded fact reaches a caller.
-      for (const batch of bufferedJavaIndexBatches.splice(0)) {
-        await this.applyBatchToJavaIndex(entry.context.javaIndexClient, batch);
-      }
-      await coordinator.flushNow();
-      const generationChangedDuringSeed = generation.snapshot().value !== validationGeneration;
-      // A root with a nonzero failed/recovered count restores COMPLETE too
-      // (its content is provably unchanged from a prior parse that had
-      // issues), but only a fresh coverage.begin() - which only a
-      // reconcile()'d sweep performs - ever resets that count. Treating such
-      // a root as "not fully restored" keeps it self-healing instead of
-      // leaving canAnswerNegative() stuck false forever.
-      const fullyRestored = openStatus.coverage.length > 0
-        && openStatus.coverage.every(entry_ =>
-          entry_.state === "COMPLETE"
-          && entry_.generation === openStatus.indexedGeneration
-          && entry_.failedFiles === 0
-          && entry_.recoveredFiles === 0
-        );
-      // Own-snapshot verification now continues in the worker after OPEN has
-      // restored its facts provisionally.  Starting a full reconcile here
-      // would erase the startup win and duplicate the verifier's bounded
-      // diff/sweep decision; it promotes COMPLETE or schedules the governed
-      // sweep itself.  A real watcher batch still sets generationChanged and
-      // takes the normal reconcile path.
-      const needsFollowUp = (!fullyRestored && !openStatus.snapshotVerificationPending)
-        || generationChangedDuringSeed;
-      if (needsFollowUp) {
-        // Never await a sweep on runtime.create: a failed/empty seed used to
-        // block the 15s public tool on a cold-build child, and a successful
-        // seed already has queryable facts. Use a fresh manager cap so a
-        // nearly-spent OPEN budget cannot cancel the background sweep.
-        void entry.context.javaIndexClient?.reconcile(
-          generation.snapshot().value,
-          { budget: DeadlineBudget.fromTimeout(this.options.requestTimeoutMs) }
-        ).catch(() => undefined);
-      }
-    }).catch(() => {
-      // An OPEN failure remains non-fatal, but watchers must not retain every
-      // later batch forever. Subsequent batch delivery will self-degrade the
-      // unavailable client through the coordinator's normal listener path.
-      javaIndexReady = true;
-      bufferedJavaIndexBatches.length = 0;
     });
     this.runtimes.set(resolved.repoRoot, entry);
     return entry;
   }
 
-  /**
-   * Maps one coordinator batch onto the Java index's own refresh/reconcile
-   * contract (Task 20 Step 7). A storm or a build-file change routes to a
-   * background reconcile rather than a per-path foreground refresh. A listener
-   * throw here is caught by RepoChangeCoordinator's own per-listener catch,
-   * which marks the generation dirty for the next request's retry.
-   */
-  private async applyBatchToJavaIndex(
-    javaIndex: JavaIndexClientApi | undefined,
-    batch: RepoChangeBatch
-  ): Promise<void> {
-    if (!javaIndex) return;
-    const budget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
-    if (batch.storm || batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
-      await javaIndex.reconcile(batch.generation, { budget });
-      return;
-    }
-    const changed: string[] = [];
-    const deleted: string[] = [];
-    const resources: string[] = [];
-    for (const change of batch.changes) {
-      if (change.kind === "JAVA_ADD" || change.kind === "JAVA_CHANGE") changed.push(change.absolutePath);
-      else if (change.kind === "JAVA_DELETE") deleted.push(change.absolutePath);
-      else if (change.kind === "RESOURCE_CHANGE") resources.push(change.absolutePath);
-    }
-    if (changed.length > 0 || deleted.length > 0) {
-      await javaIndex.refresh(batch.generation, changed, deleted, { budget });
-    }
-    // The coordinator retains the exact resource event for LSP consumers, but
-    // the worker API remains path-only and resolves each path via its own stat,
-    // idempotently (Task 28 Slice B).
-    if (resources.length > 0) {
-      await javaIndex.refreshResources(batch.generation, resources, { budget });
-    }
-  }
-
   private refreshResource(entry: RuntimeEntry): void {
     entry.context.resource = this.resourceStatus();
-    entry.context.watcher = entry.coordinator.status();
+    // The metadata read/write runs synchronously on the owner's event loop:
+    // once per interval per runtime, not once per request.
+    const ownerToken = entry.runtimeLease?.owner.ownerToken;
+    const now = Date.now();
+    if (entry.cacheTouch && entry.cacheTouch.ownerToken === ownerToken && now - entry.cacheTouch.at < CACHE_TOUCH_INTERVAL_MS) return;
+    entry.cacheTouch = { at: now, ownerToken };
     // The multi-process janitor's authoritative signal (Task 12c) is the
     // runtime lease itself. lastRequestAt is stamped only on MCP use, never
     // on JDT pid changes — otherwise log writes and lifecycle touches keep
@@ -949,7 +850,7 @@ export class RepoRuntimeManager {
       repoHash: entry.context.repoHash,
       familyHash: entry.context.worktree?.familyHash,
       ownerPid: process.pid,
-      ownerToken: entry.runtimeLease?.owner.ownerToken,
+      ownerToken,
       touchLastRequest: true
     });
   }
@@ -1044,7 +945,7 @@ export class RepoRuntimeManager {
    */
   private releaseUnusedReservation(entry: RuntimeEntry): void {
     const state = entry.context.session.status().state;
-    if (entry.lspReservation === "STARTING" && state !== "STARTING" && state !== "READY") {
+    if (state !== "STARTING" && state !== "READY" && !this.sessionHasLiveChildren(entry)) {
       entry.lspReservation = "NONE";
       this.drainSlotWaiters();
     }
@@ -1057,6 +958,10 @@ export class RepoRuntimeManager {
   private oldestIdleReservedEntry(exempt?: RuntimeEntry): RuntimeEntry | undefined {
     return this.reservedEntries()
       .filter(entry => entry !== exempt && entry.refCount === 0)
+      .filter(entry => {
+        const state = entry.context.session.status().state;
+        return state === "READY" || state === "STARTING" || !this.sessionHasLiveChildren(entry);
+      })
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
@@ -1064,30 +969,6 @@ export class RepoRuntimeManager {
     return [...this.runtimes.values()]
       .filter(entry => entry !== exempt && entry.refCount === 0 && entry.stoppedAt === undefined)
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
-  }
-
-  private familyKey(worktree: { familyHash?: string; repoHash: string } | undefined, repoHash: string): string {
-    return worktree?.familyHash ?? worktree?.repoHash ?? repoHash;
-  }
-
-  private findSiblingDb(resolved: ResolvedRepo): string | undefined {
-    const family = this.familyKey(resolved.worktree, resolved.repoHash);
-    const self = indexDbPath(resolved.repoRoot);
-    let best: { path: string; mtime: number } | undefined;
-    for (const entry of this.runtimes.values()) {
-      if (entry.stoppedAt !== undefined) continue;
-      if (this.familyKey(entry.context.worktree, entry.context.repoHash) !== family) continue;
-      const dbPath = indexDbPath(entry.context.repoRoot);
-      if (dbPath === self || !existsSync(dbPath)) continue;
-      const mtime = statSync(dbPath).mtimeMs;
-      if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
-    }
-    const fromDisk = scanFamilySiblingIndex(repoCacheBase(), family, self);
-    if (fromDisk && existsSync(fromDisk)) {
-      const mtime = statSync(fromDisk).mtimeMs;
-      if (!best || mtime > best.mtime) best = { path: fromDisk, mtime };
-    }
-    return best?.path;
   }
 
   private clearIdleTimers(entry: RuntimeEntry): void {
@@ -1158,11 +1039,17 @@ export class RepoRuntimeManager {
     }
   }
 
+  private sessionHasLiveChildren(entry: RuntimeEntry): boolean {
+    const session = entry.context.session as { hasLiveChildren?: () => boolean };
+    return session.hasLiveChildren?.() ?? false;
+  }
+
   private async reapSession(entry: RuntimeEntry): Promise<void> {
     const session = entry.context.session as { reapAbandonedChildren?: () => Promise<void> };
     if (typeof session.reapAbandonedChildren !== "function") return;
     try {
       await session.reapAbandonedChildren();
+      this.releaseUnusedReservation(entry);
     } catch (error) {
       console.error("[codex-java-lsp] failed to reap abandoned JDT", error);
     }
@@ -1179,28 +1066,68 @@ export class RepoRuntimeManager {
   }
 }
 
-function indexDbPath(repoRoot: string): string {
-  const dir = process.env.JAVA_LSP_INDEX_DIR?.trim();
-  return path.join(dir && dir.length > 0 ? dir : repoCacheRoot(repoRoot), "index.sqlite");
+/** Confident negatives need a complete snapshot: every source and resource root COMPLETE with no failed or recovered files. */
+function negativeLookupAllowed(status: JavaIndexStatus): boolean {
+  if (status.state !== "READY" || status.lastError !== undefined || status.coverage.length === 0) return false;
+  const generation = status.indexedGeneration;
+  return status.coverage.every(entry => entry.generation === generation && entry.state === "COMPLETE"
+      && entry.failedFiles === 0 && entry.recoveredFiles === 0)
+    && (status.resourceCoverage ?? []).every(entry => entry.generation === generation && entry.state === "COMPLETE" && entry.failedFiles === 0);
+}
+
+const BUILD_FILES = ["pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.properties"];
+
+/** One publish as the JDT/router change batch: verified content changes only, at the new generation. */
+export function changeBatchFor(event: PublishEvent, generation: number): RepoChangeBatch {
+  const changes: RepoChange[] = [];
+  const absolute = (relative: string) => path.join(event.canonicalRoot, relative);
+  for (const relative of event.changed) {
+    const name = path.posix.basename(relative);
+    if (BUILD_FILES.includes(name)) changes.push({ kind: "BUILD_CHANGE", absolutePath: absolute(relative), event: "change" });
+    else changes.push(relative.endsWith(".java")
+      ? { kind: "JAVA_CHANGE", absolutePath: absolute(relative), event: "change" }
+      : { kind: "RESOURCE_CHANGE", absolutePath: absolute(relative), event: "change" });
+  }
+  for (const relative of event.deleted) {
+    const name = path.posix.basename(relative);
+    if (BUILD_FILES.includes(name)) changes.push({ kind: "BUILD_CHANGE", absolutePath: absolute(relative), event: "delete" });
+    else changes.push(relative.endsWith(".java")
+      ? { kind: "JAVA_DELETE", absolutePath: absolute(relative), event: "delete" }
+      : { kind: "RESOURCE_CHANGE", absolutePath: absolute(relative), event: "delete" });
+  }
+  if (event.buildKeyChanged && !changes.some(change => change.kind === "BUILD_CHANGE")) {
+    for (const name of BUILD_FILES) changes.push({ kind: "BUILD_CHANGE", absolutePath: absolute(name), event: "change" });
+  }
+  const javaFiles = changes.filter(change => change.kind.startsWith("JAVA_")).length;
+  return {
+    generation,
+    observedAt: new Date().toISOString(),
+    changes,
+    storm: isStormBatch(changes.length, Math.max(javaFiles, 1)),
+    affectedRoots: [...new Set(changes.map(change => path.relative(event.canonicalRoot, path.dirname(change.absolutePath)).split(path.sep)[0] || "."))].slice(0, 16)
+  };
 }
 
 function createRuntime(
   resolved: ResolvedRepo,
   leases: CrossProcessLeaseStore,
+  shared: SharedRouterState,
   transportMode: RepoOwnerTransport = "stdio",
-  ownershipLifecycle?: RepoOwnershipLease
+  ownershipLifecycle?: RepoOwnershipLease,
+  gradleDomain?: GradleDomain
 ): ManagedToolContext {
   const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, {
+    gradleDomain,
     transportMode,
     ownershipLifecycle,
     leaseStore: leases,
     worktree: resolved.worktree
   });
-  const dbPath = indexDbPath(resolved.repoRoot);
-  const supervisor = new BuilderSupervisor({ repoRoot: resolved.repoRoot, dbPath });
-  const javaIndexClient = new SqlJavaIndexClient(resolved.repoRoot, dbPath, supervisor);
-  const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
-  const router = new AgentRouter(resolved.repoRoot, session, javaIndex);
+  // Until a request holds a verified snapshot, every index read refuses (NOT_READY, never a sibling).
+  const javaIndexClient = new NotReadyJavaIndexClient();
+  const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient, {}, shared.layout);
+  const router = new AgentRouter(resolved.repoRoot, session, javaIndex, shared.layout,
+    resolveRoutingPolicy(resolved.repoRoot), shared.rgRunner, shared.edgeStore);
   return {
     repoRoot: resolved.repoRoot,
     rootSource: resolved.rootSource,
@@ -1216,29 +1143,10 @@ function createRuntime(
   };
 }
 
-function isOwnershipProvider(value: CoordinationFactory | RepoOwnershipProvider): value is RepoOwnershipProvider {
-  return typeof value === "object" && value !== null && typeof (value as RepoOwnershipProvider).acquire === "function";
-}
-
 function isLeaseStore(value: unknown): value is CrossProcessLeaseStore {
   return typeof value === "object" && value !== null && typeof (value as CrossProcessLeaseStore).open === "function";
 }
 
 function createDefaultLeaseStore(): CrossProcessLeaseStore {
   return new FileCrossProcessLeaseStore(path.join(repoCacheBase(), "leases"), defaultLeaseClockDeps());
-}
-
-function createCoordination(resolved: ResolvedRepo, indexedFileCount: () => number): RuntimeCoordination {
-  const generation = new GenerationClock();
-  const layout = new LayoutManager(resolved.repoRoot, resolved.layoutProfile);
-  const coordinator = new RepoChangeCoordinator(
-    resolved.repoRoot,
-    resolved.worktree,
-    repoCacheBase(),
-    generation,
-    layout,
-    undefined,
-    indexedFileCount
-  );
-  return { generation, coordinator, layout };
 }

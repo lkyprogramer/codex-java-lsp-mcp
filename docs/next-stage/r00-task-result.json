@@ -1,0 +1,41 @@
+{
+ "schemaVersion": "task-result/v1",
+ "task": "R00",
+ "branch": "codex/java-specialist-release-audit-v1.1",
+ "sourceSha": "commit that records this file (see commit message; branch codex/java-specialist-release-audit-v1.1)",
+ "status": "DONE",
+ "restoredFile": "docs/java-specialist-devkit-v1/dataset/contracts/fixtures/unicode/src/main/java/demo/Unicode.java",
+ "bytesBefore": "42f1c89bcc4ced94b42e738de6f536104b13be8a809645ccbd6611cdc5aa681b",
+ "bytesAfter": "294cd139daf877efe01a66a81da59ca3ec652806837da749eb60486eb0dd43b3",
+ "gitattributesRule": "docs/java-specialist-devkit-v1/dataset/contracts/fixtures/unicode/src/main/java/demo/Unicode.java -text",
+ "freshCloneVerified": "temporary local clone: CRLF preserved, sha256 == GOOD (after .gitattributes committed)",
+ "frozenSetUnchanged": {
+  "dataset/manifest.json": "6233410947b1a4bbe1860789856f7789af7cf29e6092d4de5143f7202227b223",
+  "harness/scoring.py": "5c41e12a994a7a9269725e94646bfb691e6929c2d3dba7c306255754095d4a28",
+  "schemas/gates.json": "6125a647eb31dc5fa9093cf4e4b08f70d1ea402a91d6cb777bb53acb6211844b",
+  "note": "manifest NOT refreshed; recovery source = baseline-kit bytes"
+ },
+ "evidence": {
+  "red": "java-specialist-audit-runs/r00-red (selfcheck: dataset=2, unit=1 FAIL/1 ERROR, repair-oracles=2)",
+  "green": "java-specialist-audit-runs/r00-green (selfcheck 5/5 exit 0)",
+  "probe12": "java-specialist-audit-runs/r00/probe-12.log (12/12, isolated targeted run)",
+  "fullValidation": "java-specialist-audit-runs/r00/validate-full.log (rc in r00/rc.log)",
+  "baselineCounterexamples": "java-specialist-audit-runs/baseline-counterexamples (26/27 fail, exit 1, expected pre-fix baseline)",
+  "packageTests": "tests/test_r00_frozen_recovery.py 5/5 ok with PROJECT checkout; 2 failures against scratch copy with BAD LF bytes (RED semantics proven); check_bundle 357 PASS",
+  "deliverables": [
+   "docs/next-stage/baseline-b9.md",
+   "docs/next-stage/invalidated-runs.json (12 run groups / 572 runs, all causalClaimEligible=false)",
+   "report correction blocks appended to m2-milestone.md / m3-milestone.md / m3-t10-semantic-discovery.md"
+  ]
+ },
+ "versioning": {
+  "current": "this checkout (b9c3cc3 + R00 commits)",
+  "installed": "UNMEASURED (not touched, not assumed == b9)",
+  "measured": "per historical run-dir preflight/source_sha"
+ },
+ "residualGaps": [
+  "S1 counterexamples (W01-W05, E01-E04) remain failing by design until R01-R04 fix the product/harness",
+  "S2 product correctness (R05-R09), S3 experiments (R10/R11), S4 release validation (R12/R13) not started",
+  "installed release version unmeasured; no production cache/38456 touched"
+ ]
+}

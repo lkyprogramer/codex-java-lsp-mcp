@@ -1,0 +1,46 @@
+{
+  "scope": "FIXTURES_ONLY",
+  "passed": true,
+  "rows": [
+    {
+      "file": "dataset/corpora/admissions/modules/graduate/src/main/java/demo/Shared.java",
+      "argv": [
+        "javac",
+        "-encoding",
+        "UTF-8",
+        "-proc:none",
+        "--release",
+        "8",
+        "-d",
+        "/tmp/java-module-isolation-upi0zcib",
+        "/mnt/data/java-specialist-devkit-v1/dataset/corpora/admissions/modules/graduate/src/main/java/demo/Shared.java"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n",
+      "classes": [
+        "demo/Shared.class"
+      ]
+    },
+    {
+      "file": "dataset/corpora/admissions/modules/undergrad/src/main/java/demo/Shared.java",
+      "argv": [
+        "javac",
+        "-encoding",
+        "UTF-8",
+        "-proc:none",
+        "--release",
+        "8",
+        "-d",
+        "/tmp/java-module-isolation-8bw2gues",
+        "/mnt/data/java-specialist-devkit-v1/dataset/corpora/admissions/modules/undergrad/src/main/java/demo/Shared.java"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n",
+      "classes": [
+        "demo/Shared.class"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,560 @@
+{
+  "taskId": "MAC-02B",
+  "gateId": "G02B",
+  "status": "PASS",
+  "dependency": {
+    "taskId": "MAC-02A",
+    "status": "PASS",
+    "commit": "2c70544eeaf58358eb65a03cb4f0d6b3fd435cfd"
+  },
+  "identity": {
+    "baseCommit": "2c70544eeaf58358eb65a03cb4f0d6b3fd435cfd",
+    "executableTree": "dc34aabf0ddc167860afcc563e1da9f1dc5184cb",
+    "sourceDigest": "c04f2ae68c4476276d63ac9abe4988959599f8a7f4339dcd7fc223f7b4dc05cd",
+    "nativeBinarySha256": "c0e21377d559d9ae2db5387e3d30fefe4ab7737bee2439237ca97cfdcd062c6d",
+    "nativeManifestSha256": "b3ee49b94f1f2a508df38d5a95043f12db069353f53e2f47ad882dfd86dd8cb6",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "sourceFiles": 37
+  },
+  "checks": [
+    {
+      "name": "client-kill-06",
+      "status": "FAIL",
+      "classification": "FAIL_FIXTURE_PRECONDITION",
+      "exitCode": 1,
+      "candidateTree": "08b96e6e820257e54b0e8a79642186e770e944a9",
+      "nativeBinarySha256": "9739ad9a4b2bc6de7e8cc7f17b581f27a03ebbf3f681ffe90daca53162d0b2c4",
+      "tap": {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "f0650f207e8c17bd084ae99c7440bed48af37051d781d9482282547b6207ab42",
+      "stderrSha256": "f20f79f528a972a54139f38fb342a4e2cb3181c7ec101889760b89f389c0127f"
+    },
+    {
+      "name": "client-readiness-07",
+      "status": "PASS",
+      "classification": "N/A",
+      "exitCode": 0,
+      "candidateTree": "5a3f3fedce7197543c401ab33d35753ace6d6eec",
+      "nativeBinarySha256": "ed924b3d64131e656eccef25adee8049a6f06de55d3852aa51f452109b1fc810",
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "dc6fb813fe18dce6423509a6da4eacd3f756c2dffe9c83f38f62f86dbd945f67",
+      "stderrSha256": "f033fceb98ccdc12eb67cb0e3fcc40f6352cfe6c9823ce0b1313c83d63af0c2b"
+    },
+    {
+      "name": "final-directed-08",
+      "status": "PASS",
+      "classification": "N/A",
+      "exitCode": 0,
+      "candidateTree": "5a3f3fedce7197543c401ab33d35753ace6d6eec",
+      "nativeBinarySha256": "f73d37e17d438b96798d662bbf6f788172882b9905ee2469155211f55f7b44a3",
+      "tap": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "0b9d8eec52bcc0a6ef88bdc67060e51c79937193edcc784b55330f70364a0dc7",
+      "stderrSha256": "32e96123d94db6cb9240f1a5a1d7cd46fbc1c6a6bba3facf4f1baf2930ccf0a3"
+    },
+    {
+      "name": "fixes-05",
+      "status": "FAIL",
+      "classification": "FAIL_FIXTURE_PRECONDITION",
+      "exitCode": 1,
+      "candidateTree": "c5e7713756e0e17d2fff8647c4d8e53acf5a38b2",
+      "nativeBinarySha256": "bf1021dd6f644e48b81ec402c6800955260b8b69b2a727d6cc4beb68adc3a5f8",
+      "tap": {
+        "tests": 86,
+        "pass": 85,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "c20a042d5764fbb9e59fa2e62b07dd3b3d45cc877be6bfcd33f079efd7502ccf",
+      "stderrSha256": "a5ecbfa8101051a9d4262dfc766c1c5e0df588ec06c7ba1dbd4869a3554dee06"
+    },
+    {
+      "name": "gradle-04",
+      "status": "PASS",
+      "classification": "N/A",
+      "exitCode": 0,
+      "candidateTree": "662ea8e016111ac4cacea76b0295bc03ac3cff13",
+      "nativeBinarySha256": "7b7ede48567a3d1481f423d7849d8ece85ac05f32dc19b0894e00cdd307c72fb",
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "112313a50f48a999cbed6036ab3ae8b379616baa863de502536891f008c894e7",
+      "stderrSha256": "2ab3b5314e82272ff215ebfdcd5d28bd84e2f1cb1bf86a9d599beb608cafbffa"
+    },
+    {
+      "name": "gradle-home-red",
+      "status": "FAIL",
+      "classification": "EXPECTED_BEHAVIOR_RED",
+      "exitCode": 1,
+      "candidateTree": "88cb240a449c3f115207e7b67c993fbb96f54d9d",
+      "nativeBinarySha256": "25e793ee38c4036a6a2a2ce8b368e5e865f5460fcf38964743544cf81384210e",
+      "tap": {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "2792d858b109555bddd3053671af9d3442e67067004cd6e13ec08cc1ab0caa55",
+      "stderrSha256": "b0254854869da0e9741dcd4a6376811e7b8d09c6ca94dba312740181de77bc26"
+    },
+    {
+      "name": "jdt-gradle-03",
+      "status": "FAIL",
+      "classification": "INVALID_EXPERIMENT_MUTABLE_TOOLCHAIN_INPUT",
+      "exitCode": 1,
+      "candidateTree": "ab1b7bc279ad2a991fef8bb590a25a84c05fbdc1",
+      "nativeBinarySha256": "65bc55e6226ad5881f5e4b5e213b0a367f2796846be58f394fcc791da9ee481c",
+      "tap": {
+        "tests": 6,
+        "pass": 5,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "62f9f74afd948db3488eabef6d0b8772e1eac2c64bffa96c7197d4a4bfa3dadd",
+      "stderrSha256": "32429e7e0de613a47b89fc3b8b98b85f9086758fb3e4708f456fdbbc39988ad2"
+    },
+    {
+      "name": "primitive-01",
+      "status": "FAIL",
+      "classification": "BLOCKED_ENV_PRE_MAIN",
+      "exitCode": 1,
+      "candidateTree": "36fceabcd49b1ccd01e108dfabb355619ecebb6a",
+      "nativeBinarySha256": "6297e6574745ede57e754677152cb2893c11d4392ccea7e95e1823f9f0b7ef50",
+      "tap": {
+        "tests": 7,
+        "pass": 0,
+        "fail": 7,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "87c29ee0e664d40fa305f911813c97e5bce909788ba38a3cbd29bf4e80246c09",
+      "stderrSha256": "b8a045683ab7d5f205eca03c0c8841014840f48f868e3ca1dfeae62f3fa29691"
+    },
+    {
+      "name": "primitives-02",
+      "status": "PASS",
+      "classification": "N/A",
+      "exitCode": 0,
+      "candidateTree": "59ca0901aa0f435db3c4f615c2ed38ba4e3c2837",
+      "nativeBinarySha256": "665034ec540e5f42449a3f848f147907687f706e0608f7db02ef05f45c687828",
+      "tap": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "dba0700b04fbc2700543ffd531d92fddaff9e273a9e9b179ac74a849848e2e89",
+      "stderrSha256": "df06a8d06e9f8ec307371fe6b2aeea07cc3f7df4a325088e0a5724122ebdfb7b"
+    },
+    {
+      "name": "native-fd-red",
+      "status": "FAIL",
+      "classification": "EXPECTED_BEHAVIOR_RED",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "scripts/run-isolated-validation.mjs",
+        "--keep",
+        "--profile",
+        "targeted",
+        "--",
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-name-pattern=native-calls-preserve-owned-lock-and-pgid",
+        "scripts/ilv2-mac-owner-primitives.test.mjs"
+      ],
+      "exitCode": 1,
+      "candidateTree": "2824bcb11fbaa68d3153e86606992414ec0b6569",
+      "nativeBinarySha256": "dc2e083b73c1ea77ca76a1356d28878f96f37eed2168f88006adea966b3ff3fc",
+      "tap": {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "44707780ec619fba4e3426217a1990588f62b7fbfabaa1ccae58f31ef3b30a2b",
+      "stderrSha256": "2992391e7a490f269b682c6c38126545015074500abab5861f1ac7c8ab816547"
+    },
+    {
+      "name": "native-fd-green",
+      "status": "PASS",
+      "classification": "N/A",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "scripts/run-isolated-validation.mjs",
+        "--keep",
+        "--profile",
+        "targeted",
+        "--",
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-owner-primitives.test.mjs",
+        "dist/mac-platform/clonefile.test.js",
+        "dist/mac-platform/native-exec.test.js"
+      ],
+      "exitCode": 0,
+      "candidateTree": "69f55a4d254507bd8adfad557c42bcd7d55c0c35",
+      "nativeBinarySha256": "c0e21377d559d9ae2db5387e3d30fefe4ab7737bee2439237ca97cfdcd062c6d",
+      "tap": {
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "stdoutSha256": "15a25e0429573913c9b9f3d667c90929de1463caa9cdf1df354107245269bd0f",
+      "stderrSha256": "d1e376f97d1a02020e7c20f270e55fbd664dbf3eef026969bbb37b3dbdea3534"
+    },
+    {
+      "name": "launchd-directed",
+      "status": "PASS",
+      "classification": "N/A",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-owner-lifecycle.test.mjs",
+        "scripts/ilv2-mac-owner-quota.test.mjs"
+      ],
+      "exitCode": 0,
+      "sourceDigest": "e09510b7d49ec2a3c96203bcf4beae098ac633717e3d014b42150dcb31280818",
+      "executableTree": "9417fff4618de6154361da2da5a1bee1cd428aba",
+      "tap": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "archiveCommandEntry": "launchd-directed.command.json",
+      "stdoutSha256": "0d4b6cee05572b4e56f1f63598c1579d69aa0bb43e8cdfd233d67f27ff37ee8b",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "controller-window",
+      "status": "PASS",
+      "classification": "SUPERSEDED_WINDOW_FIXTURE",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-owner-window.test.mjs"
+      ],
+      "exitCode": 0,
+      "sourceDigest": "5887f57b428303c05577b145ff5c6aec72ca675e388397e2dc3c536049ae96e5",
+      "executableTree": "58a497fed825ac37852ac623130753f8785e1b8d",
+      "tap": {
+        "tests": 2,
+        "pass": 2,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "archiveCommandEntry": "controller-window.command.json",
+      "stdoutSha256": "8cc18be94871c10371d264a13479c6817a2337eec5c77dad9d9f3886003613b2",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "jdt-import-final",
+      "status": "FAIL",
+      "classification": "FAIL_FIXTURE_PROBE_EPERM",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-jdt-import.test.mjs"
+      ],
+      "exitCode": 1,
+      "sourceDigest": "e82dc1711d5f014c629237e0e919405bf26527160701f7b64e7a2da590b96e00",
+      "executableTree": "578d5974da2c15ce81ceb0d0866b8d1cf4b6e0b5",
+      "tap": {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "archiveCommandEntry": "jdt-import-final.command.json",
+      "stdoutSha256": "1980fef51b194ab702bc84590fba12895ae3305ed8af25ec21e22a95adcf0549",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "jdt-import-v2",
+      "status": "FAIL",
+      "classification": "FAIL_FIXTURE_PROBE_EPERM",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-jdt-import.test.mjs"
+      ],
+      "exitCode": 1,
+      "sourceDigest": "9c2dfec7db862ce30f5ed20fc978c2c0d8377d98e734b52befdc42db5aef84bf",
+      "executableTree": "a10eaeac0ecf4d0bc79969382400c8cc5b5cacb0",
+      "tap": {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "archiveCommandEntry": "jdt-import-v2.command.json",
+      "stdoutSha256": "a1540d42984dc4cb9e592efc851f623d63f5fcb64d130f7aa3c0115f9bbb2322",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "directed-final-v3",
+      "status": "PASS",
+      "classification": "N/A",
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=launchd-jdt|controller-sigkill|crash-soon|real-builder-parses-and|permission-denial|nested validation|external reservation",
+        "scripts/ilv2-mac-jdt-import.test.mjs",
+        "scripts/ilv2-mac-owner-lifecycle.test.mjs",
+        "scripts/ilv2-mac-owner-window.test.mjs",
+        "scripts/ilv2-mac-owner-quota.test.mjs"
+      ],
+      "exitCode": 0,
+      "sourceDigest": "c04f2ae68c4476276d63ac9abe4988959599f8a7f4339dcd7fc223f7b4dc05cd",
+      "executableTree": "dc34aabf0ddc167860afcc563e1da9f1dc5184cb",
+      "tap": {
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "archiveCommandEntry": "directed-final-v3.command.json",
+      "stdoutSha256": "3be61f2ed69b8bd9a4728683c4c0079d6bf9e0e37b7ab5214a299372b9dbb218",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "primaryVerification": {
+    "name": "directed-final-v3",
+    "tests": 8,
+    "pass": 8,
+    "fail": 0,
+    "sourceDigest": "c04f2ae68c4476276d63ac9abe4988959599f8a7f4339dcd7fc223f7b4dc05cd",
+    "independentTargetedTests": 8,
+    "independentReview": "PASS",
+    "faultToBothExitMs": 2156.0132909999957,
+    "countPolicy": "Final8 directed and independent8 are separate overlapping checks. e09535-source launchd9 and5887 windows2 retained with own identities; no combined whole-suite count. Native/product source unchanged from approved c0e subject; final helper/script changes rechecked with JDT, crash, builder, quota and controller windows."
+  },
+  "remainingGaps": [
+    {
+      "status": "NOT_RUN",
+      "name": "MAC-02C real FSEvents inheritance"
+    },
+    {
+      "status": "NOT_RUN",
+      "name": "G09 formal transport/binding/GC query recovery and restart JDT reinitialize"
+    },
+    {
+      "status": "NOT_RUN",
+      "name": "formal K/PR/release/business matrix/production"
+    }
+  ],
+  "historicalEvidenceLimit": "Unscoped per-test metadata filenames were overwritten by later trials; only final-directed-08 metadata is adopted. Prior TAP/candidate/owner records remain, old 3306.67ms is not adopted. This run stable-name crash/builder quantitative JSON belongs only to final-v3; e095 original TAP and unique per-job timelines remain. No overwritten old timing value is adopted.",
+  "remoteActions": "NOT_RUN",
+  "exactCommands": "Current archived trial records include exact argv, cwd, environment whitelist, start/end, exit and source/native identities. Historical broker snapshot limitations belong to their recorded prior runs.",
+  "next": "G02B PASS. Commit reviewed B changes, then enter MAC-02C under ILV2-MAC/4.",
+  "deferredToG02C": [
+    {
+      "name": "real-FSEvents-inheritance",
+      "status": "NOT_RUN",
+      "gateId": "G02C",
+      "authorization": "User reply 2026-10-14: 将 FSEvents 实测归入 G02C",
+      "ordering": "G02B PASS before MAC-02C"
+    }
+  ],
+  "previousVerification": {
+    "name": "final-directed-08",
+    "tests": 18,
+    "pass": 18,
+    "fail": 0,
+    "sourceDigest": "1c5f20af0d3ea4bb1f69cff41fd9b6042bdc3cd16d11b8649d6729556aefb06e",
+    "independentTargetedTests": 4,
+    "independentReview": "PASS_WITH_GATE_BLOCKED",
+    "faultToBothExitMs": 4368.818665999999,
+    "executableTree": "5a3f3fedce7197543c401ab33d35753ace6d6eec",
+    "scope": "Prior 31-file candidate; not a PASS of the current source or G02B"
+  },
+  "previousArchive": {
+    "status": "PASS",
+    "archive": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02b/20261014T035836Z/raw-evidence.tar.gz",
+    "archiveSha256": "1879d4e4286eed2b4a1af64c7f64de97dcddd416353549481590a2819945fe0d",
+    "manifest": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02b/20261014T035836Z/raw-manifest.json",
+    "manifestSha256": "3861bfaa253dce1bbeee9acef80e8545635ec9379d1bb86d402e3420cbbd1fa3",
+    "fileCount": 479,
+    "totalBytes": 14331423,
+    "pathSetBytesAndAllHashesMatch": true
+  },
+  "previousTestData": {
+    "status": "PASS",
+    "unregisteredPaths": [],
+    "expiredResidualPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": []
+  },
+  "previousProcessCloseout": {
+    "status": "PASS",
+    "jobsChecked": 8,
+    "associatedResidualProcesses": 0,
+    "quotaSlots": 0,
+    "scope": "Prior historical run"
+  },
+  "previousIndependentReviewSha256": "1e849c08fd79a7cc89ecaba8098ed557c45476698ac153e79e16bd4e8871f0d9",
+  "previousIndependentVerificationSha256": "107767b9d235b5d5fd31ec8a507e7f812669450c4fa533c88fb6e0a7aec92a33",
+  "independentReviewSha256": "eba9334878c58ffab2274ba8b4cae66b5778dda20a13f459325d72cdaca08c38",
+  "independentVerificationSha256": "8da8d7c36b1ac54f2b330647f74a9f433063714394b64c273c75ff599587f373",
+  "currentRun": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T081316Z",
+  "archive": {
+    "status": "PASS",
+    "archive": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02b/20261014T081316Z/raw-evidence.tar.gz",
+    "archiveSha256": "6ba90b883ad32765f31109b04a80b839dcebdb2888b9e90044c329e9a2e96174",
+    "manifest": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02b/20261014T081316Z/raw-manifest.json",
+    "manifestSha256": "ece314aca068bfef3c7c78cd4fee32d732e88f84ce971b6c12e4680512514162",
+    "fileCount": 566,
+    "totalBytes": 52648725,
+    "physicalExtractionVerified": true,
+    "pathSetBytesAndAllHashesMatch": true
+  },
+  "testData": {
+    "status": "PASS",
+    "unregisteredPaths": [],
+    "expiredResidualPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "command": [
+      "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "scripts/ilv2-mac-closeout.mjs",
+      "--manifest",
+      "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T081316Z/closeout-manifest.json"
+    ],
+    "cwd": "/Users/luo/Documents/github/codex-java-lsp-mcp",
+    "exitCode": 0,
+    "gateId": "G02B",
+    "gatePassClaim": true,
+    "observedAt": 1791970306.398359,
+    "taskGateStatus": "PASS"
+  },
+  "processCloseout": {
+    "status": "PASS",
+    "recordedLabelsChecked": 29,
+    "ownedPidsChecked": 52,
+    "ownedGroupsChecked": 27,
+    "associatedResidualProcesses": [],
+    "quotaSlots": [],
+    "externalFixtureJobs": [],
+    "labelCountMeaning": "Includes direct and never-bootstrapped fixtures; not a launched-job count",
+    "archiveEntry": "process-closeout-before-prune.json"
+  },
+  "environmentDiagnosis": {
+    "status": "PASS_PRECONDITION",
+    "permissionDecision": "USER_ALLOW",
+    "fixedSubjectSha256": "c0e21377d559d9ae2db5387e3d30fefe4ab7737bee2439237ca97cfdcd062c6d",
+    "documentsRequestId": "94098.9",
+    "documentsFinalAuthorizationObserved": true,
+    "documentsAuthValue": 2,
+    "documentsAuthReason": 2,
+    "fullDiskAccess": "NOT_GRANTED_OR_REQUIRED",
+    "automatedTccDatabaseOrUiMutation": "NOT_RUN",
+    "permissionScope": "Documents folder; test operations limited to preregistered synthetic fixture roots"
+  },
+  "carryOverPermissionTarget": {
+    "consumerRun": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T081316Z",
+    "permissionGranted": true,
+    "consumerCompleted": true,
+    "actualExists": false,
+    "carryRemoved": true
+  },
+  "independentCloseout": {
+    "status": "PASS",
+    "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T081316Z/independent-closeout.json",
+    "sha256": "c234a63bb8e446c5d122f31f256ff7a07d934bc6a290338fa7b15a2f97796f5f",
+    "scope": "Full physical archive extraction verification; current actual job/PID/owned-group/quota and expired-data closeout."
+  },
+  "historicalRuns": [
+    {
+      "asOfRun": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T061337Z",
+      "status": "BLOCKED_ENV",
+      "identity": {
+        "baseCommit": "2c70544eeaf58358eb65a03cb4f0d6b3fd435cfd",
+        "executableTree": "69f55a4d254507bd8adfad557c42bcd7d55c0c35",
+        "sourceDigest": "18194d252d616cc0ff90968b6090eb460972a1423fc9e94ad0c4a859111bced7",
+        "nativeBinarySha256": "c0e21377d559d9ae2db5387e3d30fefe4ab7737bee2439237ca97cfdcd062c6d",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "sourceFiles": 35
+      },
+      "componentVerification": {
+        "name": "native-fd-green",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "sourceDigest": "18194d252d616cc0ff90968b6090eb460972a1423fc9e94ad0c4a859111bced7",
+        "independentTargetedTests": 2,
+        "independentReview": "PASS_WITH_GATE_BLOCKED",
+        "countPolicy": "8 directed and 2 independent are overlapping checks, not one 10-test suite; prior 18/4 belong to a different candidate."
+      },
+      "archive": {
+        "status": "PASS",
+        "archive": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02b/20261014T061337Z/raw-evidence.tar.gz",
+        "archiveSha256": "35a9b72726e929647004fab4b9f2c9c1bf8e96ec3ccbd5e1278dccd7cbed6b1b",
+        "manifest": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-02b/20261014T061337Z/raw-manifest.json",
+        "manifestSha256": "7e2bb1e2ed74d2ac8029abb701239514edfc0b368439f83cbd0a619325edbf57",
+        "fileCount": 226,
+        "totalBytes": 1338689,
+        "physicalExtractionVerified": true,
+        "pathSetBytesAndAllHashesMatch": true
+      },
+      "independentCloseout": {
+        "status": "PASS",
+        "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T061337Z/independent-closeout.json",
+        "sha256": "58ede5b3d4671d5796ba9e278f37a391689dc5179c85bc85736a1ea6ecd87128",
+        "scope": "This blocked run archive, actual residual tree, registered minimal carry, own job/processes and quota; not G02B PASS."
+      },
+      "carryOverSnapshot": {
+        "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-02b/20261014T061337Z/tmp/codex-java-lsp-isolated-validation-1sG0O8/candidate",
+        "files": 8,
+        "bytes": 52519,
+        "consumer": "G02B explicit Documents consent and same-candidate reconstruction/revalidation",
+        "expiresAtGate": "G02C",
+        "deleteAfterConsumer": "Delete when the next G02B verification closes, before MAC-02C starts. G02C is the hard latest expiry.",
+        "permissionGranted": false
+      },
+      "carryOverNow": "Consumed and exact candidate removed before G02C"
+    }
+  ]
+}

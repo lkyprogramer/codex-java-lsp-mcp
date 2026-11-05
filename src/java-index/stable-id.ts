@@ -4,7 +4,10 @@ import type { SourceRange } from "../runtime/source-range.js";
 // path, not by the FQN alone. Two declarations sharing an FQN in different
 // files (same module duplicate, or the same FQN in different source roots)
 // are distinct identities; the FQN remains a multi-valued search attribute.
-export const STABLE_ID_VERSION = 2;
+// v3 gives normalized method signatures a new key namespace. Old array keys
+// must never resolve to a different overload after rebuilding the facts.
+export const STABLE_ID_VERSION = 3;
+export const METHOD_ID_PREFIX = "method:v3:";
 
 export function normalizeStableRelativePath(relativePath: string): string {
   const normalized = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -49,7 +52,7 @@ export function javaMethodId(ownerTypeId: string, erasedSignature: string): stri
   if (!ownerTypeId.startsWith("type:") && !ownerTypeId.startsWith("type-local:")) {
     throw new Error(`invalid owner type id: ${ownerTypeId}`);
   }
-  return `method:${ownerTypeId}#${erasedSignature}`;
+  return `${METHOD_ID_PREFIX}${ownerTypeId}#${erasedSignature}`;
 }
 
 export function javaFieldId(ownerTypeId: string, fieldName: string): string {
@@ -67,8 +70,8 @@ export function javaParameterId(methodId: string, index: number): string {
 
 // v2 owner ids ("type:v2:<path>#<fqn>") embed one "#" inside the owner itself,
 // so "owner#member" keys cannot be split on the first "#". Split on the owner
-// boundary instead: v2 owners end at their second "#", v1/local owners at their
-// first "#". Returns undefined for malformed keys.
+// boundary instead: v2 owners end at their second "#", local owners at their
+// first "#". Any other owner (including pre-v2 "type:<fqn>") is malformed.
 export function splitOwnerMemberKey(key: string): { owner: string; member: string } | undefined {
   if (key.startsWith("type:v2:")) {
     const first = key.indexOf("#");
@@ -77,6 +80,7 @@ export function splitOwnerMemberKey(key: string): { owner: string; member: strin
     if (second === -1) return undefined;
     return { owner: key.slice(0, second), member: key.slice(second + 1) };
   }
+  if (!key.startsWith("type-local:")) return undefined;
   const sep = key.indexOf("#");
   if (sep === -1) return undefined;
   return { owner: key.slice(0, sep), member: key.slice(sep + 1) };

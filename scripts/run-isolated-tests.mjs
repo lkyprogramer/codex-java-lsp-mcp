@@ -34,6 +34,8 @@ export function createIsolatedTestEnvironment(parentEnvironment = process.env) {
     "JAVA_LSP_PROJECTS_JSON",
     "JDTLS_DATA_DIR",
     "JDTLS_LOG_DIR",
+    "JAVA_LSP_SERVICE_STATE_ROOT",
+    "GRADLE_USER_HOME",
     "XDG_CONFIG_HOME",
     "CODEX_HOME",
     "HOME"
@@ -46,7 +48,9 @@ export function createIsolatedTestEnvironment(parentEnvironment = process.env) {
     JAVA_LSP_PROJECTS_JSON: projects,
     XDG_CONFIG_HOME: xdgConfig,
     CODEX_HOME: codexHome,
-    HOME: home
+    HOME: home,
+    JAVA_LSP_SERVICE_STATE_ROOT: path.join(root, "service-state"),
+    GRADLE_USER_HOME: path.join(root, "service-state", "jdt-gradle-home")
   });
 
   return {

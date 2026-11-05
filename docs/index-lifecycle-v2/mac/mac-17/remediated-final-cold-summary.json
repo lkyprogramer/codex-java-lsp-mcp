@@ -1,0 +1,132 @@
+{
+  "schema": "mac17-remediated-final-public-summary/v1",
+  "status": "FAIL",
+  "candidateStatus": "NOT_READY_DISABLED",
+  "sourceBaseCommit": "ff81b8ddbcb8c508f785f035be92323e5a8b4027",
+  "sourceDigest": "cfce7c772405fdff35401908244e10213d7cde248223722d1a01fffc0c8b95c1",
+  "buildLabel": "ff81b8ddbcb8+pcfcd4f85b607",
+  "productPatchSha256": "cfcd4f85b6073932e0b3fe324dbb2ddcb575f32863ffe42ada869d9c85c17843",
+  "businessPatchSha256": "4019b815297a5c310aad773c774d6b8512c1d8f6d0ffa62330d3e39ffb18a65c",
+  "actualNativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+  "counts": {
+    "finalCases": 1,
+    "jdtSpawns": 1,
+    "startCalls": 1,
+    "positionCalls": 0,
+    "referenceCalls": 0,
+    "fullsuiteReruns": 0,
+    "installerReruns": 0,
+    "tap": {
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "skip": 0,
+      "cancel": 0
+    }
+  },
+  "emptyGradleBefore": {
+    "files": 0,
+    "directories": 0,
+    "allocatedBytes": 0
+  },
+  "jdtTiming": {
+    "jdtPid": 48371,
+    "spawnAt": "2026-11-02T11:10:38.274Z",
+    "termAt": "2026-11-02T11:12:38.266Z",
+    "exitAt": "2026-11-02T11:12:38.492Z",
+    "spawnToTermMs": 119994.57029199999,
+    "spawnToExitMs": 120221.14337499999
+  },
+  "terminalFailure": [
+    {
+      "at": "2026-11-02T11:12:38.443Z",
+      "type": "failure",
+      "message": "JDT import failed"
+    }
+  ],
+  "firstStaticMs": 140953.23454200002,
+  "firstSemanticMs": null,
+  "newFiles": 4137,
+  "newArtifacts": 1282,
+  "logicalBytes": 617362216,
+  "allocatedBytes": 648609792,
+  "distributionDownloaded": false,
+  "sourceAttachmentsInSnapshot": {
+    "files": 0,
+    "logicalBytes": 0
+  },
+  "exceptionStringOccurrences": {
+    "SSLHandshakeException": 0,
+    "PKIX": 0,
+    "UnknownPluginException": 0,
+    "ModuleVersionNotFoundException": 0
+  },
+  "policyInitProof": "PASS: actual private init path retained in transport and exact script bytes",
+  "gradleJvmBuildPropertiesAndRoute": "PASS",
+  "bootMarker": "MARKER_RESOLVED",
+  "actualSemantic": "NOT_RUN: no ServiceReady before original120s; no definitions or references requested",
+  "runtimeBackoff": "NOT_VERIFIED after shared catch: last status was before child exit; no follow-up API under fail-stop",
+  "originalActualJdtLaunchArgumentsObserved": false,
+  "initialJdtArgsBoundary": "Original false field retained because READY-selected process evidence absent; raw initial spawn trace retained separately",
+  "artifactIdentityAfter": "UNCHANGED",
+  "review": {
+    "status": "PASS",
+    "scope": "Independent original-failure/resource accuracy, not acceptance",
+    "knownPids": 17,
+    "knownGroups": 5,
+    "quotaSlots": 0,
+    "externalJobs": 0
+  },
+  "package": {
+    "schema": "mac17-remediated-package-verification/v1",
+    "status": "PASS",
+    "candidateStatus": "UNQUALIFIED_NOT_READY",
+    "reason": "Sole cold semantic case failed original120s; evidence package only, no deployment approval",
+    "archive": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T094800Z-remediated-cold-once/unqualified-remediated-cfce7c772405.tar.gz",
+    "archiveSha256": "e03f53c5dd1924424de1d42a497b3f8b00377132fdae2441e930f0fcfb63fd9c",
+    "archiveBytes": 20327675,
+    "inventorySha256": "b97bc97dc70aa506e130715fb562cfc049fc68b42c4491b9eccd3dc9ac85d8e7",
+    "fileCount": 6505,
+    "directoryCount": 1183,
+    "symlinkCount": 7,
+    "logicalBytes": 105087991,
+    "physicalVerification": "PASS",
+    "physicalExtractions": 1,
+    "excluded": ".git metadata only; candidate source/runtime/dependencies retained",
+    "sourceDigest": "cfce7c772405fdff35401908244e10213d7cde248223722d1a01fffc0c8b95c1",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "buildLabel": "ff81b8ddbcb8+pcfcd4f85b607"
+  },
+  "closeout": {
+    "status": "PASS",
+    "registeredPids": 17,
+    "ownedGroups": 5,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T094800Z-remediated-cold-once/closeout/raw-evidence.tar.gz",
+      "sha256": "ae487d192f394a53301280262085f8782fb5902903c7bb3682e6bd1a4d2e9ca5",
+      "fileCount": 27,
+      "bytes": 190698925,
+      "physicalVerification": "PASS"
+    }
+  },
+  "preparationFailures": {
+    "modeGuardFailures": 2,
+    "harnessFooterReferenceError": 1,
+    "runtimeStartsBeforePrepComplete": 0,
+    "originalFailuresRetained": true,
+    "repairs": "Exact original regular and symlink modes restored in same consumer; no second extraction or acceptance replay"
+  },
+  "stopped": true,
+  "next": "No automatic retry or optimization; preserve candidate disabled and actual failed evidence",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "notPerformed": [
+    "No new fullsuite/installer/native compilation",
+    "No compatibility/rollback/canary/G12 replay",
+    "No push/production/TCC probe",
+    "No additional semantic case"
+  ],
+  "boundary": "Required metadata/binary downloads and model import were unfinished at cutoff. Source attachment cache0 and no four exception strings do not establish unique network cause or guarantee120s. Cache bytes are not network bytes."
+}

@@ -1,0 +1,182 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-03B",
+  "gateId": "G03B",
+  "status": "PASS",
+  "dependency": {
+    "head": "0d5574895ab6c556cd278ac7c3169baf4298992f",
+    "requiredGates": [
+      "G03A",
+      "G02C"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "cedf589d8f70819881a690a53565260ab067e7f07b022bea091daf60c2bcb2e1",
+    "distInventorySha256": "5e72d16bb33544791d5ec4c857817f4b7ae83df81820b324c86c47e0d81a6810",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g03b-fixed",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g03b-fixed/result.json",
+      "sourceDigest": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+      "commands": 4,
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "elapsedMs": 13285,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/java-index/snapshot/workspace-tracker.test.js",
+        "dist/index-builder/content-capture.test.js",
+        "scripts/ilv2-mac-tracker.test.mjs"
+      ]
+    },
+    {
+      "name": "regression-g03b-fixed",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/regression-g03b-fixed/result.json",
+      "sourceDigest": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+      "commands": 4,
+      "tests": 421,
+      "pass": 421,
+      "fail": 0,
+      "elapsedMs": 116494,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/index-builder/build-scheduler.test.js",
+        "dist/index-builder/content-capture.test.js",
+        "dist/index-builder/execution-plan.test.js",
+        "dist/index-builder/integrity.test.js",
+        "dist/java-index/ast-extractor.test.js",
+        "dist/java-index/build-fingerprint.test.js",
+        "dist/java-index/builder-supervisor.test.js",
+        "dist/java-index/builder/cold-build.test.js",
+        "dist/java-index/builder/incremental.test.js",
+        "dist/java-index/builder/parse-cache.test.js",
+        "dist/java-index/builder/r08-evidence.test.js",
+        "dist/java-index/builder/review-fixes.test.js",
+        "dist/java-index/edge-builder.test.js",
+        "dist/java-index/entity-search.test.js",
+        "dist/java-index/framework-index-view.test.js",
+        "dist/java-index/java-index-file-parse.test.js",
+        "dist/java-index/java-parser-backend.test.js",
+        "dist/java-index/manifest.test.js",
+        "dist/java-index/mybatis-xml-extractor.test.js",
+        "dist/java-index/name-resolver.test.js",
+        "dist/java-index/router-facts.test.js",
+        "dist/java-index/router-integration.test.js",
+        "dist/java-index/router-java-index-cold.test.js",
+        "dist/java-index/router-java-index.test.js",
+        "dist/java-index/snapshot/query-pool.test.js",
+        "dist/java-index/snapshot/snapshot-store.test.js",
+        "dist/java-index/snapshot/workspace-tracker.test.js",
+        "dist/java-index/sql/bounded-cache.test.js",
+        "dist/java-index/sql/driver-async.test.js",
+        "dist/java-index/sql/driver.test.js",
+        "dist/java-index/sql/entity-search-bounded.test.js",
+        "dist/java-index/sql/entity-search-evidence-determinism.test.js",
+        "dist/java-index/sql/entity-search-intent.test.js",
+        "dist/java-index/sql/entity-search.test.js",
+        "dist/java-index/sql/entity-tokens.test.js",
+        "dist/java-index/sql/facts-store.test.js",
+        "dist/java-index/sql/knowledge-graph.test.js",
+        "dist/java-index/sql/logical-export.test.js",
+        "dist/java-index/sql/posting-delta.test.js",
+        "dist/java-index/sql/registry-view.test.js",
+        "dist/java-index/sql/rows.test.js",
+        "dist/java-index/sql/search-docs.test.js",
+        "dist/java-index/sql/sql-client-incremental.test.js",
+        "dist/java-index/sql/sql-client-lifecycle.test.js",
+        "dist/java-index/sql/sql-client.test.js",
+        "dist/java-index/sql/sql-queries.test.js",
+        "dist/java-index/sql/sql-read-ranges.test.js",
+        "dist/java-index/sql/sym.test.js",
+        "dist/java-index/sql/workspace-stat.test.js",
+        "dist/java-index/stable-id.test.js",
+        "dist/java-index/symbol-identity.test.js",
+        "dist/mac-platform/clonefile.test.js",
+        "dist/mac-platform/fsevents.test.js",
+        "dist/mac-platform/gradle-domain.test.js",
+        "dist/mac-platform/jdt-gradle-home.test.js",
+        "dist/mac-platform/native-exec.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "real-fsevents-tracker-acceptance",
+      "file": "tracker-native-summary-fixed.json",
+      "sha256": "6183a45df948e14bb0f8652404f16a9b8cd8d241392e778cba51c293b8cd8a11",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "tracker-mutation-kill-matrix",
+      "file": "g03b-mutations-fixed.json",
+      "sha256": "d17a60d9d91f498aea7985c409d51a162fbdb737cdcedfc4c3423357f575af48",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-resource-archive-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "e1ce4ef1a7c2a28b430c6e4f43a7cc67046f3f45177d60c04069effb0b8a2f5b",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "4498b283db55e2302654073aaf42141c15a885101c24c259e81e08bb7d5e2447",
+    "registeredPids": 160,
+    "ownedGroups": 0,
+    "launchdJobs": 6,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-03b/20261016T074254Z/closeout/raw-evidence.tar.gz",
+      "sha256": "e70d6c40a938bfe8b8274f08cdf048ad50b6bc31ae10e656ed079f77523da837",
+      "fileCount": 88,
+      "bytes": 1548038,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "22e26bd06743532e575527a0ad958deba651b2ce7437416f78a263a33904cc9e",
+      "source": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "a4c0381c85ee006ed9e63ec2ecd174906824a9e0da27fc15878b3fce4d591fd8",
+  "notClaimed": [
+    "Real OS FSEvents drop (MustScanSubDirs/UserDropped/KernelDropped): NOT_INDUCED; drop handling proven at protocol level with the fake source only",
+    "Sleep/wake resume signal: the native helper does not emit it; the producer is owned by MAC-09 (cards/MAC-09.md)",
+    "launchd route: NOT_RUN; the real-helper scenario runs under the owner launcher with a fixture slot (G01 direct route)",
+    "D07 residual: the legacy fs.watch tracker (repo-fs-watch.ts, repo-change-coordinator.ts) stays as the old runtime's only watcher and is deleted by MAC-08B with the call-graph switch (ledger D07); G03B does not close D07 as a whole",
+    "Symlinked content root: tracker membership differs from indexer discovery; fail-closed (extra rebuilds, never a false FRESH); accepted limit, owner MAC-08B (tracker->builder wiring)",
+    "Production pipeline wiring of tracker -> builder (builder still re-reads files after tracker verification): MAC-08, NOT_RUN",
+    "After an abandoned periodic full-hash round, status() still reports FRESH until the retry runs (hasWork() stays true, so the retry is guaranteed); accepted limit, owner MAC-08B"
+  ],
+  "next": "G03B PASS completes parent G03 (G03A already PASS); manual next is MAC-07 (G07 rerun on the post-03B source).",
+  "authorization": "User 2026-10-16: \"继续,按照的你的建议方案\" (do MAC-03B, close out G03B, then rerun and compose G07; local commits only). The D07 plan amendment (size+mtime skip removed in G03B, fs.watch tracker deletion recorded as a D07 residual owned by MAC-08B) was decided by team-lead under that instruction after review finding P1-2; it was not separately approved by the user.",
+  "notes": "Main: final-g03b-fixed 28/28 (incl. real native FSEvents scenario) and regression-g03b-fixed 421/421 on source 33861459…. final-g03b and regression-g03b (source 7c7bded5…) are history: the first review found a dispatch cut race (P1-1) and the D07 size+mtime skip still live in the reconcile path (P1-2). Mutation matrix is dev tier, 25/25 killed. Stat identity is now size + ns mtime/ctime + ino + dev (workspace-stat schema v2, pure cache). Closeout incident: the first --finish archived and physically verified raw/, then failed with EACCES deleting BULK tmp/ because scripts/ilv2-mac-tracker.test.mjs leaves its mkdtemp root behind and its 6 sealed snapshot directories are mode 0555. raw/ was restored from the verified archive, only those 6 directories under the run's own tmp/ were chmod u+w, and --finish was rerun; archive-manifest.json is byte-identical to the first attempt. Follow-up (not in this source): the native test must chmod+remove its temp root, or closeout must handle sealed read-only directories.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-03b/20261016T074254Z"
+}

@@ -3,7 +3,7 @@
 // pos: Transport-neutral owner of aliases, repo resolution, runtimes, drain, and shutdown.
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver, type RepoResolverOptions } from "./repo-resolver.js";
-import { RepoRuntimeManager } from "./repo-runtime-manager.js";
+import { RepoRuntimeManager, type IndexOwnerSource } from "./repo-runtime-manager.js";
 import { RepoOwnershipManager, type RepoOwnershipProvider, type RepoOwnerTransport } from "./repo-ownership-lease.js";
 import { canonicalPath, repoHash } from "./path-utils.js";
 import {
@@ -32,6 +32,8 @@ export type JavaLspApplicationOptions = {
   ownership?: RepoOwnershipProvider;
   cleanup?: (options: WorktreeCacheCleanupOptions) => WorktreeCacheCleanupResult;
   cacheJanitorIntervalMs?: number;
+  /** The index owner source for the default runtime manager (false: no index, for JDT-only tests). */
+  index?: IndexOwnerSource;
 };
 
 export class JavaLspApplication {
@@ -59,11 +61,16 @@ export class JavaLspApplication {
     this.resolver = options.resolver ?? new RepoResolver(this.registry, options.resolverOptions ?? {
       cwdFallback: this.transportMode === "streamable_http" ? "reject" : "allow"
     });
+    const idleMode = process.env.JAVA_LSP_STATIC_WORKTREE_GC;
     this.runtimes = options.runtimes ?? new RepoRuntimeManager(
       this.resolver,
       {
         transportMode: this.transportMode,
-        isProtectedRepo: root => this.lspEnabledPinRoots().has(canonicalPath(root))
+        isProtectedRepo: root => this.lspEnabledPinRoots().has(canonicalPath(root)),
+        ...(idleMode === "observe" || idleMode === "enforce" ? { worktreeIdle: {
+          mode: idleMode, isUnpinned: (root: string) => this.registry.isUnpinnedForReclaim(root)
+        } } : {}),
+        ...(options.index !== undefined ? { index: options.index } : {})
       },
       undefined,
       options.ownership ?? new RepoOwnershipManager({ transport: this.transportMode })

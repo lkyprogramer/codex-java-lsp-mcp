@@ -1,0 +1,220 @@
+{
+  "schema": "native-isolated-recovery-independent-review/v1",
+  "status": "PASS",
+  "scope": "ACTUAL_ISOLATED_UPGRADE_ROLLBACK_CLEANUP_RECOVERY_AND_STATIC_R7_PRODUCTION_GUARDS",
+  "reviewedAt": "2026-10-11T12:25:45.529450+00:00",
+  "isolatedProofSha256": "6ed5a7bfa2fcf25ad8856c0cdfdf407f13668a15361471eef847bc4a99f1c13e",
+  "installedSelectionSha256": "a5d648f17d0b68a6174b0028c0348b5bb4a8743dbd394ee466145104f87d4fa1",
+  "driverSha256": "38bc045ffe18a1ba9121acd0babf8233e0d783542a8b65ee701a6a4c26ee2f0c",
+  "findings": [],
+  "blockingFindings": [],
+  "qualification": "ISOLATED_NATIVE_PREREQUISITES_COMPLETE_FOR_REVIEWED_R7_PRODUCTION_CHECKS",
+  "releaseIdentity": {
+    "commit": "8f737ac7cd141d0eb07de37bb212d4d6648d96a3",
+    "sourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc"
+  },
+  "evaluatedIdentity": {
+    "commit": "a77b6428ca432259c4008ead6c5e58cdc5e53cef",
+    "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864"
+  },
+  "actualProof": {
+    "proofType": "ORIGINAL_OPERATIONS_PLUS_ADDITIVE_CLEANUP_RECOVERY",
+    "originalDriverExitCode": 1,
+    "recoveryExitCode": 0,
+    "originalOrderedNativeAndQualificationOperations": 8,
+    "originalOperationExitCodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "mandatoryInstallerSourceTests": 1366,
+    "mandatoryInstallerScriptTests": 436,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "candidateSmokes": {
+      "ports": [
+        38562,
+        38561
+      ],
+      "build": "8f737ac7cd14",
+      "tools": 5,
+      "status": "PASS"
+    },
+    "oldBaselineAndRollbackSmokes": {
+      "port": 38561,
+      "build": "09b9851e888a",
+      "tools": 5,
+      "status": "PASS"
+    },
+    "oldCurrentPointerAndStamp": "PASS",
+    "originalAndRecoveredJobAbsentRecords": "PASS",
+    "recoveredPortChecks": {
+      "38561": "BOUND_WITHOUT_SO_REUSEADDR",
+      "38562": "BOUND_WITHOUT_SO_REUSEADDR"
+    },
+    "cleanup": "STOPPED_JOB_ABSENT_PORTS_FREE",
+    "exactSocketStateAtOriginalFailure": "NOT_CAPTURED",
+    "timeWaitCause": "NOT_CLAIMED",
+    "noInstallerBuildTestsLifecycleReexecutionByRecovery": true
+  },
+  "sourceSelection": {
+    "originalInstallerRules": 16,
+    "inputFiles": 1843,
+    "includedFiles": 1780,
+    "excludedFiles": 63,
+    "excludedFilesAllDocsLogs": true,
+    "originalMetadataFlagMismatches": 29,
+    "mismatchesAllOriginalRuleMatchedDocsLogs": true,
+    "productionSourceFilesOmitted": 0,
+    "packageShaAndModesActuallyRechecked": 1843,
+    "installedSourceFilesActuallyRehashed": 1780,
+    "sourceHashMismatches": [],
+    "originalInstallerAndManifestUnchanged": true,
+    "selectionIsNewExemption": false
+  },
+  "staticR7": {
+    "acceptsProductionOnly": true,
+    "requiresRecoveryReviewPass": true,
+    "requiresExactCompositeProofSha": true,
+    "requiresExactSelectionSha": true,
+    "priorQualificationVerifierAndTerminalPassRetained": true,
+    "priorIndependentAdoptionPassAndManifestBindingRetained": true,
+    "cleanSourceActual1843ShaModeHeadGuardsRetained": true,
+    "testOnlyAdoptionNoRelabelGuardsRetained": true,
+    "productionCurrentPlistProjectsNondriftRetained": true,
+    "oldHealthAndCandidatePortAvailabilityGuardsRetained": true,
+    "environmentCacheOwnershipProjectJavaPinsPreservationRetained": true,
+    "immutableCurrentAndPreviousPointerGuardsRetained": true,
+    "newHealthInstanceAndFinalHttpSmokeGuardsRetained": true,
+    "actualInstalledSourceHashGuardRetained": true,
+    "reviewedDriverMustRemainExact": true,
+    "driverExecutedByReviewer": false
+  },
+  "priorEvidence": {
+    "hashReferencesVerified": 24,
+    "terminalReviewStatus": "PASS",
+    "originalGates": 15,
+    "originalContracts": 32,
+    "modelScheduledSlots": 168,
+    "modelEvidenceReaudited": false,
+    "oldModelMeasurementsRelabeled": false,
+    "adoptionReviewPreserved": true
+  },
+  "reviewerActions": {
+    "fileReadsAndHashChecks": true,
+    "pythonAstParseOnly": [
+      "run-install-proof-r6.py",
+      "run-install-proof-r7.py",
+      "recover-isolated-cleanup-proof-r2.py"
+    ],
+    "modelRuns": 0,
+    "tests": 0,
+    "builds": 0,
+    "installerRuns": 0,
+    "daemonctlCalls": 0,
+    "launchctlCalls": 0,
+    "httpCalls": 0,
+    "productionCalls": 0,
+    "writes": "ONLY_THIS_REVIEW_MD_AND_JSON"
+  },
+  "productionDeploymentPerformed": false,
+  "productionVerification": "NOT_RUN_BY_REVIEWER; r7 must perform fresh production nondrift, install and postconditions before any production PASS",
+  "minimalAdditionalProofRequiredBeforeR7": "NONE_FOR_ISOLATED_SCOPE; keep reviewed hashes fixed and allow existing r7 runtime guards to decide fresh production state",
+  "limitations": [
+    "Original r6 exit 1 and first recovery failure remain preserved; composite PASS does not relabel either failed invocation.",
+    "Original post-stop EADDRINUSE cause is not established. Later no-reuse bind checks prove recovery-time port availability only.",
+    "Five-tool smoke is host/MCP exposure evidence (repoScoped false, started false), not new real-project JDT semantic acceptance.",
+    "Original model/gates remain 6d/a77; new native proof is on test-only-adopted 3ee/8f.",
+    "R7 was statically reviewed and AST-parsed, not executed. Production installation, production environment preservation and production smoke remain pending.",
+    "Existing unchanged dependency-audit warnings retain their separately reviewed conditional risk; auditClean is not claimed."
+  ],
+  "evidence": [
+    {
+      "path": "terminal-review.json",
+      "sha256": "a63d5d47f50251ffb6a8338cec6cf8b52629d8e859de57debe0f9399aa23b8c4"
+    },
+    {
+      "path": "release-evidence.json",
+      "sha256": "dff120abf3703353d9456a848b1b57bfa69095c7eecf0f6f49119b7cf2e2037a"
+    },
+    {
+      "path": "release-verdict.json",
+      "sha256": "ff409554b43d467e8babd666899ece164ac6bb57cce99a013b2bc119637381e1"
+    },
+    {
+      "path": "native-deployment/test-fixture-adoption-review.json",
+      "sha256": "b16a9d8d3961e6d848e3d0443bd58c737189109076a318068ea906344604388c"
+    },
+    {
+      "path": "native-deployment/test-fixture-source-binding.json",
+      "sha256": "1728baba12541666a7f914622a6ab102a752dd398522dea7a6c33acd7a4a3690"
+    },
+    {
+      "path": "native-deployment/package-source-manifest-r3-test-fixture.json",
+      "sha256": "5f3e13cefea457551f69037f06503884714f64815f58a08e0138e908006e3b5f"
+    },
+    {
+      "path": "native-deployment/run-install-proof-r6.py",
+      "sha256": "abf3c2819cdd1afcbc5a347e4b7942105b642fe1f4df522659cf0448b741647b"
+    },
+    {
+      "path": "native-deployment/driver-r6-review.json",
+      "sha256": "b7388211f4d145bc600ddee0b66a32a2d59b7dfa62810dabd8bc31b936e2d328"
+    },
+    {
+      "path": "native-deployment/isolated-driver-attempt-6.log",
+      "sha256": "fe733e1cf880fa8cdbe4e704df026563a86e88e4dcbf6d0a8ea601788f9f545a"
+    },
+    {
+      "path": "native-deployment/isolated-attempt-6/isolated-proof.json",
+      "sha256": "6ed5a7bfa2fcf25ad8856c0cdfdf407f13668a15361471eef847bc4a99f1c13e"
+    },
+    {
+      "path": "native-deployment/isolated-attempt-6/cleanup-recovery.json",
+      "sha256": "20a20cd5ec388e045e2a7e81b1c6881dae143331bfbeb87a19ab708b48f67e3c"
+    },
+    {
+      "path": "native-deployment/isolated-attempt-6/isolated-launchctl-after-stop.log",
+      "sha256": "51cadc86da3b3d8919db9ef8c19e885f1de55a366dd7b3fcedb704be6623364a"
+    },
+    {
+      "path": "native-deployment/isolated-attempt-6/cleanup-recovery-launchctl.log",
+      "sha256": "51cadc86da3b3d8919db9ef8c19e885f1de55a366dd7b3fcedb704be6623364a"
+    },
+    {
+      "path": "native-deployment/installed-source-selection.json",
+      "sha256": "a5d648f17d0b68a6174b0028c0348b5bb4a8743dbd394ee466145104f87d4fa1"
+    },
+    {
+      "path": "native-deployment/recover-isolated-cleanup-proof-r2.py",
+      "sha256": "51980bba74443fc7b14f1a1bd41da1095e22effd4624f7f4decd49d3e94da8d0"
+    },
+    {
+      "path": "native-deployment/isolated-cleanup-recovery-r2.log",
+      "sha256": "34b552f612ddca6008cc30e4e6c0e47f446085605f7a2f5f30001891a5354e57"
+    },
+    {
+      "path": "native-deployment/recover-isolated-cleanup-proof.py",
+      "sha256": "f28b3b059a35f6def05b0051ffbf3125e8a25f45dea37e1b903a4c6225ddcf5b"
+    },
+    {
+      "path": "native-deployment/isolated-cleanup-recovery.log",
+      "sha256": "23463d607f47a6eb931c5cf9304c4bd0818965e54cc099360a456aaae26e35c6"
+    },
+    {
+      "path": "native-deployment/run-install-proof-r7.py",
+      "sha256": "38bc045ffe18a1ba9121acd0babf8233e0d783542a8b65ee701a6a4c26ee2f0c"
+    },
+    {
+      "path": "native-deployment/dependency-risk-review.json",
+      "sha256": "8248c8cd8ef71a4e33eec96d0e23068744e88f7861bf895aee1a31931e30a198"
+    }
+  ]
+}

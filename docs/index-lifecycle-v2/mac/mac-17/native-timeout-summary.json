@@ -1,0 +1,333 @@
+{
+  "schema": "mac17-native-timeout-diagnosis/v1",
+  "status": "NOT_REPRODUCED",
+  "rootCause": "UNDETERMINED",
+  "scope": "Diagnosis/evidence only,no product fix,full installer replay,production,push,threshold change or optimization",
+  "implementationCommit": "f58e66190952aab415a9f5f6fc4e70cdbacf86c1",
+  "reportBaseCommit": "f26cfb3d427b33e785696879ed5ff671d08f030c",
+  "originalFailures": {
+    "preserved": true,
+    "G17": "FAIL",
+    "oldRunRoots": [
+      "20261031T082239Z-acceptance-retry1",
+      "20261031T085341Z-acceptance-retry2"
+    ],
+    "test": "scripts/ilv2-mac-retrieval-eval.test.mjs:153",
+    "error": "native process deadline exceeded",
+    "nativeFailedBrokerSha256": "d4d88d282ccaddd7edba04bf633e837244de51db25c7ba84f1b17586f592fdd6"
+  },
+  "identityBoundary": {
+    "restoredNativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+    "sourceNativeAndAssertionsUnchanged": true,
+    "sameBytesAsOriginalFailedBroker": false,
+    "newDiagnosticsOnly": "Temporary observing scripts;v1,v2,v3 augmented source identities tracked individually",
+    "notClaimed": "Normal observations of restored8a do not explain originald4 process state or prove a fix."
+  },
+  "systemLogSignals": {
+    "subjectPathFilteredRows": 950,
+    "kernelAspProvenanceInterrupts": 2,
+    "machReturn": 268451845,
+    "machMeaning": "MACH_RCV_INTERRUPTED verified against local SDK mach/message.h",
+    "subjectFilteredAuthreqPromptingRows": 0,
+    "syspolicydFaultStringRows": 109209,
+    "dispatchMigRows": 103093,
+    "qtnProcRows": 6116,
+    "fdProbe": "EPERM;UNAVAILABLE,not zero FD and not proof of exhaustion",
+    "scope": "Task candidate path filter/system-service exact fault strings only;not production TCC validation",
+    "causality": "UNVERIFIED;could be effect/correlation,not a demonstrated native timeout cause"
+  },
+  "missingEvidence": [
+    "Original failed broker native file/metadata not retained in prior closeout package;restoredrelease has different signed binary bytes.",
+    "No original failed native PID event trace/stack;normal runs do not distinguish its pre-main,statfs,scheduling,orpipe-close state.",
+    "No failure exceeded3s in observed runs;no timeout-time sample was captured."
+  ],
+  "notClaimed": [
+    "No G17 PASS or deploy readiness",
+    "No original same-byte reproduction",
+    "No proven close-tail defect or statfs/path-length cause",
+    "No proven SystemPolicy causal mechanism or descriptor exhaustion",
+    "No production TCC denial or authorization test"
+  ],
+  "recommendation": "Do not patch product or relax5s on current evidence. The next informative evidence must come from an actual newly constructed broker at the original failing boundary, preserving exact failing native bytes/metadata plus same-PID spawn/stdout/exit/pipe-close/kill and a pre-timeout sample. No repeated current suite or specimen construction in this round.",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "updatedAt": "2026-10-31T11:04:28.411698+00:00",
+  "privateSummarySha256": "b173c296726d78fb6ffce992fdde38ba542caac17c78b90b337ae9e43a2a0566",
+  "checks": [
+    {
+      "name": "file-context",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "f35b23de9d2ba081e64456fd1b4f5a7dde42318b1b2dae83f3b217641642aa3b",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "elapsedMs": 12259.092166
+    },
+    {
+      "name": "preceding-context",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "b674543ff03cdf21c0ae19338c23594f7616197afa3c801ddf9e61000675d29d",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 26,
+        "pass": 26,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "elapsedMs": 125136.716583
+    },
+    {
+      "name": "source-context",
+      "status": "FAIL",
+      "identity": {
+        "sourceDigest": "b674543ff03cdf21c0ae19338c23594f7616197afa3c801ddf9e61000675d29d",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 1601,
+        "pass": 1600,
+        "fail": 1,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "elapsedMs": 243827.85541599998
+    },
+    {
+      "name": "jdk-parity",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "b674543ff03cdf21c0ae19338c23594f7616197afa3c801ddf9e61000675d29d",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "elapsedMs": 1375.866917
+    },
+    {
+      "name": "script-prefix",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "b674543ff03cdf21c0ae19338c23594f7616197afa3c801ddf9e61000675d29d",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 285,
+        "pass": 284,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "elapsedMs": 417313.001625
+    },
+    {
+      "name": "copy-short",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "2c61559ea235ed60f269936bbff1f263432cd2bd8b05e2c7332b0ba6d187b059",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "elapsedMs": 956.6041659999999
+    },
+    {
+      "name": "copy-deep",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "2c61559ea235ed60f269936bbff1f263432cd2bd8b05e2c7332b0ba6d187b059",
+        "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+        "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "e8e5621f9d6809e6f3efc3a62acd5137191b16c3fbade34b32089b210cdad878",
+        "distInventorySha256": "93fb57ab6ae6445755078f8f00fcef610756c40a6cc0be3fa8f413d2a11cabf1",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "elapsedMs": 536.507541
+    }
+  ],
+  "nativeProcessObservations": [
+    {
+      "case": "file-context",
+      "pid": 55903,
+      "spawnReturnToFirstStdoutMs": 1168.4467090000003,
+      "spawnReturnToExitMs": 1169.2857090000002,
+      "spawnReturnToCloseMs": 1169.3555000000001,
+      "exitCode": 0,
+      "closeCode": 0,
+      "stdoutBytes": 98,
+      "stderrBytes": 0,
+      "killObserved": false,
+      "threeSecondObservation": false,
+      "sampleCaptured": false
+    },
+    {
+      "case": "preceding-context",
+      "pid": 59029,
+      "spawnReturnToFirstStdoutMs": 3.471958000000086,
+      "spawnReturnToExitMs": 4.049375000000055,
+      "spawnReturnToCloseMs": 4.135583000000224,
+      "exitCode": 0,
+      "closeCode": 0,
+      "stdoutBytes": 98,
+      "stderrBytes": 0,
+      "killObserved": false,
+      "threeSecondObservation": false,
+      "sampleCaptured": false
+    },
+    {
+      "case": "script-prefix",
+      "pid": 70178,
+      "spawnReturnToFirstStdoutMs": 3.5537500000000364,
+      "spawnReturnToExitMs": 4.222874999999931,
+      "spawnReturnToCloseMs": 4.317374999999629,
+      "exitCode": 0,
+      "closeCode": 0,
+      "stdoutBytes": 98,
+      "stderrBytes": 0,
+      "killObserved": false,
+      "threeSecondObservation": false,
+      "sampleCaptured": false
+    },
+    {
+      "case": "copy-short",
+      "pid": 73090,
+      "spawnReturnToFirstStdoutMs": 700.6097500000001,
+      "spawnReturnToExitMs": 701.409541,
+      "spawnReturnToCloseMs": 701.807166,
+      "exitCode": 0,
+      "closeCode": 0,
+      "stdoutBytes": 98,
+      "stderrBytes": 0,
+      "killObserved": false,
+      "threeSecondObservation": false,
+      "sampleCaptured": false
+    },
+    {
+      "case": "copy-deep",
+      "pid": 73112,
+      "spawnReturnToFirstStdoutMs": 292.437375,
+      "spawnReturnToExitMs": 293.9135,
+      "spawnReturnToCloseMs": 294.826375,
+      "exitCode": 0,
+      "closeCode": 0,
+      "stdoutBytes": 98,
+      "stderrBytes": 0,
+      "killObserved": false,
+      "threeSecondObservation": false,
+      "sampleCaptured": false
+    }
+  ],
+  "nativeCopies": {
+    "copy-short": {
+      "pathBytes": 144,
+      "inode": 585824487,
+      "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+      "xattrNamesBefore": [
+        "com.apple.provenance"
+      ],
+      "notClaimed": "New file first exec,not cold code/system policy cache;fixed short-deep order does not establish path causality.",
+      "xattrNamesAfter": [
+        "com.apple.provenance"
+      ]
+    },
+    "copy-deep": {
+      "pathBytes": 194,
+      "inode": 585824493,
+      "nativeSha256": "8a7526baf36fa8039a7314219cb4c3c04e162ae2405a5c646a5dc12fbae14b74",
+      "xattrNamesBefore": [
+        "com.apple.provenance"
+      ],
+      "notClaimed": "New file first exec,not cold code/system policy cache;fixed short-deep order does not establish path causality.",
+      "xattrNamesAfter": [
+        "com.apple.provenance"
+      ]
+    }
+  },
+  "closeout": {
+    "status": "PASS",
+    "registeredPids": 193,
+    "ownedGroups": 57,
+    "launchdJobs": 37,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261031T094215Z-native-timeout-evidence/closeout/raw-evidence.tar.gz",
+      "sha256": "c21f0f9bc12ade5894f7ae2d3b24824d1d8ab29c7557e22990a0bb83d7afa0e9",
+      "fileCount": 417,
+      "bytes": 156716124,
+      "physicalVerification": "PASS"
+    },
+    "rawAndTmpAbsent": true,
+    "globalQuota": "Both tables0 in independent final readback"
+  },
+  "independentReview": {
+    "status": "PASS_REVIEW_OF_NOT_REPRODUCED",
+    "file": "final-independent-review.json",
+    "sha256": "546b899b200f6832c151bc37da252f5b702d140010531bcdffa9d54aa5627876",
+    "reviewedSummarySha256": "0eb7c4d9a278dd20691c5f46f1fdffa8919a078db8b7c8d5e94228fcb6517742",
+    "scope": "Original raw evidence and complete actual resource exit; no test/build rerun"
+  }
+}

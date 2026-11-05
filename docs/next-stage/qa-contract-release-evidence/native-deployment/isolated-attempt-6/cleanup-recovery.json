@@ -1,0 +1,166 @@
+{
+  "schema": "native-cleanup-proof-recovery/v1",
+  "status": "PASS",
+  "scope": "ADDITIVE_READ_ONLY_POSTCONDITION_RECOVERY",
+  "originalDriverExitCode": 1,
+  "originalFailure": "Immediate post-stop bind reported EADDRINUSE; no lifecycle or test operation failed. The exact socket state at failure was not captured.",
+  "originalOperations": [
+    {
+      "name": "qualification-isolated",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/qualification-isolated.log",
+        "sha256": "3730eb8a9ec38b8c97c16fb3fdaa4f53976f6c9b55bf713dd3e78ae08781138a"
+      }
+    },
+    {
+      "name": "clean-source-isolated",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/clean-source-isolated.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "isolated-render-baseline",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/isolated-render-baseline.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "isolated-start-deployed-previous",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/isolated-start-deployed-previous.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "isolated-smoke-deployed-previous",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/isolated-smoke-deployed-previous.log",
+        "sha256": "f97e5e5d5367c608c313a91832829d6f0976a3326215fc2724465032ea455ec2"
+      }
+    },
+    {
+      "name": "isolated-install-candidate",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/isolated-install-candidate.log",
+        "sha256": "31461058364e6a14485b77ee3f7cef9f8ffed8e2e21579305c01ecd5459a936e"
+      }
+    },
+    {
+      "name": "isolated-rollback",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/isolated-rollback.log",
+        "sha256": "f97e5e5d5367c608c313a91832829d6f0976a3326215fc2724465032ea455ec2"
+      }
+    },
+    {
+      "name": "isolated-stop",
+      "exitCode": 0,
+      "log": {
+        "path": "native-deployment/isolated-attempt-6/isolated-stop.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "mandatoryInstallerTests": {
+    "source": 1366,
+    "scripts": 436,
+    "failed": 0,
+    "skipped": 0
+  },
+  "candidateHttpSmokes": [
+    {
+      "ok": true,
+      "url": "http://127.0.0.1:38562/mcp",
+      "tools": [
+        "java_diagnostics",
+        "java_impact",
+        "java_runtime",
+        "java_status",
+        "java_symbol"
+      ],
+      "buildSha": "8f737ac7cd14",
+      "state": "ready",
+      "repoScoped": false,
+      "started": false
+    },
+    {
+      "ok": true,
+      "url": "http://127.0.0.1:38561/mcp",
+      "tools": [
+        "java_diagnostics",
+        "java_impact",
+        "java_runtime",
+        "java_status",
+        "java_symbol"
+      ],
+      "buildSha": "8f737ac7cd14",
+      "state": "ready",
+      "repoScoped": false,
+      "started": false
+    }
+  ],
+  "previousHttpSmoke": {
+    "ok": true,
+    "url": "http://127.0.0.1:38561/mcp",
+    "tools": [
+      "java_diagnostics",
+      "java_impact",
+      "java_runtime",
+      "java_status",
+      "java_symbol"
+    ],
+    "buildSha": "09b9851e888a",
+    "state": "ready",
+    "repoScoped": false,
+    "started": false
+  },
+  "rollbackHttpSmoke": {
+    "ok": true,
+    "url": "http://127.0.0.1:38561/mcp",
+    "tools": [
+      "java_diagnostics",
+      "java_impact",
+      "java_runtime",
+      "java_status",
+      "java_symbol"
+    ],
+    "buildSha": "09b9851e888a",
+    "state": "ready",
+    "repoScoped": false,
+    "started": false
+  },
+  "currentAfterRollback": "releases/09b9851e888a-deployed-baseline",
+  "candidateRelease": "releases/8f737ac7cd14-20261011T120855Z",
+  "installedCandidateFilesChecked": 1780,
+  "installedCandidateFileMismatches": [],
+  "installedFileSelection": {
+    "path": "native-deployment/installed-source-selection.json",
+    "sha256": "a5d648f17d0b68a6174b0028c0348b5bb4a8743dbd394ee466145104f87d4fa1"
+  },
+  "originalMetadataFlagMismatchCount": 29,
+  "jobAbsent": true,
+  "launchctlExitCode": 113,
+  "ports": {
+    "38561": "BOUND_WITHOUT_SO_REUSEADDR",
+    "38562": "BOUND_WITHOUT_SO_REUSEADDR"
+  },
+  "sourceBinding": {
+    "path": "native-deployment/test-fixture-source-binding.json",
+    "sha256": "1728baba12541666a7f914622a6ab102a752dd398522dea7a6c33acd7a4a3690"
+  },
+  "originalDriverLog": {
+    "path": "native-deployment/isolated-driver-attempt-6.log",
+    "sha256": "fe733e1cf880fa8cdbe4e704df026563a86e88e4dcbf6d0a8ea601788f9f545a"
+  },
+  "productionDeploymentPerformed": false,
+  "recoveryDoesNotReexecuteInstallerBuildTestsOrLifecycle": true
+}

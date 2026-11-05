@@ -1,0 +1,45 @@
+{
+  "schema": "post-ilv2/observed-branch/v1",
+  "checkedAt": "2026-11-05",
+  "sourceHead": "b1475cddac01ab6ce589a1d465578d5ab7772533",
+  "sources": "sources.json",
+  "userReportedDeployment": true,
+  "installedIdentityVerified": false,
+  "publicLedger": {
+    "planStatus": "IN_PROGRESS",
+    "candidateStatus": "NOT_READY",
+    "benefit": "UNMEASURED",
+    "G14": "PASS",
+    "G15": "PLAN",
+    "G16": "NOT_RUN",
+    "G17": "FAIL",
+    "G18": "PLAN",
+    "G19": "PLAN"
+  },
+  "historicalQuality": {
+    "classification": "REPO_REPORT_NOT_RERUN",
+    "g13": {
+      "devProductRecall": 0.3929,
+      "holdoutProductRecall": 0.4118,
+      "devEvidence": [
+        49,
+        104
+      ],
+      "holdoutEvidence": [
+        18,
+        45
+      ]
+    },
+    "g14AbsoluteFloor": "FAIL_BOTH_ARMS_OWNER_ACCEPTED_NONREGRESSION"
+  },
+  "sourceTimeouts": {
+    "classification": "CODE_NOT_LIVE_VERIFIED",
+    "importStartDefaultMs": 120000,
+    "separateIndexDefaultMs": 600000
+  },
+  "localProductBuild": "NOT_RUN",
+  "localMacNativeTests": "NOT_RUN",
+  "localRealJdtTests": "NOT_RUN",
+  "localModelCalls": 0,
+  "embeddingExperiment": "EXCLUDED_BY_USER_DECISION"
+}

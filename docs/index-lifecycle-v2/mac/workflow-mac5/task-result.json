@@ -1,0 +1,168 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "ILV2-MAC/5",
+  "workflowId": "WF-MAC5",
+  "status": "FAIL",
+  "dependency": {
+    "head": "e7c12e4",
+    "tccRecord": "../workflow-mac5-tcc/task-result.json"
+  },
+  "identity": {
+    "sourceDigest": "94cf521d110992aa7b801b3c6f7523c7e3200acce2b51d323d700b9e39453c90",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "83312abdfd0545597edbefdd018011c7d8b83c418d0140b2cf8997e2ffece8a9",
+    "buildStampSha256": "dbde5039d1d9a521d036a19afe5da85bece78b380fc6d822f0052d08d62eb98c",
+    "distInventorySha256": "74568f61903bd42d05951845b8bb574b7502eb68e4435d0402089c34cfd9e7d5",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "env-probe",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/env-probe/result.json",
+      "sourceDigest": "94cf521d110992aa7b801b3c6f7523c7e3200acce2b51d323d700b9e39453c90",
+      "commands": 4,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0,
+      "elapsedMs": 14804,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "scripts/ilv2-mac-env-probe.mjs",
+        "--toolchains",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/inputs/toolchains/jdt-1.56.0-gradle-9.3.1-jdk-25.0.2/toolchains.json"
+      ]
+    },
+    {
+      "name": "main-ilv2",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/main-ilv2/result.json",
+      "sourceDigest": "94cf521d110992aa7b801b3c6f7523c7e3200acce2b51d323d700b9e39453c90",
+      "commands": 1,
+      "tests": 120,
+      "pass": 119,
+      "fail": 1,
+      "elapsedMs": 158638,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-cli.test.mjs",
+        "scripts/ilv2-mac-closeout.test.mjs",
+        "scripts/ilv2-mac-contracts.test.mjs",
+        "scripts/ilv2-mac-dev.test.mjs",
+        "scripts/ilv2-mac-driver.test.mjs",
+        "scripts/ilv2-mac-env-probe.test.mjs",
+        "scripts/ilv2-mac-fixture-lifecycle.test.mjs",
+        "scripts/ilv2-mac-fsevents.test.mjs",
+        "scripts/ilv2-mac-owner-lifecycle.test.mjs",
+        "scripts/ilv2-mac-owner-primitives.test.mjs",
+        "scripts/ilv2-mac-owner-quota.test.mjs",
+        "scripts/ilv2-mac-owner-window.test.mjs",
+        "scripts/ilv2-mac-runtime-contracts.test.mjs",
+        "scripts/ilv2-mac-slo-report.test.mjs",
+        "scripts/ilv2-mac-status.test.mjs",
+        "scripts/ilv2-mac-task-result.test.mjs",
+        "scripts/isolation-utils.test.mjs",
+        "scripts/run-isolated-validation.test.mjs",
+        "scripts/build-macos-native.test.mjs"
+      ]
+    },
+    {
+      "name": "main-jdt",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/main-jdt/result.json",
+      "sourceDigest": "94cf521d110992aa7b801b3c6f7523c7e3200acce2b51d323d700b9e39453c90",
+      "commands": 1,
+      "tests": 3,
+      "pass": 2,
+      "fail": 1,
+      "elapsedMs": 133400,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-jdt-gradle.test.mjs",
+        "scripts/ilv2-mac-jdt-import.test.mjs"
+      ]
+    },
+    {
+      "name": "rerun-owner-primitives",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/rerun-owner-primitives/result.json",
+      "sourceDigest": "94cf521d110992aa7b801b3c6f7523c7e3200acce2b51d323d700b9e39453c90",
+      "commands": 1,
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "elapsedMs": 32496,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-owner-primitives.test.mjs"
+      ]
+    },
+    {
+      "name": "rerun-jdt-import",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/rerun-jdt-import/result.json",
+      "sourceDigest": "94cf521d110992aa7b801b3c6f7523c7e3200acce2b51d323d700b9e39453c90",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 214123,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-jdt-import.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "0294571481e6f771393d6e8dfaa21fb90440d201a2ec1351dfb7ca87ff8842f8",
+    "registeredPids": 92,
+    "ownedGroups": 18,
+    "launchdJobs": 39,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/workflow-mac5/20261014T141933Z/closeout/raw-evidence.tar.gz",
+      "sha256": "2c7933030e27e7e9f7b09d0e0b1f0c806304a8227903c858f76d243a98cf478f",
+      "fileCount": 379,
+      "bytes": 44337228,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": "NOT_RUN"
+  },
+  "validationIndexSha256": "5476d588c9e318e81298818a3ece371eeb2dd2838192754660f5b77ab92cb9ab",
+  "notClaimed": [
+    "Real JDT/Gradle import from the relocated work root: launchd-jdt-settings-import-and-fault-recovery failed twice on this candidate (active domain made no Gradle import progress within 90 s after JDT initialize; host load 10-13); root cause not established",
+    "native-owner-rejects-closed-fd-and-erased-child-binding timed out once in main-ilv2 and passed 5/5 in an isolated rerun; the original failure is kept",
+    "No gate status changed; D (manual split, spike constraints, G06C de-dup, ordering) and remaining E items are out of scope",
+    "Production install/calls and any TCC grant: NOT_RUN"
+  ],
+  "next": "Diagnose the JDT active-domain import stall on the relocated root before relying on it for MAC-06C/G09; user decides TCC-LAUNCHER-IDENTITY before MAC-17.",
+  "authorization": "Current user instruction (A -> C -> B). Local commit only per U2/memory; no push.",
+  "notes": "Workflow scripts, status source, generator and Tier-0 loop: 119/120 in main-ilv2 (the single failure passed on rerun), env probe READY, independent review FAIL (4 P2) -> fixed -> re-review PASS. An earlier attempt (runs/workflow-mac5/20261014T135433Z) is superseded and archived.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/workflow-mac5/20261014T141933Z"
+}

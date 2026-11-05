@@ -1,6 +1,6 @@
-import type { SQLOutputValue } from "node:sqlite";
+import type { SQLOutputValue, StatementSync } from "node:sqlite";
 import { classifyQuery } from "../../discovery/query-intent.js";
-import { QueryWorkBudget } from "../../discovery/query-budget.js";
+import { QueryTrace, QueryWorkBudget } from "../../discovery/query-budget.js";
 import {
   bm25Score,
   extractFqnCandidates,
@@ -11,16 +11,19 @@ import {
   DEFAULT_QUERY_MAX_POSTINGS,
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
-  filterHitsByScope,
+  matchesExactSelector,
+  parseExactSelector,
   type DetailedEntitySearchResult,
   type EntityHit,
+  type EntityHitEvidence,
   type EntityKind,
   type EntityLayer,
   type EntitySearchMode,
   type EntitySearchOptions,
+  type EntitySearchScope,
   type EntitySearchStopReason
 } from "../entity-search.js";
-import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
+import { bindChunks, inClause, prepareCached, withReadSnapshot, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { decodeFacts } from "./rows.js";
 import { symId, symText } from "./sym.js";
@@ -80,27 +83,253 @@ function loadEntityRow(db: IndexDatabase, row: Record<string, SQLOutputValue>): 
   };
 }
 
-const ENTITY_SELECT = `SELECT s.text AS entityId, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName,
+const ENTITY_SELECT = `SELECT e.sym AS sym, s.text AS entityId, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName,
   e.path_sym AS pathSym, e.ident_len AS identLen, e.chunk_len AS chunkLen
   FROM entity e JOIN sym s ON s.id=e.sym`;
 
-function existingTokenSyms(db: IndexDatabase, tokens: readonly string[]): number[] {
-  const ids: number[] = [];
-  for (const token of tokens) {
-    const id = symId(db, token);
-    if (id !== undefined) ids.push(id);
-  }
-  return ids;
+/**
+ * R06: the scope predicate every route pushes into its SQL, so out-of-scope
+ * rows never reach the postings budget, ranking or the result cap. Same
+ * semantics as filterHitsByScope (path === root or under `root/`); roots are
+ * bound parameters, never interpolated.
+ */
+type ScopeSql = { sql: string; params: string[] };
+
+function scopeSql(pathSymColumn: string, scope: EntitySearchScope | undefined): ScopeSql {
+  const roots = [...new Set((scope?.sourceRoots ?? []).map(root => root.replace(/\/+$/, "")).filter(root => root.length > 0))];
+  if (roots.length === 0) return { sql: "", params: [] };
+  const terms = roots.map(() => "(ps.text=? OR substr(ps.text, 1, length(?))=?)").join(" OR ");
+  return {
+    sql: ` AND EXISTS (SELECT 1 FROM sym ps WHERE ps.id=${pathSymColumn} AND (${terms}))`,
+    params: roots.flatMap(root => [root, `${root}/`, `${root}/`])
+  };
 }
 
-function fqnHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
+/**
+ * Scope follow-up: the scope stays in SQL (R06: only in-scope rows reach the
+ * posting budget), but a statement whose rows are all filtered out yields no
+ * row boundary, so nothing would check the deadline while it reads them. A
+ * scoped scan therefore reads each token's postings in keyset pages of this
+ * many rows - index order, so the visit order is unchanged - checks the
+ * deadline before every page and counts the page as examined work.
+ */
+const SCOPED_SCAN_PAGE_ROWS = 2048;
+
+type PostingRow = Record<string, SQLOutputValue> | SQLOutputValue[];
+
+function postingStatement(db: IndexDatabase, sql: string): StatementSync {
+  const statement = prepareCached(db, sql);
+  // Node 22.16 added array rows. Older supported runtimes keep object rows.
+  // These SQL strings belong only to the two posting routes below.
+  if (typeof statement.setReturnArrays === "function") statement.setReturnArrays(true);
+  return statement;
+}
+
+function postingValue(row: PostingRow, index: number, alias: string): SQLOutputValue | undefined {
+  return Array.isArray(row) ? row[index] : row[alias];
+}
+type PostingSource = {
+  key(row: PostingRow): number;
+  /** Unscoped: at most one bounded batch is materialized before row billing. */
+  batch(tokenSym: number, afterKey: number, limit: number): PostingRow[];
+  /** Key of the posting that ends the page after `after`; undefined on the last page. */
+  pageEnd(tokenSym: number, after: number): number | undefined;
+  /** In-scope rows with key in (after, upTo]. */
+  page(tokenSym: number, after: number, upTo: number): Iterable<PostingRow>;
+};
+
+function scanPostings(
+  context: RouteContext,
+  tokens: ReadonlyArray<{ sym: number; df: number }>,
+  source: PostingSource,
+  consume: (row: PostingRow, tokenSym: number) => boolean
+): void {
+  const { budget, stop, work } = context;
+  if (!context.scope?.sql) {
+    // The token index visits tokens in numeric order, then its primary key. Keep that
+    // order while amortizing native iterator crossings in bounded batches.
+    for (const token of [...tokens].sort((left, right) => left.sym - right.sym)) {
+      let after = Number.MIN_SAFE_INTEGER;
+      for (;;) {
+        if (expiredBefore(context)) return;
+        const limit = Math.min(256, budget ? Math.max(1, budget.maxPostings - budget.visited() + 1) : 256);
+        const rows = source.batch(token.sym, after, limit);
+        // A deadline can interrupt processing after SQL materialized the
+        // batch. Count that physical work even when some rows are not billed.
+        work.examined += rows.length;
+        for (const row of rows) if (!consume(row, token.sym)) return;
+        if (rows.length < limit) break;
+        after = source.key(rows[rows.length - 1]!);
+      }
+    }
+    return;
+  }
+  for (const token of [...tokens].sort((left, right) => left.sym - right.sym)) {
+    let after = Number.MIN_SAFE_INTEGER;
+    let read = 0;
+    for (;;) {
+      if (budget?.expired()) {
+        if (stop) recordStop(stop, "deadline");
+        return;
+      }
+      // An earlier route may have spent the posting budget: no in-scope row
+      // could be billed, so do not read the filtered pages either.
+      if (budget && budget.visited() >= budget.maxPostings) {
+        if (stop) recordStop(stop, "postings");
+        return;
+      }
+      const upTo = source.pageEnd(token.sym, after);
+      // df is the token's posting count, so the last page is the remainder.
+      work.examined += upTo === undefined ? Math.max(0, token.df - read) : SCOPED_SCAN_PAGE_ROWS;
+      read += SCOPED_SCAN_PAGE_ROWS;
+      for (const row of source.page(token.sym, after, upTo ?? Number.MAX_SAFE_INTEGER)) {
+        if (!consume(row, token.sym)) return;
+      }
+      if (upTo === undefined) break;
+      after = upTo;
+    }
+  }
+}
+
+/** In-scope rows are billed at the row boundary; returns false to stop the scan. */
+function billPosting(context: RouteContext): boolean {
+  const { budget, stop } = context;
+  if (!budget) return true;
+  const verdict = budget.take();
+  if (verdict === "ok") return true;
+  if (stop) recordStop(stop, verdict);
+  return false;
+}
+
+// Query tokens that exist in the corpus, keyed by the SQL-bound token sym.
+function queryTokenSyms(db: IndexDatabase, tokens: readonly string[]): Map<number, string> {
+  const bySym = new Map<number, string>();
+  for (const token of tokens) {
+    const id = symId(db, token);
+    if (id !== undefined) bySym.set(id, token);
+  }
+  return bySym;
+}
+
+type RouteContext = {
+  budget?: QueryWorkBudget;
+  stop?: { reason?: EntitySearchStopReason };
+  scope?: ScopeSql;
+  work: { examined: number };
+  trace?: QueryTrace;
+  entityIds?: Map<number, string | undefined>;
+};
+
+function staged<T>(context: RouteContext, operation: string, fn: () => { value: T; visited: number }): T {
+  return context.trace ? context.trace.stage(operation, fn) : fn().value;
+}
+
+// R09: a route that starts after the deadline does no SQL at all.
+function expiredBefore(context: RouteContext): boolean {
+  if (!context.budget?.expired()) return false;
+  if (context.stop) recordStop(context.stop, "deadline");
+  return true;
+}
+
+/**
+ * R09: top-`cap` by (score desc, entityId asc) without loading every scored
+ * candidate. Candidates are taken in whole score tiers - every candidate tied
+ * with the last one needed - so the id tie-break sees all of them; a tier
+ * whose ids do not resolve pulls in the next tier.
+ */
+function selectTop<T extends { sym: number; score: number }>(
+  scored: T[],
+  cap: number,
+  resolveIds: (syms: number[]) => ReadonlyMap<number, string | undefined>
+): Array<T & { entityId: string }> {
+  scored.sort((left, right) => right.score - left.score);
+  const out: Array<T & { entityId: string }> = [];
+  const compare = (left: T & { entityId: string }, right: T & { entityId: string }): number =>
+    right.score - left.score || left.entityId.localeCompare(right.entityId);
+  let index = 0;
+  while (index < scored.length && out.length < cap) {
+    const last = Math.min(scored.length, index + cap - out.length) - 1;
+    const cut = scored[last]!.score;
+    let end = last + 1;
+    while (end < scored.length && scored[end]!.score >= cut) end += 1;
+    const tier = scored.slice(index, end);
+    const ids = resolveIds(tier.map(item => item.sym));
+    for (const item of tier) {
+      const entityId = ids.get(item.sym);
+      if (entityId === undefined) continue;
+      const candidate = { ...item, entityId };
+      // Worst-first heap bounds retained candidates and sorting when the cutoff
+      // score has thousands of equal candidates. Every ID still competes.
+      if (out.length < cap) {
+        out.push(candidate);
+        let child = out.length - 1;
+        while (child > 0) {
+          const parent = (child - 1) >> 1;
+          if (compare(out[child]!, out[parent]!) <= 0) break;
+          [out[child], out[parent]] = [out[parent]!, out[child]!];
+          child = parent;
+        }
+      } else if (compare(candidate, out[0]!) < 0) {
+        out[0] = candidate;
+        let parent = 0;
+        for (;;) {
+          const left = parent * 2 + 1;
+          if (left >= out.length) break;
+          const right = left + 1;
+          const child = right < out.length && compare(out[right]!, out[left]!) > 0 ? right : left;
+          if (compare(out[child]!, out[parent]!) <= 0) break;
+          [out[child], out[parent]] = [out[parent]!, out[child]!];
+          parent = child;
+        }
+      }
+    }
+    index = end;
+  }
+  out.sort(compare);
+  return out.slice(0, cap);
+}
+
+function entityIds(db: IndexDatabase, syms: number[], context: RouteContext): Map<number, string | undefined> {
+  const cache = context.entityIds ??= new Map<number, string | undefined>();
+  const missing = syms.filter(sym => !cache.has(sym));
+  for (const sym of missing) cache.set(sym, undefined);
+  // Whole score tiers can contain thousands of IDs. Keep row transfer and
+  // statement shape bounded while resolving every tied candidate.
+  for (let offset = 0; offset < missing.length; offset += 512) {
+    const chunk = missing.slice(offset, offset + 512);
+    for (const row of prepareCached(
+      db,
+      `SELECT e.sym AS sym, s.text AS entityId FROM entity e JOIN sym s ON s.id=e.sym WHERE e.sym IN ${inClause(chunk.length)}`
+    ).all(...chunk) as Array<Record<string, SQLOutputValue>>) {
+      cache.set(asInt(row.sym), String(row.entityId));
+    }
+  }
+  return cache;
+}
+
+function entityRows(db: IndexDatabase, syms: number[]): Map<number, EntityRow> {
+  const rows = new Map<number, EntityRow>();
+  for (const chunk of bindChunks(syms)) {
+    for (const row of prepareCached(db, `${ENTITY_SELECT} WHERE e.sym IN ${inClause(chunk.length)}`)
+      .iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      rows.set(asInt(row.sym), loadEntityRow(db, row));
+    }
+  }
+  return rows;
+}
+
+function fqnHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql): EntityHit[] {
   const seen = new Set<string>();
   const hits: EntityRow[] = [];
   for (const candidate of extractFqnCandidates(task)) {
+    // An entity's simple name is the last [.#$] segment of its fqn, so a
+    // suffix match implies a simple-name match: the entity_simple index
+    // bounds the lookup instead of a leading-wildcard LIKE over every fqn.
+    const simpleName = candidate.split(/[.#]/).pop()!.toLowerCase();
     for (const row of prepareCached(
       db,
-      `${ENTITY_SELECT} WHERE e.fqn=? OR e.fqn LIKE '%.' || ?`
-    ).iterate(candidate, candidate) as Iterable<Record<string, SQLOutputValue>>) {
+      `${ENTITY_SELECT} WHERE e.simple_name_lc=? AND (e.fqn=? OR e.fqn LIKE '%.' || ?)${scope?.sql ?? ""}`
+    ).iterate(simpleName, candidate, candidate, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       const entity = loadEntityRow(db, row);
       if (entity.fqn !== candidate && !entity.fqn.endsWith(`.${candidate}`)) continue;
       if (seen.has(entity.entityId)) continue;
@@ -112,15 +341,15 @@ function fqnHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
   return hits.slice(0, cap).map(entity => toHit(entity, "FQN", 1));
 }
 
-function simpleNameHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
+function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql, kind: EntityKind = "type"): EntityHit[] {
   const lexemes = identifierLexemes(task);
   if (lexemes.length === 0) return [];
   const hits: EntityRow[] = [];
   for (const chunk of bindChunks(lexemes)) {
     for (const row of prepareCached(
       db,
-      `${ENTITY_SELECT} WHERE e.kind='type' AND e.simple_name_lc IN ${inClause(chunk.length)}`
-    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      `${ENTITY_SELECT} WHERE e.kind=? AND e.simple_name_lc IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
+    ).iterate(kind, ...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       hits.push(loadEntityRow(db, row));
     }
   }
@@ -138,6 +367,42 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number): EntityHit
     return left.entityId.localeCompare(right.entityId);
   });
   return hits.slice(0, cap).map(entity => toHit(entity, "SIMPLE_NAME", 1));
+}
+
+/**
+ * R07: an exact selector resolves as a WHOLE selector (parseExactSelector):
+ * candidates come from the simple-name index, then must match every
+ * qualifier segment. A miss is a miss: no word-level match and no fall
+ * through to BM25. Several declarations for one selector are ambiguous.
+ */
+function exactHits(
+  db: IndexDatabase,
+  task: string,
+  cap: number,
+  context: RouteContext
+): { hits: EntityHit[]; outcome: "match" | "miss" | "ambiguous"; visited: number } {
+  const scope = context.scope;
+  let visited = 0;
+  for (const alternative of parseExactSelector(task)) {
+    // R09: the deadline is checked before every alternative and between rows;
+    // an interrupted lookup reports no outcome (see searchDetailed).
+    if (expiredBefore(context)) return { hits: [], outcome: "miss", visited };
+    const found: EntityRow[] = [];
+    for (const row of prepareCached(
+      db,
+      `${ENTITY_SELECT} WHERE e.kind=? AND e.simple_name_lc=?${scope?.sql ?? ""}`
+    ).iterate(alternative.kind, alternative.name.toLowerCase(), ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
+      if (expiredBefore(context)) return { hits: [], outcome: "miss", visited };
+      visited += 1;
+      const entity = loadEntityRow(db, row);
+      if (matchesExactSelector(alternative, entity)) found.push(entity);
+    }
+    if (found.length === 0) continue;
+    found.sort((left, right) => left.entityId.localeCompare(right.entityId));
+    const hits = found.slice(0, cap + 1).map(entity => toHit(entity, alternative.kind === "type" && alternative.qualifier === undefined ? "SIMPLE_NAME" : "FQN", 1));
+    return { hits, outcome: found.length > 1 ? "ambiguous" : "match", visited };
+  }
+  return { hits: [], outcome: "miss", visited };
 }
 
 // T07: corpus statistics are maintained by the writer (rebuildEntityDf)
@@ -181,63 +446,78 @@ function rankBm25(
   field: 0 | 1,
   layer: EntityLayer,
   cap: number,
-  budget?: QueryWorkBudget,
-  stop?: { reason?: EntitySearchStopReason }
+  context: RouteContext = { work: { examined: 0 } }
 ): EntityHit[] {
+  const route = field === FIELD_IDENTIFIER ? "identifier" : "chunk";
+  if (expiredBefore(context)) return [];
   const queryTokens = tokenize(task);
-  const tokenSyms = existingTokenSyms(db, queryTokens);
-  if (tokenSyms.length === 0) return [];
+  const tokenBySym = queryTokenSyms(db, queryTokens);
+  if (tokenBySym.size === 0) return [];
   const lengthColumn = field === FIELD_IDENTIFIER ? "ident_len" : "chunk_len";
   const { avgdl, documentCount } = avgLength(db, lengthColumn);
   if (documentCount === 0 || avgdl <= 0) return [];
   const dfByToken = new Map<string, number>();
-  for (const token of queryTokens) {
-    const tokenSym = symId(db, token);
-    if (tokenSym === undefined) {
-      dfByToken.set(token, 0);
-      continue;
-    }
+  for (const token of queryTokens) dfByToken.set(token, 0);
+  for (const [tokenSym, token] of tokenBySym) {
     const dfRow = prepareCached(db, "SELECT df AS n FROM entity_df WHERE field=? AND token_sym=?").get(field, tokenSym) as
       | { n: SQLOutputValue }
       | undefined;
     dfByToken.set(token, asCount(dfRow));
   }
-  const grouped = new Map<string, { entity: EntityRow; tf: Map<string, number> }>();
-  for (const chunk of bindChunks(tokenSyms, 1)) {
-    for (const row of prepareCached(
-      db,
-      `SELECT s.text AS entityId, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName,
-        e.path_sym AS pathSym, e.ident_len AS identLen, e.chunk_len AS chunkLen,
-        t.token_sym AS tokenSym, t.tf AS tf
-       FROM entity e JOIN sym s ON s.id=e.sym
-       JOIN entity_token t ON t.entity_sym=e.sym
-       WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}`
-    ).iterate(field, ...chunk) as Iterable<Record<string, SQLOutputValue>>) {
-      // T07: every posting row is billed against the query work budget at
-      // the interruptible boundary between rows; synchronous SQL cannot stop
-      // mid-statement, so the scan ends at the row boundary.
-      if (budget) {
-        const verdict = budget.take();
-        if (verdict !== "ok") {
-          if (stop) recordStop(stop, verdict);
-          break;
-        }
-      }
-      const entity = loadEntityRow(db, row);
-      const token = symText(db, asInt(row.tokenSym));
-      const bucket = grouped.get(entity.entityId) ?? { entity, tf: new Map<string, number>() };
-      bucket.tf.set(token, asInt(row.tf));
-      grouped.set(entity.entityId, bucket);
+  // R09: posting rows carry integers only (entity sym, tf, length);
+  // entity text is loaded for the ranked top-K, never per posting.
+  const grouped = staged(context, `postings:${route}`, () => {
+    const byEntity = new Map<number, { length: number; tf: Map<string, number> }>();
+    let visited = 0;
+    const scope = context.scope;
+    const columns = `SELECT t.entity_sym AS entitySym, t.tf AS tf, e.${lengthColumn} AS len
+           FROM entity_token t JOIN entity e ON e.sym=t.entity_sym`;
+    const tokens = [...tokenBySym].map(([sym, token]) => ({ sym, df: dfByToken.get(token) ?? 0 }));
+    const source: PostingSource = {
+      key: row => asInt(postingValue(row, 0, "entitySym")),
+      batch: (tokenSym, after, limit) => postingStatement(db,
+        `${columns} WHERE t.field=? AND t.token_sym=? AND t.entity_sym>? ORDER BY t.entity_sym LIMIT ?`)
+        .all(field, tokenSym, after, limit) as PostingRow[],
+      pageEnd: (tokenSym, after) => {
+        const row = prepareCached(
+          db,
+          "SELECT entity_sym AS k FROM entity_token WHERE field=? AND token_sym=? AND entity_sym>? ORDER BY entity_sym LIMIT 1 OFFSET ?"
+        ).get(field, tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
+        return row ? asInt(row.k) : undefined;
+      },
+      page: (tokenSym, after, upTo) => postingStatement(
+        db,
+        `${columns} WHERE t.field=? AND t.token_sym=? AND t.entity_sym>? AND t.entity_sym<=?${scope?.sql ?? ""}`
+      ).iterate(field, tokenSym, after, upTo, ...(scope?.params ?? [])) as Iterable<PostingRow>
+    };
+    // T07: every posting row is billed against the query work budget at the
+    // interruptible boundary between rows; synchronous SQL cannot stop
+    // mid-statement, so the scan ends at the row boundary.
+    scanPostings(context, tokens, source, (row, tokenSym) => {
+      if (!billPosting(context)) return false;
+      visited += 1;
+      const entitySym = asInt(postingValue(row, 0, "entitySym"));
+      const bucket = byEntity.get(entitySym) ?? { length: asInt(postingValue(row, 2, "len")), tf: new Map<string, number>() };
+      bucket.tf.set(tokenBySym.get(tokenSym)!, asInt(postingValue(row, 1, "tf")));
+      byEntity.set(entitySym, bucket);
+      return true;
+    });
+    return { value: byEntity, visited };
+  });
+  return staged(context, `rank:${route}`, () => {
+    const scored: Array<{ sym: number; score: number }> = [];
+    for (const [sym, item] of grouped) {
+      const score = bm25Score(queryTokens, item.tf, item.length, avgdl, dfByToken, documentCount);
+      if (score > 0) scored.push({ sym, score });
     }
-  }
-  const scored: Array<{ entity: EntityRow; score: number }> = [];
-  for (const item of grouped.values()) {
-    const documentLength = field === FIELD_IDENTIFIER ? item.entity.identLen : item.entity.chunkLen;
-    const score = bm25Score(queryTokens, item.tf, documentLength, avgdl, dfByToken, documentCount);
-    if (score > 0) scored.push({ entity: item.entity, score });
-  }
-  scored.sort((left, right) => right.score - left.score || left.entity.entityId.localeCompare(right.entity.entityId));
-  return scored.slice(0, cap).map(item => toHit(item.entity, layer, item.score));
+    const top = selectTop(scored, cap, syms => entityIds(db, syms, context));
+    const rows = entityRows(db, top.map(item => item.sym));
+    const hits = top.flatMap(item => {
+      const entity = rows.get(item.sym);
+      return entity ? [toHit(entity, layer, item.score)] : [];
+    });
+    return { value: hits, visited: scored.length };
+  });
 }
 
 // Source-linked document route (T05): signature/comment/framework-key text
@@ -246,96 +526,124 @@ function docHits(
   db: IndexDatabase,
   task: string,
   cap: number,
-  budget?: QueryWorkBudget,
-  stop?: { reason?: EntitySearchStopReason }
+  context: RouteContext = { work: { examined: 0 } }
 ): EntityHit[] {
+  if (expiredBefore(context)) return [];
   const queryTokens = tokenize(task);
-  const tokenSyms = existingTokenSyms(db, queryTokens);
-  if (tokenSyms.length === 0) return [];
+  const tokenBySym = queryTokenSyms(db, queryTokens);
+  if (tokenBySym.size === 0) return [];
   const stats = searchDocStats(db);
   if (stats.docCount === 0 || stats.totalLen <= 0) return [];
   const avgdl = stats.totalLen / stats.docCount;
   const dfByToken = new Map<string, number>();
-  const postingSyms: number[] = [];
-  for (const token of queryTokens) {
-    const tokenSym = symId(db, token);
-    if (tokenSym === undefined) { dfByToken.set(token, 0); continue; }
+  for (const token of queryTokens) dfByToken.set(token, 0);
+  const postingTokens: Array<{ sym: number; df: number }> = [];
+  for (const [tokenSym, token] of tokenBySym) {
     const dfRow = prepareCached(db, "SELECT df AS n FROM search_doc_df WHERE token_sym=?").get(tokenSym) as
       | { n: SQLOutputValue }
       | undefined;
     const df = asCount(dfRow);
     dfByToken.set(token, df);
-    if (df > 0) postingSyms.push(tokenSym);
+    if (df > 0) postingTokens.push({ sym: tokenSym, df });
   }
-  if (postingSyms.length === 0) return [];
-  // docSym -> { tfByToken, docLen, declarationSym, pathSym }
-  const docs = new Map<number, { tf: Map<string, number>; docLen: number; declarationSym: number; pathSym: number | undefined }>();
-  for (const chunk of bindChunks(postingSyms)) {
-    for (const row of prepareCached(
-      db,
-      `SELECT t.doc_sym AS docSym, t.token_sym AS tokenSym, t.tf AS tf, d.token_len AS docLen
-         FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym
-        WHERE t.token_sym IN ${inClause(chunk.length)}`
-    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
-      if (budget) {
-        const verdict = budget.take();
-        if (verdict !== "ok") {
-          if (stop) recordStop(stop, verdict);
-          break;
-        }
-      }
-      const docSym = asInt(row.docSym);
-      const bucket = docs.get(docSym) ?? { tf: new Map<string, number>(), docLen: asInt(row.docLen), declarationSym: 0, pathSym: undefined };
-      bucket.tf.set(symText(db, asInt(row.tokenSym)), asInt(row.tf));
-      docs.set(docSym, bucket);
-    }
-  }
+  if (postingTokens.length === 0) return [];
+  const docs = staged(context, "postings:document", () => {
+    // docId -> { tfByToken, docLen, declarationSym }
+    const byDoc = new Map<number, { tf: Map<string, number>; docLen: number; declarationSym: number }>();
+    let visited = 0;
+    const scope = context.scope;
+    const columns = `SELECT t.doc_id AS docId, t.tf AS tf, d.token_len AS docLen, d.declaration_sym AS declarationSym
+           FROM search_doc_token t JOIN search_doc d ON d.id=t.doc_id`;
+    const source: PostingSource = {
+      key: row => asInt(postingValue(row, 0, "docId")),
+      batch: (tokenSym, after, limit) => postingStatement(db,
+        `${columns} WHERE t.token_sym=? AND t.doc_id>? ORDER BY t.doc_id LIMIT ?`)
+        .all(tokenSym, after, limit) as PostingRow[],
+      pageEnd: (tokenSym, after) => {
+        const row = prepareCached(
+          db,
+          "SELECT doc_id AS k FROM search_doc_token WHERE token_sym=? AND doc_id>? ORDER BY doc_id LIMIT 1 OFFSET ?"
+        ).get(tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
+        return row ? asInt(row.k) : undefined;
+      },
+      // Scope applies to the declaration a document points at (the hit is
+      // that declaration), joined before any posting is billed.
+      page: (tokenSym, after, upTo) => postingStatement(
+        db,
+        `${columns} JOIN entity e ON e.sym=d.declaration_sym
+          WHERE t.token_sym=? AND t.doc_id>? AND t.doc_id<=?${scope?.sql ?? ""}`
+      ).iterate(tokenSym, after, upTo, ...(scope?.params ?? [])) as Iterable<PostingRow>
+    };
+    scanPostings(context, postingTokens, source, (row, tokenSym) => {
+      if (!billPosting(context)) return false;
+      visited += 1;
+      const docId = asInt(postingValue(row, 0, "docId"));
+      const bucket = byDoc.get(docId) ?? { tf: new Map<string, number>(), docLen: asInt(postingValue(row, 2, "docLen")), declarationSym: asInt(postingValue(row, 3, "declarationSym")) };
+      bucket.tf.set(tokenBySym.get(tokenSym)!, asInt(postingValue(row, 1, "tf")));
+      byDoc.set(docId, bucket);
+      return true;
+    });
+    return { value: byDoc, visited };
+  });
   if (docs.size === 0) return [];
-  for (const chunk of bindChunks([...docs.keys()])) {
-    for (const row of prepareCached(
-      db,
-      `SELECT sym AS docSym, declaration_sym AS declarationSym, path_sym AS pathSym FROM search_doc WHERE sym IN ${inClause(chunk.length)}`
-    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
-      const bucket = docs.get(asInt(row.docSym));
-      if (!bucket) continue;
-      bucket.declarationSym = asInt(row.declarationSym);
-      bucket.pathSym = row.pathSym == null ? undefined : asInt(row.pathSym);
+  return staged(context, "rank:document", () => {
+    const bestByDeclaration = new Map<number, { score: number; docId: number }>();
+    for (const [docId, bucket] of docs) {
+      const score = bm25Score(queryTokens, bucket.tf, bucket.docLen, avgdl, dfByToken, stats.docCount);
+      if (score <= 0) continue;
+      const current = bestByDeclaration.get(bucket.declarationSym);
+      // Allocation order changes on incremental replacement. Only a tie needs
+      // these two point lookups; compare original identity values, not sym IDs.
+      if (!current || score > current.score || (score === current.score && earlierDocumentIdentity(db, docId, current.docId))) {
+        bestByDeclaration.set(bucket.declarationSym, { score, docId });
+      }
     }
-  }
-  const bestByDeclaration = new Map<number, { score: number; docPathSym: number | undefined; docSym: number }>();
-  for (const [docSym, bucket] of docs) {
-    const score = bm25Score(queryTokens, bucket.tf, bucket.docLen, avgdl, dfByToken, stats.docCount);
-    if (score <= 0) continue;
-    const current = bestByDeclaration.get(bucket.declarationSym);
-    if (!current || score > current.score || (score === current.score && docSym < current.docSym)) {
-      bestByDeclaration.set(bucket.declarationSym, { score, docPathSym: bucket.pathSym, docSym });
+    const scored = [...bestByDeclaration].map(([sym, best]) => ({ sym, score: best.score, docId: best.docId }));
+    // Declarations without an entity row never resolve, as before.
+    const top = selectTop(scored, cap, syms => entityIds(db, syms, context));
+    const rows = entityRows(db, top.map(item => item.sym));
+    const out: EntityHit[] = [];
+    for (const item of top) {
+      const entity = rows.get(item.sym);
+      if (!entity) continue;
+      const evidence = documentEvidence(db, item.docId);
+      out.push({ ...toHit(entity, "DOCUMENT", item.score), ...(evidence ? { evidence } : {}) });
     }
-  }
-  if (bestByDeclaration.size === 0) return [];
-  const declarationSyms = [...bestByDeclaration.keys()];
-  const out: EntityHit[] = [];
-  for (const chunk of bindChunks(declarationSyms)) {
-    for (const row of prepareCached(
-      db,
-      `SELECT e.sym AS sym, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName, e.path_sym AS pathSym
-         FROM entity e WHERE e.sym IN ${inClause(chunk.length)}`
-    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
-      const sym = asInt(row.sym);
-      const best = bestByDeclaration.get(sym);
-      if (!best) continue;
-      out.push({
-        entityId: symText(db, sym),
-        kind: String(row.kind) as EntityKind,
-        fqn: String(row.fqn),
-        simpleName: String(row.simpleName),
-        relativePath: rowPath(db, row.pathSym as SQLOutputValue | null | undefined),
-        layer: "DOCUMENT",
-        score: best.score
-      });
-    }
-  }
-  out.sort((left, right) => right.score - left.score || left.entityId.localeCompare(right.entityId));
-  return out.slice(0, cap);
+    return { value: out, visited: scored.length };
+  });
+}
+
+function earlierDocumentIdentity(db: IndexDatabase, candidate: number, current: number): boolean {
+  // Within one declaration these columns are the unique document identity.
+  // BINARY ordering is independent of host locale; ranges stay numeric.
+  const row = prepareCached(db, `
+    SELECT d.id FROM search_doc d JOIN sym p ON p.id=d.source_path_sym
+    WHERE d.id IN (?, ?)
+    ORDER BY d.kind COLLATE BINARY, p.text COLLATE BINARY,
+      d.start_line, d.end_line LIMIT 1
+  `).get(candidate, current) as { id: SQLOutputValue };
+  return asInt(row.id) === candidate;
+}
+
+/** The matched document's own source (XML for a MyBatis statement). Its
+ *  hash is the source row's, written in the document's transaction. */
+function documentEvidence(db: IndexDatabase, docId: number): EntityHitEvidence | undefined {
+  const row = prepareCached(
+    db,
+    `SELECT p.text AS sourcePath, COALESCE(f.content_hash, r.content_hash) AS contentHash, d.kind AS kind,
+       d.start_line AS startLine, d.end_line AS endLine
+     FROM search_doc d JOIN sym p ON p.id=d.source_path_sym
+     LEFT JOIN file f ON f.path=p.text LEFT JOIN mybatis_resource r ON r.path=p.text
+     WHERE d.id=?`
+  ).get(docId) as Record<string, SQLOutputValue> | undefined;
+  if (!row || typeof row.contentHash !== "string") return undefined;
+  return {
+    relativePath: String(row.sourcePath),
+    contentHash: row.contentHash,
+    startLine: asInt(row.startLine),
+    endLine: asInt(row.endLine),
+    sourceKind: String(row.kind)
+  };
 }
 
 // T06: declaration locator enrichment for the discovery API. Point lookups
@@ -345,8 +653,7 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
   const byEntity = new Map<string, EntityHit>();
   for (const hit of hits) byEntity.set(hit.entityId, hit);
   for (const hit of byEntity.values()) {
-    const symRow = prepareCached(db, "SELECT id FROM sym WHERE text=?").get(hit.entityId) as { id: SQLOutputValue } | undefined;
-    const sym = symRow ? asInt(symRow.id) : undefined;
+    const sym = symId(db, hit.entityId);
     if (sym === undefined) continue;
     const fileRow = hit.kind === "type"
       ? (prepareCached(db, "SELECT file_id AS fileId, facts FROM type WHERE sym=?").get(sym) as { fileId: SQLOutputValue; facts: SQLOutputValue } | undefined)
@@ -357,8 +664,12 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
       : (decodeFacts<JavaMethodFacts>(fileRow.facts) ?? undefined);
     const range = declaration?.range;
     if (range) {
-      hit.line = range.start.line;
-      hit.column = range.start.column;
+      // The locator is the name (an LSP selection); the head preview starts
+      // at the declaration's first line so annotations stay visible.
+      const selection = declaration?.nameRange?.start ?? range.start;
+      hit.line = selection.line;
+      hit.column = selection.column;
+      hit.declarationStartLine = range.start.line;
     }
     if (hit.kind === "method") {
       const arity = (fileRow as { arity?: SQLOutputValue }).arity;
@@ -381,80 +692,160 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
 export class SqlEntitySearch {
   constructor(private readonly db: IndexDatabase) {}
 
-  search(task: string, limit: number = ENTITY_SEARCH_DEFAULT_LIMIT, mode: EntitySearchMode = "auto"): EntityHit[] {
+  /**
+   * Legacy ranked search (queryEntitySearch, the context-graph lexical
+   * fallback). Its route semantics stay as they are (an exact miss falls
+   * through to BM25), but the work is bounded like searchDetailed: the default
+   * posting cap and, when given, the caller's deadline. A bounded scan simply
+   * returns what it ranked; this API has no partial flag.
+   */
+  search(
+    task: string,
+    limit: number = ENTITY_SEARCH_DEFAULT_LIMIT,
+    mode: EntitySearchMode = "auto",
+    options: { remainingMs?: () => number } = {}
+  ): EntityHit[] {
     const cap = clampLimit(limit);
     if (task.trim().length === 0) return [];
-    // T04: exact code shapes may short-circuit on the name layers; free-text
-    // task intent must let every route compete, so a class name in the query
-    // never hides the method that matches the intent words. The 1..512 length
-    // contract is enforced at the discovery API boundary, not here, because
-    // internal callers pass empty task text on purpose.
-    const intent = classifyQuery(task, mode);
-    if (intent === "exact") {
-      const fqn = fqnHits(this.db, task, cap);
-      if (fqn.length > 0) return fqn;
-      const simple = simpleNameHits(this.db, task, cap);
-      if (simple.length > 0) return simple;
-    }
-    const identifier = rankBm25(this.db, task, FIELD_IDENTIFIER, "BM25_IDENTIFIER", cap);
-    const chunk = rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap);
-    if (intent === "text") {
-      const doc = docHits(this.db, task, cap);
-      return mergeByRank([identifier, chunk, doc], cap);
-    }
-    return firstNonEmpty(identifier, chunk, cap);
+    const budget = new QueryWorkBudget(DEFAULT_QUERY_MAX_POSTINGS, options.remainingMs ?? (() => Number.POSITIVE_INFINITY));
+    if (budget.expired()) return [];
+    return withReadSnapshot(this.db, () => {
+      const context: RouteContext = { budget, work: { examined: 0 } };
+      // T04: exact code shapes may short-circuit on the name layers; free-text
+      // task intent must let every route compete, so a class name in the query
+      // never hides the method that matches the intent words. The 1..512 length
+      // contract is enforced at the discovery API boundary, not here, because
+      // internal callers pass empty task text on purpose.
+      const intent = classifyQuery(task, mode);
+      if (intent === "exact") {
+        const fqn = fqnHits(this.db, task, cap);
+        if (fqn.length > 0) return fqn;
+        const simple = simpleNameHits(this.db, task, cap);
+        if (simple.length > 0) return simple;
+      }
+      const identifier = rankBm25(this.db, task, FIELD_IDENTIFIER, "BM25_IDENTIFIER", cap, context);
+      const chunk = rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap, context);
+      if (intent === "text") {
+        const doc = docHits(this.db, task, cap, context);
+        return mergeByRank([identifier, chunk, doc], cap);
+      }
+      return firstNonEmpty(identifier, chunk, cap);
+    });
   }
 
-  // T07: budgeted, scoped retrieval. The work budget bounds posting rows
-  // visited (never the returned rows); scope is applied before the result
-  // cap; any exhausted budget reports an explicit partial result with the
+  // T07/R06: budgeted, scoped retrieval. The work budget bounds posting rows
+  // visited (never the returned rows); scope is pushed into every route's SQL
+  // so it precedes the posting budget, ranking and the result cap; any exhausted budget reports an explicit partial result with the
   // stop reason instead of pretending the scan was complete. The reported
-  // generation labels the snapshot the scan observed (K20).
+  // generation labels the snapshot the scan observed (K20): every route,
+  // the locators and the generation are read inside ONE read transaction, so
+  // a concurrent writer commit can never mix two generations in one result.
+  // R09: the deadline is one absolute budget for every stage - lookup,
+  // postings, ranking, merge and locators. A request that is already expired
+  // opens no snapshot and runs no SQL; one that expires mid-way skips the
+  // remaining routes and only finishes the bounded top-K it already holds.
   searchDetailed(
     task: string,
     limit: number = ENTITY_SEARCH_DEFAULT_LIMIT,
     mode: EntitySearchMode = "auto",
     options: EntitySearchOptions = {}
   ): DetailedEntitySearchResult {
-    const cap = clampLimit(limit);
-    const generation = readIndexGeneration(this.db);
-    let budget: QueryWorkBudget | undefined;
-    if (options.budget) {
-      budget = new QueryWorkBudget(
+    const budget = options.budget
+      ? new QueryWorkBudget(
         options.budget.maxPostings ?? DEFAULT_QUERY_MAX_POSTINGS,
         options.budget.remainingMs ?? (() => Number.POSITIVE_INFINITY)
-      );
+      )
+      : undefined;
+    if (budget?.expired()) {
+      return { hits: [], truncated: true, selectionLimited: false, work: { postings: 0, examined: 0 }, generation: 0, stopReason: "deadline", trace: [] };
     }
+    return withReadSnapshot(this.db, () => this.searchDetailedInSnapshot(task, limit, mode, options, budget));
+  }
+
+  private searchDetailedInSnapshot(
+    task: string,
+    limit: number,
+    mode: EntitySearchMode,
+    options: EntitySearchOptions,
+    budget: QueryWorkBudget | undefined
+  ): DetailedEntitySearchResult {
+    const cap = clampLimit(limit);
+    const trace = new QueryTrace(budget ? () => budget.remaining() : undefined);
+    const generation = readIndexGeneration(this.db);
     const stop: { reason?: EntitySearchStopReason } = {};
-    const finish = (hits: EntityHit[]): DetailedEntitySearchResult => {
+    const context: RouteContext = {
+      budget,
+      stop,
+      scope: scopeSql("e.path_sym", options.scope),
+      work: { examined: 0 },
+      trace
+    };
+    // Every route fetches cap+1: the extra row only proves "more exist"
+    // (selectionLimited) and is never returned.
+    const finish = (selected: EntityHit[], exact?: "match" | "miss" | "ambiguous"): DetailedEntitySearchResult => {
+      // Locators are bounded (<= cap point lookups) and always finish, so a
+      // late deadline still returns actionable hits, labelled partial.
+      const hits = trace.stage("locators", () => {
+        const located = attachLocators(this.db, selected.slice(0, cap));
+        return { value: located, visited: located.length };
+      });
+      if (budget?.expired()) recordStop(stop, "deadline");
       const result: DetailedEntitySearchResult = {
-        hits: attachLocators(this.db, hits),
+        hits,
         truncated: stop.reason !== undefined,
-        work: { postings: budget ? budget.visited() : 0 },
-        generation
+        selectionLimited: selected.length > cap,
+        work: { postings: budget ? budget.visited() : 0, examined: context.work.examined },
+        generation,
+        trace: trace.stages
       };
+      // An interrupted exact lookup has no outcome: "miss" would claim the
+      // selector does not exist.
+      if (exact && stop.reason !== "deadline") result.exact = exact;
       if (stop.reason !== undefined) result.stopReason = stop.reason;
       return result;
     };
     if (task.trim().length === 0) return finish([]);
-    const intent = classifyQuery(task, mode);
+    // An explicit mode is authoritative (discovery classifies the raw query
+    // itself and may send query+terms, longer than one selector).
+    const intent = mode === "auto" ? classifyQuery(task, mode) : mode;
     if (intent === "exact") {
-      const fqn = filterHitsByScope(fqnHits(this.db, task, cap), options.scope);
-      if (fqn.length > 0) return finish(fqn);
-      const simple = filterHitsByScope(simpleNameHits(this.db, task, cap), options.scope);
-      if (simple.length > 0) return finish(simple);
+      const exact = staged(context, "exact-lookup", () => {
+        const found = exactHits(this.db, task, cap, context);
+        return { value: found, visited: found.visited };
+      });
+      return finish(exact.hits, exact.outcome);
     }
-    const identifier = filterHitsByScope(
-      rankBm25(this.db, task, 0, "BM25_IDENTIFIER", cap, budget, stop),
-      options.scope
-    );
-    const chunk = filterHitsByScope(rankBm25(this.db, task, 1, "CHUNK", cap, budget, stop), options.scope);
-    if (intent === "text") {
-      const doc = filterHitsByScope(docHits(this.db, task, cap, budget, stop), options.scope);
-      return finish(mergeByRank([identifier, chunk, doc], cap));
-    }
-    return finish(firstNonEmpty(identifier, chunk, cap));
+    const fetch = cap + 1;
+    const identifier = rankBm25(this.db, task, 0, "BM25_IDENTIFIER", fetch, context);
+    const chunk = rankBm25(this.db, task, 1, "CHUNK", fetch, context);
+    const routes = [identifier, chunk];
+    if (intent === "text") routes.push(docHits(this.db, task, fetch, context));
+    const merged = staged(context, "merge", () => {
+      const value = mergeByRank(routes, fetch);
+      return { value, visited: routes.reduce((sum, route) => sum + route.length, 0) };
+    });
+    const result = finish(merged);
+    // A complete empty answer says whether the index knows any query word
+    // (an all-CJK question over English code knows none): point lookups,
+    // bounded by the query's own token count.
+    if (merged.length === 0 && result.stopReason === undefined) result.vocabulary = queryVocabulary(this.db, task);
+    return result;
   }
+}
+
+function queryVocabulary(db: IndexDatabase, task: string): { queryTokens: number; knownTokens: number } {
+  const tokens = tokenize(task);
+  const known = prepareCached(
+    db,
+    `SELECT 1 AS ok WHERE EXISTS(SELECT 1 FROM entity_df WHERE field=0 AND token_sym=?)
+       OR EXISTS(SELECT 1 FROM entity_df WHERE field=1 AND token_sym=?)
+       OR EXISTS(SELECT 1 FROM search_doc_df WHERE token_sym=?)`
+  );
+  const isKnown = (token: string) => {
+    const sym = symId(db, token);
+    return sym !== undefined && known.get(sym, sym, sym) !== undefined;
+  };
+  return { queryTokens: tokens.length, knownTokens: tokens.filter(isKnown).length };
 }
 
 // text intent merges both BM25 routes so a type hit never preempts a method
@@ -479,6 +870,9 @@ function mergeByRank(routes: EntityHit[][], cap: number): EntityHit[] {
   return merged;
 }
 
+// Legacy search() only (java_impact lexical fallbacks): an exact shape with no
+// name-layer hit still falls back to BM25 there. The discovery path
+// (searchDetailed) never does.
 function firstNonEmpty(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {
   if (identifier.length > 0) return identifier.slice(0, cap);
   return chunk.slice(0, cap);

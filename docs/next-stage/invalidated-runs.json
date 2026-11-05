@@ -1,0 +1,203 @@
+{
+ "schemaVersion": "invalidated-live-runs/v1",
+ "basis": "R00 (release-audit-v1.1): A01 frozen-fixture byte drift + W01-W05 final-model-message loss + E01-E04 scorer coercion. Every LIVE agent run above used the shared faulty evaluation loop, so cross-model agreement does not rule out one systemic confound. Records are retained; none may support causal capability claims or release eligibility.",
+ "generated": "2026-09-26",
+ "retainedNotes": [
+  "The 0/24 repair frozen-test outcomes remain true failures of the workspace state as it then was, but 'failures are model refusal, not harness' is NOT supported by this data (audit report line 47).",
+  "Search-layer A/B recall numbers (A2/A3) remain valid: they never depended on the model chat loop; only agent-outcome and repair-outcome attribution is invalidated."
+ ],
+ "runs": [
+  {
+   "milestone": "M2",
+   "run": "live-full",
+   "label": "M2 LIVE full (27B, 24 dev x2 arms x3)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m2/live-full/results-pack.json",
+   "runs": 144,
+   "backend": "openclaw/Qwen3.8-27B-WORK",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M2",
+   "run": "live-pilot",
+   "label": "M2 LIVE pilot (27B, 8 x1 x2)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m2/live-pilot/results-pack.json",
+   "runs": 16,
+   "backend": "openclaw/Qwen3.8-27B-WORK",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "agent-ab",
+   "label": "M3 early agent A/B round",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-ab/results-pack.json",
+   "runs": 72,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "agent-full",
+   "label": "M3 T10 round 1 (27B, dev 24 x2 x3)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-full/results-pack.json",
+   "runs": 72,
+   "backend": "openclaw/Qwen3.8-27B-WORK",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "agent-full2",
+   "label": "M3 T10 round 2 (space-bunny-alpha, dev)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-full2/results-pack.json",
+   "runs": 72,
+   "backend": "openclaw/Qwen3.8-27B-WORK",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "agent-full3",
+   "label": "M3 T10 round 3 backend-a (dev)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-full3/results-pack.json",
+   "runs": 72,
+   "backend": "stealth/space-bunny-alpha",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "agent-luna2",
+   "label": "M3 T10 round 3 (gpt-6-luna reasoning=max, strong judge, dev)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-luna2/results-pack.json",
+   "runs": 72,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "agent-locked",
+   "label": "M3 luna locked split (12 tasks x2 x3)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-locked/results-pack.json",
+   "runs": 72,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "repair-dev",
+   "label": "M3 closure repair matrix dev (8...5 tasks x2 x3, final siliconflow round)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/repair-dev/results-pack.json",
+   "runs": 30,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "repair-locked",
+   "label": "M3 closure repair matrix locked (3 tasks x2 x3)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/repair-locked/results-pack.json",
+   "runs": 18,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "repair-smoke",
+   "label": "M3 repair smoke (2 runs)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/repair-smoke/results-pack.json",
+   "runs": 2,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  },
+  {
+   "milestone": "M3",
+   "run": "repair-probe",
+   "label": "M3 repair probe diagnostics (2 runs)",
+   "pack": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/repair-probe/results-pack.json",
+   "runs": 2,
+   "backend": "codex/gpt-6-luna",
+   "status": "INVALID_EXPERIMENT",
+   "causalClaimEligible": false,
+   "reasons": [
+    "W01-W03/W04 (final model tool-message payload loss; delivery semantics unsound; SOURCE_RECEIVED without payload)",
+    "A01 frozen Unicode CRLF fixture drift made M3-boundary dataset selfcheck fail at byte level",
+    "E01-E04 scorer type coercion not enforced in the LIVE path"
+   ],
+   "retainedFor": "historical record and R01-R04 re-measurement baseline only; no capability attribution"
+  }
+ ]
+}

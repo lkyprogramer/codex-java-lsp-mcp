@@ -1,0 +1,14 @@
+{
+  "schema": "java-specialist-release-verdict/v1.1",
+  "eligibility": "NO_GO",
+  "deploymentAuthorized": false,
+  "deploymentPerformed": false,
+  "errors": [
+    "INDEPENDENT_LOCKED not PASS",
+    "FULL_PUBLIC not PASS",
+    "PERFORMANCE not PASS",
+    "K29 not PASS",
+    "QA frozen floor failed"
+  ],
+  "limit": "Artifact hashes and declared states do not prove execution. A separate reviewer must inspect raw traces, candidate provenance and all per-case outcomes."
+}

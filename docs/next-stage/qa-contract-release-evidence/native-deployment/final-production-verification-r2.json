@@ -1,0 +1,31 @@
+{
+  "schema": "final-document-binding-correction/v2",
+  "status": "PASS",
+  "checkedAt": "2026-10-11T12:49:24.845024+00:00",
+  "originalVerification": {
+    "path": "native-deployment/final-production-verification.json",
+    "sha256": "66c1981059440a4c1793a5287843d631938d3b7d2b2eee15e47764477c14c2b7"
+  },
+  "productionProof": {
+    "path": "native-deployment/production-attempt-8/production-proof.json",
+    "sha256": "03886f95d871b6132ae03547d4b47c40896c6ed8c77e8952291e09c31598247a"
+  },
+  "productionDeploymentPerformed": true,
+  "sourceAndFrozenInputVerification": "PASS_REUSED_UNCHANGED_SOURCE_AND_293_INPUTS",
+  "correction": "README development section now labels earlier runtime integrity NO_GO as historical and points to current actual deployment; original verification snapshot kept unchanged",
+  "documentHashes": [
+    {
+      "path": "README.md",
+      "sha256": "1f8be3d4f375ee94e1169015cb5ffb0f64c804b5fdf6435e505d1944d9467eba"
+    },
+    {
+      "path": "docs/phase-f/production-operations.md",
+      "sha256": "2a461ff9cba6aad7b0a893e0883e2142d42f0c51192067073e7d3ae406b758ae"
+    },
+    {
+      "path": "docs/next-stage/qa-contract-release-review.md",
+      "sha256": "2b23ad08b1e22f94d06f13b06f9ed7182b2b6e159b955222bd8043c392551f81"
+    }
+  ],
+  "gitDiffCheckExit": 0
+}

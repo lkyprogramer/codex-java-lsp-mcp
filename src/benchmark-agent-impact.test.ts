@@ -49,7 +49,7 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.metadata.projectId, "generic-java");
   assert.equal(payload.metadata.warmState, "cold-nolsp");
-  assert.equal(payload.metadata.indexBackend, "v2");
+  assert.equal(payload.metadata.indexBackend, "mac1-owner");
   assert.equal(payload.metadata.indexPrepareTimeoutMs, 600000);
   assert.equal(payload.metadata.readPlanMaxBytes, 2048);
   assert.equal(payload.scenarios[0].id, "demo");
@@ -222,4 +222,74 @@ test("benchmark can run a no-lsp token baseline", async () => {
     profile: "controller",
     semanticUsed: false
   });
+});
+
+test("benchmark impact strategy serves every attempt from a published owner snapshot", { timeout: 180_000 }, async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-benchmark-impact-"));
+  const srcDir = path.join(root, "src", "main", "java", "demo");
+  await mkdir(srcDir, { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(srcDir, "DemoController.java"), [
+    "package demo;",
+    "public class DemoController {",
+    "  private final DemoService service = new DemoService();",
+    "  public DemoResponse updateDemo(DemoRequest request) { return service.update(request); }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(srcDir, "DemoService.java"), "package demo; public class DemoService { DemoResponse update(DemoRequest request) { return new DemoResponse(request.name()); } }\n");
+  await writeFile(path.join(srcDir, "DemoRequest.java"), "package demo; public record DemoRequest(String name) {}\n");
+  await writeFile(path.join(srcDir, "DemoResponse.java"), "package demo; public record DemoResponse(String name) {}\n");
+  const scenarioFile = path.join(root, "generic-java.scenarios.jsonl");
+  await writeFile(scenarioFile, `${JSON.stringify({
+    id: "demo-update",
+    name: "DemoController#updateDemo",
+    projectId: "generic-java",
+    layoutProfile: "generic-java",
+    scenarioVersion: 1,
+    warmState: "cold-nolsp",
+    anchor: { file: "src/main/java/demo/DemoController.java", line: 4, column: 23, profile: "controller", taskKeywords: ["demo", "update"] },
+    golden: { mustHit: ["src/main/java/demo/DemoController.java", "src/main/java/demo/DemoService.java"], taskBlocking: [], shouldHit: [], support: [] }
+  })}\n`);
+  const cacheDir = path.join(root, "index-cache");
+
+  const result = spawnSync(process.execPath, [
+    "dist/benchmark-agent-impact.js",
+    "--repo-root", root,
+    "--scenarios", scenarioFile,
+    "--project-id", "generic-java",
+    "--warm-state", "cold-nolsp",
+    "--semantic-policy", "fast",
+    "--strategy", "impact",
+    "--runs", "2",
+    "--index-cache-dir", cacheDir
+  ], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+    env: { ...process.env, JAVA_LSP_ISOLATED_VALIDATION: "1" }
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.metadata.indexBackend, "mac1-owner");
+  assert.equal(payload.metadata.prepareJavaIndexReconciled, true);
+  assert.equal(payload.metadata.prepareJavaIndexStatus.state, "READY");
+  assert.ok(payload.metadata.prepareJavaIndexStatus.files >= 4, JSON.stringify(payload.metadata.prepareJavaIndexStatus));
+  const attempts = payload.rows[0].attempts;
+  assert.equal(attempts.length, 2);
+  for (const attempt of attempts) {
+    assert.equal(attempt.strategy, "impact");
+    assert.ok(attempt.elapsedMs > 0);
+    // Every timed attempt held a FRESH view of the one prepared snapshot.
+    assert.equal(attempt.indexView.state, "FRESH");
+    assert.equal(attempt.indexView.snapshotId, attempts[0].indexView.snapshotId);
+    assert.match(attempt.indexView.snapshotId, /^s-/);
+  }
+  assert.ok(payload.metadata.prepareJavaIndexStatus.indexedGeneration >= 1);
+  // Each answer comes from the published snapshot's index, not a fallback without one.
+  for (const attempt of attempts) {
+    assert.equal(attempt.recall, 1, JSON.stringify(attempt.determinism));
+    assert.equal(attempt.determinism.completion.coverage, "COMPLETE");
+    assert.equal(attempt.determinism.completion.indexedGeneration, payload.metadata.prepareJavaIndexStatus.indexedGeneration);
+  }
 });

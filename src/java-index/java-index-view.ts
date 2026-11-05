@@ -11,7 +11,7 @@ import type {
   StaticEdgeKind
 } from "./index-types.js";
 
-export type JavaIndexOpenSource = "own-snapshot" | "sibling-seed" | "cold";
+export type JavaIndexOpenSource = "own-snapshot" | "cold";
 
 export interface JavaIndexView {
   ensureFresh(files: string[], generation: number): Promise<void>;

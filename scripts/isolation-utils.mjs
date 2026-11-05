@@ -2,8 +2,9 @@
 // output: Detached clones, private dependency identities, and commands bound to private validation state.
 // pos: Shared validation isolation primitive for code, Java repositories, and formal matrices.
 import { createHash } from "node:crypto";
-import { cp, readFile, readdir, readlink } from "node:fs/promises";
+import { cp, lstat, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
+import { readdirSync, statSync } from "node:fs";
 
 const ISOLATED_STATE_FLAGS = new Set([
   "--index-cache-dir",
@@ -24,7 +25,8 @@ const HOST_NODE_RUNTIME_SELECTORS = [
   "NODE_REPL_HISTORY",
   "NODE_V8_COVERAGE",
   "NODE_COMPILE_CACHE",
-  "NODE_REDIRECT_WARNINGS"
+  "NODE_REDIRECT_WARNINGS",
+  "NODE_TEST_CONTEXT"
 ];
 const NODE_CODE_LOADING_OPTIONS = new Set([
   "--require",
@@ -64,7 +66,7 @@ export async function copyIsolatedNodeModules(sourceRoot, isolationRoot) {
   return target;
 }
 
-export async function dependencyTreeInventory(root) {
+export async function dependencyTreeInventory(root, { includeMode = false, excludeRoot = [] } = {}) {
   const resolvedRoot = path.resolve(root);
   const digest = createHash("sha256");
   const totals = { fileCount: 0, directoryCount: 0, symlinkCount: 0, totalBytes: 0 };
@@ -73,25 +75,27 @@ export async function dependencyTreeInventory(root) {
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
     for (const entry of entries) {
+      if (!relativeDirectory && excludeRoot.includes(entry.name)) continue;
       const relativePath = path.posix.join(relativeDirectory.split(path.sep).join(path.posix.sep), entry.name);
       const absolutePath = path.join(directory, entry.name);
+      const mode = includeMode ? `\0${(await lstat(absolutePath)).mode & 0o7777}` : "";
       if (entry.isDirectory()) {
         totals.directoryCount += 1;
-        digest.update(`D\0${relativePath}\n`);
+        digest.update(`D\0${relativePath}${mode}\n`);
         await visit(absolutePath, path.join(relativeDirectory, entry.name));
       } else if (entry.isFile()) {
         const bytes = await readFile(absolutePath);
         totals.fileCount += 1;
         totals.totalBytes += bytes.byteLength;
-        digest.update(`F\0${relativePath}\0${bytes.byteLength}\0${sha256(bytes)}\n`);
+        digest.update(`F\0${relativePath}\0${bytes.byteLength}\0${sha256(bytes)}${mode}\n`);
       } else if (entry.isSymbolicLink()) {
         const target = await readlink(absolutePath);
         const resolvedTarget = path.resolve(path.dirname(absolutePath), target);
-        if (!isWithin(resolvedRoot, resolvedTarget)) {
+        if (!isWithin(resolvedRoot, resolvedTarget) || (includeMode && path.isAbsolute(target))) {
           throw new Error(`isolated dependency symlink escapes node_modules: ${relativePath}`);
         }
         totals.symlinkCount += 1;
-        digest.update(`L\0${relativePath}\0${target}\n`);
+        digest.update(`L\0${relativePath}\0${target}${mode}\n`);
       } else {
         throw new Error(`unsupported isolated dependency entry: ${relativePath}`);
       }
@@ -101,7 +105,7 @@ export async function dependencyTreeInventory(root) {
   await visit(resolvedRoot);
   return {
     schemaVersion: 1,
-    algorithm: "sha256-path-type-size-content-v1",
+    algorithm: includeMode ? "sha256-path-type-size-content-mode-v1" : "sha256-path-type-size-content-v1",
     ...totals,
     sha256: digest.digest("hex")
   };
@@ -154,10 +158,10 @@ export function validateCandidateNodeCommand(values) {
 
 export function bindCandidateNodeCommand(values, { candidateRoot, stateRoot }) {
   validateCandidateNodeCommand(values);
+  const command = [process.execPath, ...values.slice(1)];
   const script = values.slice(1).find(value => /\.(?:[cm]?js|ts)$/.test(value));
-  if (script && NESTED_ISOLATION_BROKERS.has(path.normalize(script))) return [...values];
+  if (script && NESTED_ISOLATION_BROKERS.has(path.normalize(script))) return command;
 
-  const command = [...values];
   for (let index = 0; index < command.length; index += 1) {
     const value = command[index];
     if ([...ISOLATED_STATE_FLAGS, ...CANDIDATE_ROOT_FLAGS].some(flag => value.startsWith(`${flag}=`))) {
@@ -183,7 +187,35 @@ export function bindCandidateNodeCommand(values, { candidateRoot, stateRoot }) {
     command[index + 1] = bound;
     index += 1;
   }
-  return command;
+  return expandCandidateTestGlobs(command, candidateRoot);
+}
+
+// Node 22.16 does not expand these quoted test globs. Resolve only in the built
+// candidate, never against the source checkout's possibly stale dist tree.
+export function expandCandidateTestGlobs(values, candidateRoot) {
+  const testRun = values.includes("--test");
+  return values.flatMap(value => {
+    const match = /^(dist|scripts)\/(\*\*\/)?\*\.test\.(js|mjs)$/.exec(value);
+    if (!match) {
+      // node --test treats a missing path as a pattern and silently runs nothing
+      // for it, e.g. an unsplit "a.test.mjs b.test.mjs" from an unquoted zsh array.
+      if (testRun && !value.startsWith("-") && /\.(?:[cm]?js|ts)$/.test(value) && !statSync(path.resolve(candidateRoot, value), { throwIfNoEntry: false })?.isFile()) {
+        throw new Error(`candidate test file not found: ${value}`);
+      }
+      return [value];
+    }
+    const files = [];
+    function visit(relative) {
+      for (const entry of readdirSync(path.join(candidateRoot, relative), { withFileTypes: true })) {
+        const name = path.posix.join(relative, entry.name);
+        if (entry.isDirectory() && match[2]) visit(name);
+        else if (entry.isFile() && name.endsWith(`.test.${match[3]}`)) files.push(name);
+      }
+    }
+    visit(match[1]);
+    if (!files.length) throw new Error(`candidate test glob has no matches: ${value}`);
+    return files.sort();
+  });
 }
 
 function sha256(value) {

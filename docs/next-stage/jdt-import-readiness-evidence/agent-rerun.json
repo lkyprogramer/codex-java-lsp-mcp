@@ -1,0 +1,87 @@
+{
+  "status": "PASS",
+  "scope": "original Agent implementation and production-reference task recovered; not every semantic call passed",
+  "buildSha": "83aa814049e5",
+  "historicalResult": "PARTIAL",
+  "historicalResultPreserved": true,
+  "originalPromptByteIdentical": true,
+  "modelAndToolOrderOverridden": false,
+  "globalAgentsAndConfigUnchangedDuringRerun": true,
+  "states": [
+    "NEW",
+    "READY"
+  ],
+  "importStates": [
+    "NOT_STARTED",
+    "READY"
+  ],
+  "coldReferences": {
+    "status": "EXPECTED_NOT_READY",
+    "itemId": "item_27",
+    "backgroundImportContinued": true
+  },
+  "requiredImpact": {
+    "status": "PARTIAL_TIMEOUT",
+    "itemId": "item_28"
+  },
+  "recoveredPrecision": {
+    "status": "PASS",
+    "backend": "jdt",
+    "itemIds": [
+      "item_47",
+      "item_48",
+      "item_50"
+    ],
+    "referenceCounts": [
+      11,
+      9,
+      4
+    ],
+    "truncated": false,
+    "filesVerified": [
+      "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientUpdateAppService.java",
+      "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientReleaseController.java",
+      "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java"
+    ]
+  },
+  "annotationProcessingEnabledInNativeStatus": true,
+  "aptGeneratedSemantics": "NOT_CLAIMED",
+  "run": {
+    "id": "semantic-primary",
+    "command": [
+      "codex",
+      "-a",
+      "never",
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/Users/luo/Documents/program/cipherlink",
+      "-o",
+      "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-jdt-readiness-ua9mfgpr/agents/semantic-primary/answer.md",
+      "-"
+    ],
+    "exitCode": 0,
+    "timedOut": false,
+    "seconds": 132.503,
+    "gitStatusUnchanged": true
+  },
+  "rawEvidenceHashes": {
+    "agent-check-protocol.json": "05a814d669bd4ca758517eb49303790175751b8b006be9db30f3fb9991b27a98",
+    "agent-run-records.json": "791090637a90c2a55bf5fb0f272eb17a5d2062a5a3d40fd18fc724a276cbc3db",
+    "agents/semantic-primary/events.jsonl": "9489deab7ea9efdf42f0025763f802f7a917356f01c082163f9ffcdb6d1b7333",
+    "agents/semantic-primary/answer.md": "5c43cfac3f41b388e3fa21e967d7483b26294f7a4c9624bc2f2884afaa8a2ff0",
+    "agents/semantic-primary/stderr.log": "356d61097146171132918f167c00b7fbce37d91413d508ea6503ef22305c80f4"
+  },
+  "limits": [
+    "Initial references was not ready; required impact still PARTIAL_TIMEOUT. Successful later exact references are the task acceptance evidence.",
+    "Original Agent answer says only source and static references, which is imprecise; actual trace contains real JDT references. Original answer is retained unchanged.",
+    "CLI stderr contains existing configuration warnings and another MCP endpoint 14242 connection failure; Java endpoint 38456 succeeded. Zero-error logs are not claimed.",
+    "No application build/start or database operation observed in this Agent trace; runtime business behavior is not claimed.",
+    "Codex config was not byte-identical to the historical run before this rerun; the current existing default configuration was used unchanged."
+  ]
+}

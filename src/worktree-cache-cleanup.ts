@@ -2,7 +2,6 @@
 // output: L0 retired-format GC, L1 dead-path / non-pin TTL reclaim, L2 unpinned LRU caps.
 // pos: Startup and periodic cache janitor; never deletes a pin or concurrently owned runtime.
 import { randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -17,7 +16,7 @@ import path from "node:path";
 import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
 import { killOwnedProcessTree, listProcesses } from "./jdt-process-tree.js";
 import { canonicalPath } from "./path-utils.js";
-import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
+import { OWNER_STORE_DIR, repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import {
   processStartIdentityForPid,
   repoOwnershipBase,
@@ -40,7 +39,6 @@ const RETIRED_INDEX_FILES = [
 type RepoCacheMeta = {
   schemaVersion?: number;
   repoRoot?: string;
-  isGitWorktree?: boolean;
   jdtlsPid?: number;
   jdtlsProcessStartIdentity?: string;
   ownerToken?: string;
@@ -122,7 +120,6 @@ export function touchRepoCache(repoRoot: string, extra: RepoCacheTouch = {}): vo
       ...(previous?.repoRoot === root ? previous : {}),
       schemaVersion: 2,
       repoRoot: root,
-      isGitWorktree: isLinkedGitWorktree(root),
       updatedAt: new Date().toISOString()
     };
     if (extra.ownership) {
@@ -263,6 +260,8 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
       || entry.name === "leases"
       || entry.name === "ownership"
       || entry.name === "telemetry"
+      // The owner store has no repo-meta and its mtime stays at creation: it is the owner GC's, not ours.
+      || entry.name === OWNER_STORE_DIR
     ) {
       continue;
     }
@@ -683,28 +682,4 @@ function processLiveness(pid: number, expectedIdentity?: string): "alive" | "dea
     return "unknown";
   }
   return currentIdentity === expectedIdentity ? "alive" : "dead";
-}
-
-function isLinkedGitWorktree(repoRoot: string): boolean {
-  if (!existsSync(repoRoot)) {
-    return false;
-  }
-  try {
-    const gitDir = gitPath(repoRoot, "--git-dir");
-    const commonDir = gitPath(repoRoot, "--git-common-dir");
-    return path.normalize(gitDir) !== path.normalize(commonDir);
-  } catch {
-    try {
-      return !statSync(path.join(repoRoot, ".git")).isDirectory();
-    } catch {
-      return false;
-    }
-  }
-}
-
-function gitPath(repoRoot: string, arg: "--git-dir" | "--git-common-dir"): string {
-  return execFileSync("git", ["-C", repoRoot, "rev-parse", "--path-format=absolute", arg], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"]
-  }).trim();
 }

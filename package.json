@@ -8,7 +8,7 @@
     "codex-java-lsp-mcp": "dist/server.js"
   },
   "scripts": {
-    "build": "npm run clean && tsc -p tsconfig.json && node scripts/write-build-stamp.mjs",
+    "build": "sh scripts/run-isolated-node.sh scripts/build-macos-native.mjs --build",
     "build:isolated": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile",
     "clean": "rm -rf dist",
     "test": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full",
@@ -52,7 +52,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "chokidar": "5.0.0",
     "express": "^5.2.1",
     "fast-xml-parser": "5.10.1",
     "tree-sitter": "0.25.0",

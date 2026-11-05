@@ -42,12 +42,8 @@ try {
 
 function advisorMessage(lsp: LspEnablement, linkedWorktree: boolean): string {
   const root = lsp.effectiveRepoRoot;
-  const impact =
-    "随后优先用 java_impact 获取影响面。java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT；需要实现类或引用时传 semanticPolicy=required，或改用 java_symbol。";
-  if (linkedWorktree) {
-    return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})，这是 Git worktree。先调用 java_status({repoRoot:"${root}",start:false}) 校验 repoRoot。不要预启 JDT；符号级查询再调 java_symbol 或 java_diagnostics（按需启动）。${impact}`;
-  }
-  return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。这是已配置项目，不能只报告 LSP server 未启动。先调用 java_status({repoRoot:"${root}",start:false}) 校验 repoRoot；若返回 started=false，必须立即调用 java_status({repoRoot:"${root}",start:true}) 启动 LSP server；${impact}`;
+  const worktree = linkedWorktree ? "，这是 Git worktree" : "";
+  return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})${worktree}。Java 语义任务按 AGENTS.md 的工具指引执行；每次调用显式传 repoRoot:"${root}" 直接调用目标工具，不必先调 java_status（worktree 嵌在另一个 Maven/Gradle 工程目录下时，先用 java_status 核对解析出的 repoRoot；结果的 indexView 标明所用视图与新鲜度）。未知位置先用 java_symbol(operation=query) 静态定位，或直接 java_impact({symbol:"Type#method"})；结果里的 symbolId 可直接传回，AMBIGUOUS 时从候选选一个 symbolId，不猜重载；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。`;
 }
 
 function readPayload(): HookPayload {

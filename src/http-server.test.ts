@@ -382,6 +382,8 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
     projectsConfigPath,
     resolverOptions: { cwdFallback: "reject" },
     cacheJanitorIntervalMs: 0,
+    // JDT runtime sharing only: no FSEvents owner binding outside the owner launcher.
+    index: false,
     cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] })
   });
   const daemon = new JavaLspHttpServer({ application, port: 0, reportError: () => undefined });
@@ -398,7 +400,7 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
     firstClient.callTool({ name: "java_status", arguments: { repoRoot: firstRoot, start: true, detail: "diagnostic" } }),
     secondClient.callTool({ name: "java_status", arguments: { repoRoot: firstRoot, start: true, detail: "diagnostic" } })
   ]);
-  assert.equal(sameRootFirst.isError, undefined);
+  assert.equal(sameRootFirst.isError, undefined, JSON.stringify(sameRootFirst.content));
   assert.equal(sameRootSecond.isError, undefined);
   const firstStatus = toolJson(sameRootFirst);
   const secondStatus = toolJson(sameRootSecond);
@@ -519,18 +521,27 @@ function git(cwd: string, ...args: string[]): void {
 function fakeJdtlsProgram(): string {
   return `#!${process.execPath}
 let buffer = Buffer.alloc(0);
+let rootUri;
+
+function sendMessage(message) {
+  const body = JSON.stringify(message);
+  process.stdout.write("Content-Length: " + Buffer.byteLength(body) + "\\r\\n\\r\\n" + body);
+}
 
 function send(id, result) {
-  if (id === undefined) return;
-  const body = JSON.stringify({ jsonrpc: "2.0", id, result });
-  process.stdout.write("Content-Length: " + Buffer.byteLength(body) + "\\r\\n\\r\\n" + body);
+  if (id !== undefined) sendMessage({ jsonrpc: "2.0", id, result });
 }
 
 function handle(message) {
   if (message.method === "initialize") {
+    rootUri = message.params.rootUri;
     send(message.id, { capabilities: {} });
+  } else if (message.method === "initialized") {
+    sendMessage({ jsonrpc: "2.0", method: "language/status", params: { type: "ServiceReady", message: "ServiceReady" } });
   } else if (message.method === "shutdown") {
     send(message.id, null);
+  } else if (message.method === "workspace/executeCommand" && message.params?.command === "java.project.getAll" && message.params?.arguments?.length === 0) {
+    send(message.id, [rootUri]);
   } else if (message.method === "workspace/symbol") {
     send(message.id, []);
   }

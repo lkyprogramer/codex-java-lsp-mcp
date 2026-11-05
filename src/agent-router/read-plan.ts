@@ -1,6 +1,7 @@
 // input: Ranked candidates and one batched JavaIndex range query.
 // output: V6 multi-range plan constrained by file and exact UTF-8 byte budgets.
 // pos: Token-aware ReadPlan planner; candidate source bytes stay in the index worker.
+import path from "node:path";
 import type {
   CandidateFile,
   ImpactMode,
@@ -125,14 +126,18 @@ type SelectReadPlanInput = {
 
 type CandidateWindow = MaterializedReadWindow;
 
-// Final serializer truth (T03): for every shortlisted candidate, requested
-// anchor lines that no selected read window covers are enumerated per line.
-// A plan that dropped anchors is partial and must name them instead of
-// reporting a trimmed selection as complete.
-function uncoveredAnchorLineGaps(
+function gapFilePath(file: CandidateFile): string {
+  return file.path || path.basename(file.absolutePath);
+}
+
+// Keep the full position ledger for diagnostics. Only ordinary, unselected
+// candidates may be summarized in compact output.
+function uncoveredPositionGaps(
   files: readonly CandidateFile[],
-  units: readonly ReadUnit[]
-): string[] {
+  units: readonly ReadUnit[],
+  options: ImpactOptions,
+  protectedPaths: ReadonlySet<string>
+): { gaps: string[]; compactPositionGaps: ReadonlyMap<string, string | null> } {
   const coverageByPath = new Map<string, Array<{ startLine: number; endLine: number }>>();
   for (const unit of units) {
     const windows = coverageByPath.get(unit.absolutePath) ?? [];
@@ -142,6 +147,7 @@ function uncoveredAnchorLineGaps(
     coverageByPath.set(unit.absolutePath, windows);
   }
   const gaps: string[] = [];
+  const compactPositionGaps = new Map<string, string | null>();
   for (const file of files) {
     if (file.positions.length === 0) continue;
     const windows = coverageByPath.get(file.absolutePath) ?? [];
@@ -149,9 +155,19 @@ function uncoveredAnchorLineGaps(
       .filter(line => !windows.some(window => window.startLine <= line && line <= window.endLine))
       .sort((a, b) => a - b);
     if (uncovered.length === 0) continue;
-    gaps.push(`Anchor lines ${uncovered.join(", ")} in ${file.absolutePath} were dropped by read-plan budget trimming; the plan is partial.`);
+    const lines = uncovered.join(", ");
+    const filePath = gapFilePath(file);
+    const gap = `Anchor lines ${lines} in ${filePath} were dropped by read-plan budget trimming; the plan is partial.`;
+    gaps.push(gap);
+    if (options.verbosity === "compact") {
+      const ordinaryUnselected = !coverageByPath.has(file.absolutePath) && !isAnchor(file, options)
+        && !protectedPaths.has(file.absolutePath) && !isProtectedCore(file, options);
+      compactPositionGaps.set(gap, ordinaryUnselected
+        ? null
+        : `Uncovered lines ${lines} in ${filePath}; read plan partial.`);
+    }
   }
-  return gaps;
+  return { gaps, compactPositionGaps };
 }
 
 type ShortlistResult = {
@@ -170,6 +186,8 @@ export type ReadPlanBuildResult = {
   maxFiles: number;
   budgetExceededByAnchor: boolean;
   evidenceGaps: string[];
+  /** Compact-only rendering by original message. Null counts towards the ordinary-candidate summary. */
+  compactPositionGaps: ReadonlyMap<string, string | null>;
   /** T08 structured view of evidenceGaps: ENTRY_ABSENT (no index entry),
    *  EVICTED (budget/capacity dropped it), RANGE_MISS (entry exists but the
    *  selected windows miss required lines). Diagnostic-only. */
@@ -247,12 +265,11 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
     result.evidenceGaps = [...new Set([rangeDeadlineGap, ...result.evidenceGaps])];
     noteGap(extraLedger, "RANGE_MISS", rangeDeadlineGap);
   }
-  // Explicit anchors whose windows the plan dropped are enumerated per line:
-  // a budget-trimmed plan is partial and must name the anchors it lost.
-  const anchorLineGaps = uncoveredAnchorLineGaps(shortlist.files, selectedUnits);
-  if (anchorLineGaps.length > 0) {
-    result.evidenceGaps = [...new Set([...anchorLineGaps, ...result.evidenceGaps])];
-    for (const message of anchorLineGaps) noteGap(extraLedger, "RANGE_MISS", message);
+  const { gaps: positionGaps, compactPositionGaps } =
+    uncoveredPositionGaps(shortlist.files, selectedUnits, input.options, protectedPaths);
+  if (positionGaps.length > 0) {
+    result.evidenceGaps = [...new Set([...positionGaps, ...result.evidenceGaps])];
+    for (const message of positionGaps) noteGap(extraLedger, "RANGE_MISS", message);
   }
   if (shortlist.omittedProtected > 0) {
     const shortlistGap = `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`;
@@ -268,6 +285,7 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   }
   return {
     ...result,
+    compactPositionGaps,
     evidenceGapLedger: uniqueByMessage([...result.evidenceGapLedger, ...extraLedger])
   };
 }
@@ -414,7 +432,7 @@ function selectTokenAwarePlan(
   options: ImpactOptions,
   budget: ReadPlanBudget,
   protectedPaths: ReadonlySet<string>
-): ReadPlanBuildResult {
+): Omit<ReadPlanBuildResult, "compactPositionGaps"> {
   const anchors = windows.filter(window => isAnchor(window.file, options));
   const selected: CandidateWindow[] = [];
   const selectedPaths = new Set<string>();
@@ -435,17 +453,17 @@ function selectTokenAwarePlan(
     bucketCounts[bucketOf(window.file, options, protectedPaths)] += 1;
     marginalUtilityBySelectedFile[window.file.path || window.file.absolutePath] = utility;
     if (window.extremeMethod) {
-      note("RANGE_MISS", `Extreme method range was bounded for ${window.file.path || window.file.absolutePath}; inspect omitted middle body if needed.`);
+      note("RANGE_MISS", `Extreme method range was bounded for ${gapFilePath(window.file)}; inspect omitted middle body if needed.`);
     }
     if (window.ranges.length === 0) {
-      note("ENTRY_ABSENT", `No indexed read range was available for ${window.file.path || window.file.absolutePath}.`);
+      note("ENTRY_ABSENT", `No indexed read range was available for ${gapFilePath(window.file)}.`);
     }
   };
 
   for (const anchor of anchors) {
     add(anchor, anchor.file.score);
     if (anchor.ranges.length === 0) {
-      note("ENTRY_ABSENT", `Read range unavailable for anchor ${anchor.file.path || anchor.file.absolutePath}.`);
+      note("ENTRY_ABSENT", `Read range unavailable for anchor ${gapFilePath(anchor.file)}.`);
     }
   }
   if (totalBytes > budget.maxReadBytes) {
@@ -459,7 +477,7 @@ function selectTokenAwarePlan(
   const readableWindows = windows.filter(window => window.ranges.length > 0);
   for (const window of windows) {
     if (!isAnchor(window.file, options) && window.ranges.length === 0) {
-      note("ENTRY_ABSENT", `Read range unavailable for ${window.file.path || window.file.absolutePath}; candidate was omitted.`);
+      note("ENTRY_ABSENT", `Read range unavailable for ${gapFilePath(window.file)}; candidate was omitted.`);
     }
   }
 
@@ -522,7 +540,8 @@ function selectTokenAwarePlan(
     for (const anchor of stableAnchorEntries(options)) {
       const attributed = core.filter(window => protectedAnchorIds(window.file, options).has(anchor.id));
       if (attributed.length > 0 && !attributed.some(window => selectedPaths.has(window.file.absolutePath))) {
-        note("EVICTED", `Protected core coverage omitted for anchor ${anchor.file}: read-plan limits.`);
+        const resolved = anchors.find(({ file }) => anchor.file === file.absolutePath || anchor.file === file.path);
+        note("EVICTED", `Protected core coverage omitted for anchor ${resolved ? gapFilePath(resolved.file) : anchor.id}: read-plan limits.`);
       }
     }
   }

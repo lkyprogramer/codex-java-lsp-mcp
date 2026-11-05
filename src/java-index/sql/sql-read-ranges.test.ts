@@ -58,7 +58,6 @@ function longMethodBundle(): JavaFileBundle {
       allTypeIds: [type.typeId],
       contentHash: "fixture",
       size: 5000,
-      mtimeMs: 1,
       parseState: "COMPLETE",
       parseErrorCount: 0,
       generation: 1

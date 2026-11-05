@@ -3,7 +3,7 @@
 // pos: Installer renderer for one fixed-port loopback daemon.
 import { readFileSync, writeFileSync } from "node:fs";
 
-const TEMPLATE_TOKENS = ["__LABEL__", "__RUNNER__", "__RUNTIME_DIR__", "__LOG_DIR__", "__ENVIRONMENT_ENTRIES__"];
+const TEMPLATE_TOKENS = ["__LABEL__", "__RUNNER__", "__RUNTIME_DIR__", "__LOG_DIR__", "__ENVIRONMENT_ENTRIES__", "__CACHE_ROOT__", "__SERVER_ENTRY__"];
 
 export function xmlEscape(value) {
   return String(value)
@@ -18,7 +18,7 @@ export function renderLaunchAgent(template, values) {
   for (const token of TEMPLATE_TOKENS) {
     if (!template.includes(token)) throw new Error(`LaunchAgent template is missing ${token}.`);
   }
-  for (const key of ["label", "runner", "runtimeDir", "logDir"]) {
+  for (const key of ["label", "runner", "runtimeDir", "logDir", "cacheRoot", "serverEntry"]) {
     const value = values[key];
     if (typeof value !== "string" || !value || value.includes("\n") || value.includes("\r")) {
       throw new Error(`Invalid LaunchAgent ${key}.`);
@@ -34,23 +34,25 @@ export function renderLaunchAgent(template, values) {
   return template
     .replaceAll("__LABEL__", xmlEscape(values.label))
     .replaceAll("__RUNNER__", xmlEscape(values.runner))
+    .replaceAll("__CACHE_ROOT__", xmlEscape(values.cacheRoot))
+    .replaceAll("__SERVER_ENTRY__", xmlEscape(values.serverEntry))
     .replaceAll("__RUNTIME_DIR__", xmlEscape(values.runtimeDir))
     .replaceAll("__LOG_DIR__", xmlEscape(values.logDir))
     .replaceAll("__ENVIRONMENT_ENTRIES__", entries);
 }
 
 export function parseArguments(args) {
-  if (args.length < 6) {
-    throw new Error("Usage: render-launch-agent-plist.mjs <template> <output> <label> <runner> <runtime-dir> <log-dir> <KEY=VALUE>...");
+  if (args.length < 8) {
+    throw new Error("Usage: render-launch-agent-plist.mjs <template> <output> <label> <runner> <runtime-dir> <log-dir> <cache-root> <server-entry> <KEY=VALUE>...");
   }
-  const [templatePath, outputPath, label, runner, runtimeDir, logDir, ...entries] = args;
+  const [templatePath, outputPath, label, runner, runtimeDir, logDir, cacheRoot, serverEntry, ...entries] = args;
   const environment = new Map();
   for (const entry of entries) {
     const separator = entry.indexOf("=");
     if (separator <= 0) throw new Error(`Invalid LaunchAgent environment argument: ${entry}`);
     environment.set(entry.slice(0, separator), entry.slice(separator + 1));
   }
-  return { templatePath, outputPath, values: { label, runner, runtimeDir, logDir, environment } };
+  return { templatePath, outputPath, values: { label, runner, runtimeDir, logDir, cacheRoot, serverEntry, environment } };
 }
 
 function main(args) {

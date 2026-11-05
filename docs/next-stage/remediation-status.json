@@ -1,0 +1,131 @@
+{
+  "schema": "java-specialist-remediation-status/v1",
+  "note": "Task progress lives here, not in the audit kit: docs/java-specialist-release-audit-v1.1/tasks/*.md and plan.json are hashed by the kit's SHA256SUMS (tools/check_bundle.py) and stay byte-identical to the delivered package.",
+  "updated": "2026-10-10",
+  "tasks": {
+    "R00": {
+      "state": "DONE",
+      "commit": "b061409",
+      "report": "docs/next-stage/r00-task-result.json"
+    },
+    "R01": {
+      "state": "DONE",
+      "commit": "321bde0",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r01-task-result.md"
+    },
+    "R02": {
+      "state": "DONE",
+      "commit": "ee3e774",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r02-task-result.md"
+    },
+    "R03": {
+      "state": "DONE",
+      "commit": "b58d3f1",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r03-task-result.md"
+    },
+    "R04": {
+      "state": "DONE",
+      "commit": "c8ab600",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r04-task-result.md"
+    },
+    "R05": {
+      "state": "DONE",
+      "commit": "3c12b57",
+      "report": "docs/next-stage/r05-task-result.md"
+    },
+    "R06": {
+      "state": "DONE",
+      "commit": "77d7e61",
+      "report": "docs/next-stage/r06-task-result.md"
+    },
+    "R07": {
+      "state": "DONE",
+      "commit": "791c520",
+      "report": "docs/next-stage/r07-task-result.md"
+    },
+    "R08": {
+      "state": "DONE",
+      "commit": "8a9d485",
+      "report": "docs/next-stage/r08-task-result.md"
+    },
+    "R09": {
+      "state": "DONE",
+      "commit": "836f772",
+      "report": "docs/next-stage/r09-task-result.md"
+    },
+    "R10": {
+      "state": "DONE",
+      "commit": "aa8a1e3",
+      "report": "docs/next-stage/r10-task-result.md",
+      "note": "index-backed dense input was DISABLED_INVALID at aa8a1e3; resolved by the denseInput follow-up (search_doc_text, schema v8). compare.mjs scorer path-only coverage fixed there (line-recall.mjs); R11 equal-budget still open"
+    },
+    "R11": {
+      "state": "DONE",
+      "commit": "a1c9d26",
+      "report": "docs/next-stage/r11-task-result.md",
+      "protocol": "docs/next-stage/experiment-v1.1.md",
+      "decision": "INCONCLUSIVE (decideFourWay v2; dense gain not separable from a seeded fill control; agent QA lower and 1.86x tokens); closed after one pre-registered pilot"
+    },
+    "R12": {
+      "state": "NOT_STARTED"
+    },
+    "R13": {
+      "state": "NOT_STARTED"
+    }
+  },
+  "reviewFixes": {
+    "scope": "R05-R08 independent review (2 P1, 3 P2, 5 P3)",
+    "state": "DONE",
+    "commit": "b22c0a5",
+    "report": "docs/next-stage/r05-r08-review-fixes.md"
+  },
+  "r09Followups": {
+    "scope": "R09 residual items: cold-build lock, HOL queue order (low-concurrency), scope-filtered deadline, legacy search bound",
+    "state": "DONE",
+    "commit": "463ba33",
+    "report": "docs/next-stage/r09-followups.md"
+  },
+  "denseInput": {
+    "scope": "R10 residual: ordered SearchDocument text for the dense experiment + first real-provider pilot (SiliconFlow Qwen3-VL-Embedding-8B, openclaw/Qwen3.8-next)",
+    "state": "DONE",
+    "commit": "1bbb63c",
+    "report": "docs/next-stage/dense-input-result.md"
+  },
+  "a2StaticFixes": {
+    "scope": "R11 follow-up: name locators (facts revision 4), no_vocabulary_overlap diagnosis, java_symbol preview modes, eval protocol v1.2 ledger/read window, stale existing index rebuild",
+    "state": "DONE",
+    "commits": [
+      "0348a16",
+      "aed7603",
+      "(this commit: test(experiment): re-measure R11 under eval protocol v1.2)"
+    ],
+    "report": "docs/next-stage/a2-static-fixes.md",
+    "decision": "dense retrieval NO_GO (decideFourWay v2); native vs A2 INCONCLUSIVE"
+  },
+  "denseRemoval": {
+    "scope": "close the dense experiment: drivers, tests and the product search_doc_text table removed (index schema v9); provider.mjs/repair-judge.mjs kept for the frozen audit",
+    "state": "DONE",
+    "commit": "7f62569"
+  },
+  "jdtLocatorProbe": {
+    "scope": "real JDT check of static name locators (petclinic, 18 annotated declarations)",
+    "state": "DONE",
+    "commit": "93f3f64",
+    "result": "definition at selection 18/18; at the old annotation-line locator 0/18",
+    "report": "docs/next-stage/a2-static-fixes.md (Limits)"
+  },
+  "evidencePilot": {
+    "scope": "declaration.range + preview-is-not-evidence description (eval-protocol/v1.3), pre-registered",
+    "state": "DONE",
+    "commits": [
+      "fc11d90 (change + pre-registration)",
+      "(this commit: revert + results)"
+    ],
+    "decision": "REVERT (token guard failed: median 12,446.5 > 12,235; E 3 -> 2, ACCESS-01 0/3 -> 2/3)",
+    "report": "docs/next-stage/a2-evidence-pilot.md"
+  }
+}

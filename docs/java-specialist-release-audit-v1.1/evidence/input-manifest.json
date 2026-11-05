@@ -1,0 +1,23 @@
+[
+  {
+    "name": "current",
+    "sha256": "5e7f4996ca86e2c9924df273f1e5b63664bcbf854824ad1bb1418662546ea0f4",
+    "comment": "b9c3cc325491947b198342575e9ea251c024b521",
+    "entries": 2266,
+    "bytes": 231728006
+  },
+  {
+    "name": "original-kit",
+    "sha256": "350ce2ddcb4544297a75fadec1fa6d64a521c542c569f27b0e58cd4d37482386",
+    "comment": "",
+    "entries": 246,
+    "bytes": 1725003
+  },
+  {
+    "name": "old-source",
+    "sha256": "0e0dae4432a4467c110cde04532654fd449e7b32f6ef55302316609701f3d427",
+    "comment": "d86dba38fccc9bf4b6d83703c9effacedbe9a972",
+    "entries": 1845,
+    "bytes": 229675541
+  }
+]

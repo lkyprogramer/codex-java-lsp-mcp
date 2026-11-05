@@ -1,0 +1,158 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-INDEX-READY-FIX",
+  "status": "PASS",
+  "dependency": null,
+  "identity": {
+    "sourceDigest": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "f12c85717f9a931fd2bbaeb805df901e38895606ad5c3e074af97841b3a59928",
+    "distInventorySha256": "9b64f544779eca509f8b10c11d8b0863684bf55bb1acb6c076a9846d679ba6bc",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "index-gate-lifecycle",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/index-gate-lifecycle/result.json",
+      "sourceDigest": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+      "commands": 1,
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "elapsedMs": 9526,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=search index barrier|initial import blocks|initialization Error|pending import|lease failure during import|public position and references report|short caller deadline|stop during STARTING|lease metadata-update failure|Gradle import receives|short first semantic caller|READY child that exits|ready stability window",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/tmp/candidate/dist/jdtls-session.test.js"
+      ]
+    },
+    {
+      "name": "final-once",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-once/result.json",
+      "sourceDigest": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 370807,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/final-cold.test.mjs"
+      ]
+    },
+    {
+      "name": "index-gate-red",
+      "role": "expected-red",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/index-gate-red/result.json",
+      "sourceDigest": "71af9790ea26564ca47a1093ca52dc1f9dc6e619603b5a46c99825b3eca085fe",
+      "commands": 1,
+      "tests": 5,
+      "pass": 0,
+      "fail": 5,
+      "elapsedMs": 7155,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=search index barrier",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/tmp/candidate/dist/jdtls-session.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "actual-startup-index-fence-and-first-semantics",
+      "file": "index-fence-proof.json",
+      "sha256": "15f3ec8876bce4e3f9a8b739de5a481b4ae7a225a1b98e0b61263fba00c3e8a9",
+      "status": "PASS",
+      "provenance": "Actual sameJDT getAll21URI returns before all semantic requests; exact original oracles,109s first semantics,430ms references, no warmup/probe/timeout change"
+    },
+    {
+      "name": "original-ended-case-facts",
+      "file": "actual-analysis.json",
+      "sha256": "91c0757a8f43d64952765a03e40e185a575fc0b9c54b28b9979a548cbe0358fd",
+      "status": "PASS",
+      "provenance": "One original frozen business copy/one freshJDT/one precise reference; original firstFailure static error retained, not terminal failure"
+    },
+    {
+      "name": "same-third-party-artifact-bytes",
+      "file": "artifact-comparison.json",
+      "sha256": "0bbf480db7bbb413e9acd74c61cd121fcb604126fa8758879ccf1acb81af0d81",
+      "status": "PASS",
+      "provenance": "1395 path/hash/size entries match old input; selected old manifest only, no repeated archive physical verification"
+    },
+    {
+      "name": "complete-actual-resource-exit",
+      "file": "root-resource-observation.json",
+      "sha256": "35a1a6469a1fa8302f784fdd3916bbb87f4c8faa6251cb99167de7acbac6a195",
+      "status": "PASS",
+      "provenance": "All19 recorded PIDs/7 owned groups and exactroot/jobs/quota actual readback; no foreign kill/reset"
+    },
+    {
+      "name": "actual-fixed-candidate-package",
+      "file": "review-candidate-verification.json",
+      "sha256": "d5c8497ca1d19f6c71efb074a6d12ad380c8044534e53f3f643ac3b6e43ca023",
+      "status": "PASS",
+      "provenance": "Actual compiled source package6508files/7relative links, one physical extraction/fullidentity only; package integrity distinct from formaldeployment"
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "2a82fa6389d4c6a55562bcfd83868d8a94b19e7eed59ad036b73fb14fd820e12",
+    "registeredPids": 19,
+    "ownedGroups": 7,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/closeout/raw-evidence.tar.gz",
+      "sha256": "e5ff6532a59865fb968babac24596412321a29c3f4464c35a927a2a4f5158062",
+      "fileCount": 52,
+      "bytes": 10894834,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "db8c2be037b614d4d705ba5c5acb76bdad589d4d55ad266cf9d544f0fd6bd8d8",
+      "source": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "02a319df318be82ca5e6419295981404fedc2ea3136a707f2d7a8a7cae716b18",
+  "notClaimed": [
+    "Formal G17 PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "Original empty-cache total120s PASS",
+    "Production fixed-launcher TCC/business read",
+    "Full installer/fullsuite rerun",
+    "New native build/independent rebuild",
+    "New canary/SLO",
+    "All future searches always under10s",
+    "All public requests succeeded without15s timeout",
+    "AI benefit"
+  ],
+  "next": "本轮初始索引等待导致的首次引用超时修复通过隔离验收，停止扩展。保留LOCAL可审查候选。正式门状态/生产TCC与业务读回需要另定授权范围，不发起部署、MAC18/19或push。",
+  "authorization": "User explicitly authorized executing the minimal reviewed fix and ensuring resolution; original120s startup/10s semantic/15s public limits and harddeadline2026-11-03T18:00+08 retained. Focused lifecycle checks and one real isolated oracle acceptance only. No fullsuite/fullinstaller/compatibility/rollback/push/production.",
+  "notes": "Product delta: JdtlsSession startup waits existing read-only java.project.getAll under same120s budget; standard Javafile:/ URI parsing/containment; existing heartbeat/late-attempt guard. Sharedfake adds only builtin command response and five focused regression tests. RED5FAIL retained:4 behavior failures from missing fence,1 invalid150ms unit startup fixture beforeinitialize; unit cap corrected to2s, real120s unchanged. GREEN17/17PASS and real1/1PASS. Earlier static MCP errors and start:true15s timeout remain original observations; shared startup continued with status:false polling. No semantic warmup/cache answer or stack probe. Current frozenJDT/real isolated business case only; later file edits retain normal indexing lifecycle.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix"
+}

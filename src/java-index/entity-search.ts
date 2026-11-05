@@ -10,6 +10,7 @@ import {
   identifierTokensForMethod,
   identifierTokensForType
 } from "./entity-scoring.js";
+import type { QueryStageTrace } from "../discovery/query-budget.js";
 
 export {
   bm25Score,
@@ -20,8 +21,13 @@ export {
   tokenize
 } from "./entity-scoring.js";
 
+/** Legacy default of the internal lexical search (java_impact fallbacks). */
 export const ENTITY_SEARCH_DEFAULT_LIMIT = 3;
-export const ENTITY_SEARCH_MAX_LIMIT = 10;
+/** R07: the one result cap shared by every discovery layer (tool, discovery
+ *  API, SQL clamp). A request above it is rejected, never silently clamped. */
+export const ENTITY_SEARCH_MAX_LIMIT = 20;
+/** R07: java_symbol static discovery default. */
+export const DISCOVERY_DEFAULT_LIMIT = 8;
 
 export type EntitySearchMode = "auto" | "exact" | "text";
 
@@ -50,10 +56,24 @@ export type EntityHit = {
   // (SQL client, in-memory oracle). 1-based UTF-16, ready for java_impact.
   line?: number;
   column?: number;
+  /** First line of the whole declaration (annotations included): the head preview start. */
+  declarationStartLine?: number;
   contentHash?: string;
   module?: string;
   sourceRoot?: string;
   signature?: string;
+  // R08: a DOCUMENT hit names the document that actually matched (comment,
+  // framework key, MyBatis XML statement) as its evidence source, separate
+  // from the target declaration locator above.
+  evidence?: EntityHitEvidence;
+};
+
+export type EntityHitEvidence = {
+  relativePath: string;
+  contentHash: string;
+  startLine: number;
+  endLine: number;
+  sourceKind: string;
 };
 
 // T07: query work budget is not the returned row count. It bounds physical
@@ -66,17 +86,36 @@ export type EntitySearchScope = {
   sourceRoots?: readonly string[];
 };
 
-export type EntitySearchStopReason = "deadline" | "postings";
+/** "queue_full": the shared query worker's bounded queue rejected the scan. */
+export type EntitySearchStopReason = "deadline" | "postings" | "queue_full";
+
+/** R07: exact lookups never fall back to fuzzy routes; they say what happened. */
+export type ExactLookupOutcome = "match" | "miss" | "ambiguous";
 
 export type DetailedEntitySearchResult = {
   hits: EntityHit[];
   /** True when the candidate scan stopped before it could be exhaustive. */
   truncated: boolean;
+  /** True when more candidates than `limit` matched (cap+1 detection): the
+   *  hits are a ranked top-K, not the complete candidate set. */
+  selectionLimited: boolean;
+  /** Present for exact-intent lookups only. */
+  exact?: ExactLookupOutcome;
   stopReason?: EntitySearchStopReason;
-  /** Physical work counters for the budget that was applied (if any). */
-  work: { postings: number };
-  /** Index generation the scan observed; 0 when the db has no generation meta. */
+  /** Physical work counters for the budget that was applied (if any):
+   *  `postings` are the billed (in-scope) posting rows; `examined` also
+   *  counts the rows a scope filtered out, which cost scan time but no budget.
+   *  `examined` is an upper bound: a scoped scan counts whole pages, and the
+   *  row that hit the budget is counted though not billed. */
+  work: { postings: number; examined?: number };
+  /** Index generation the scan observed; 0 when the db has no generation meta
+   *  or no snapshot was read (a request whose deadline expired on entry). */
   generation: number;
+  /** R09: per-stage begin/end/remaining/visited; empty when nothing ran. */
+  trace?: QueryStageTrace[];
+  /** Set on a complete, empty non-exact scan: how many query tokens the
+   *  index vocabulary (identifier, chunk or document postings) knows. */
+  vocabulary?: { queryTokens: number; knownTokens: number };
 };
 
 export type EntitySearchOptions = {
@@ -88,6 +127,52 @@ export type EntitySearchOptions = {
     remainingMs?: () => number;
   };
 };
+
+/**
+ * R07: one exact selector, matched as a whole - never by one of its words.
+ * `a.b.C` / `Outer$Inner` / `C` name a type (then, for a dotted selector, the
+ * `Owner.method` reading), `Owner#method(...)` names a method. Qualifiers
+ * must match whole FQN segments: `Outer.Inner` matches `demo.Outer.Inner`,
+ * `demo.Missing` never matches `demo.Demo`. Parameter lists are not
+ * signatures (overloads stay ambiguous). Not a selector -> no alternatives.
+ */
+export type ExactSelectorAlternative =
+  | { kind: "type"; name: string; qualifier?: string }
+  | { kind: "method"; name: string; owner?: string };
+
+const SELECTOR_IDENT = "[A-Za-z_$][A-Za-z0-9_$]*";
+const SELECTOR_SHAPE = new RegExp(`^(${SELECTOR_IDENT}(?:[.$]${SELECTOR_IDENT})*)(?:#(${SELECTOR_IDENT})(?:\\([^()]*\\))?)?$`);
+
+export function parseExactSelector(raw: string): ExactSelectorAlternative[] {
+  const match = SELECTOR_SHAPE.exec(raw.trim());
+  if (!match) return [];
+  // `$` is the binary nested-type separator; the index stores canonical dots.
+  const path = match[1]!.replace(/\$/g, ".").split(".").filter(Boolean);
+  if (path.length === 0) return [];
+  if (match[2] !== undefined) return [{ kind: "method", name: match[2], owner: path.join(".") }];
+  const name = path[path.length - 1]!;
+  if (path.length === 1) return [{ kind: "type", name }, { kind: "method", name }];
+  const prefix = path.slice(0, -1).join(".");
+  return [{ kind: "type", name, qualifier: prefix }, { kind: "method", name, owner: prefix }];
+}
+
+// Stored nested FQNs are binary (`demo.Outer$Inner`); selectors may use
+// either separator, so both sides compare in dotted form.
+const dotted = (fqn: string) => fqn.replace(/\$/g, ".");
+const qualifiedBy = (actual: string, expected: string) => {
+  const name = dotted(actual);
+  return name === expected || name.endsWith(`.${expected}`);
+};
+
+export function matchesExactSelector(alternative: ExactSelectorAlternative, entity: { kind: EntityKind; fqn: string; simpleName: string }): boolean {
+  if (entity.kind !== alternative.kind || entity.simpleName !== alternative.name) return false;
+  if (alternative.kind === "type") {
+    return alternative.qualifier === undefined || qualifiedBy(entity.fqn, `${alternative.qualifier}.${alternative.name}`);
+  }
+  if (alternative.owner === undefined) return true;
+  const hash = entity.fqn.lastIndexOf("#");
+  return hash > 0 && qualifiedBy(entity.fqn.slice(0, hash), alternative.owner);
+}
 
 /** Scope is applied before the result cap: a scoped candidate can never be
  *  pushed out of the cap by an out-of-scope candidate. */

@@ -1,12 +1,10 @@
 {
   "name": "@java-devkit/semantic-discovery-experiment",
-  "description": "M3 T10 bounded experiment: optional external dense discovery (stock external vector route) vs the product's lexical route. Standalone package: no product source imports beyond the frozen evaluation harness scripts; never a production dependency.",
+  "description": "Closed dense experiment (R11 re-measure: NO_GO). Only the modules the frozen release audit imports by path remain: the embedding provider core (audit D01-D04) and the frozen repair judge (audit J01). Never a production dependency.",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "test": "node --test semantic-discovery.test.mjs",
-    "compare": "node compare.mjs",
-    "agent-ab": "node agent-ab.mjs"
+    "test": "node --test semantic-discovery.test.mjs repair-judge.test.mjs"
   }
 }

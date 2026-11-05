@@ -1,0 +1,198 @@
+{
+  "checkedAt": "2026-11-05",
+  "pinnedProjectSha": "b1475cddac01ab6ce589a1d465578d5ab7772533",
+  "sources": [
+    {
+      "id": "S01",
+      "title": "分支固定提交",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/commit/b1475cddac01ab6ce589a1d465578d5ab7772533",
+      "scope": "GitHub connector；2026-11-04 提交，不等于生产部署身份"
+    },
+    {
+      "id": "S02",
+      "title": "ILV2-MAC/6 执行手册",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/deep/codex-java-lsp-mcp-index-lifecycle-v2-ai-execution-manual-2026-10-13.md",
+      "scope": "计划及授权合同；不是完成证据"
+    },
+    {
+      "id": "S03",
+      "title": "状态唯一真源",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/status.json",
+      "scope": "当前公开记录 IN_PROGRESS / NOT_READY / benefit UNMEASURED"
+    },
+    {
+      "id": "S04",
+      "title": "Mac 目标合同",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/deep/ilv2-mac-manual/contract.md",
+      "scope": "唯一 owner、快照、watermark、lease、Mac 平台边界"
+    },
+    {
+      "id": "S05",
+      "title": "MAC-12 性能报告",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/mac-12/README.md",
+      "scope": "历史报告；D1-a 容差和原 FAIL 均保留"
+    },
+    {
+      "id": "S06",
+      "title": "MAC-13 工具与质量报告",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/mac-13/README.md",
+      "scope": "历史数据；不是 HEAD 重测"
+    },
+    {
+      "id": "S07",
+      "title": "MAC-14 整合报告",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/mac-14/README.md",
+      "scope": "K32 最终通过；三仓绝对地板失败为用户已接受的已知质量限制"
+    },
+    {
+      "id": "S08",
+      "title": "MAC-16 条件精度实验",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/mac-16/task-result.json",
+      "scope": "NOT_RUN；未建立任务级编译器解析缺陷证据"
+    },
+    {
+      "id": "S09",
+      "title": "MAC-10 数据和评测边界",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/mac-10/README.md",
+      "scope": "真实数据、gold 和 raw 在本地私有 work root；本轮未取得"
+    },
+    {
+      "id": "S10",
+      "title": "11 月 3 日首次语义验收",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md",
+      "scope": "单次隔离验收；原口径120秒；并非当前生产或完整HEAD验收"
+    },
+    {
+      "id": "S11",
+      "title": "当前 JDT 生命周期",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/jdtls-session.ts",
+      "scope": "重点读取210–420、480–710、870–1150；当前独立120秒导入/600秒索引预算"
+    },
+    {
+      "id": "S12",
+      "title": "公开 symbol 操作",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/tools/symbol.ts",
+      "scope": "query / position / references / evidence；outline 是本包拟新增操作"
+    },
+    {
+      "id": "S13",
+      "title": "现有静态发现",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/discovery/query.ts",
+      "scope": "terms补充、scope、hash、preview预算已存在；不要重新实现"
+    },
+    {
+      "id": "S14",
+      "title": "现有 evidence unit",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/discovery/evidence-unit.ts",
+      "scope": "目前 supportedScope 限 indexed-mybatis-xml-fqn-links"
+    },
+    {
+      "id": "S15",
+      "title": "现有 read plan",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/agent-router/read-plan.ts",
+      "scope": "已有文件/byte预算、ReadUnit、缺口分类和多位置保护"
+    },
+    {
+      "id": "S16",
+      "title": "当前 compact 输出",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/agent-router/output-compact.ts",
+      "scope": "11月4日已修选中证据保护；不沿用旧丢弃断言"
+    },
+    {
+      "id": "S17",
+      "title": "关系 provider",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/agent-router/providers/relationship-provider.ts",
+      "scope": "有限直接/实现/helper展开；权重非已校准概率"
+    },
+    {
+      "id": "S18",
+      "title": "SQL 实体搜索",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/java-index/sql/entity-search.ts",
+      "scope": "scope SQL前置、整数postings、writer统计已有"
+    },
+    {
+      "id": "S19",
+      "title": "现有 client 接口",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/java-index/java-index-client-api.ts",
+      "scope": "queryFiles/queryReadRanges/queryEvidenceSources/queryCallers/queryCallees可复用"
+    },
+    {
+      "id": "S20",
+      "title": "当前 repair oracle",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/scripts/ilv2-mac-repair-oracle.mjs",
+      "scope": "退出码0+固定stdout marker；MAC10已披露完成凭据限制"
+    },
+    {
+      "id": "S21",
+      "title": "当前脚本与依赖",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/package.json",
+      "scope": "Mac原生构建；复用隔离验证，不新增默认运行依赖"
+    },
+    {
+      "id": "S22",
+      "title": "11月4日闲置worktree回收",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/commit/b1475cddac01ab6ce589a1d465578d5ab7772533",
+      "scope": "默认关闭，observe/enforce；48小时；不删除Git worktree/源码/JDT/Gradle"
+    },
+    {
+      "id": "E01",
+      "title": "Bifrost usage analysis",
+      "url": "https://bifrost.brokk.ai/design/usage-analysis/",
+      "scope": "官方设计；目标定向与全图、proof与completion分离；本轮未运行"
+    },
+    {
+      "id": "E02",
+      "title": "Bifrost name resolution",
+      "url": "https://bifrost.brokk.ai/design/name-resolution/",
+      "scope": "官方说明Java/Scala新引擎仍处于trial/cutover阶段；不是已全面替代JDT"
+    },
+    {
+      "id": "E03",
+      "title": "UsageBench Java",
+      "url": "https://usagebench.slopcop.com/languages/java/",
+      "scope": "11个维护者评审开发用例；非Java总体精度或速度排名"
+    },
+    {
+      "id": "E04",
+      "title": "Serena JetBrains backend",
+      "url": "https://oraios.github.io/serena/02-usage/025_jetbrains_plugin.html",
+      "scope": "需IDE项目正确设置/根匹配；本轮不引入付费插件或IDE依赖"
+    },
+    {
+      "id": "E05",
+      "title": "codebase-memory-mcp",
+      "url": "https://github.com/DeusData/codebase-memory-mcp",
+      "scope": "官方README机制对照；不采信宣传token/速度为本项目收益"
+    },
+    {
+      "id": "E06",
+      "title": "Graphify",
+      "url": "https://github.com/Graphify-Labs/graphify",
+      "scope": "官方README：AST关系和来源标签；无同任务Java对测"
+    },
+    {
+      "id": "E07",
+      "title": "Aider repo map",
+      "url": "https://aider.chat/docs/repomap.html",
+      "scope": "签名和预算化导航；不是MCP必须每轮注入全仓地图"
+    },
+    {
+      "id": "E08",
+      "title": "scip-java design",
+      "url": "https://github.com/scip-code/scip-java/blob/main/docs/design.md",
+      "scope": "编译器插件、逐文件shard；暂不加入构建强依赖"
+    },
+    {
+      "id": "P01",
+      "title": "RepoNav",
+      "url": "https://arxiv.org/html/2609.08355",
+      "scope": "后检索组织/文件内导航；使用不变dense底座，Python验证；只借鉴接口假设"
+    },
+    {
+      "id": "S23",
+      "title": "当前SQL证据来源投影",
+      "url": "https://github.com/lkyprogramer/codex-java-lsp-mcp/blob/b1475cddac01ab6ce589a1d465578d5ab7772533/src/java-index/sql/evidence-sources.ts",
+      "scope": "已读完整源码；method通过mybatis_resource join取XML documents，type取resultMap；资源scan有256/8等上限"
+    }
+  ]
+}

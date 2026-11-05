@@ -2,30 +2,27 @@ import { createHash } from "node:crypto";
 import type { SQLOutputValue } from "node:sqlite";
 import { REVERSE_EDGE_KIND, type EdgeKind } from "../../java-knowledge/edge-kinds.js";
 import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
-import type { MethodSummary } from "../../java-knowledge/method-summary.js";
+import { graphEdgeOrdinal, type GraphFragment } from "../../java-knowledge/graph-fragment.js";
+import type { KnowledgeGraphStore } from "../../java-knowledge/graph-reader.js";
 import type { GraphEdge, GraphNode, NodeKind } from "../../java-knowledge/schema.js";
-import { bindChunks, inClause, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
-import { decodeFacts, encodeFacts } from "./rows.js";
 import { internSym, internSymNullable, symId, symText } from "./sym.js";
 
 const KG_NODE_SELECT = `SELECT n.generation AS generation, ns.text AS id, ks.text AS kind, ps.text AS relativePath,
-  n.simple_name AS simpleName, js.text AS javaIndexId, os.text AS ownerFile
+  n.simple_name AS simpleName, js.text AS javaIndexId
   FROM kg_node n
   JOIN sym ns ON ns.id=n.sym
   JOIN sym ks ON ks.id=n.kind_sym
   LEFT JOIN sym ps ON ps.id=n.path_sym
-  LEFT JOIN sym js ON js.id=n.jid_sym
-  LEFT JOIN sym os ON os.id=n.owner_sym`;
+  LEFT JOIN sym js ON js.id=n.jid_sym`;
 
-const KG_EDGE_SELECT = `SELECT e.id AS rowId, e.ordinal AS ordinal, e.generation AS generation,
-  fs.text AS fromId, ts.text AS toId, ks.text AS kind, fl.text AS sourceFile, os.text AS ownerFile
+const KG_EDGE_SELECT = `SELECT e.ordinal AS ordinal, e.generation AS generation,
+  fs.text AS fromId, ts.text AS toId, ks.text AS kind
   FROM kg_edge e
   JOIN sym fs ON fs.id=e.from_sym
   JOIN sym ts ON ts.id=e.to_sym
-  JOIN sym ks ON ks.id=e.kind_sym
-  LEFT JOIN sym fl ON fl.id=e.file_sym
-  LEFT JOIN sym os ON os.id=e.owner_sym`;
+  JOIN sym ks ON ks.id=e.kind_sym`;
 
 function itemHash(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -51,7 +48,7 @@ function readMeta(db: IndexDatabase, key: string): string | undefined {
 function writeMeta(db: IndexDatabase, key: string, value: string): void {
   prepareCached(
     db,
-    "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value<>excluded.value"
   ).run(key, value);
 }
 
@@ -80,72 +77,27 @@ function graphNodeFromRow(row: Record<string, SQLOutputValue>): GraphNode {
   };
 }
 
-function graphEdgeOrdinal(edge: GraphEdge): number {
-  const prefix = `e:${edge.kind}:${edge.fromId}->${edge.toId}:`;
-  if (edge.edgeId.startsWith(prefix)) {
-    const parsed = Number(edge.edgeId.slice(prefix.length));
-    if (Number.isInteger(parsed) && parsed >= 0) return parsed;
-  }
-  return 0;
-}
-
 function graphEdgeFromRow(row: Record<string, SQLOutputValue>): GraphEdge {
   const kind = String(row.kind) as EdgeKind;
   const fromId = String(row.fromId);
   const toId = String(row.toId);
-  const ordinal = asInt(row.ordinal);
-  const sourceFile = optionalText(row.sourceFile);
   return {
-    edgeId: knowledgeEdgeId({ kind, fromId, toId, ordinal }),
+    edgeId: knowledgeEdgeId({ kind, fromId, toId, ordinal: asInt(row.ordinal) }),
     kind,
     fromId,
     toId,
-    generation: asInt(row.generation),
-    ...(sourceFile ? { sourceFile } : {})
+    generation: asInt(row.generation)
   };
 }
 
-function existingSyms(db: IndexDatabase, texts: Iterable<string>): number[] {
-  const ids: number[] = [];
-  for (const text of texts) {
-    const id = symId(db, text);
-    if (id !== undefined) ids.push(id);
-  }
-  return ids;
-}
-
-class SqlSummaryMap {
-  constructor(private readonly db: IndexDatabase) {}
-
-  get(methodId: string): MethodSummary | undefined {
-    const methodSym = symId(this.db, methodId);
-    if (methodSym === undefined) return undefined;
-    const row = prepareCached(this.db, "SELECT facts FROM kg_summary WHERE method_sym=?").get(methodSym);
-    return row ? decodeFacts<MethodSummary>(row.facts) : undefined;
-  }
-
-  set(methodId: string, summary: MethodSummary): this {
-    prepareCached(
-      this.db,
-      "INSERT INTO kg_summary(method_sym, facts) VALUES (?, ?) ON CONFLICT(method_sym) DO UPDATE SET facts=excluded.facts"
-    ).run(internSym(this.db, methodId), encodeFacts(summary));
-    return this;
-  }
-
-  delete(methodId: string): boolean {
-    const methodSym = internSym(this.db, methodId);
-    const result = prepareCached(this.db, "DELETE FROM kg_summary WHERE method_sym=?").run(methodSym);
-    return result.changes > 0;
-  }
-
-  clear(): void {
-    this.db.exec("DELETE FROM kg_summary");
-  }
-}
-
-export class SqlKnowledgeGraph {
+/**
+ * Knowledge graph rows with relational ownership (schema v13): a node or edge
+ * lives while at least one owner row names it. Owners are the Java files
+ * whose build emitted the row; the repository root is the only ownerless row.
+ * The digest is an XOR over row identities, maintained on insert/delete.
+ */
+export class SqlKnowledgeGraph implements KnowledgeGraphStore {
   generation = 0;
-  readonly summariesByMethodId: SqlSummaryMap;
   readonly nodesById: {
     get(id: string): GraphNode | undefined;
     has(id: string): boolean;
@@ -156,8 +108,6 @@ export class SqlKnowledgeGraph {
 
   private readonly nodeXor: Buffer;
   private readonly edgeXor: Buffer;
-  private readonly extraEdgeOwners = new Map<string, Set<string>>();
-  private readonly extraNodeOwners = new Map<string, Set<string>>();
   private outByNode: Map<string, GraphEdge[]> | undefined;
   private inByNode: Map<string, GraphEdge[]> | undefined;
   private nodeMap: Map<string, GraphNode> | undefined;
@@ -166,7 +116,6 @@ export class SqlKnowledgeGraph {
     this.nodeXor = xorFromMeta(db, "graphNodeXor");
     this.edgeXor = xorFromMeta(db, "graphEdgeXor");
     this.generation = Number(readMeta(db, "kgGeneration") ?? "0") || 0;
-    this.summariesByMethodId = new SqlSummaryMap(db);
     this.nodesById = {
       get: id => this.nodeById(id),
       has: id => this.nodeById(id) !== undefined,
@@ -175,18 +124,17 @@ export class SqlKnowledgeGraph {
       },
       entries: () => this.nodeEntries()
     };
-    const self = this;
     this.edgesById = {
       get size() {
-        return asCount(prepareCached(self.db, "SELECT count(*) AS n FROM kg_edge").get());
+        return asCount(prepareCached(db, "SELECT count(*) AS n FROM kg_edge").get());
       }
     };
-    this.loadExtraOwners();
   }
 
   flushMeta(): void {
-    this.persistXor();
-    this.persistGeneration();
+    writeMeta(this.db, "graphNodeXor", this.nodeXor.toString("hex"));
+    writeMeta(this.db, "graphEdgeXor", this.edgeXor.toString("hex"));
+    writeMeta(this.db, "kgGeneration", String(this.generation));
   }
 
   private invalidateAdj(): void {
@@ -214,95 +162,63 @@ export class SqlKnowledgeGraph {
       .digest("hex");
   }
 
+  /** Adds or updates one node; with an owner it also gains that owner (never loses one). */
   upsertNode(node: GraphNode, ownerFile?: string): void {
     this.writeTx(() => {
-      const existing = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(node.id) as
-        | Record<string, SQLOutputValue>
-        | undefined;
-      if (!existing) {
-        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-      } else if (String(existing.kind) !== node.kind) {
-        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${String(existing.kind)}`));
-        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-      }
-      prepareCached(
-        this.db,
-        `INSERT INTO kg_node(sym, kind_sym, path_sym, simple_name, jid_sym, owner_sym, generation)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(sym) DO UPDATE SET
-           kind_sym=excluded.kind_sym,
-           path_sym=excluded.path_sym,
-           simple_name=excluded.simple_name,
-           jid_sym=excluded.jid_sym,
-           owner_sym=COALESCE(kg_node.owner_sym, excluded.owner_sym),
-           generation=excluded.generation`
-      ).run(
-        internSym(this.db, node.id),
-        internSym(this.db, node.kind),
-        internSymNullable(this.db, node.relativePath),
-        node.simpleName ?? null,
-        internSymNullable(this.db, node.javaIndexId),
-        internSymNullable(this.db, ownerFile),
-        node.generation
-      );
-      if (ownerFile) this.addExtraOwner(this.extraNodeOwners, node.id, ownerFile, existing !== undefined);
+      const nodeSym = this.writeNode(node);
+      if (ownerFile) this.ownNode(nodeSym, internSym(this.db, ownerFile));
     });
   }
 
+  /** Adds one edge and its materialized reverse; an owner owns both, whether or not they already existed. */
   addEdge(edge: GraphEdge, ownerFile?: string): GraphEdge {
-    return this.writeTx(() => {
-      if (this.findStoredEdge(edge)) {
-        if (ownerFile) {
-          this.addExtraOwner(this.extraEdgeOwners, edge.edgeId, ownerFile, true);
-          const ownerSym = internSym(this.db, ownerFile);
-          const fromSym = internSym(this.db, edge.fromId);
-          const toSym = internSym(this.db, edge.toId);
-          const kindSym = internSym(this.db, edge.kind);
-          const ordinal = graphEdgeOrdinal(edge);
-          prepareCached(
-            this.db,
-            `UPDATE kg_edge SET owner_sym=COALESCE(owner_sym, ?)
-             WHERE from_sym=? AND to_sym=? AND kind_sym=? AND ordinal=?`
-          ).run(ownerSym, fromSym, toSym, kindSym, ordinal);
-        }
-        return edge;
-      }
-      prepareCached(
-        this.db,
-        `INSERT INTO kg_edge(from_sym, to_sym, kind_sym, ordinal, file_sym, owner_sym, generation)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        internSym(this.db, edge.fromId),
-        internSym(this.db, edge.toId),
-        internSym(this.db, edge.kind),
-        graphEdgeOrdinal(edge),
-        internSymNullable(this.db, edge.sourceFile),
-        internSymNullable(this.db, ownerFile),
-        edge.generation
+    this.writeTx(() => {
+      const ownerSym = ownerFile ? internSym(this.db, ownerFile) : undefined;
+      const ordinal = graphEdgeOrdinal(edge);
+      this.attachEdge(edge.kind, edge.fromId, edge.toId, ordinal, edge.generation, ownerSym);
+      const reverse = REVERSE_EDGE_KIND[edge.kind];
+      if (reverse) this.attachEdge(reverse, edge.toId, edge.fromId, 0, edge.generation, ownerSym);
+    });
+    return edge;
+  }
+
+  replaceOwner(fragment: GraphFragment): void {
+    this.writeTx(() => {
+      const ownerSym = internSym(this.db, fragment.owner);
+      const staleNodes = new Set(
+        (prepareCached(this.db, "SELECT node_sym AS id FROM kg_node_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
+          .map(row => asInt(row.id))
       );
-      xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
-      if (ownerFile) this.extraEdgeOwners.delete(edge.edgeId);
-      const reverseKind = REVERSE_EDGE_KIND[edge.kind];
-      if (reverseKind) {
-        this.addEdge({
-          edgeId: knowledgeEdgeId({ kind: reverseKind, fromId: edge.toId, toId: edge.fromId, ordinal: 0 }),
-          kind: reverseKind,
-          fromId: edge.toId,
-          toId: edge.fromId,
-          sourceFile: edge.sourceFile,
-          generation: edge.generation
-        }, ownerFile);
+      const staleEdges = new Set(
+        (prepareCached(this.db, "SELECT edge_id AS id FROM kg_edge_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
+          .map(row => asInt(row.id))
+      );
+      for (const node of fragment.nodes.values()) {
+        const nodeSym = this.writeNode(node);
+        if (!staleNodes.delete(nodeSym)) this.ownNode(nodeSym, ownerSym);
       }
-      return edge;
+      for (const edge of fragment.edges.values()) {
+        const id = this.attachEdge(edge.kind, edge.fromId, edge.toId, edge.ordinal, edge.generation, undefined);
+        if (!staleEdges.delete(id)) this.ownEdge(id, ownerSym);
+      }
+      this.releaseEdges(ownerSym, staleEdges);
+      this.releaseNodes(ownerSym, staleNodes);
     });
   }
 
   removeFiles(relativePaths: readonly string[]): void {
     if (relativePaths.length === 0) return;
     this.writeTx(() => {
-      const removed = new Set(relativePaths);
-      this.dropOwnedEdges(removed);
-      this.dropOwnedNodes(removed);
+      for (const relativePath of new Set(relativePaths)) {
+        const ownerSym = symId(this.db, relativePath);
+        if (ownerSym === undefined) continue;
+        const edges = (prepareCached(this.db, "SELECT edge_id AS id FROM kg_edge_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
+          .map(row => asInt(row.id));
+        const nodes = (prepareCached(this.db, "SELECT node_sym AS id FROM kg_node_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
+          .map(row => asInt(row.id));
+        this.releaseEdges(ownerSym, edges);
+        this.releaseNodes(ownerSym, nodes);
+      }
     });
   }
 
@@ -339,13 +255,101 @@ export class SqlKnowledgeGraph {
 
   clear(): void {
     this.writeTx(() => {
-      this.db.exec("DELETE FROM kg_summary; DELETE FROM kg_edge; DELETE FROM kg_node;");
+      this.db.exec("DELETE FROM kg_edge_owner; DELETE FROM kg_node_owner; DELETE FROM kg_edge; DELETE FROM kg_node;");
       this.nodeXor.fill(0);
       this.edgeXor.fill(0);
       this.generation = 0;
-      this.extraEdgeOwners.clear();
-      this.extraNodeOwners.clear();
     });
+  }
+
+  // Attributes are rewritten only when they differ: generation alone is not a
+  // change, so a rebuilt but identical node costs a read, not a page write.
+  private writeNode(node: GraphNode): number {
+    const nodeSym = internSym(this.db, node.id);
+    const kindSym = internSym(this.db, node.kind);
+    const pathSym = internSymNullable(this.db, node.relativePath);
+    const simpleName = node.simpleName ?? null;
+    const jidSym = internSymNullable(this.db, node.javaIndexId);
+    const existing = prepareCached(this.db, "SELECT kind_sym AS kindSym FROM kg_node WHERE sym=?").get(nodeSym) as
+      | { kindSym: SQLOutputValue }
+      | undefined;
+    if (!existing) {
+      xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
+      prepareCached(
+        this.db,
+        "INSERT INTO kg_node(sym, kind_sym, path_sym, simple_name, jid_sym, generation) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(nodeSym, kindSym, pathSym, simpleName, jidSym, node.generation);
+      return nodeSym;
+    }
+    const oldKind = asInt(existing.kindSym);
+    if (oldKind !== kindSym) {
+      xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${symText(this.db, oldKind)}`));
+      xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
+    }
+    prepareCached(
+      this.db,
+      `UPDATE kg_node SET kind_sym=?, path_sym=?, simple_name=?, jid_sym=?, generation=?
+       WHERE sym=? AND (kind_sym IS NOT ? OR path_sym IS NOT ? OR simple_name IS NOT ? OR jid_sym IS NOT ?)`
+    ).run(kindSym, pathSym, simpleName, jidSym, node.generation, nodeSym, kindSym, pathSym, simpleName, jidSym);
+    return nodeSym;
+  }
+
+  private ownNode(nodeSym: number, ownerSym: number): void {
+    prepareCached(this.db, "INSERT OR IGNORE INTO kg_node_owner(node_sym, owner_sym) VALUES (?, ?)").run(nodeSym, ownerSym);
+  }
+
+  private ownEdge(edgeId: number, ownerSym: number): void {
+    prepareCached(this.db, "INSERT OR IGNORE INTO kg_edge_owner(edge_id, owner_sym) VALUES (?, ?)").run(edgeId, ownerSym);
+  }
+
+  /** Finds or inserts the edge row (one per identity) and returns its id. */
+  private attachEdge(kind: EdgeKind, fromId: string, toId: string, ordinal: number, generation: number, ownerSym: number | undefined): number {
+    const fromSym = internSym(this.db, fromId);
+    const kindSym = internSym(this.db, kind);
+    const toSym = internSym(this.db, toId);
+    const row = prepareCached(
+      this.db,
+      "SELECT id FROM kg_edge WHERE from_sym=? AND kind_sym=? AND to_sym=? AND ordinal=?"
+    ).get(fromSym, kindSym, toSym, ordinal) as { id: SQLOutputValue } | undefined;
+    let id: number;
+    if (row) {
+      id = asInt(row.id);
+    } else {
+      id = Number(prepareCached(
+        this.db,
+        "INSERT INTO kg_edge(from_sym, to_sym, kind_sym, ordinal, generation) VALUES (?, ?, ?, ?, ?)"
+      ).run(fromSym, toSym, kindSym, ordinal, generation).lastInsertRowid);
+      xorBuffers(this.edgeXor, itemHash(`e:${knowledgeEdgeId({ kind, fromId, toId, ordinal })}`));
+    }
+    if (ownerSym !== undefined) this.ownEdge(id, ownerSym);
+    return id;
+  }
+
+  private releaseEdges(ownerSym: number, edgeIds: Iterable<number>): void {
+    const release = prepareCached(this.db, "DELETE FROM kg_edge_owner WHERE edge_id=? AND owner_sym=?");
+    const owned = prepareCached(this.db, "SELECT 1 AS ok FROM kg_edge_owner WHERE edge_id=? LIMIT 1");
+    for (const id of edgeIds) {
+      release.run(id, ownerSym);
+      if (owned.get(id)) continue;
+      const row = prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.id=?`).get(id);
+      if (!row) continue;
+      xorBuffers(this.edgeXor, itemHash(`e:${graphEdgeFromRow(row).edgeId}`));
+      prepareCached(this.db, "DELETE FROM kg_edge WHERE id=?").run(id);
+    }
+  }
+
+  private releaseNodes(ownerSym: number, nodeSyms: Iterable<number>): void {
+    const release = prepareCached(this.db, "DELETE FROM kg_node_owner WHERE node_sym=? AND owner_sym=?");
+    const owned = prepareCached(this.db, "SELECT 1 AS ok FROM kg_node_owner WHERE node_sym=? LIMIT 1");
+    for (const nodeSym of nodeSyms) {
+      release.run(nodeSym, ownerSym);
+      if (owned.get(nodeSym)) continue;
+      const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.sym=?`).get(nodeSym);
+      if (!row) continue;
+      const node = graphNodeFromRow(row);
+      xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
+      prepareCached(this.db, "DELETE FROM kg_node WHERE sym=?").run(nodeSym);
+    }
   }
 
   private ensureAdj(): void {
@@ -388,7 +392,8 @@ export class SqlKnowledgeGraph {
 
   private nodeById(id: string): GraphNode | undefined {
     if (this.nodeMap) return this.nodeMap.get(id);
-    const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(id);
+    const sym = symId(this.db, id);
+    const row = sym === undefined ? undefined : prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.sym=?`).get(sym);
     return row ? graphNodeFromRow(row) : undefined;
   }
 
@@ -397,148 +402,5 @@ export class SqlKnowledgeGraph {
       const node = graphNodeFromRow(row);
       yield [node.id, node];
     }
-  }
-
-  private persistXor(): void {
-    writeMeta(this.db, "graphNodeXor", this.nodeXor.toString("hex"));
-    writeMeta(this.db, "graphEdgeXor", this.edgeXor.toString("hex"));
-    writeMeta(this.db, "graphExtraEdgeOwners", serializeOwnerMap(this.extraEdgeOwners));
-    writeMeta(this.db, "graphExtraNodeOwners", serializeOwnerMap(this.extraNodeOwners));
-  }
-
-  private persistGeneration(): void {
-    writeMeta(this.db, "kgGeneration", String(this.generation));
-  }
-
-  private loadExtraOwners(): void {
-    loadOwnerMap(readMeta(this.db, "graphExtraEdgeOwners"), this.extraEdgeOwners);
-    loadOwnerMap(readMeta(this.db, "graphExtraNodeOwners"), this.extraNodeOwners);
-  }
-
-  private findStoredEdge(edge: GraphEdge): boolean {
-    const fromSym = internSym(this.db, edge.fromId);
-    const toSym = internSym(this.db, edge.toId);
-    const kindSym = internSym(this.db, edge.kind);
-    const row = prepareCached(
-      this.db,
-      "SELECT 1 AS ok FROM kg_edge WHERE from_sym=? AND to_sym=? AND kind_sym=? AND ordinal=?"
-    ).get(fromSym, toSym, kindSym, graphEdgeOrdinal(edge));
-    return row !== undefined;
-  }
-
-  private addExtraOwner(
-    map: Map<string, Set<string>>,
-    id: string,
-    ownerFile: string,
-    existed: boolean
-  ): void {
-    if (!existed) return;
-    const extra = map.get(id) ?? new Set<string>();
-    extra.add(ownerFile);
-    if (extra.size > 0) map.set(id, extra);
-  }
-
-  private dropOwnedEdges(removed: ReadonlySet<string>): void {
-    const ownerSyms = existingSyms(this.db, removed);
-    if (ownerSyms.length === 0) {
-      this.pruneExtraOwners(this.extraEdgeOwners, removed);
-      return;
-    }
-    const primary: Array<Record<string, SQLOutputValue>> = [];
-    for (const chunk of bindChunks(ownerSyms)) {
-      primary.push(
-        ...prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.owner_sym IN ${inClause(chunk.length)}`).all(...chunk)
-      );
-    }
-    for (const row of primary) {
-      const edge = graphEdgeFromRow(row);
-      const ownerFile = optionalText(row.ownerFile) ?? "";
-      const extra = this.extraEdgeOwners.get(edge.edgeId);
-      extra?.delete(ownerFile);
-      for (const path of removed) extra?.delete(path);
-      if (extra && extra.size > 0) {
-        const next = [...extra][0]!;
-        extra.delete(next);
-        if (extra.size === 0) this.extraEdgeOwners.delete(edge.edgeId);
-        prepareCached(this.db, "UPDATE kg_edge SET owner_sym=? WHERE id=?").run(internSym(this.db, next), asInt(row.rowId));
-        continue;
-      }
-      this.extraEdgeOwners.delete(edge.edgeId);
-      xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
-      prepareCached(this.db, "DELETE FROM kg_edge WHERE id=?").run(asInt(row.rowId));
-    }
-    this.pruneExtraOwners(this.extraEdgeOwners, removed);
-  }
-
-  private dropOwnedNodes(removed: ReadonlySet<string>): void {
-    const ownerSyms = existingSyms(this.db, removed);
-    if (ownerSyms.length === 0) {
-      this.pruneExtraOwners(this.extraNodeOwners, removed);
-      return;
-    }
-    const primary: Array<Record<string, SQLOutputValue>> = [];
-    for (const chunk of bindChunks(ownerSyms)) {
-      primary.push(
-        ...prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.owner_sym IN ${inClause(chunk.length)}`).all(...chunk)
-      );
-    }
-    for (const row of primary) {
-      const node = graphNodeFromRow(row);
-      const ownerFile = optionalText(row.ownerFile) ?? "";
-      const extra = this.extraNodeOwners.get(node.id);
-      extra?.delete(ownerFile);
-      for (const path of removed) extra?.delete(path);
-      if (extra && extra.size > 0) {
-        const next = [...extra][0]!;
-        extra.delete(next);
-        if (extra.size === 0) this.extraNodeOwners.delete(node.id);
-        prepareCached(this.db, "UPDATE kg_node SET owner_sym=? WHERE sym=?").run(
-          internSym(this.db, next),
-          internSym(this.db, node.id)
-        );
-        continue;
-      }
-      this.extraNodeOwners.delete(node.id);
-      xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-      const methodSym = internSym(this.db, node.id);
-      prepareCached(this.db, "DELETE FROM kg_summary WHERE method_sym=?").run(methodSym);
-      prepareCached(this.db, "DELETE FROM kg_node WHERE sym=?").run(methodSym);
-    }
-    this.pruneExtraOwners(this.extraNodeOwners, removed);
-  }
-
-  private pruneExtraOwners(map: Map<string, Set<string>>, removed: ReadonlySet<string>): void {
-    for (const [id, extra] of [...map]) {
-      let changed = false;
-      for (const path of removed) {
-        if (extra.delete(path)) changed = true;
-      }
-      if (!changed) continue;
-      if (extra.size === 0) map.delete(id);
-    }
-  }
-}
-
-function serializeOwnerMap(map: Map<string, Set<string>>): string {
-  const value: Record<string, string[]> = {};
-  for (const [id, owners] of map) {
-    if (owners.size > 0) value[id] = [...owners];
-  }
-  return JSON.stringify(value);
-}
-
-function loadOwnerMap(raw: string | undefined, target: Map<string, Set<string>>): void {
-  target.clear();
-  if (!raw) return;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return;
-    for (const [id, owners] of Object.entries(parsed as Record<string, unknown>)) {
-      if (!Array.isArray(owners)) continue;
-      const set = new Set(owners.filter((item): item is string => typeof item === "string"));
-      if (set.size > 0) target.set(id, set);
-    }
-  } catch {
-    // ignore corrupt meta; cold build will clear
   }
 }

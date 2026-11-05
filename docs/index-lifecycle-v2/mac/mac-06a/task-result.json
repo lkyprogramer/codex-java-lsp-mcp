@@ -1,0 +1,103 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-06A",
+  "gateId": "G06A",
+  "status": "PASS",
+  "dependency": {
+    "head": "efe6a498663ff59c9d433e92a277a1cbac9c3f8a",
+    "requiredGates": [
+      "G02B",
+      "G05"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "168feeb6a5f5a58b56718c15af7b06f95ae10db75c8c41f97ac849be57fe4a66",
+    "distInventorySha256": "897ff5b5d5a64608a930d4dfaf2fc5442e59f146be364693bf837b1e0aff66de",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g06a-fixed",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g06a-fixed/result.json",
+      "sourceDigest": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+      "commands": 4,
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "elapsedMs": 49214,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/index-builder/build-scheduler.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "scheduler-fix-summary",
+      "file": "scheduler-summary.json",
+      "sha256": "a5bc7d950903104cd1932fc55b444a6d86573e029dcecf429632bdb60d6f94ef",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "prior-result-preserved",
+      "file": "prior-task-result.json",
+      "sha256": "56e4559c7a047632eba345ea7afbc07df3d0d5f8833a016103e037e5ffd66032",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-resource-archive-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "252f25150021af7cb5b9eb228b563702f115909a78cb67da8d725a50cb12d378",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "dbcb68bda3c0520a5fab80dcdea0fb60e52790ee5e15d434228df37e63325978",
+    "registeredPids": 107,
+    "ownedGroups": 0,
+    "launchdJobs": 6,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06a/20261016T020618Z/closeout/raw-evidence.tar.gz",
+      "sha256": "0b577052560901a1aae663110b33bc37fc18bf62b027328cf719b6fb79cfefcd",
+      "fileCount": 56,
+      "bytes": 839896,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "5c28dc32a51dca1c3d803650cd41a657058fa677f8e3f7c03be7d63ab085625c",
+      "source": "7fd3886434172ed56096d47cf15a5e9f93260daf4f4c0916f10056a885753fd8",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "1d6a90d886d84f460829790f66966b06ff37f6ce3021f1a4977d1c43bd09eab3",
+  "notClaimed": [
+    "Real builder/query adapters and owner-restart admission: claimed only by G06C",
+    "MAC-07/08 file leases and production entry switch, MAC-09 formal recovery: NOT_RUN",
+    "Unrelated full suite, four-repository matrix, JDT/Gradle: NOT_RUN",
+    "Findings 8 (single-instance global cap, parser token constant) and 9 (fairness assertion, change path normalization): not addressed here; fairness is measured in G06C"
+  ],
+  "next": "Recomposed after the review fixes; MAC-06C follows.",
+  "authorization": "User 2026-10-16: complete the review fixes in the proposed order: fix findings 1/2/3/5 (+4/6 interfaces) with regressions, rerun G06A/G06B and recompose results keeping the prior PASS, then implement MAC-06C with a fresh independent reviewer; local commits only.",
+  "notes": "Only final-g06a-fixed 20/20 is main. final-g06a-fix 19/19 (source 2f8a7d80…) predates the kill re-entry fix found by the independent review and is kept as history, not summed. The prior PASS (90f97fb8, source 09fb3ef6…) is preserved as prior-task-result.json. Dev-tier mutation checks (exit grace, selection release, reap watchdog, kill re-entry) are diagnostics, not gate totals.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-06a/20261016T020618Z"
+}

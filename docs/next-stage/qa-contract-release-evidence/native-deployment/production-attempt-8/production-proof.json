@@ -1,0 +1,143 @@
+{
+  "schema": "native-release-proof/v1",
+  "stage": "production",
+  "events": [
+    {
+      "name": "qualification-production",
+      "args": [
+        "python3",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture/docs/java-specialist-release-audit-v1.1/tools/verify_release.py",
+        "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/next-stage/qa-contract-release-evidence/release-evidence.json",
+        "--evidence-root",
+        "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/next-stage/qa-contract-release-evidence"
+      ],
+      "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture",
+      "exitCode": 0,
+      "elapsedMs": 136.83,
+      "log": "native-deployment/production-attempt-8/qualification-production.log",
+      "sha256": "3730eb8a9ec38b8c97c16fb3fdaa4f53976f6c9b55bf713dd3e78ae08781138a"
+    },
+    {
+      "name": "clean-source-production",
+      "args": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture/scripts/verify-clean-source-tree.mjs",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture"
+      ],
+      "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture",
+      "exitCode": 0,
+      "elapsedMs": 136.474,
+      "log": "native-deployment/production-attempt-8/clean-source-production.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "production-install-candidate",
+      "args": [
+        "bash",
+        "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture/install-runtime.sh",
+        "--port",
+        "38456",
+        "--canary-port",
+        "38457"
+      ],
+      "cwd": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-lsp-qa-release-t14dzuaq/p4-release/package-candidate-r3-test-fixture",
+      "exitCode": 0,
+      "elapsedMs": 393523.879,
+      "log": "native-deployment/production-attempt-8/production-install-candidate.log",
+      "sha256": "5a955fe992365e435a821b9ca757b81507f0b4facaa72f3f071815fb694f77ec"
+    },
+    {
+      "name": "production-final-smoke",
+      "args": [
+        "bash",
+        "/Users/luo/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh",
+        "smoke"
+      ],
+      "cwd": "/Users/luo/Library/Application Support/codex-java-lsp-mcp",
+      "exitCode": 0,
+      "elapsedMs": 356.283,
+      "log": "native-deployment/production-attempt-8/production-final-smoke.log",
+      "sha256": "dc2d413553b71bb2eca53917e12a2fb36fd5ddb9a59b553175d9cfd7cf2037e8"
+    }
+  ],
+  "status": "PASS",
+  "productionDeploymentPerformed": true,
+  "current": "releases/8f737ac7cd14-20261011T123708Z",
+  "previousCurrent": "releases/09b9851e888a-20260929T085025Z",
+  "sourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc",
+  "evaluatedSourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+  "testOnlySourceAdoption": {
+    "path": "native-deployment/package-source-manifest-r3-test-fixture.json",
+    "sha256": "5f3e13cefea457551f69037f06503884714f64815f58a08e0138e908006e3b5f"
+  },
+  "healthBefore": {
+    "healthz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 272838313,
+      "buildSha": "09b9851e888a",
+      "instanceId": "managed-09b9851e888a-20260929T085025Z-83d8c61d-87b5-4d67-97f6-1a5edc6d8fac"
+    },
+    "readyz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 272838316,
+      "buildSha": "09b9851e888a",
+      "instanceId": "managed-09b9851e888a-20260929T085025Z-83d8c61d-87b5-4d67-97f6-1a5edc6d8fac"
+    }
+  },
+  "healthAfter": {
+    "healthz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 3006,
+      "buildSha": "8f737ac7cd14",
+      "instanceId": "managed-8f737ac7cd14-20261011T123708Z-a055690f-9443-44f7-9dda-aaa2b394f76d"
+    },
+    "readyz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 3007,
+      "buildSha": "8f737ac7cd14",
+      "instanceId": "managed-8f737ac7cd14-20261011T123708Z-a055690f-9443-44f7-9dda-aaa2b394f76d"
+    }
+  },
+  "environmentPreserved": {
+    "JAVA_HOME": true,
+    "JAVA_LSP_CACHE_BASE": true,
+    "JAVA_LSP_HTTP_PORT": true,
+    "JAVA_LSP_IDLE_TTL_MS": true,
+    "JAVA_LSP_OWNERSHIP_BASE": true,
+    "JDTLS_BIN": true,
+    "NODE_BIN": true,
+    "PATH": true
+  },
+  "installationProcessPath": "/Users/luo/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+  "daemonPathBefore": "/Users/luo/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+  "daemonPathAfter": "/Users/luo/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+  "projectConfigPreserved": true,
+  "projectConfigSha256": "d4ac323ec219af4725838c0c97437db28e1dc7b7739aa5f763a2e05ad6c6a925",
+  "lspEnabledAliases": [
+    "lishuedu",
+    "exam-parent-v3",
+    "cipherlink",
+    "lishu-v2"
+  ],
+  "installedFilesChecked": 1780,
+  "installedFilesMismatched": [],
+  "installedFileSelection": {
+    "path": "native-deployment/installed-source-selection.json",
+    "sha256": "a5d648f17d0b68a6174b0028c0348b5bb4a8743dbd394ee466145104f87d4fa1"
+  },
+  "releaseDirectories": [
+    "09b9851e888a-20260929T085025Z",
+    "8f737ac7cd14-20261011T123708Z"
+  ],
+  "productionRollback": "NOT_RUN_SUCCESSFUL_RELEASE_RETAINED",
+  "isolatedRollback": "PASS",
+  "mcpUrl": "http://127.0.0.1:38456/mcp"
+}

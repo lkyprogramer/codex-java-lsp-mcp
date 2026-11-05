@@ -3,6 +3,7 @@
 // pos: The only place JdtlsSession touches node:child_process or vscode-jsonrpc,
 //      so lifecycle tests can inject failures without spawning a real JVM.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { ownerChildStdio } from "./mac-platform/owner-lock.js";
 import {
   createMessageConnection,
   StreamMessageReader,
@@ -60,7 +61,7 @@ export const defaultJdtlsTransportFactory: JdtlsTransportFactory = {
     const child = spawn(input.binary, input.args, {
       cwd: input.cwd,
       env: input.env,
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ownerChildStdio(["pipe", "pipe", "pipe"], input.env)
     }) as ChildProcessWithoutNullStreams;
     let connection: MessageConnection | undefined;
     const writer = guardMessageWriter(new StreamMessageWriter(child.stdin), () => {

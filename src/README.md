@@ -15,18 +15,17 @@
 - `hooks/hook-gate.ts` | Codex advisory hook，复用 registry/resolver/path 判断。
 - `http-server.ts` | loopback stateless Streamable HTTP host。
 - `http-server-lifecycle.ts` | HTTP READY/DRAINING/CLOSED 状态、in-flight 计数与有界 drain。
-- `java-index/` | Tree-sitter Java AST、FQN/import resolution、静态 edges、MyBatis resources、coverage、incremental refresh、atomic snapshot 与 worktree seed。
+- `java-index/` | Tree-sitter Java AST、FQN/import resolution、静态 edges、MyBatis resources、coverage、incremental refresh；`snapshot/` 为 owner（FSEvents tracker、全局 BuildScheduler、sealed snapshot store、request view、query worker 池）。
 - `jdtls-session.ts` | transactional JDT lifecycle、restart backoff、lease heartbeat、DocumentLru、LSP notifications 与 SemanticGateway backend。
 - `mcp-server-factory.ts` | 每个 transport/session 创建独立 MCP server，并共享 application。
 - `semantic-gateway.ts` | 所有 semantic operations 的 same-key singleflight、per-caller deadline、complete-only bounded cache。
-- `repo-change-coordinator.ts` | 唯一文件 watcher owner；输出 normalized batch 和单调 generation，处理 storm/degraded 状态。
 - `repo-ownership-lease.ts` | cross-process ownership | 通过原子目录交接、PID 启动身份和 owner token 保证同 root 单 owner。
-- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 coordinator、SQL JavaIndex、JDT session、request budget 与 lifecycle。
+- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 JDT session、request budget 与 lifecycle；每个请求经 `IndexOwner` 的 request view 读取 sealed snapshot，发布事件驱动 JDT change batch。
 - `path-utils.ts` | canonical/potential path、segment-safe containment、repo hash。
 - `project-jdk.ts` | 解析项目 JDK 与 JDT LS runtime JDK 的配置关系。
 - `repo-layout.ts` | 识别 repo root、模块、layer、sourceSet 和路径规范化。
 - `repo-resolver.ts` | 将 `projectId/repoRoot/file` 解析为 canonical repoRoot、repoHash 与 LSP enablement；daemon 模式严格拒绝 CWD/跨 root 推断。
-- `server.ts` | stdio compatibility entry | 装配 application、protocol server 与 stdio lifecycle。
+- `server.ts` | stdio compatibility entry | 仅把本机 MCP 消息转发到 owner daemon（`stdio-owner-proxy.ts`），自身不建 runtime/index/JDT。
 - `smoke.ts` | 启动已构建 MCP server，验证 `tools/list`、`java_status` 与 shutdown。
 - `smoke-http.ts` | 连接显式 loopback URL，验证 5 tools、daemon status、build SHA。
 - `tools/` | 5 个 public MCP tool 的薄 handler 与共享 context。

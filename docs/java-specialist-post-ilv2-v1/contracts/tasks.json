@@ -1,0 +1,135 @@
+{
+  "schema": "post-ilv2/tasks/v1",
+  "tasks": [
+    {
+      "id": "Q00",
+      "phase": "P0",
+      "title": "冻结当前版本、运行身份和时间合同",
+      "dependsOn": [],
+      "conditional": false,
+      "path": "tasks/Q00.md"
+    },
+    {
+      "id": "Q01",
+      "phase": "P0",
+      "title": "证明最终模型消息与repair判定边界",
+      "dependsOn": [
+        "Q00"
+      ],
+      "conditional": false,
+      "path": "tasks/Q01.md"
+    },
+    {
+      "id": "Q02",
+      "phase": "P0",
+      "title": "逐阶段归因并冻结改进队列",
+      "dependsOn": [
+        "Q00"
+      ],
+      "conditional": false,
+      "path": "tasks/Q02.md"
+    },
+    {
+      "id": "Q03",
+      "phase": "P1",
+      "title": "增加按需单文件outline",
+      "dependsOn": [
+        "Q01",
+        "Q02"
+      ],
+      "conditional": false,
+      "path": "tasks/Q03.md"
+    },
+    {
+      "id": "Q04",
+      "phase": "P1",
+      "title": "扩展现有evidence到Java声明",
+      "dependsOn": [
+        "Q03"
+      ],
+      "conditional": false,
+      "path": "tasks/Q04.md"
+    },
+    {
+      "id": "Q05",
+      "phase": "P2",
+      "title": "有界目标关系与源码证明",
+      "dependsOn": [
+        "Q04"
+      ],
+      "conditional": true,
+      "path": "tasks/Q05.md"
+    },
+    {
+      "id": "Q06",
+      "phase": "P2",
+      "title": "只修有证据的静态发现缺口",
+      "dependsOn": [
+        "Q04"
+      ],
+      "conditional": true,
+      "path": "tasks/Q06.md"
+    },
+    {
+      "id": "Q07",
+      "phase": "P2",
+      "title": "在现有ReadUnit中提高证据边际价值",
+      "dependsOn": [
+        "Q04"
+      ],
+      "conditional": true,
+      "path": "tasks/Q07.md"
+    },
+    {
+      "id": "Q08",
+      "phase": "P2",
+      "title": "按需Java绑定保真，不重写编译器",
+      "dependsOn": [
+        "Q04"
+      ],
+      "conditional": true,
+      "path": "tasks/Q08.md"
+    },
+    {
+      "id": "Q09",
+      "phase": "P2",
+      "title": "只优化已测重复等待与source I/O",
+      "dependsOn": [
+        "Q00",
+        "Q04"
+      ],
+      "conditional": true,
+      "path": "tasks/Q09.md"
+    },
+    {
+      "id": "Q10",
+      "phase": "P3",
+      "title": "一次可信的真实Agent配对",
+      "dependsOn": [
+        "Q04"
+      ],
+      "conditional": false,
+      "path": "tasks/Q10.md"
+    },
+    {
+      "id": "Q11",
+      "phase": "P4",
+      "title": "受影响工程门与候选资格",
+      "dependsOn": [
+        "Q10"
+      ],
+      "conditional": false,
+      "path": "tasks/Q11.md"
+    },
+    {
+      "id": "Q12",
+      "phase": "P4",
+      "title": "删减、文档唯一入口与停止决定",
+      "dependsOn": [
+        "Q11"
+      ],
+      "conditional": false,
+      "path": "tasks/Q12.md"
+    }
+  ]
+}

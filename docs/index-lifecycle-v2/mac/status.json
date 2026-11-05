@@ -1,0 +1,403 @@
+{
+  "schema": "ilv2-mac-status/v1",
+  "manualVersion": "ILV2-MAC/6",
+  "planStatus": "IN_PROGRESS",
+  "candidateStatus": "NOT_READY",
+  "benefit": "UNMEASURED",
+  "workRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac",
+  "historicalWorkRoot": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac",
+  "currentInputs": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/plans/relocation/20261014T133452Z/inputs.json",
+  "toolchains": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/inputs/toolchains/jdt-1.56.0-gradle-9.3.1-jdk-25.0.2/toolchains.json",
+  "gates": [
+    {
+      "gateId": "G00",
+      "taskId": "MAC-00",
+      "status": "PASS",
+      "result": "mac-00/task-result.json",
+      "commit": "6fd8032"
+    },
+    {
+      "gateId": "G01",
+      "taskId": "MAC-01",
+      "status": "PASS",
+      "result": "mac-01/task-result.json",
+      "commit": "6fd8032"
+    },
+    {
+      "gateId": "G02A",
+      "taskId": "MAC-02A",
+      "status": "PASS",
+      "result": "mac-02/task-result.json",
+      "commit": "2c70544"
+    },
+    {
+      "gateId": "G02B",
+      "taskId": "MAC-02B",
+      "status": "PASS",
+      "result": "mac-02b/task-result.json",
+      "commit": "0ab0e0f"
+    },
+    {
+      "gateId": "G02C",
+      "taskId": "MAC-02C",
+      "status": "PASS",
+      "result": "mac-02c/task-result.json",
+      "commit": "e7c12e4"
+    },
+    {
+      "gateId": "G02",
+      "taskId": "MAC-02",
+      "children": [
+        "G02A",
+        "G02B",
+        "G02C"
+      ],
+      "result": "mac-02/task-result.json"
+    },
+    {
+      "gateId": "G03A",
+      "taskId": "MAC-03A",
+      "status": "PASS",
+      "result": "mac-03a/task-result.json"
+    },
+    {
+      "gateId": "G03B",
+      "taskId": "MAC-03B",
+      "status": "PASS",
+      "result": "mac-03b/task-result.json"
+    },
+    {
+      "gateId": "G03",
+      "taskId": "MAC-03",
+      "children": [
+        "G03A",
+        "G03B"
+      ]
+    },
+    {
+      "gateId": "G04",
+      "taskId": "MAC-04",
+      "status": "PASS",
+      "result": "mac-04/task-result.json"
+    },
+    {
+      "gateId": "G05",
+      "taskId": "MAC-05",
+      "status": "PASS",
+      "result": "mac-05/task-result.json"
+    },
+    {
+      "gateId": "G06A",
+      "taskId": "MAC-06A",
+      "status": "PASS",
+      "result": "mac-06a/task-result.json"
+    },
+    {
+      "gateId": "G06B",
+      "taskId": "MAC-06B",
+      "status": "PASS",
+      "result": "mac-06b/task-result.json"
+    },
+    {
+      "gateId": "G06C",
+      "taskId": "MAC-06C",
+      "status": "PASS",
+      "result": "mac-06c/task-result.json"
+    },
+    {
+      "gateId": "G06",
+      "taskId": "MAC-06",
+      "children": [
+        "G06A",
+        "G06B",
+        "G06C"
+      ]
+    },
+    {
+      "gateId": "G07",
+      "taskId": "MAC-07",
+      "status": "PASS",
+      "result": "mac-07/task-result.json"
+    },
+    {
+      "gateId": "G08A",
+      "taskId": "MAC-08A",
+      "status": "PASS",
+      "result": "mac-08a/task-result.json"
+    },
+    {
+      "gateId": "G08B",
+      "taskId": "MAC-08B",
+      "status": "PASS",
+      "result": "mac-08b/task-result.json"
+    },
+    {
+      "gateId": "G08C",
+      "taskId": "MAC-08C",
+      "status": "PASS",
+      "result": "mac-08c/task-result.json"
+    },
+    {
+      "gateId": "G08",
+      "taskId": "MAC-08",
+      "children": [
+        "G08A",
+        "G08B",
+        "G08C"
+      ]
+    },
+    {
+      "gateId": "G09",
+      "taskId": "MAC-09",
+      "status": "PASS",
+      "result": "mac-09/task-result.json"
+    },
+    {
+      "gateId": "G10",
+      "taskId": "MAC-10",
+      "status": "PASS",
+      "result": "mac-10/task-result.json"
+    },
+    {
+      "gateId": "G11",
+      "taskId": "MAC-11",
+      "status": "PASS",
+      "result": "mac-11/task-result.json",
+      "performanceReady": false
+    },
+    {
+      "gateId": "G12",
+      "taskId": "MAC-12",
+      "status": "PASS",
+      "result": "mac-12/task-result.json"
+    },
+    {
+      "gateId": "G13",
+      "taskId": "MAC-13",
+      "status": "PASS",
+      "result": "mac-13/task-result.json"
+    },
+    {
+      "gateId": "G14",
+      "taskId": "MAC-14",
+      "status": "PASS",
+      "result": "mac-14/task-result.json"
+    },
+    {
+      "gateId": "G15",
+      "taskId": "MAC-15",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G16",
+      "taskId": "MAC-16",
+      "status": "NOT_RUN",
+      "result": "mac-16/task-result.json"
+    },
+    {
+      "gateId": "G17",
+      "taskId": "MAC-17",
+      "status": "FAIL",
+      "result": "mac-17/task-result.json"
+    },
+    {
+      "gateId": "G18",
+      "taskId": "MAC-18",
+      "status": "PLAN"
+    },
+    {
+      "gateId": "G19",
+      "taskId": "MAC-19",
+      "status": "PLAN"
+    }
+  ],
+  "workflow": [
+    {
+      "id": "WF-MAC5-TCC",
+      "status": "BLOCKED_ENV",
+      "result": "workflow-mac5-tcc/task-result.json"
+    },
+    {
+      "id": "WF-MAC5",
+      "status": "FAIL",
+      "result": "workflow-mac5/task-result.json"
+    },
+    {
+      "id": "WF-MAC6",
+      "status": "PASS",
+      "result": "workflow-mac6/task-result.json"
+    },
+    {
+      "id": "WF-MAC17-NATIVE-DIAG",
+      "status": "NOT_REPRODUCED",
+      "result": "mac-17/native-timeout-task-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-PREP",
+      "status": "INVALID_EXPERIMENT",
+      "result": "mac-17/first-capability-preparation-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-OLD",
+      "status": "NOT_REPRODUCED",
+      "result": "mac-17/first-capability-original-host-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-DRIFT",
+      "status": "BLOCKED_ENV",
+      "result": "mac-17/first-capability-host-drift-result.json"
+    },
+    {
+      "id": "WF-M17-CAP-CURRENT",
+      "status": "NOT_REPRODUCED",
+      "result": "mac-17/first-capability-result.json"
+    },
+    {
+      "id": "WF-M17-BASE-PREP",
+      "status": "FAIL",
+      "result": "mac-17/current-baseline-preparation-result.json"
+    },
+    {
+      "id": "WF-M17-BASE-COLD",
+      "status": "BLOCKED_ENV",
+      "result": "mac-17/current-baseline-result.json"
+    },
+    {
+      "id": "WF-M17-TLS12",
+      "status": "FAIL",
+      "result": "mac-17/tls12-single-result.json"
+    },
+    {
+      "id": "WF-M17-ASTRA-DIAG",
+      "status": "FAIL",
+      "result": "mac-17/astra-diagnostic-result.json"
+    },
+    {
+      "id": "WF-M17-JDT-PREP1",
+      "status": "FAIL",
+      "result": "mac-17/original-chain-preparation-1-result.json"
+    },
+    {
+      "id": "WF-M17-JDT-PREP2",
+      "status": "FAIL",
+      "result": "mac-17/original-chain-preparation-2-result.json"
+    },
+    {
+      "id": "WF-M17-JDT-COLD",
+      "status": "FAIL",
+      "result": "mac-17/original-chain-cold-result.json"
+    },
+    {
+      "id": "WF-M17-COLD-REMEDIATION",
+      "status": "NOT_RUN",
+      "result": "mac-17/cold-remediation-task-result.json"
+    },
+    {
+      "id": "WF-M17-REMEDIATED-COLD-ONCE",
+      "status": "FAIL",
+      "result": "mac-17/remediated-final-cold-task-result.json"
+    },
+    {
+      "id": "WF-M17-HOME-JVM-ONLY",
+      "status": "FAIL",
+      "result": "mac-17/home-jvm-only-task-result.json"
+    },
+    {
+      "id": "WF-M17-HOME-CLI-ONLY",
+      "status": "FAIL",
+      "result": "mac-17/home-cli-only-task-result.json"
+    },
+    {
+      "id": "WF-M17-HOME-PROPERTIES-OBS",
+      "status": "FAIL",
+      "result": "mac-17/home-properties-observation-task-result.json"
+    },
+    {
+      "id": "WF-M17-PROPERTIES-CLEAN",
+      "status": "FAIL",
+      "result": "mac-17/properties-clean-task-result.json"
+    },
+    {
+      "id": "WF-M17-PLUGIN-MIRROR",
+      "status": "FAIL",
+      "result": "mac-17/gradle-cold-final-task-result.json"
+    },
+    {
+      "id": "WF-M17-INSTALL-PREPARED",
+      "status": "FAIL",
+      "result": "mac-17/install-prepared-task-result.json"
+    },
+    {
+      "id": "WF-M17-REF-DIAG",
+      "status": "PASS",
+      "result": "mac-17/reference-index-task-result.json"
+    },
+    {
+      "id": "WF-M17-INDEX-READY-FIX",
+      "status": "PASS",
+      "result": "mac-17/index-ready-fix-task-result.json"
+    }
+  ],
+  "openDecisions": [
+    {
+      "id": "TCC-LAUNCHER-IDENTITY",
+      "blocks": [
+        "MAC-17",
+        "MAC-18"
+      ],
+      "finding": "An isolated launchd job whose Program is the native owner launcher, after exec into the frozen Node, still hit AUTHREQ_PROMPTING for kTCCServiceSystemPolicyDocumentsFolder; TCC named the launcher as responsible_path (binary_path=node). Business repositories live under ~/Documents/program.",
+      "evidence": {
+        "result": "workflow-mac5-tcc/task-result.json",
+        "name": "a4-documents-read"
+      },
+      "options": [
+        "stable code-signing identity for the launcher plus one recorded Documents grant",
+        "business worktrees outside TCC-protected folders",
+        "another launch topology proven by the same probe"
+      ],
+      "decisionOwner": "user",
+      "decision": {
+        "choice": "stable code-signing identity for the launcher plus one recorded Documents grant",
+        "decidedBy": "user",
+        "decidedAt": "2026-10-15",
+        "state": "PROVEN_AT_DEV_PATH",
+        "supersedes": "2026-10-14 choice 'business worktrees outside TCC-protected folders' (dry-run plan never executed; business repos and worktrees stay in place)",
+        "note": "Remaining before MAC-17/18: install the launcher at a stable unversioned path replaced in place on upgrade (releases/<id> paths would re-prompt on every release), grant it once there, and prove the production launchd job reads without a prompt; whether launching through the current symlink records the link or the resolved path is unverified.",
+        "proof": {
+          "at": "2026-10-15",
+          "grantedBy": "user (clicked Allow once)",
+          "teamIdentifier": "2UVGT2J459",
+          "identifier": "com.lky.codex-java-lsp-mcp.ilv2-mac",
+          "designatedRequirement": "certificate-based (Apple anchor + Apple Development leaf CN), no cdhash",
+          "probes": [
+            {
+              "run": 1,
+              "read": "OK",
+              "elapsedMs": 2061,
+              "note": "TCC prompted; tccd logged responsible identifier=com.lky.codex-java-lsp-mcp.ilv2-mac, binary_path=node"
+            },
+            {
+              "run": 2,
+              "read": "OK",
+              "elapsedMs": 42,
+              "note": "no prompt"
+            },
+            {
+              "run": 3,
+              "read": "OK",
+              "elapsedMs": 40,
+              "note": "after a code change, rebuild and re-sign at the same path (cdhash changed); no prompt"
+            }
+          ],
+          "finding": "tccd stored the grant with identifier_type=Path (the launcher's absolute path), so a different launcher path needs a new grant.",
+          "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/plans/tcc-sign/20261015T013938Z"
+        }
+      }
+    }
+  ],
+  "next": [
+    "MAC-17索引屏障修复通过17项定向检查及唯一真实精确定义/引用验收；客户端106.150s READY，首次引用430.448ms。",
+    "LOCAL审查候选source7805669821c9，包c6fc6ab4ff760c57af65d7d03838378dba40538820868d330219c7ca12148ba3；尚未部署。",
+    "正式G17历史FAIL保留；生产TCC/业务读回、新全量installer与canary未运行；不push、不动生产。"
+  ]
+}

@@ -18,6 +18,7 @@ import { openIndexDb, close } from "../java-index/sql/driver.js";
 import { ensureSchema } from "../java-index/sql/schema.js";
 import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
+import { LocalBuilder } from "../java-index/local-builder.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
 import { AgentRouter } from "../agent-router/index.js";
 import { RgRunner } from "../search/rg-runner.js";
@@ -143,7 +144,7 @@ async function buildFixture(): Promise<Fixture> {
   ensureSchema(db);
   await runSqlColdBuild({ repoRoot, db, generation: 1 });
   close(db);
-  const client = new SqlJavaIndexClient(repoRoot, dbPath) as unknown as JavaIndexClientApi;
+  const client = new SqlJavaIndexClient(repoRoot, dbPath, new LocalBuilder({ repoRoot, dbPath })) as unknown as JavaIndexClientApi;
   return {
     repoRoot,
     dbPath,
@@ -158,6 +159,78 @@ async function buildFixture(): Promise<Fixture> {
 async function openFixtureClient(fixture: Fixture): Promise<void> {
   await (fixture.client as SqlJavaIndexClient).open(1);
 }
+
+test("MAC11 stale view cannot return a confident static miss", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    const held = { state: "STALE" as const, workspaceId: "workspace-held", snapshotId: "snapshot-held", bindingVersion: 7, coveredThroughSeq: 7 };
+    context.indexView = held;
+    const query = args({ query: "com.acme.AbsentMac11Type", searchMode: "exact", preview: "none" });
+    const stale = await javaSymbol(context, query, { budget: DeadlineBudget.fromTimeout(15000) }) as Record<string, unknown>;
+    assert.equal(stale.scopeState, "PARTIAL");
+    assert.equal(stale.exact, undefined, "an old complete snapshot cannot prove a current miss");
+    assert.equal(stale.emptyReason, undefined);
+    assert.equal(stale.stopReason, "source_changed", "a view behind edits on disk is partial because the source changed");
+    assert.deepEqual(stale.indexView, held);
+    const hit = await javaSymbol(context, args({ query: "com.acme.OrderService", searchMode: "exact", preview: "none" })) as Record<string, unknown>;
+    assert.equal(hit.scopeState, "PARTIAL");
+    assert.equal(hit.exact, "match", "verified positive evidence remains usable from the held view");
+    assert.deepEqual(hit.indexView, held);
+    context.indexView = { ...held, state: "FRESH", bindingVersion: 8 };
+    const fresh = await javaSymbol(context, query) as Record<string, unknown>;
+    assert.equal(fresh.scopeState, "READY");
+    assert.equal(fresh.exact, "miss");
+    const incomplete = await javaSymbol(context, query, { budget: DeadlineBudget.fromTimeout(15000), negativeLookupAllowed: false }) as Record<string, unknown>;
+    assert.equal(incomplete.scopeState, "PARTIAL", "FRESH does not make partial coverage complete");
+    assert.equal(incomplete.exact, undefined);
+    context.indexView = { state: "NOT_READY" };
+    const cold = await javaSymbol(context, query) as Record<string, unknown>;
+    assert.equal(cold.scopeState, "NOT_READY", "no verified binding is reported as such, not as a partial answer");
+    assert.equal(cold.exact, undefined);
+    assert.equal(cold.stopReason, "index_partial");
+    assert.deepEqual(stale.indexView, held, "later bindings cannot relabel an earlier response");
+    assert.equal(probe.startCalls, 0);
+  } finally { await fixture.cleanup(); }
+});
+
+test("MAC11 stale evidence exposes the held view and remains partial", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    context.indexView = { state: "STALE", snapshotId: "snapshot-held", bindingVersion: 7 };
+    const out = await javaSymbol(context, args({ operation: "evidence", file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21 })) as Record<string, unknown>;
+    assert.equal(out.scopeState, "PARTIAL");
+    assert.deepEqual(out.indexView, context.indexView);
+    assert.ok((out.reasons as string[]).includes("INDEX_VIEW_STALE"));
+  } finally { await fixture.cleanup(); }
+});
+
+test("explicit evidence uses the static index and does not start JDT", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    const result = await javaSymbol(context, args({ operation: "evidence",
+      file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21
+    }), { budget: DeadlineBudget.fromTimeout(15000) }) as Record<string, unknown>;
+    assert.equal(result.schemaVersion, "java-evidence-unit/v1");
+    assert.equal(result.generation, 1);
+    assert.equal(result.scopeState, "READY");
+    assert.deepEqual(result.units, [], "a type without XML relations has no resource source units");
+    assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
+    await assert.rejects(javaSymbol(context, args({ operation: "evidence" })), /requires file\/line\/column/);
+    await assert.rejects(javaSymbol(context, args({ operation: "evidence", backend: "jdt",
+      file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21
+    })), /static index/);
+    assert.equal(probe.startCalls, 0);
+  } finally { await fixture.cleanup(); }
+});
 
 test("K25: static query succeeds with JDT disabled and zero JDT interactions", async () => {
   const fixture = await buildFixture();
@@ -263,6 +336,8 @@ test("K26: position/references keep the explicit JDT requirement", async () => {
   assert.equal(symbolNeedsJdt({ operation: "query", backend: "jdt" }), true);
   assert.equal(symbolNeedsJdt({ operation: "position" }), true);
   assert.equal(symbolNeedsJdt({ operation: "references" }), true);
+  assert.equal(symbolNeedsJdt({ operation: "evidence" }), false, "explicit evidence never starts JDT");
+  assert.equal(symbolNeedsJdt({ operation: "evidence", backend: "jdt" }), false, "invalid evidence backend is rejected without starting JDT");
   assert.equal(symbolNeedsJdt({ query: "OrderService" }), false, "omitted operation infers query");
 
   const fixture = await buildFixture();

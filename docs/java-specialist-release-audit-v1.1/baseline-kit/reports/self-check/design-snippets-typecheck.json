@@ -1,0 +1,29 @@
+{
+  "scope": "FIVE_STANDALONE_DESIGN_SNIPPETS_ONLY_NOT_PRODUCT",
+  "files": [
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T07"
+  ],
+  "argv": [
+    "tsc",
+    "--strict",
+    "--noEmit",
+    "--target",
+    "ES2022",
+    "--module",
+    "NodeNext",
+    "--moduleResolution",
+    "NodeNext",
+    "/mnt/data/work/doc-snippets/T02.ts",
+    "/mnt/data/work/doc-snippets/T03.ts",
+    "/mnt/data/work/doc-snippets/T04.ts",
+    "/mnt/data/work/doc-snippets/T05.ts",
+    "/mnt/data/work/doc-snippets/T07.ts"
+  ],
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": ""
+}

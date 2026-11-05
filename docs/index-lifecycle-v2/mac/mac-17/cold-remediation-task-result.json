@@ -1,0 +1,114 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-COLD-REMEDIATION",
+  "status": "NOT_RUN",
+  "dependency": null,
+  "identity": null,
+  "checks": [
+    {
+      "name": "sources",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/sources/result.json",
+      "sourceDigest": null,
+      "commands": 2,
+      "tests": 24,
+      "pass": 24,
+      "fail": 0,
+      "elapsedMs": 9330,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=shared .* hard cap|short caller deadline|lease|backoff|java_status|Gradle import receives",
+        "/private/tmp/mac17-root-cause-20261102T090900Z/tmp/dist/jdtls-session.test.js",
+        "/private/tmp/mac17-root-cause-20261102T090900Z/tmp/dist/jdt-restart-backoff.test.js",
+        "/private/tmp/mac17-root-cause-20261102T090900Z/tmp/dist/tools/status.test.js"
+      ]
+    },
+    {
+      "name": "red",
+      "role": "expected-red",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/red/result.json",
+      "sourceDigest": null,
+      "commands": 2,
+      "tests": 5,
+      "pass": 2,
+      "fail": 3,
+      "elapsedMs": 7468,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=shared .* hard cap|java_status handles",
+        "/private/tmp/mac17-root-cause-20261102T090900Z/tmp/dist/jdtls-session.test.js",
+        "/private/tmp/mac17-root-cause-20261102T090900Z/tmp/dist/tools/status.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "minimum-source-and-business-fixes",
+      "file": "implementation-summary.json",
+      "sha256": "afb4a526c6c89b4b1d579d8f6679d37b53bd3e8996ad72ffdbe52c95d0a9b2e3",
+      "status": null,
+      "provenance": "Recorded focused tests plus actual model/configuration resolution; not a new full cold semantic acceptance"
+    },
+    {
+      "name": "actual-source-policy-model-comparison",
+      "file": "source-policy-summary.json",
+      "sha256": "a321c732c6da7b2668e0003e149349e9f4c3c4f87675c9961748a26b18516176",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "actual-business-configurations",
+      "file": "business-classpath-summary.json",
+      "sha256": "ffdbe28dc113de65078ecfcc3a3ee7e7191cce622b5601b3df986b63508a9ac3",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "7b85ede6ae2d6adebbfec6900a0cc795fdbf8c5e784330a310a080e2e5f9a59e",
+    "registeredPids": 20,
+    "ownedGroups": 1,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/private/tmp/mac17-root-cause-20261102T090900Z/closeout/raw-evidence.tar.gz",
+      "sha256": "1346e48b54b3191a49fe03966b24baa496cd16e399cdc7ad52d2d95bb9c4a947",
+      "fileCount": 51,
+      "bytes": 161419,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "5f589c3b90bbe6c1ea81cb97b316fad561010614a90df3208e1d148ca60145c3",
+      "source": "cfcd4f85b6073932e0b3fe324dbb2ddcb575f32863ffe42ada869d9c85c17843",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "442babb627abe7fb65f712eb49b8d4493bb608b3a7fd98097d59d72bd4586be4",
+  "notClaimed": [
+    "Post-remediation complete cold semantic acceptance",
+    "Formal G17 PASS",
+    "Ready for production",
+    "Deployment",
+    "AI improvements"
+  ],
+  "next": "Obtain explicit authorization for one additional full cold semantic case on the reviewed product patch and corrected isolated business input; original 120s/15s, precise definition/reference and exit gates remain. Do not repeat fullsuite or installer.",
+  "authorization": "Local minimum repair and focused diagnosis only; no push/production/compatibility/rollback. Original hard cutoff 2026-11-03T18:00:00+08:00.",
+  "notes": "Components PASS: final focused 24/24; actual local source-attachment model comparison PASS; original real business RED then nine resolved artifact checks PASS. Overall NOT_RUN means no post-fix full cold semantic case, not that component checks were absent. Business main/old frozen input unchanged. No product/native release built.",
+  "privateEvidence": "/private/tmp/mac17-root-cause-20261102T090900Z"
+}

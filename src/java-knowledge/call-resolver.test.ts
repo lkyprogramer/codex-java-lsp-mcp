@@ -51,7 +51,6 @@ function typeBundle(simpleName: string, kind: JavaTypeFacts["kind"], methods: st
     allTypeIds: [],
     contentHash: "h",
     size: 10,
-    mtimeMs: 1,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1

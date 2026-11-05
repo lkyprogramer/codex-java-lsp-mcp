@@ -1,0 +1,122 @@
+[
+  {
+    "task_id": "JSB-PAYMENTS-03",
+    "corpus": "payments",
+    "allowed_edits": [
+      "src/main/java/lab/payments/PaymentService.java"
+    ],
+    "test_file": "repairs/JSB-PAYMENTS-03/FrozenPaymentsTest.java",
+    "test_class": "lab.payments.FrozenPaymentsTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-PAYMENTS-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-INVENTORY-03",
+    "corpus": "inventory",
+    "allowed_edits": [
+      "src/main/java/lab/inventory/StockService.java"
+    ],
+    "test_file": "repairs/JSB-INVENTORY-03/FrozenInventoryTest.java",
+    "test_class": "lab.inventory.FrozenInventoryTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-INVENTORY-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-ACCESS-03",
+    "corpus": "access",
+    "allowed_edits": [
+      "src/main/java/lab/access/SignedAccessPolicy.java"
+    ],
+    "test_file": "repairs/JSB-ACCESS-03/FrozenAccessTest.java",
+    "test_class": "lab.access.FrozenAccessTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-ACCESS-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-ADMISSIONS-03",
+    "corpus": "admissions",
+    "allowed_edits": [
+      "src/main/java/lab/admissions/AdmissionService.java"
+    ],
+    "test_file": "repairs/JSB-ADMISSIONS-03/FrozenAdmissionsTest.java",
+    "test_class": "lab.admissions.FrozenAdmissionsTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-ADMISSIONS-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-PRICING-03",
+    "corpus": "pricing",
+    "allowed_edits": [
+      "src/main/java/lab/pricing/MoneyPolicy.java"
+    ],
+    "test_file": "repairs/JSB-PRICING-03/FrozenPricingTest.java",
+    "test_class": "lab.pricing.FrozenPricingTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-PRICING-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-NOTIFICATIONS-03",
+    "corpus": "notifications",
+    "allowed_edits": [
+      "src/main/java/lab/notifications/DispatchBus.java"
+    ],
+    "test_file": "repairs/JSB-NOTIFICATIONS-03/FrozenNotificationsTest.java",
+    "test_class": "lab.notifications.FrozenNotificationsTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-NOTIFICATIONS-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-LEDGER-03",
+    "corpus": "ledger",
+    "allowed_edits": [
+      "src/main/java/lab/ledger/Ledger.java"
+    ],
+    "test_file": "repairs/JSB-LEDGER-03/FrozenLedgerTest.java",
+    "test_class": "lab.ledger.FrozenLedgerTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-LEDGER-03/reference-change.json"
+  },
+  {
+    "task_id": "JSB-PAGINATION-03",
+    "corpus": "pagination",
+    "allowed_edits": [
+      "src/main/java/lab/pagination/PageWindow.java"
+    ],
+    "test_file": "repairs/JSB-PAGINATION-03/FrozenPaginationTest.java",
+    "test_class": "lab.pagination.FrozenPaginationTest",
+    "source_roots": [
+      "src/main/java"
+    ],
+    "java_release": 8,
+    "timeout_seconds": 10,
+    "reference_change": "repairs/JSB-PAGINATION-03/reference-change.json"
+  }
+]

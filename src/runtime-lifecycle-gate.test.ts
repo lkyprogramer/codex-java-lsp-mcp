@@ -3,6 +3,20 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { RuntimeLifecycleGate } from "./runtime-lifecycle-gate.js";
 
+test("RuntimeLifecycleGate removes a cancelled queued control without running it", async () => {
+  const gate = new RuntimeLifecycleGate();
+  const abort = new AbortController();
+  const reason = new Error("request cancelled");
+  await gate.withQuery(async () => {
+    const control = gate.withControl(async () => assert.fail("cancelled control ran"), 1000, abort.signal);
+    assert.equal(gate.state().pendingControls, 1);
+    abort.abort(reason);
+    await assert.rejects(control, error => error === reason);
+    assert.equal(gate.state().pendingControls, 0);
+  }, 1000);
+  assert.equal(gate.isIdle(), true);
+});
+
 test("RuntimeLifecycleGate allows concurrent queries", async () => {
   const gate = new RuntimeLifecycleGate();
   const first = deferred();

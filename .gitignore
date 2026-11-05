@@ -20,3 +20,7 @@ graphify-out/
 .task30-debug.mjs
 .commandcode/
 .workflow/
+
+# Python bytecode (frozen kits must stay byte-identical)
+__pycache__/
+*.pyc

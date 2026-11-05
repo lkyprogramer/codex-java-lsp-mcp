@@ -1,0 +1,17 @@
+# Test fixture adoption independent review
+
+**PASS，范围仅为 native 部署使用旧测量证据的源码运行等价采用。** 实际身份绑定条件已核验；新 installer/升级/回滚/生产操作尚未通过，不在本 PASS 内。
+
+新clean包 commit `8f737ac7cd141d0eb07de37bb212d4d6648d96a3`、tree `7d20822ac2e5f184841236fd2cbfecbe5b74a2b4`、sourceDigest `3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc` /611；原模型及业务测量仍属于a77与6d，未改标为新测量。新manifest SHA `5f3e13cefea457551f69037f06503884714f64815f58a08e0138e908006e3b5f`，source-binding SHA `1728baba12541666a7f914622a6ab102a752dd398522dea7a6c33acd7a4a3690`；新bundle SHA `e7ea5f9846f4744b0a9453689f852f2d0f7df05411583feb0b3332ca3d0b65bd` 与source-binding一致，verify0为已保存作者结果。
+
+独立读取两份完整manifest与新旧actual files：1843路径集合一致，逐SHA+mode无mismatch，1842文件逐字相同，全部1843 mode相同。唯一差异src/jdtls-session.test.ts，全文精确为目标用例writeFileSync后加await session.ensureStarted()。原10/500预算、40ms handler及三条assert不变；冷共享startup用例保持。所有其他源码、fixtures、lock、installer、scripts、tools、scorer、gate和protocol相同。Git实际HEAD/tree相符、工作树clean。
+
+按原candidateIdentity规则独立复算两611摘要确为6d与3ee；仅排除此精确改变的test path时，剩余610执行输入共同摘要为 `ec262fbb97fabca8bed48f3f7bb991acfba75ff608731f6bde2924327fa22d1a`。未使用笼统忽略所有tests的allowlist。实际诊断证明cold进程身份探测侵入500ms，前置setup不会预填definition缓存；修正不改变生产cold-start或共享deadline语义。
+
+原样test-fixture-session-recheck.log绑定新8f/tree7d，完整JdtlsSession文件54/54 PASS、0FAIL、0skip，包含修改用例与原cold-start边界。此为主代理已运行日志，本review没有重新测试。
+
+旧release-evidence全部原hash/身份及56/16/72/24分组、CLIqualification FAIL、repair2/3失败、新critical范围、cost/optional限制保持。此单测试setup不改变模型收到的生产工具/fixtures/scorer/protocol，允许native准备阶段按本manifest绑定显式沿用旧业务证据，不需为该修改调参或重跑模型。不允许称3ee上重新完成了模型/score/performance测量，也不把旧verifier的a77资格直接冒充新native执行证明。
+
+R1所列生成产物及实际操作证明是后续stage条件：新包原installer仍须完整build、mandatory tests、HTTPsmoke；新buildstamp必须属8f，新测试产物与身份元数据应明确分类，不宣称已完成旧/新dist字节比较。实际隔离升级→rollback09→stop/jobabsent/portsfree后才可进入生产nondrift/环境保存路径。当前采用PASS只关闭source/identity绑定及单测试边界问题，不给这些未运行步骤预判PASS。
+
+仅写本报告及JSON，未执行任何tests/build/model/native动作。

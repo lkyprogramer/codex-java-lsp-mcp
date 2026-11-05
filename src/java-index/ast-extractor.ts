@@ -26,8 +26,6 @@ export type ExtractJavaInput = {
   sourceSet: JavaSourceSet;
   content: string;
   size: number;
-  mtimeMs: number;
-  ctimeMs?: number;
   contentHash: string;
   generation: number;
 };
@@ -38,6 +36,8 @@ export type ExtractedJavaFile = {
   fields: JavaFieldFacts[];
   methods: JavaMethodFacts[];
 };
+
+const METHOD_DECL_TYPES = new Set(["method_declaration", "constructor_declaration", "compact_constructor_declaration"]);
 
 const TYPE_DECL_TYPES = new Set([
   "class_declaration",
@@ -113,8 +113,6 @@ export function extractFromParsedTree(input: ExtractJavaInput, tree: JavaSyntaxT
     allTypeIds: context.allTypeIds,
     contentHash: input.contentHash,
     size: input.size,
-    mtimeMs: input.mtimeMs,
-    ...(input.ctimeMs === undefined ? {} : { ctimeMs: input.ctimeMs }),
     parseState,
     parseErrorCount: errorCount,
     generation: input.generation
@@ -153,7 +151,7 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
   const simpleName = nameNode ? textOf(nameNode, context.source) : "";
   const range = rangeOf(node);
   const parent = context.enclosing[context.enclosing.length - 1];
-  const fqn = isLocal
+  const fqn = isLocal || (parent !== undefined && parent.fqn === undefined)
     ? undefined
     : parent?.fqn
       ? `${parent.fqn}$${simpleName}`
@@ -176,6 +174,7 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
     fileId: javaFileId(context.input.relativePath),
     ...(parent ? { enclosingTypeId: parent.typeId } : {}),
     range,
+    ...(nameNode ? { nameRange: rangeOf(nameNode) } : {}),
     modifiers: extractModifiers(modifiersNode),
     annotations: extractAnnotations(modifiersNode, context.source),
     typeParameters: typeParametersNode
@@ -215,28 +214,45 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
     // Pass 2: methods/constructors (call sites can now resolve sibling
     // field receivers) and nested member types.
     for (const member of memberNodes) {
-      if (member.type === "method_declaration" || member.type === "constructor_declaration") {
-        const method = buildMethod(member, context, typeId);
+      if (METHOD_DECL_TYPES.has(member.type)) {
+        const method = buildMethod(member, context, typeId, node.childForFieldName("parameters"));
         context.methods.push(method);
         methodIds.push(method.methodId);
+        visitLocalTypeDeclarations(member, context);
       } else if (TYPE_DECL_TYPES.has(member.type)) {
         extractType(member, context, false);
       } else if (member.type === "enum_body_declarations") {
         for (const enumMember of member.namedChildren) {
-          if (enumMember.type === "method_declaration" || enumMember.type === "constructor_declaration") {
+          if (METHOD_DECL_TYPES.has(enumMember.type)) {
             const method = buildMethod(enumMember, context, typeId);
             context.methods.push(method);
             methodIds.push(method.methodId);
+            visitLocalTypeDeclarations(enumMember, context);
           } else if (TYPE_DECL_TYPES.has(enumMember.type)) {
             extractType(enumMember, context, false);
+          } else {
+            visitLocalTypeDeclarations(enumMember, context);
           }
         }
+      } else {
+        visitLocalTypeDeclarations(member, context);
       }
     }
   }
 
   context.enclosing.pop();
   return typeFacts;
+}
+
+// Stop at each declaration: extractType owns its nested members and methods.
+// Method and initializer blocks may contain real local declarations; these
+// retain position-based identities rather than inventing a package FQN.
+function visitLocalTypeDeclarations(node: JavaSyntaxNode, context: ExtractContext): void {
+  if (TYPE_DECL_TYPES.has(node.type)) {
+    extractType(node, context, true);
+    return;
+  }
+  for (const child of node.namedChildren) visitLocalTypeDeclarations(child, context);
 }
 
 function typeKindOf(nodeType: string): JavaTypeKind {
@@ -302,7 +318,7 @@ function buildFields(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId:
       const nameNode = decl.childForFieldName("name") ?? decl.namedChildren[0];
       const name = nameNode ? textOf(nameNode, context.source) : "";
       const dimsNode = decl.childForFieldName("dimensions");
-      const extraDepth = dimsNode ? countBrackets(textOf(dimsNode, context.source)) : 0;
+      const extraDepth = dimsNode ? countDimensions(dimsNode) : 0;
       const type: JavaTypeRef = extraDepth > 0
         ? { ...baseType, arrayDepth: baseType.arrayDepth + extraDepth }
         : baseType;
@@ -344,26 +360,33 @@ function buildRecordComponentFields(
     });
 }
 
-function buildMethod(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId: string): JavaMethodFacts {
-  const isConstructor = node.type === "constructor_declaration";
+function buildMethod(
+  node: JavaSyntaxNode,
+  context: ExtractContext,
+  ownerTypeId: string,
+  recordParameters?: JavaSyntaxNode | null
+): JavaMethodFacts {
+  const isCompactConstructor = node.type === "compact_constructor_declaration";
+  const isConstructor = node.type === "constructor_declaration" || isCompactConstructor;
   const modifiersNode = findChildOfType(node, "modifiers");
   const nameNode = node.childForFieldName("name");
   const name = nameNode ? textOf(nameNode, context.source) : "<init>";
   const typeParametersNode = node.childForFieldName("type_parameters");
   const typeNode = node.childForFieldName("type");
-  const parametersNode = node.childForFieldName("parameters");
+  // A compact constructor implicitly declares the canonical record parameters.
+  const parametersNode = isCompactConstructor ? recordParameters : node.childForFieldName("parameters");
   const throwsNode = findChildOfType(node, "throws");
   const bodyNode = node.childForFieldName("body");
 
-  const parameters = parametersNode
+  const parameterNodes = parametersNode
     ? parametersNode.namedChildren
         .filter(p => p.type === "formal_parameter" || p.type === "spread_parameter")
-        .map(p => buildParameter(p, context.source))
     : [];
+  const parameters = parameterNodes.map(p => buildParameter(p, context.source));
   const varargs = parameters.length > 0 && parameters[parameters.length - 1]!.varargs;
   const signatureKey = erasedSignatureKey({
     name: isConstructor ? "<init>" : name,
-    parameterTypeTexts: parameters.map(p => erasedTypeText(p.type)),
+    parameterTypeTexts: parameters.map((p, index) => erasedTypeText(p.type, parameterNodes[index]!, context.source)),
     varargs
   });
   const methodId = javaMethodId(ownerTypeId, signatureKey);
@@ -389,6 +412,7 @@ function buildMethod(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId:
     constructor: isConstructor,
     signatureKey,
     range: rangeOf(node),
+    ...(nameNode ? { nameRange: rangeOf(nameNode) } : {}),
     ...(bodyNode ? { bodyRange: rangeOf(bodyNode) } : {}),
     modifiers: extractModifiers(modifiersNode),
     annotations: extractAnnotations(modifiersNode, context.source),
@@ -409,8 +433,8 @@ function buildParameter(
 ): { name: string; type: JavaTypeRef; varargs: boolean; annotations: JavaAnnotationFact[]; range: SourceRange } {
   const modifiersNode = findChildOfType(node, "modifiers");
   const annotations = extractAnnotations(modifiersNode, source);
+  const typeNode = parameterTypeNode(node);
   if (node.type === "spread_parameter") {
-    const typeNode = node.namedChildren[0];
     const declaratorNode = findChildOfType(node, "variable_declarator");
     const nameNode = declaratorNode?.childForFieldName("name") ?? declaratorNode?.namedChildren[0];
     const name = nameNode ? textOf(nameNode, source) : "";
@@ -423,15 +447,27 @@ function buildParameter(
       range: rangeOf(node)
     };
   }
-  const typeNode = node.childForFieldName("type");
   const nameNode = node.childForFieldName("name");
   const name = nameNode ? textOf(nameNode, source) : "";
-  const type = typeNode ? buildTypeRef(typeNode, source) : unknownTypeRef(rangeOf(node));
+  const baseType = typeNode ? buildTypeRef(typeNode, source) : unknownTypeRef(rangeOf(node));
+  const dimensionsNode = node.childForFieldName("dimensions");
+  const extraDepth = dimensionsNode ? countDimensions(dimensionsNode) : 0;
+  const type = extraDepth > 0 ? { ...baseType, arrayDepth: baseType.arrayDepth + extraDepth } : baseType;
   return { name, type, varargs: false, annotations, range: rangeOf(node) };
 }
 
-function erasedTypeText(type: JavaTypeRef): string {
-  const base = type.text.split("<")[0]!.trim();
+function parameterTypeNode(node: JavaSyntaxNode): JavaSyntaxNode | undefined {
+  if (node.type !== "spread_parameter") return node.childForFieldName("type") ?? undefined;
+  // The spread type has no grammar field; it precedes the ellipsis and declarator.
+  return node.namedChildren.find(child =>
+    child.type !== "modifiers" && child.type !== "line_comment" && child.type !== "block_comment"
+  );
+}
+
+function erasedTypeText(type: JavaTypeRef, parameterNode: JavaSyntaxNode, source: string): string {
+  let elementNode = parameterTypeNode(parameterNode);
+  while (elementNode?.type === "array_type") elementNode = elementNode.childForFieldName("element") ?? undefined;
+  const base = (elementNode ? textOf(elementNode, source) : type.text).split("<")[0]!.trim();
   return `${base}${"[]".repeat(type.arrayDepth)}`;
 }
 
@@ -471,12 +507,12 @@ function buildTypeRef(node: JavaSyntaxNode, source: string): JavaTypeRef {
       return { ...base, text: textOf(node, source), typeArguments, range: rangeOf(node) };
     }
     case "array_type": {
-      const elementNode = node.namedChildren[0];
-      const dimensionsNode = node.namedChildren[1];
+      const elementNode = node.childForFieldName("element");
+      const dimensionsNode = node.childForFieldName("dimensions");
       const element = elementNode
         ? buildTypeRef(elementNode, source)
         : baseRef(textOf(node, source), textOf(node, source), [], 0, rangeOf(node));
-      const extraDepth = dimensionsNode ? countBrackets(textOf(dimensionsNode, source)) : 1;
+      const extraDepth = dimensionsNode ? countDimensions(dimensionsNode) : 1;
       return {
         ...element,
         text: textOf(node, source),
@@ -530,6 +566,9 @@ function collectCallSites(
   callSites: JavaCallSiteFact[],
   localTypes: JavaTypeRef[]
 ): void {
+  // A local type's methods own their calls; do not attribute them to the
+  // containing method while recursively walking its body.
+  if (TYPE_DECL_TYPES.has(node.type)) return;
   switch (node.type) {
     case "local_variable_declaration": {
       const typeNode = node.childForFieldName("type");
@@ -653,9 +692,13 @@ function argumentTypeHintOf(node: JavaSyntaxNode, scope: Scope, context: Extract
 }
 
 function countErrorNodes(node: JavaSyntaxNode): number {
-  let count = node.type === "ERROR" || node.isMissing ? 1 : 0;
-  for (const child of node.children) count += countErrorNodes(child);
-  return count;
+  const count = node.type === "ERROR" || node.isMissing ? 1 : 0;
+  // A node without hasError has no ERROR or MISSING descendant (a MISSING node
+  // itself reports false), so most files skip the walk below the root.
+  if (!node.hasError) return count;
+  let total = count;
+  for (const child of node.children) total += countErrorNodes(child);
+  return total;
 }
 
 function extractModifiers(modifiersNode: JavaSyntaxNode | undefined): string[] {
@@ -686,8 +729,8 @@ function findChildOfType(node: JavaSyntaxNode, type: string): JavaSyntaxNode | u
   return node.namedChildren.find(c => c.type === type);
 }
 
-function countBrackets(text: string): number {
-  return (text.match(/\[/g) ?? []).length;
+function countDimensions(node: JavaSyntaxNode): number {
+  return node.children.filter(child => child.type === "[").length;
 }
 
 function simpleNameOf(dotted: string): string {
@@ -705,14 +748,13 @@ const LEADING_COMMENT_MAX = 4;
 
 type CollectedComment = { text: string; startLine: number; endLine: number };
 
-function collectComments(node: JavaSyntaxNode, source: string, out: CollectedComment[]): void {
-  if (COMMENT_NODE_TYPES.has(node.type)) {
+function collectComments(root: JavaSyntaxNode, source: string, out: CollectedComment[]): void {
+  for (const node of root.descendantsOfType([...COMMENT_NODE_TYPES])) {
     const text = stripCommentMarkers(textOf(node, source));
     if (text.length > 0) {
       out.push({ text, startLine: node.startPosition.row + 1, endLine: node.endPosition.row + 1 });
     }
   }
-  for (const child of node.children) collectComments(child, source, out);
 }
 
 function attachLeadingComments(

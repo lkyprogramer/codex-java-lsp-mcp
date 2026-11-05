@@ -26,6 +26,7 @@ type BuildImpactResultInput = {
   readonly rgExecution: RgExecutionResult;
   readonly suppressed: Record<string, number>;
   readonly evidenceGaps: string[];
+  readonly compactPositionGaps: ReadonlyMap<string, string | null>;
   readonly freshness: ImpactFreshnessV6;
   readonly semanticCompletion: Completion;
   readonly semanticReadiness?: string;
@@ -45,7 +46,8 @@ type BuildImpactResultInput = {
 
 export function buildImpactResult(input: BuildImpactResultInput): ImpactResult | CompactImpact {
   const verbosity = input.options.verbosity || "standard";
-  const formattedFiles = input.ranked.map((file, index) => buildImpactFileV6(file, `F${index + 1}`, verbosity));
+  // Both public projections need provider reasons before stripping diagnostic fields.
+  const formattedFiles = input.ranked.map((file, index) => buildImpactFileV6(file, `F${index + 1}`, "diagnostic"));
   const framework = input.metrics.framework;
   const generatedCode = framework?.generatedCode as Record<string, unknown> | undefined;
   const generatedSemantics = generatedCode?.semantics as "OK" | "INCOMPLETE" | "NOT_DETECTED" | undefined;
@@ -63,7 +65,12 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult |
     files: formattedFiles,
     readPlan: input.readPlan,
     evidenceGaps: unique(input.evidenceGaps),
-    cost: { resultBytes: 0, readBytes: 0, estimatedTokens: 0, suppressedRawBytes: 0 },
+    cost: {
+      resultBytes: 0,
+      readBytes: readPlanBytes(input.readPlan),
+      estimatedTokens: 0,
+      suppressedRawBytes: input.rgExecution.rawBytes
+    },
     metrics: {
       routingVersion: 6,
       elapsedMs: Date.now() - input.startedAt,
@@ -82,13 +89,23 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult |
       suppressed: input.suppressed
     }
   };
-  const sourceFiles = payload.files;
-  applyVerbosity(payload, verbosity);
-  const v6 = withConvergedCostV6(payload, readPlanBytes(input.readPlan), input.rgExecution.rawBytes);
-  if (verbosity === "diagnostic") return v6;
-  // Compact proof needs provider kinds; applyVerbosity already stripped them
-  // from the V6 wire clone. Reattach the pre-strip files only for serialization.
-  return toCompactImpact({ ...v6, files: sourceFiles });
+  if (verbosity === "diagnostic") {
+    return withConvergedCostV6(payload, payload.cost.readBytes, payload.cost.suppressedRawBytes);
+  }
+  if (verbosity === "compact") {
+    let ordinaryCount = 0;
+    const gaps: string[] = [];
+    for (const gap of payload.evidenceGaps) {
+      const compact = input.compactPositionGaps.get(gap);
+      if (compact === null) ordinaryCount += 1;
+      else gaps.push(compact ?? shortEvidenceGap(gap));
+    }
+    if (ordinaryCount > 0) gaps.push(`Unselected candidates with uncovered positions: ${ordinaryCount}. See diagnostic for paths and lines.`);
+    payload.evidenceGaps = gaps;
+  } else {
+    payload.evidenceGaps = publicEvidenceGaps(payload.evidenceGaps, 3);
+  }
+  return toCompactImpact(payload, verbosity);
 }
 
 function readPlanBytes(readPlan: ReadPlanItem[]): number {
@@ -114,16 +131,18 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     ...item,
     ranges: item.ranges.map(({ reason: _reason, ...publicRange }) => publicRange)
   }));
-  const preservedGaps = payload.evidenceGaps.filter(isLombokCompletenessGap);
-  const ordinaryGaps = payload.evidenceGaps.filter(gap => !isLombokCompletenessGap(gap));
-  payload.evidenceGaps = [...preservedGaps, ...ordinaryGaps]
-    .map(shortEvidenceGap)
-    .slice(0, verbosity === "compact" ? 2 : 3);
+  payload.evidenceGaps = publicEvidenceGaps(payload.evidenceGaps, verbosity === "compact" ? 2 : 3);
   payload.metrics = {
     routingVersion: metrics.routingVersion,
     elapsedMs: metrics.elapsedMs,
     ...(metrics.generatedSemantics === undefined ? {} : { generatedSemantics: metrics.generatedSemantics })
   };
+}
+
+function publicEvidenceGaps(gaps: string[], limit: number): string[] {
+  const preserved = gaps.filter(isLombokCompletenessGap);
+  const ordinary = gaps.filter(gap => !isLombokCompletenessGap(gap));
+  return [...preserved, ...ordinary].slice(0, limit).map(shortEvidenceGap);
 }
 
 /**
@@ -146,6 +165,9 @@ function shortEvidenceGap(gap: string): string {
   }
   if (gap === "Use rg/runtime evidence for Spring wiring, SQL/XML/YAML, logs, Nacos, and DB state.") {
     return "Check rg/runtime evidence for wiring and DB/config.";
+  }
+  if (gap === "LSP semantic enrichment is not available (JDT_NOT_READY; java_status reports semantic admission); results are JavaIndex plus rg evidence only.") {
+    return "Semantic unavailable (JDT_NOT_READY); JavaIndex plus rg only.";
   }
   if (gap === "LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.") {
     return "Semantic skipped; raise semanticPolicy for exact binding.";

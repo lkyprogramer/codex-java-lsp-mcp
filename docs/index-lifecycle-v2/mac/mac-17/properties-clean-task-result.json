@@ -1,0 +1,93 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-PROPERTIES-CLEAN",
+  "status": "FAIL",
+  "dependency": null,
+  "identity": {
+    "sourceDigest": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "e5dde1f3d39af618421c8d9a448b074961c46b2d659af3244e4ccf9fcee5038f",
+    "distInventorySha256": "976b4e86d21fdb5734b34dbef5e476861fc9f3c442c79c07fee27d129205160a",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "final-once",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/final-once/result.json",
+      "sourceDigest": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 268729,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T132500Z-properties-clean-once/final-cold.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "original-case-facts",
+      "file": "actual-analysis.json",
+      "sha256": "870fa6216c0211386d0ac7b3744451cc17a3465b982d80202b496005842cb2d1",
+      "status": "FAIL",
+      "provenance": "Original outcome, TAP/index, same-PID trace and cache census; no acceptance replay"
+    },
+    {
+      "name": "complete-known-resource-readback",
+      "file": "root-resource-observation.json",
+      "sha256": "cabcb79e39f5f7854edd13cd533394030d7160700237026d5fee5fad7eeccf51",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "70a993dc7742b6832ff2fe50a6f5c85441aedfb394c691873f21c8196ae81739",
+    "registeredPids": 14,
+    "ownedGroups": 5,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T132500Z-properties-clean-once/closeout/raw-evidence.tar.gz",
+      "sha256": "c78fd26dcd6ff62e66f18b193e00538d3da90b74effaf97486361f9ee0d9c982",
+      "fileCount": 24,
+      "bytes": 1990436,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "920f6eb167625f689c574329570a2e2248af779071206e78d5a10796acd5a568",
+      "source": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "435d82eb284b4d45145efb44a7399758d88fcf908f91b57cd18e216903e015d3",
+  "notClaimed": [
+    "Clean cold semantic PASS",
+    "Formal G17 PASS",
+    "READY_FOR_DEPLOY",
+    "Production TCC/business read",
+    "Deployment",
+    "AI benefit",
+    "Unique cause of contextual Gradle download delay"
+  ],
+  "next": "Await user decision: dependency restoration as an installation phase with JDT startup remaining120s, or retain original empty-cache total120s and stop. No new cold case, retries, fullsuite or production action under unchanged boundary.",
+  "authorization": "Latest user authorized thorough local Gradle diagnosis/fix; original120s/15s, precise definitions/references, original deadline2026-11-03T18:00+08. No push or production.",
+  "notes": "Every original FAIL retained. R1310 was protocol-interfered by diagnostic SIGQUIT and is not a clean product cold-start verdict. Standalone HTTP client timings do not establish cause of slower real-build downloads.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T132500Z-properties-clean-once"
+}

@@ -1,0 +1,614 @@
+{
+  "schemaVersion": "java-specialist-audit/v1",
+  "basis": "actual-source-exports; TypeScript transpilation NOT typecheck; unused SDK transport stubbed; fake chat/fetch only; no network",
+  "selectedCaseIds": [],
+  "rows": [
+    {
+      "id": "W01",
+      "title": "read source survives final model-message boundary",
+      "status": "FAIL",
+      "observed": {
+        "received": [
+          {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "{\"files\":[],\"readPlan\":[],\"evidenceGaps\":[]}"
+          }
+        ],
+        "events": [
+          {
+            "type": "SOURCE_RECEIVED",
+            "callId": "c1",
+            "path": "A.java",
+            "contentHash": "4c3591ba37fe9cb43206d0be976484b3b4526aa7117085a97ff1085475df6c0f",
+            "startLine": 1,
+            "endLine": 2,
+            "text": "int auditSentinel=73619;\n",
+            "origin": "explicit_read"
+          }
+        ],
+        "stopReason": "MODEL_STOP"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(JSON.stringify(r.received).includes('auditSentinel=73619'))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:53:9\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:51:1"
+    },
+    {
+      "id": "W02",
+      "title": "java_symbol candidates survive final model-message boundary",
+      "status": "FAIL",
+      "observed": {
+        "received": [
+          {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "{\"files\":[],\"readPlan\":[],\"evidenceGaps\":[]}"
+          }
+        ],
+        "events": [],
+        "stopReason": "MODEL_STOP"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(JSON.stringify(r.received).includes('auditSentinelMethod'))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:57:9\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:55:1"
+    },
+    {
+      "id": "W03",
+      "title": "write acknowledgement survives final model-message boundary",
+      "status": "FAIL",
+      "observed": {
+        "received": [
+          {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "{\"files\":[],\"readPlan\":[],\"evidenceGaps\":[]}"
+          }
+        ],
+        "events": [],
+        "stopReason": "MODEL_STOP"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(JSON.stringify(r.received).includes('written'))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:60:89\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:59:1"
+    },
+    {
+      "id": "W04",
+      "title": "SOURCE_RECEIVED cannot precede a lossy projection",
+      "status": "FAIL",
+      "observed": {
+        "received": [
+          {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": "{\"files\":[],\"readPlan\":[],\"evidenceGaps\":[]}"
+          }
+        ],
+        "events": [
+          {
+            "type": "SOURCE_RECEIVED",
+            "callId": "c1",
+            "path": "A.java",
+            "contentHash": "93ceabe9537de39f437c33a5d51f2082b0cee9540fe8932db823a3aeb8026bca",
+            "startLine": 1,
+            "endLine": 2,
+            "text": "auditPayload();\n",
+            "origin": "explicit_read"
+          }
+        ],
+        "stopReason": "MODEL_STOP"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(r.events.length===0 || JSON.stringify(r.received).includes('auditPayload'))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:64:9\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:62:1"
+    },
+    {
+      "id": "W05",
+      "title": "evaluation prompt does not restrict to an unavailable tool",
+      "status": "FAIL",
+      "observed": {
+        "systemPrompt": "Explore this task's impact surface with the java_impact tool only. If the result points to uncovered directions (unresolved / next / evidenceGaps), call again until you can fully describe the impact surface, or until the 8-round limit. Never ask for whole files. Never invent file paths.\n\nYou may use the java_symbol and read tools in any order, or none at all. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {\"patchApplied\": true|false, \"summary\": \"...\"}."
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(!EVAL_SYSTEM_PROMPT.includes('with the java_impact tool only'))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:67:52\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:66:7"
+    },
+    {
+      "id": "E01",
+      "title": "strict QA types do not coerce string to boolean",
+      "status": "FAIL",
+      "observed": {
+        "status": "CORRECT",
+        "correct": true
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\ntrue !== false\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:70:67\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:69:7"
+    },
+    {
+      "id": "E02",
+      "title": "strict QA rejects extra keys",
+      "status": "FAIL",
+      "observed": {
+        "status": "CORRECT",
+        "correct": true
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\ntrue !== false\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:73:75\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:72:7"
+    },
+    {
+      "id": "E03",
+      "title": "strict QA rejects duplicate keys",
+      "status": "FAIL",
+      "observed": {
+        "status": "CORRECT",
+        "correct": true
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\ntrue !== false\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:76:76\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:75:7"
+    },
+    {
+      "id": "E04",
+      "title": "contract QA cannot succeed with no received required source",
+      "status": "FAIL",
+      "observed": {
+        "taskOutcome": "MEASURED",
+        "taskSuccess": true,
+        "answerStatus": "CORRECT"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected \"actual\" to be strictly unequal to: true\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:80:9\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:78:7"
+    },
+    {
+      "id": "E05",
+      "title": "failed scheduled runs remain in success-rate denominator",
+      "status": "FAIL",
+      "observed": {
+        "schemaVersion": "java-devkit-task-eval/v1",
+        "status": "MEASURED",
+        "backend": null,
+        "datasetHash": null,
+        "arms": [
+          "product"
+        ],
+        "repeats": 1,
+        "denominator": 2,
+        "packs": [
+          {
+            "taskId": "a",
+            "arm": "product",
+            "repeat": 1,
+            "taskOutcome": "UNMEASURED",
+            "taskSuccess": true,
+            "answerStatus": null,
+            "toolCallCount": 0,
+            "sourceReceived": [],
+            "usage": null,
+            "timedOut": false,
+            "error": null
+          },
+          {
+            "taskId": "b",
+            "arm": "product",
+            "repeat": 1,
+            "taskOutcome": "UNMEASURED",
+            "taskSuccess": null,
+            "answerStatus": null,
+            "toolCallCount": 0,
+            "sourceReceived": [],
+            "usage": null,
+            "timedOut": false,
+            "stopReason": "FAILED_RUNTIME",
+            "error": null
+          }
+        ],
+        "taskSuccessRate": 1
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0.5\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:84:39\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:82:7"
+    },
+    {
+      "id": "E06",
+      "title": "wrong QA answer is rejected (positive guard)",
+      "status": "PASS",
+      "observed": {
+        "status": "WRONG_ANSWER",
+        "correct": false,
+        "wrong": [
+          "n"
+        ]
+      }
+    },
+    {
+      "id": "D01",
+      "title": "two declarations in one file retain vectors after cache reload",
+      "status": "FAIL",
+      "observed": {
+        "cold": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "reloaded": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "cache": {
+          "audit-model::A.java::61b530bf227f4492e4c8d9a2a104e5e7c000a275916f790c0088a2ee9b1b9a34": [
+            0,
+            1
+          ]
+        }
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n+     0,\n      1,\n-     0\n    ],\n    [\n      0,\n      1\n    ]\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:98:96\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:95:1"
+    },
+    {
+      "id": "D02",
+      "title": "provider identity includes endpoint",
+      "status": "FAIL",
+      "observed": {
+        "a": "openrouter:audit-model:dim?:corpus",
+        "b": "openrouter:audit-model:dim?:corpus"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected \"actual\" to be strictly unequal to:\n\n'openrouter:audit-model:dim?:corpus'\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:103:72\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:100:7"
+    },
+    {
+      "id": "D03",
+      "title": "stale dense hints do not carry actionable stale line ranges",
+      "status": "FAIL",
+      "observed": [
+        {
+          "provider": "openrouter",
+          "providerIndexIdentity": "openrouter:audit-model:dim2:corpus",
+          "relativePath": "A.java",
+          "startLine": 1,
+          "endLine": 1,
+          "rank": 1,
+          "authority": "DISCOVERY_HINT"
+        }
+      ],
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(hits.every(h=>h.indexedContentHash || (h.startLine==null && h.endLine==null)))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:107:45\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:105:1"
+    },
+    {
+      "id": "D04",
+      "title": "body-read time is covered by embedding deadline",
+      "status": "FAIL",
+      "observed": {
+        "succeeded": true,
+        "aborted": false
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\ntrue !== false\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:113:38\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:109:1"
+    },
+    {
+      "id": "Q01",
+      "title": "scope is applied before route result cap",
+      "status": "FAIL",
+      "observed": {
+        "hits": [],
+        "truncated": false,
+        "work": {
+          "postings": 0
+        },
+        "generation": 0
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n0 !== 1\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:119:123\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:117:7"
+    },
+    {
+      "id": "Q02",
+      "title": "unknown exact FQN does not fall back to fuzzy BM25",
+      "status": "FAIL",
+      "observed": {
+        "hits": [
+          {
+            "entityId": "a",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "A.java",
+            "layer": "BM25_IDENTIFIER",
+            "score": 0.5753641449035617
+          }
+        ],
+        "truncated": false,
+        "work": {
+          "postings": 0
+        },
+        "generation": 0
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:122:141\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:121:7"
+    },
+    {
+      "id": "Q03",
+      "title": "expired exact request reports deadline rather than success",
+      "status": "FAIL",
+      "observed": {
+        "hits": [
+          {
+            "entityId": "a",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "A.java",
+            "layer": "FQN",
+            "score": 1
+          }
+        ],
+        "truncated": false,
+        "work": {
+          "postings": 0
+        },
+        "generation": 0
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ undefined\n- 'deadline'\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:125:168\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:124:7"
+    },
+    {
+      "id": "Q04",
+      "title": "20 requested candidates are not silently capped at 10 as complete",
+      "status": "FAIL",
+      "observed": {
+        "hits": [
+          {
+            "entityId": "e00",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "0/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e01",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "1/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e02",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "2/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e03",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "3/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e04",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "4/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e05",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "5/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e06",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "6/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e07",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "7/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e08",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "8/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          },
+          {
+            "entityId": "e09",
+            "kind": "type",
+            "fqn": "demo.OrderService",
+            "simpleName": "OrderService",
+            "relativePath": "9/A.java",
+            "layer": "CHUNK",
+            "score": 0.02298951822469878
+          }
+        ],
+        "truncated": false,
+        "work": {
+          "postings": 0
+        },
+        "generation": 0
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(r.hits.length===20 || r.truncated)\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:129:89\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:127:7"
+    },
+    {
+      "id": "Q05",
+      "title": "explicit expansion terms supplement rather than replace query",
+      "status": "FAIL",
+      "observed": {
+        "task": "refund",
+        "options": {
+          "limit": 8,
+          "mode": "auto"
+        }
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(r.task.includes('OrderService') && r.task.includes('refund'))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:133:65\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:132:1"
+    },
+    {
+      "id": "Q06",
+      "title": "module and sourceSet combine as AND, not union",
+      "status": "FAIL",
+      "observed": {
+        "request": {
+          "task": "OrderService rollback",
+          "options": {
+            "limit": 8,
+            "mode": "auto",
+            "scope": {
+              "sourceRoots": [
+                "src/test",
+                "m"
+              ]
+            }
+          }
+        },
+        "matches": [
+          {
+            "relativePath": "m/src/main/java/A.java"
+          },
+          {
+            "relativePath": "m/src/test/java/A.java"
+          },
+          {
+            "relativePath": "src/test/java/X.java"
+          }
+        ]
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'm/src/main/java/A.java',\n    'm/src/test/java/A.java',\n+   'src/test/java/X.java'\n  ]\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:138:38\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:135:1"
+    },
+    {
+      "id": "Q07",
+      "title": "unknown module is not silently widened to whole repository",
+      "status": "FAIL",
+      "observed": {
+        "task": "OrderService rollback",
+        "options": {
+          "limit": 8,
+          "mode": "auto"
+        }
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(r.options.scope?.sourceRoots?.length)\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:142:20\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:140:1"
+    },
+    {
+      "id": "Q08",
+      "title": "file changed after index cannot remain READY with stale locator",
+      "status": "FAIL",
+      "observed": {
+        "schemaVersion": "java-discovery/v1",
+        "repoHash": "",
+        "generation": 1,
+        "candidates": [
+          {
+            "declaration": {
+              "id": "type:v2:A.java#demo.A",
+              "name": "A",
+              "relativePath": "A.java",
+              "contentHash": "cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4",
+              "module": "",
+              "sourceRoot": "",
+              "kind": "type",
+              "fqn": "demo.A",
+              "signature": "demo.A",
+              "selection": {
+                "line": 1,
+                "column": 7
+              }
+            },
+            "matchedBy": [
+              "exact"
+            ],
+            "binding": "source-declaration"
+          }
+        ],
+        "scopeState": "READY",
+        "truncated": false,
+        "droppedUnlocatable": 0
+      },
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(r.scopeState==='PARTIAL' || r.candidates.length===0 || r.candidates[0].declaration.contentHash===hash(source))\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:148:9\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:145:1"
+    },
+    {
+      "id": "Q09",
+      "title": "preview has a byte cap, not just a line cap",
+      "status": "FAIL",
+      "observed": {
+        "bytes": 100025,
+        "scopeState": "READY"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: safety sentinel: one preview must not exceed 16 KiB; production default may be stricter\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:154:110\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:150:1"
+    },
+    {
+      "id": "N01",
+      "title": "duplicate FQN with unknown compilation context stays ambiguous",
+      "status": "FAIL",
+      "observed": {
+        "text": "demo.Shared",
+        "simpleName": "Shared",
+        "qualifiedName": "demo.Shared",
+        "typeArguments": [],
+        "arrayDepth": 0,
+        "resolution": {
+          "state": "RESOLVED_REPO",
+          "typeId": "type:v2:a/Shared.java#demo.Shared",
+          "strategy": "QUALIFIED"
+        }
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'RESOLVED_REPO'\n- 'AMBIGUOUS'\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:160:9\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:156:7"
+    },
+    {
+      "id": "P01",
+      "title": "MyBatis evidence uses XML path/hash rather than Java path with XML lines",
+      "status": "FAIL",
+      "observed": [
+        {
+          "path": "src/main/java/demo/Mapper.java",
+          "contentHash": "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj",
+          "representationVersion": 1,
+          "declarationId": "method",
+          "sourceKind": "framework-key",
+          "startLine": 300,
+          "endLine": 310,
+          "normalizedText": "mybatis select demo.Mapper.load",
+          "documentId": "method|framework-key|300|310|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj|1"
+        }
+      ],
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'src/main/java/demo/Mapper.java'\n- 'src/main/resources/Mapper.xml'\n            ^\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:169:9\n    at check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:13)\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:162:7"
+    },
+    {
+      "id": "J01",
+      "title": "repair judge must not restore an allowed file deleted by the candidate",
+      "status": "FAIL",
+      "observed": {
+        "task": "audit-delete",
+        "schema": "frozen-repair-judge/v1",
+        "testClass": "FrozenTest",
+        "javaRelease": 8,
+        "timeoutSeconds": 3,
+        "diffReport": {
+          "changed": [],
+          "removed": [
+            "src/A.java"
+          ]
+        },
+        "exitCode": 0,
+        "passed": true,
+        "status": "PASS"
+      },
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\ntrue !== false\n\n    at file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:179:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async check (file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:33:7)\n    at async file:///mnt/data/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs:172:1"
+    }
+  ],
+  "summary": {
+    "total": 27,
+    "passed": 1,
+    "failed": 26,
+    "errors": 0
+  }
+}

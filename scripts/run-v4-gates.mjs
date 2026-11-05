@@ -7,6 +7,7 @@ import { spawn } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyRuntime } from "./ilv2-mac-contracts.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -47,8 +48,6 @@ export const GATE_PROFILES = {
           "scripts/run-isolated-validation.mjs",
           "--profile",
           "targeted",
-          "--env",
-          "JAVA_LSP_HTTP_PORT=38491",
           "--",
           "node",
           "scripts/run-v4-http-smoke.mjs"
@@ -86,6 +85,7 @@ async function runStep(args) {
 }
 
 async function main() {
+  await verifyRuntime();
   const cli = parseCli(process.argv.slice(2));
   const selected = GATE_PROFILES[cli.profile];
   const chunks = [];

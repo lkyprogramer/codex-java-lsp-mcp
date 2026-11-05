@@ -1,16 +1,11 @@
 // input: JavaIndex types/fields/methods plus already-resolved ANNOTATED_WITH / call facts.
 // output: Spring inject/bean/event knowledge-graph edges. Annotation set matches the existing Spring adapter.
 // pos: N2a-02. Does not invent extra annotations. Multi-implementer injection binds the declared type only.
-import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from "../java-index/index-types.js";
+import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeRef } from "../java-index/index-types.js";
 import type { FactsReader } from "../java-index/facts-reader.js";
-import type { KnowledgeGraphStore } from "./graph-reader.js";
-import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeTypeId } from "./entity-id.js";
+import type { GraphSink } from "./graph-fragment.js";
+import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeIdForType } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
-
-function knowledgeIdForType(type: JavaTypeFacts): string {
-  const path = type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId;
-  return knowledgeTypeId(path, type.fqn || type.simpleName);
-}
 
 const AUTOWIRED = "org.springframework.beans.factory.annotation.Autowired";
 const EVENT_LISTENER = "org.springframework.context.event.EventListener";
@@ -45,7 +40,7 @@ function typeRefId(ref: JavaTypeRef | undefined, store: FactsReader): string | u
 }
 
 function push(
-  graph: KnowledgeGraphStore,
+  graph: GraphSink,
   kind: EdgeKind,
   fromId: string,
   toId: string,
@@ -71,7 +66,7 @@ function injectingConstructor(methods: readonly JavaMethodFacts[]): JavaMethodFa
 }
 
 export function addFrameworkEdges(
-  graph: KnowledgeGraphStore,
+  graph: GraphSink,
   bundle: JavaFileBundle,
   store: FactsReader,
   generation: number,

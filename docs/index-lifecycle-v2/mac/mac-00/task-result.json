@@ -1,0 +1,399 @@
+{
+  "schema": "ilv2-task-result/v1",
+  "taskId": "MAC-00",
+  "status": "PASS",
+  "gateVerdict": {
+    "closeoutSha256": "99aaa38b669028e786a83b2ed43c5472c6c20bea79a02023952df340bad28fb5",
+    "id": "G00",
+    "scope": "old implementation limited diagnostic spike",
+    "status": "PASS"
+  },
+  "identity": {
+    "dependenciesSha256": "d2ca0b69b38f7eebfeb2fbbe81bcaf7b7ce766bf24a49c315ec97b70fcb96d0d",
+    "nativeManifestSha256": "3f2982d337f506122020889794e1a45fb7c2f1dd7f0e0a764e0eed5b5d9e5e62",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "sourceHead": "9b3a110437bbd9c5dd6db578e6f8824dbc763aa4",
+    "sourceManifestSha256": "0a53d8047b85364a6035d4159e9b70a111f8d7dbf7d3527129f4a63ac981f2ff"
+  },
+  "runtime": {
+    "execPath": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+    "nodeSha256": "a45751fbfe88440bebff63cd44814e4ed6deb642bc3e3c4a14c4f8ae0ed9e019",
+    "versions": {
+      "acorn": "8.14.1",
+      "ada": "2.9.2",
+      "amaro": "0.4.1",
+      "ares": "1.34.5",
+      "brotli": "1.1.0",
+      "cjs_module_lexer": "2.1.0",
+      "cldr": "47.0",
+      "icu": "77.1",
+      "llhttp": "9.2.1",
+      "modules": "127",
+      "napi": "10",
+      "nbytes": "0.1.1",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.64.0",
+      "node": "22.16.0",
+      "openssl": "3.0.16",
+      "simdjson": "3.12.2",
+      "simdutf": "6.4.2",
+      "sqlite": "3.49.1",
+      "tz": "2025b",
+      "undici": "6.21.2",
+      "unicode": "16.0",
+      "uv": "1.49.2",
+      "uvwasi": "0.0.21",
+      "v8": "12.4.254.21-node.26",
+      "zlib": "1.3.0.1-motley-780819f",
+      "zstd": "1.5.7"
+    },
+    "arch": "arm64"
+  },
+  "inputs": [
+    {
+      "name": "lishuedu",
+      "commit": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "manifestSha256": "a035cc38614046d737398b9545f1b3f1e07b6f9ef3ea30ac08137610399b4917"
+    },
+    {
+      "name": "cipherlink",
+      "commit": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "manifestSha256": "5450e05865b13aab667e80dc2ee28978ced1b66d295f7283bbea781db818822f"
+    },
+    {
+      "name": "exam-parent-v3",
+      "commit": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "manifestSha256": "1bcafa392bf294cc4a88e8649be3312bf9bca6dda4836c1c850a8064a2e000e9"
+    },
+    {
+      "name": "lishu-v2",
+      "commit": "fd9c117b4cfad46247757d4c373b9465534fe33f",
+      "manifestSha256": "34d0807d7d45d72f2ce11a26d23166d114af2640a1a767a383e114a88ab8cb45"
+    }
+  ],
+  "checks": [
+    {
+      "name": "runtime/input/isolated-compile/native-clone",
+      "status": "PASS"
+    },
+    {
+      "name": "cold/phase-CPU/nine-cost-branches",
+      "status": "PASS"
+    },
+    {
+      "name": "recorded-process-groups-gone",
+      "status": "PASS"
+    },
+    {
+      "name": "C-combined-CPU",
+      "reason": "raw stat CPU overwritten; C reconcile CPU and combined process wall retained",
+      "status": "NOT_RUN"
+    },
+    {
+      "name": "physical-COW-proportion",
+      "status": "INVALID_EXPERIMENT"
+    },
+    {
+      "name": "relative-B_full-median",
+      "status": "NOT_RUN"
+    },
+    {
+      "name": "production-running-process-runtime",
+      "status": "NOT_RUN"
+    },
+    {
+      "name": "G00-independent-review",
+      "proofScope": "old implementation limited diagnostic spike",
+      "reviewer": "/root/mac00_gate_review",
+      "status": "PASS"
+    },
+    {
+      "name": "archive/cleanup-closeout",
+      "status": "PASS"
+    }
+  ],
+  "baseline": {
+    "trackedCensus": {
+      "java": 6160,
+      "xml": 89
+    },
+    "indexerCensus": {
+      "java": 5887,
+      "xml": 4
+    },
+    "firstColdProcessSeconds": 428.9507558339974,
+    "cpuColdProbeSeconds": 445.549784375,
+    "firstColdPhaseWall": [
+      {
+        "phase": "init",
+        "wallMs": 888.7272499999999
+      },
+      {
+        "phase": "discover",
+        "wallMs": 291.22895800000003
+      },
+      {
+        "phase": "parse",
+        "wallMs": 75851.132125
+      },
+      {
+        "phase": "resources",
+        "wallMs": 33.32179200000246
+      },
+      {
+        "phase": "resolve",
+        "wallMs": 95385.485625
+      },
+      {
+        "phase": "graph-search",
+        "wallMs": 247609.75575
+      },
+      {
+        "phase": "coverage",
+        "wallMs": 7931.490166000032
+      }
+    ],
+    "cpuColdPhases": [
+      {
+        "cpu": {
+          "system": 28765,
+          "user": 77119
+        },
+        "phase": "init",
+        "wallMs": 81.701708
+      },
+      {
+        "cpu": {
+          "system": 100502,
+          "user": 144370
+        },
+        "phase": "discover",
+        "wallMs": 200.19833400000002
+      },
+      {
+        "cpu": {
+          "system": 3348633,
+          "user": 69287061
+        },
+        "phase": "parse",
+        "wallMs": 69561.35358400001
+      },
+      {
+        "cpu": {
+          "system": 4908,
+          "user": 3868
+        },
+        "phase": "resources",
+        "wallMs": 8.876958000008017
+      },
+      {
+        "cpu": {
+          "system": 3371933,
+          "user": 84289975
+        },
+        "phase": "resolve",
+        "wallMs": 88500.54895899999
+      },
+      {
+        "cpu": {
+          "system": 36323373,
+          "user": 199511878
+        },
+        "phase": "graph-search",
+        "wallMs": 277676.67075000005
+      },
+      {
+        "cpu": {
+          "system": 1442384,
+          "user": 5484410
+        },
+        "phase": "coverage",
+        "wallMs": 9416.78787499998
+      },
+      {
+        "cpu": {
+          "system": 1427,
+          "user": 772
+        },
+        "phase": "checkpoint",
+        "wallMs": 2.7901249999995343
+      }
+    ],
+    "B_full": null
+  },
+  "costCases": [
+    {
+      "affectedCount": 0,
+      "bytes": 779632640,
+      "changedCount": 0,
+      "differentLogicalPages": 4,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 0,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "variant": "B",
+      "wallMs": 7194.475667
+    },
+    {
+      "affectedCount": 109,
+      "bytes": 795254784,
+      "changedCount": 20,
+      "differentLogicalPages": 21435,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 20,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "variant": "B",
+      "wallMs": 27435.100083
+    },
+    {
+      "affectedCount": 856,
+      "bytes": 798572544,
+      "changedCount": 200,
+      "differentLogicalPages": 59476,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 200,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "variant": "B",
+      "wallMs": 131220.34591600002
+    },
+    {
+      "affectedCount": 0,
+      "bytes": 779632640,
+      "changedCount": 0,
+      "differentLogicalPages": 1800,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 0,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "statValuesChanged": 5887,
+      "variant": "A",
+      "wallMs": 7568.51925
+    },
+    {
+      "affectedCount": 0,
+      "bytes": 779632640,
+      "changedCount": 0,
+      "combinedCpu": {
+        "reason": "exact stat CPU unavailable",
+        "status": "NOT_RUN"
+      },
+      "combinedProcessWallSeconds": 16.270569584041368,
+      "differentLogicalPages": 1803,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 0,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "reconcileProbeWallMs": 7180.970625,
+      "statValuesChanged": null,
+      "variant": "C"
+    },
+    {
+      "affectedCount": 0,
+      "bytes": 779632640,
+      "changedCount": 20,
+      "differentLogicalPages": 1800,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 0,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "statValuesChanged": 5887,
+      "variant": "A",
+      "wallMs": 7904.64
+    },
+    {
+      "affectedCount": 109,
+      "bytes": 795254784,
+      "changedCount": 20,
+      "combinedCpu": {
+        "reason": "exact stat CPU unavailable",
+        "status": "NOT_RUN"
+      },
+      "combinedProcessWallSeconds": 36.91233924997505,
+      "differentLogicalPages": 23225,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 20,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "reconcileProbeWallMs": 27605.014375,
+      "statValuesChanged": null,
+      "variant": "C"
+    },
+    {
+      "affectedCount": 0,
+      "bytes": 779632640,
+      "changedCount": 200,
+      "differentLogicalPages": 1800,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 0,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "statValuesChanged": 5887,
+      "variant": "A",
+      "wallMs": 7509.905916000001
+    },
+    {
+      "affectedCount": 856,
+      "bytes": 798572544,
+      "changedCount": 200,
+      "combinedCpu": {
+        "reason": "exact stat CPU unavailable",
+        "status": "NOT_RUN"
+      },
+      "combinedProcessWallSeconds": 144.73361725005088,
+      "differentLogicalPages": 61208,
+      "extraParsedCount": 0,
+      "forcedNonRecovering": false,
+      "parsedCount": 200,
+      "physicalVerdict": "INVALID_EXPERIMENT: one repetition on shared live volume; no noise-corrected COW allocation claim",
+      "reconcileProbeWallMs": 135706.279875,
+      "statValuesChanged": null,
+      "variant": "C"
+    }
+  ],
+  "privateEvidence": {
+    "taskResult": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/runs/mac-00/20261013T144536Z/task-result.json",
+    "taskResultSha256": "39db88f6dc9074bf3328b60d725243041ecc29d5dbbfd44b448f20568258e737",
+    "exactCommands": "commands.json / commands-target.json / cpu-full-command.json in archive",
+    "archive": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-00/20261013T144536Z/raw-evidence.tar.gz",
+    "archiveSha256": "763196a1ff2e506957c77f0e1ae7467dada5c3fdd4cf25223148271bee80fc68",
+    "archiveManifest": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-00/20261013T144536Z/raw-files.json",
+    "verifiedFiles": 129,
+    "verifiedBytes": 28885873
+  },
+  "testData": {
+    "carryOver": [
+      {
+        "class": "INPUT",
+        "consumer": "MAC-01..MAC-19",
+        "expiresAtGate": "PROGRAM_END",
+        "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/plans/mac-00/20261013T144536Z"
+      },
+      {
+        "class": "INPUT",
+        "consumer": "MAC-01..MAC-16",
+        "expiresAtGate": "LAST_INPUT_CONSUMER",
+        "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/inputs/frozen-java-repos"
+      },
+      {
+        "class": "LOCAL",
+        "consumer": "retained audit archive",
+        "expiresAtGate": "N/A",
+        "path": "/Users/luo/Documents/evidence-archive/codex-java-lsp-mcp/ilv2-mac/archives/mac-00/20261013T144536Z"
+      }
+    ],
+    "expiredResidualBytes": 0,
+    "unregisteredPaths": []
+  },
+  "notValidated": [
+    "new architecture or full/delta equivalence",
+    "controlled physical COW ratio",
+    "C combined CPU",
+    "three homogeneous full median",
+    "production running process identity",
+    "K/three-repository formal matrix/JDT/model/deployment"
+  ],
+  "next": "MAC-01",
+  "deploymentPerformed": false
+}

@@ -1,0 +1,19 @@
+# Evidence copier E01 窄复审 r2
+
+结论：**PASS，E01已关闭，无新具体finding。** 仅复核原绑定缺口的修复与作者新offline proof；原`package-evidence-review.md`的REPAIR_REQUIRED结论保持原样，不覆盖历史。
+
+修复冻结copier SHA256：`1b39dd0d27d254e0f79ae3614b6bbd3cf38d149ff6f30f979d1cd111effed9e1`，实际字节hash一致。累计proof `package-evidence.binding-cumulative.tap` SHA256：`a3288f593398aa005ecb22dc178efa3f47bca7c34084dc6fec671adc6dd6add0`，实际一致。
+
+已只读核对的关闭链：
+
+- requireCompletedReviews保存三phase preregistration并调用verifyFrozenBindings。实际launch-final、launch-model和OLD_HELPER的SHA逐项与每phase launcherSha256/originalLauncherSha256/oldHelperSha256一致；当前candidate协议文件实际SHA与每phase protocolSha256一致。已不再仅检查helper是regular文件。
+- candidate root以realpath与state登记root绑定；staticReaderCount固定1；evalProtocol在三phase一致；public contract实际file、version、SHA和state.publicContractHash绑定。原source6d/611、完成56/16/72、task/arm/repeat universe、model/broad/requested与report/review hash门保留。
+- product/native tools按完整schema跨phase共享绑定；submission键精确等于各phase plan task集合，每项submit_answer schema与public36对应项相同。没有把QA28/repair8/public36的不同submission全集误判为漂移。
+- packageEvidence通过已验证的frozenBindings取得helper和protocol；launch-final、launch-model与原public contract的copyPlan条目设置expectedSha256。helper supplement和当前candidate protocol原字节supplement同样设置expectedSha256。
+- copyPlan在读取实际待复制data之后、写目标之前比较expectedSha256；stat仍是当前值也不能接受新unbound bytes。此检查关闭“仅preflight核hash、复制时已换字节”的原链。authority记录实际冻结copied bindings，不创建新Git或修改source identity。
+
+作者proof已观察：binding-red.tap原helper漂移用例出现Missing expected exception，证明旧缺口可达；binding-green.tap同用例通过。当前测试保留正向完整三phasefake fixture，追加actual helper/launcher文件漂移以及单phase产品工具schema漂移均拒绝；新增copy-time SHA用例在source stat当前但字节不匹配冻结SHA时拒绝，并留下FAILED_COPY_NOT_RELEASE_EVIDENCE标记。累计TAP为4tests、pass4、fail0、skip0；旧3/3proof原样保留。
+
+本代理仅阅读修复tool、相关测试源码与RED/GREEN/cumulative TAP，并计算上述文件hash；只写本独立r2报告。没有重跑测试，没有扫描/collect真实ROOT、没有复制或修改产品，也没有运行模型、构建、JDT、安装。上述proof来自临时fake目录，不能写成真实package执行PASS。
+
+本次停止点：E01最窄guard已修复，允许父代理在全部实际writers停止、最终review与bundle权威绑定满足后执行既定copy-only动作。copier仍固定NO_GO/EVIDENCE_COPY_ONLY_NOT_RELEASE_AUTHORITY，不推断locked/performance/发布资格。真实复制执行及最终release判定不属于本窄复审。

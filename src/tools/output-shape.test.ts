@@ -11,7 +11,7 @@ import { javaSymbol } from "./symbol.js";
 import type { ToolContext } from "./context.js";
 import { AgentRouter } from "../agent-router/index.js";
 
-import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
+import { localRouterIndex } from "../java-index/local-index.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
@@ -105,6 +105,7 @@ test("java_symbol (query/position/references operations) omits raw uri ranges un
   const context = {
     repoRoot,
     session: {
+      status() { return { state: "READY" }; },
       async workspaceSymbols(_query: string, _limit: number, budget: DeadlineBudget) {
         observedBudgets.push(budget);
         return {
@@ -173,6 +174,7 @@ test("semantic tools never emit locations from outside the repository", async ()
   const context = {
     repoRoot,
     session: {
+      status() { return { state: "READY" }; },
       async workspaceSymbols() {
         return {
           truncated: false,
@@ -265,7 +267,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
   const sourceDir = path.join(root, "src", "main", "java", "demo");
   const serviceFile = path.join(sourceDir, "DemoService.java");
   const repositoryFile = path.join(sourceDir, "DemoRepository.java");
-  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
+  const index = localRouterIndex(root, path.join(root, ".cache"));
   try {
     await mkdir(sourceDir, { recursive: true });
     await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
@@ -297,7 +299,8 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
 
     const session = new NoLspSession();
     const router = new AgentRouter(root, session as never, index, undefined, undefined, new EmptyRgRunner());
-    const context = { repoRoot: root, session, router } as unknown as ToolContext;
+    const indexView = { state: "FRESH", snapshotId: "test-snapshot" };
+    const context = { repoRoot: root, session, router, indexView } as unknown as ToolContext;
 
     const impactArgs = {
       anchors: [{ file: serviceFile, line: 6, column: 21 }],
@@ -312,6 +315,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
     };
 
     const standard = record(await javaImpact(context, { ...impactArgs, verbosity: "standard" }));
+    const compact = record(await javaImpact(context, { ...impactArgs, verbosity: "compact" }));
     const diagnostic = record(await javaImpact(context, { ...impactArgs, verbosity: "diagnostic" }));
 
     for (const key of ["version", "target", "contexts", "unresolved", "cost"]) {
@@ -327,6 +331,12 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
 
     const files = standard.contexts as Array<Record<string, unknown>>;
     assert.ok(files.length > 0, "the fixture's direct field-receiver call must produce at least one candidate, or the absence assertions below are untested");
+    assert.ok(files.some(file => (file.proof as string[]).includes("CALLS")), "standard proof uses the original provider reason");
+    assert.equal(Object.hasOwn(standard, "omittedContexts"), false);
+    assert.deepEqual(standard.indexView, indexView);
+    assert.deepEqual(diagnostic.indexView, indexView);
+    assert.deepEqual(compact.indexView, { state: "FRESH" });
+    assert.equal(compact.omittedContexts, files.length - (compact.contexts as unknown[]).length);
     for (const file of files) {
       assert.equal(Object.hasOwn(file, "score"), false);
       assert.equal(Object.hasOwn(file, "scoreBreakdown"), false);
@@ -349,6 +359,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
     // the top-level V6 fields are unchanged.
     const diagnosticFiles = diagnostic.files as Array<Record<string, unknown>>;
     assert.ok(diagnosticFiles.some(file => Object.hasOwn(file, "reasons")), "diagnostic mode must expose provider attribution the standard mode hides");
+    assert.equal(Object.hasOwn((diagnostic.metrics as { readPlan: object }).readPlan, "compactPositionGaps"), false);
   } finally {
     await index.close();
     await rm(root, { recursive: true, force: true });

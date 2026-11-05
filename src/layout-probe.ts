@@ -1,8 +1,9 @@
 // input: Java repository root plus coarse layout hint.
 // output: Detected source/resource roots for router and watcher reuse.
 // pos: Shared lightweight layout probe; falls back to current broad scan behavior.
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 
 export type LayoutKind = "gradle-multi" | "maven-multi" | "single" | "flat-layers";
 
@@ -18,60 +19,131 @@ export type LayoutContext = {
   sourceRoots: SourceRootInfo[];
   resourceRoots: string[];
   broadRoots: string[];
+  moduleBases: string[];
+  /**
+   * Source/resource roots reached through a symlink: neither indexed nor tracked. The tracker's
+   * census never follows links, so discovery must not either; publishes report them as a
+   * coverage gap instead of claiming their content.
+   */
+  symlinkedRoots?: string[];
 };
 
 export function probeLayout(repoRoot: string, layoutProfile = "generic-java"): LayoutContext {
-  const sourceRoots = sourceRootInfos(repoRoot);
-  const resourceRoots = resourceRootInfos(repoRoot);
+  const linked = new Set<string>();
+  const contentRoot = (relativePath: string): boolean => {
+    if (!isDirectory(path.join(repoRoot, relativePath))) return false;
+    const symlinked = throughSymlink(repoRoot, relativePath);
+    if (symlinked) linked.add(relativePath);
+    return symlinked === false;
+  };
+  const moduleBases = moduleBaseRelatives(repoRoot);
+  const sourceRoots = sourceRootInfos(moduleBases, contentRoot);
+  const resourceRoots = resourceRootInfos(moduleBases, contentRoot);
   return {
     layout: detectLayout(repoRoot, sourceRoots),
     layoutProfile,
     sourceRoots,
     resourceRoots,
-    broadRoots: broadRoots(repoRoot, sourceRoots)
+    moduleBases: moduleBases.filter(base => throughSymlink(repoRoot, base) === false),
+    broadRoots: broadRoots(repoRoot, sourceRoots),
+    ...(linked.size ? { symlinkedRoots: [...linked].sort() } : {})
   };
 }
 
-function sourceRootInfos(repoRoot: string): SourceRootInfo[] {
+type Prober = { worker: Worker; waiting: Map<number, { resolve: (layout: LayoutContext) => void; reject: (error: Error) => void }>; next: number };
+let prober: Prober | undefined;
+
+/**
+ * probeLayout on one shared worker thread: the walk's synchronous stat/readdir never block the calling
+ * event loop. The worker keeps the process alive only while a probe is outstanding; if it dies, the
+ * waiting probes reject and the next call starts a new one.
+ */
+export function probeLayoutOffThread(repoRoot: string, layoutProfile = "generic-java"): Promise<LayoutContext> {
+  const state = prober ??= startProber();
+  const id = state.next++;
+  return new Promise((resolve, reject) => {
+    if (state.waiting.size === 0) state.worker.ref();
+    state.waiting.set(id, { resolve, reject });
+    state.worker.postMessage({ id, repoRoot, layoutProfile });
+  });
+}
+
+function startProber(): Prober {
+  const worker = new Worker(new URL("./layout-probe-worker.js", import.meta.url), { execArgv: ["--disable-warning=ExperimentalWarning"] });
+  worker.unref();
+  const state: Prober = { worker, waiting: new Map(), next: 1 };
+  worker.on("message", (reply: { id: number; value?: LayoutContext; error?: string; code?: string }) => {
+    const waiter = state.waiting.get(reply.id);
+    state.waiting.delete(reply.id);
+    if (state.waiting.size === 0) worker.unref();
+    if (reply.error !== undefined) waiter?.reject(Object.assign(new Error(reply.error), reply.code ? { code: reply.code } : {}));
+    else waiter?.resolve(reply.value!);
+  });
+  const fail = (error: Error) => {
+    if (prober === state) prober = undefined;
+    for (const waiter of state.waiting.values()) waiter.reject(error);
+    state.waiting.clear();
+  };
+  worker.on("error", fail);
+  worker.on("exit", code => fail(new Error(`layout probe worker exited ${code}`)));
+  return state;
+}
+
+/** Whether any component of `relativePath` below the repo root is a symlink; undefined if it vanished. */
+function throughSymlink(repoRoot: string, relativePath: string): boolean | undefined {
+  let current = repoRoot;
+  for (const part of relativePath.split(path.sep)) {
+    current = path.join(current, part);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return true;
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      return undefined;
+    }
+  }
+  return false;
+}
+
+function sourceRootInfos(moduleBases: readonly string[], contentRoot: (relativePath: string) => boolean): SourceRootInfo[] {
   const roots = new Map<string, SourceRootInfo>();
   const addJavaRoots = (baseRelative: string, moduleName: string) => {
     for (const sourceSet of ["main", "test"] as const) {
       const relativePath = path.join(baseRelative, "src", sourceSet, "java");
-      if (isDirectory(path.join(repoRoot, relativePath))) {
+      if (contentRoot(relativePath)) {
         roots.set(relativePath, { relativePath, module: moduleName, sourceSet });
       }
     }
   };
 
-  for (const baseRelative of moduleBaseRelatives(repoRoot)) {
+  for (const baseRelative of moduleBases) {
     addJavaRoots(baseRelative, baseRelative === "" ? "." : path.basename(baseRelative));
   }
   return [...roots.values()].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function resourceRootInfos(repoRoot: string): string[] {
+function resourceRootInfos(moduleBases: readonly string[], contentRoot: (relativePath: string) => boolean): string[] {
   const roots = new Set<string>();
   const addResourceRoot = (baseRelative: string) => {
     const relativePath = path.join(baseRelative, "src", "main", "resources");
-    if (isDirectory(path.join(repoRoot, relativePath))) {
+    if (contentRoot(relativePath)) {
       roots.add(relativePath);
     }
   };
 
-  for (const baseRelative of moduleBaseRelatives(repoRoot)) {
+  for (const baseRelative of moduleBases) {
     addResourceRoot(baseRelative);
   }
-  if (isDirectory(path.join(repoRoot, "docs", "sql"))) {
+  if (contentRoot(path.join("docs", "sql"))) {
     roots.add(path.join("docs", "sql"));
   }
   return [...roots].sort();
 }
 
-function detectLayout(repoRoot: string, sourceRoots: SourceRootInfo[]): LayoutKind {
-  if (existsSync(path.join(repoRoot, "settings.gradle")) || existsSync(path.join(repoRoot, "settings.gradle.kts"))) {
+export function detectLayout(repoRoot: string, sourceRoots: SourceRootInfo[]): LayoutKind {
+  if (pathExists(path.join(repoRoot, "settings.gradle")) || pathExists(path.join(repoRoot, "settings.gradle.kts"))) {
     return sourceRoots.some(root => root.relativePath.startsWith("modules/") || root.relativePath.startsWith("apps/")) ? "gradle-multi" : "single";
   }
-  if (existsSync(path.join(repoRoot, "pom.xml"))) {
+  if (pathExists(path.join(repoRoot, "pom.xml"))) {
     return mavenModules(repoRoot).length > 0 || sourceRoots.some(root => root.module !== ".") ? "maven-multi" : "single";
   }
   return sourceRoots.length > 0 ? "single" : "flat-layers";
@@ -182,7 +254,8 @@ function fileFingerprint(filePath: string): string {
   try {
     const stat = statSync(filePath);
     return `${filePath}:${stat.size}:${stat.mtimeMs}`;
-  } catch {
+  } catch (error) {
+    if (!isMissing(error)) throw error;
     return `${filePath}:absent`;
   }
 }
@@ -191,7 +264,8 @@ function mavenModules(repoRoot: string): string[] {
   try {
     const text = readFileSync(path.join(repoRoot, "pom.xml"), "utf8");
     return [...text.matchAll(/<module>\s*([^<\s]+)\s*<\/module>/g)].map(match => match[1]);
-  } catch {
+  } catch (error) {
+    if (!isMissing(error)) throw error;
     return [];
   }
 }
@@ -206,7 +280,22 @@ function listDirectories(dir: string): string[] {
 function isDirectory(filePath: string): boolean {
   try {
     return statSync(filePath).isDirectory();
-  } catch {
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+    return false;
+  }
+}
+
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+function pathExists(filePath: string): boolean {
+  try {
+    statSync(filePath);
+    return true;
+  } catch (error) {
+    if (!isMissing(error)) throw error;
     return false;
   }
 }

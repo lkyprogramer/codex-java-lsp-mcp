@@ -1,0 +1,274 @@
+{
+  "schema": "final-native-operation-independent-review/v1",
+  "status": "PASS",
+  "reviewedAt": "2026-10-11T12:51:22.684227+00:00",
+  "scope": "ACTUAL_USER_DAEMON_REPLACEMENT_AND_FINAL_DELIVERY_EVIDENCE_ONLY",
+  "productionProofSha256": "03886f95d871b6132ae03547d4b47c40896c6ed8c77e8952291e09c31598247a",
+  "finalVerificationSha256": "2a503f987da763a457d0e419d81af5ad7eaf3805ba97307a7c3f4c7f1e811e33",
+  "reportSha256": "2b23ad08b1e22f94d06f13b06f9ed7182b2b6e159b955222bd8043c392551f81",
+  "driverSha256": "864c42cd2b5cfe7f9f222982070d53ebb10017720c92e1102db54b93f36c23dc",
+  "findings": [],
+  "blockingFindings": [],
+  "deliveryReady": true,
+  "productionDeploymentPerformed": true,
+  "productionStatus": "ACTUAL_PASS_BOUND_TO_ORIGINAL_PRODUCTION_PROOF",
+  "current": "releases/8f737ac7cd14-20261011T123708Z",
+  "previousCurrent": "releases/09b9851e888a-20260929T085025Z",
+  "nativeReleaseIdentity": {
+    "commit": "8f737ac7cd141d0eb07de37bb212d4d6648d96a3",
+    "sourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc"
+  },
+  "modelMeasurementIdentity": {
+    "commit": "a77b6428ca432259c4008ead6c5e58cdc5e53cef",
+    "sourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864"
+  },
+  "productionChecks": {
+    "actualR8OrderedEvents": 4,
+    "allEventExitCodesZero": true,
+    "allEventRawHashesMatch": true,
+    "r8ReviewedDriverSelfShaMatches": true,
+    "installerElapsedMs": 393523.879,
+    "mandatorySourceTests": 1366,
+    "mandatoryScriptTests": 436,
+    "failedSkippedCancelledTodo": 0,
+    "candidateHttpSmokePort": 38457,
+    "fixedHttpSmokePort": 38456,
+    "finalHttpSmokeExitCode": 0,
+    "httpTools": 5,
+    "healthReadyBuild": "8f737ac7cd14",
+    "matchingNewHealthReadyInstanceId": true,
+    "priorEnvironmentFieldsPreserved": 8,
+    "daemonPathUnchanged": true,
+    "onlyInstallerProcessPathAppendedSystemDirectories": true,
+    "projectsConfigSha256": "d4ac323ec219af4725838c0c97437db28e1dc7b7739aa5f763a2e05ad6c6a925",
+    "lspEnabledAliases": [
+      "lishuedu",
+      "exam-parent-v3",
+      "cipherlink",
+      "lishu-v2"
+    ],
+    "idleTtlMs": 900000,
+    "actualCurrentPreviousStampReadOnlyRechecked": true,
+    "actualInstalledSourceFilesIndependentlyRehashed": 1780,
+    "installedHashMismatches": [],
+    "productionPlistEnvironmentAndProjectConfigReadOnlyRechecked": true
+  },
+  "evidenceChecks": {
+    "isolatedUpgradeRollbackCleanupReviewAndBindingsUnchanged": true,
+    "testOnlyAdoptionManifestBindingsUnchanged": true,
+    "workspaceSourceFilesRehashed": 611,
+    "workspaceSourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc",
+    "originalImmutableFilesRehashed": 293,
+    "originalImmutableHashMismatches": [],
+    "primaryHead": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+    "primaryCommitOrPushByReviewer": false,
+    "gitDiffCheckExitCode": 0,
+    "documentationFiles": 3,
+    "relativeMarkdownLinksChecked": 54,
+    "brokenLinks": []
+  },
+  "profileSummaryAudit": {
+    "mode": "EXISTING_CANONICAL_PACK_AND_REVIEW_HASH_COMPARISON_ONLY_NO_MODEL_REAUDIT",
+    "runDenominators": [
+      56,
+      16,
+      72,
+      24
+    ],
+    "totalForCompletenessOnly": 168,
+    "finalQa": {
+      "product": "26/28",
+      "control": "24/28"
+    },
+    "originalRepairGroups": {
+      "product": "8/8",
+      "control": "8/8"
+    },
+    "fullPublicQa": {
+      "product": "26/28",
+      "control": "25/28"
+    },
+    "fullPublicRepair": {
+      "product": "8/8",
+      "control": "8/8"
+    },
+    "fullPublicOriginalCliQualification": {
+      "product": "QUALIFICATION_FAIL",
+      "control": "QUALIFICATION_FAIL"
+    },
+    "independentLockedQa": {
+      "product": "9/9",
+      "control": "9/9"
+    },
+    "independentLockedRepair": {
+      "product": "2/3",
+      "control": "2/3"
+    },
+    "profilesNotPooledForAccuracy": true,
+    "historicalReleaseVerdictDeploymentPerformedRemainsFalse": true,
+    "newModelMeasurementClaimedOnNativeRelease": false
+  },
+  "failurePreservation": {
+    "productionAttempt7": "FAIL_1364_PASS_1_FAIL_1_SKIP_OF_1366_RETAINED",
+    "productionAttempt7SwitchOccurred": false,
+    "isolatedDriver6": "EXIT_1_RETAINED_WITH_ADDITIVE_RECOVERY_EXIT_0",
+    "originalRecoveryFailure": "RETAINED",
+    "earlierNativeFailures": "DISCLOSED_IN_DELIVERY_REPORT",
+    "existingDependencyWarnings": {
+      "moderate": 3,
+      "high": 2,
+      "critical": 1,
+      "auditClean": false
+    }
+  },
+  "resolvedObservations": [
+    {
+      "priority": "P2",
+      "path": "README.md:350",
+      "problem": "Unqualified historical not-installed / NO_GO paragraph conflicted with current deployed header.",
+      "resolution": "Parent explicitly labeled historical state and linked current release report; next paragraph labels old evidence historical.",
+      "resolved": true,
+      "binding": "final-production-verification-r2.json binds corrected README and unchanged other two documents; original verification retained."
+    }
+  ],
+  "finalVerificationBinding": {
+    "latest": {
+      "path": "native-deployment/final-production-verification-r2.json",
+      "sha256": "2a503f987da763a457d0e419d81af5ad7eaf3805ba97307a7c3f4c7f1e811e33"
+    },
+    "originalActualPostconditions": {
+      "path": "native-deployment/final-production-verification.json",
+      "sha256": "66c1981059440a4c1793a5287843d631938d3b7d2b2eee15e47764477c14c2b7"
+    },
+    "latestOnlyUpdatesDocumentBindings": true,
+    "freshRuntimeOrSourceRunClaimedByR2": false,
+    "documentHashes": [
+      {
+        "path": "README.md",
+        "sha256": "1f8be3d4f375ee94e1169015cb5ffb0f64c804b5fdf6435e505d1944d9467eba"
+      },
+      {
+        "path": "docs/phase-f/production-operations.md",
+        "sha256": "2a461ff9cba6aad7b0a893e0883e2142d42f0c51192067073e7d3ae406b758ae"
+      },
+      {
+        "path": "docs/next-stage/qa-contract-release-review.md",
+        "sha256": "2b23ad08b1e22f94d06f13b06f9ed7182b2b6e159b955222bd8043c392551f81"
+      }
+    ]
+  },
+  "reviewerActions": {
+    "readOnlyFileEvidenceHashAndStaticCodeAudit": true,
+    "pythonAstParseOnly": true,
+    "nativeOperationsExecuted": false,
+    "modelRuns": 0,
+    "scorerRuns": 0,
+    "tests": 0,
+    "builds": 0,
+    "installerRuns": 0,
+    "daemonctlCalls": 0,
+    "launchctlCalls": 0,
+    "httpCalls": 0,
+    "productionCommands": 0,
+    "writes": [
+      "native-deployment/final-operation-review.md",
+      "native-deployment/final-operation-review.json"
+    ]
+  },
+  "limitations": [
+    "Production health/ready and smoke were executed by the original deployment/verification runs; reviewer did not issue fresh HTTP requests.",
+    "Production rollback was not executed; successful new release remains installed and previous09 remains available. Isolated rollback was actually proven.",
+    "Real four-project JDT and production load were not rerun after installation; no production project P95 or new semantic acceptance claim.",
+    "Five-tool smoke proves host/MCP surface and build identity; records remain repoScoped=false and started=false.",
+    "Original6d/a77 model failures, original public CLI qualification failures and auxiliary retrieval valid=false rows remain disclosed; no new model measurements on3ee/8f.",
+    "Six unchanged dependency warnings remain under the prior conditional risk assessment; no audit-clean or zero-vulnerability claim.",
+    "Final r2 is additive document binding only; it reuses original actual611-source/293-input/health verification rather than presenting it as new execution."
+  ],
+  "disposition": "NO_REMAINING_BLOCKER_TO_FINAL_DELIVERY; STOP_AT_REPORT",
+  "evidence": [
+    {
+      "path": "native-deployment/production-attempt-8/production-proof.json",
+      "sha256": "03886f95d871b6132ae03547d4b47c40896c6ed8c77e8952291e09c31598247a"
+    },
+    {
+      "path": "native-deployment/production-driver-attempt-8.log",
+      "sha256": "970c954a4c84bbd04821f1915657eb19ae1d0d91d31dabbae7f0fd68fb6f7d5c"
+    },
+    {
+      "path": "native-deployment/production-attempt-8/production-install-candidate.log",
+      "sha256": "5a955fe992365e435a821b9ca757b81507f0b4facaa72f3f071815fb694f77ec"
+    },
+    {
+      "path": "native-deployment/production-attempt-8/production-final-smoke.log",
+      "sha256": "dc2d413553b71bb2eca53917e12a2fb36fd5ddb9a59b553175d9cfd7cf2037e8"
+    },
+    {
+      "path": "native-deployment/driver-r8-review.json",
+      "sha256": "33810b74618d5f0f899214b283e893fa5eb4218ff3ec952cf6636ff0845bcb4b"
+    },
+    {
+      "path": "native-deployment/run-install-proof-r8.py",
+      "sha256": "864c42cd2b5cfe7f9f222982070d53ebb10017720c92e1102db54b93f36c23dc"
+    },
+    {
+      "path": "native-deployment/final-production-verification.json",
+      "sha256": "66c1981059440a4c1793a5287843d631938d3b7d2b2eee15e47764477c14c2b7"
+    },
+    {
+      "path": "native-deployment/final-production-verification-r2.json",
+      "sha256": "2a503f987da763a457d0e419d81af5ad7eaf3805ba97307a7c3f4c7f1e811e33"
+    },
+    {
+      "path": "native-deployment/native-isolated-recovery-review.json",
+      "sha256": "b45739c85c3da1386a16391ef3703d0fdbc057fbd3f18effc32c6349a5506466"
+    },
+    {
+      "path": "native-deployment/isolated-attempt-6/isolated-proof.json",
+      "sha256": "6ed5a7bfa2fcf25ad8856c0cdfdf407f13668a15361471eef847bc4a99f1c13e"
+    },
+    {
+      "path": "native-deployment/test-fixture-adoption-review.json",
+      "sha256": "b16a9d8d3961e6d848e3d0443bd58c737189109076a318068ea906344604388c"
+    },
+    {
+      "path": "native-deployment/test-fixture-source-binding.json",
+      "sha256": "1728baba12541666a7f914622a6ab102a752dd398522dea7a6c33acd7a4a3690"
+    },
+    {
+      "path": "native-deployment/installed-source-selection.json",
+      "sha256": "a5d648f17d0b68a6174b0028c0348b5bb4a8743dbd394ee466145104f87d4fa1"
+    },
+    {
+      "path": "native-deployment/production-attempt-7/failure-status.json",
+      "sha256": "a4b8b2c6fdb2a4c23b4dc5b9d7f94fe62aa0312f74c3e13d4a32d7b0d6eb2ea3"
+    },
+    {
+      "path": "native-deployment/production-attempt-7/production-install-candidate.log",
+      "sha256": "0c45cb520a119a6ecad20fac730d50ff5445c99e6baf5cf1464994d66ea8e7a5"
+    },
+    {
+      "path": "native-deployment/production-driver-attempt-7.log",
+      "sha256": "9b4e4fb263cd0eae1a6887125b73e9d441485f256d0df2089c7d3208f4d9d074"
+    },
+    {
+      "path": "native-deployment/dependency-risk-review.json",
+      "sha256": "8248c8cd8ef71a4e33eec96d0e23068744e88f7861bf895aee1a31931e30a198"
+    },
+    {
+      "path": "release-evidence.json",
+      "sha256": "dff120abf3703353d9456a848b1b57bfa69095c7eecf0f6f49119b7cf2e2037a"
+    },
+    {
+      "path": "release-verdict.json",
+      "sha256": "ff409554b43d467e8babd666899ece164ac6bb57cce99a013b2bc119637381e1"
+    },
+    {
+      "path": "terminal-review.json",
+      "sha256": "a63d5d47f50251ffb6a8338cec6cf8b52629d8e859de57debe0f9399aa23b8c4"
+    },
+    {
+      "path": "baseline/immutable-input-hashes.json",
+      "sha256": "7985f8752552e4bb44e0641a7b5e549edcf9ad3357632657b851851619a339cf"
+    }
+  ]
+}

@@ -5,6 +5,8 @@ import {
   tokenize,
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
+  matchesExactSelector,
+  parseExactSelector,
   type EntityHit,
   type EntityLayer,
   type EntityRecord,
@@ -131,9 +133,12 @@ export function searchEntities(
   return chunkHits;
 }
 
-// T07: the in-memory reference has no physical work, so a budget can never
-// truncate it; scope is applied before the cap with the same predicate as
-// the SQL engine, which keeps no-budget parity tests meaningful.
+// R07 reference for the detailed (discovery) path: same routing as
+// SqlEntitySearch.searchDetailed - an exact selector resolves through the
+// whole selector only (parseExactSelector/matchesExactSelector) and a miss
+// is a miss; text merges both BM25 routes; every route is read to cap+1 so
+// `selectionLimited` says whether more candidates existed. Scope filters the
+// pool before anything else. No physical work, so no budget truncation.
 export function searchEntitiesDetailed(
   entities: readonly EntityRecord[],
   task: string,
@@ -141,19 +146,38 @@ export function searchEntitiesDetailed(
   mode: EntitySearchMode = "auto",
   options: EntitySearchOptions = {}
 ): DetailedEntitySearchResult {
+  const cap = Math.min(Math.max(1, limit), ENTITY_SEARCH_MAX_LIMIT);
   const roots = options.scope?.sourceRoots;
   const pool =
     roots && roots.length > 0
       ? entities.filter(record =>
-          roots.some(root => record.relativePath === root || record.relativePath.startsWith(`${root}/`))
+          roots.some(root => record.relativePath === root || record.relativePath.startsWith(`${root.replace(/\/+$/, "")}/`))
         )
       : entities;
-  return {
-    hits: searchEntities(pool, task, limit, mode),
-    truncated: false,
-    work: { postings: 0 },
-    generation: 0
-  };
+  const base = { truncated: false as const, work: { postings: 0 }, generation: 0 };
+  if (task.trim().length === 0) return { ...base, hits: [], selectionLimited: false };
+  const intent = mode === "auto" ? classifyQuery(task, mode) : mode;
+  if (intent === "exact") {
+    for (const alternative of parseExactSelector(task)) {
+      const found = pool
+        .filter(entity => matchesExactSelector(alternative, entity))
+        .sort((left, right) => left.entityId.localeCompare(right.entityId));
+      if (found.length === 0) continue;
+      const layer: EntityLayer = alternative.kind === "type" && alternative.qualifier === undefined ? "SIMPLE_NAME" : "FQN";
+      return {
+        ...base,
+        hits: found.slice(0, cap).map(entity => toHit(entity, layer, 1)),
+        selectionLimited: found.length > cap,
+        exact: found.length > 1 ? "ambiguous" : "match"
+      };
+    }
+    return { ...base, hits: [], selectionLimited: false, exact: "miss" };
+  }
+  const queryTokens = tokenize(task);
+  const identifierHits = rankByBm25(pool, queryTokens, "identifierTokens", "BM25_IDENTIFIER", cap + 1);
+  const chunkHits = rankByBm25(pool, queryTokens, "chunkTokens", "CHUNK", cap + 1);
+  const merged = mergeByRank(identifierHits, chunkHits, cap + 1);
+  return { ...base, hits: merged.slice(0, cap), selectionLimited: merged.length > cap };
 }
 
 function mergeByRank(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {

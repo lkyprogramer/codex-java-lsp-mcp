@@ -1,0 +1,121 @@
+{
+  "schema": "ilv2-mac00-bfull/v1",
+  "taskId": "MAC-00",
+  "step": 6,
+  "measuredAt": "2026-10-14",
+  "oldSource": "9b3a110437bbd9c5dd6db578e6f8824dbc763aa4",
+  "input": "lishu-v2 frozen copy (relocation 20261014T133452Z manifest, head fd9c117b)",
+  "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+  "entry": "runSqlColdBuild parallelism=4, uninstrumented (no __MAC00 hooks), fresh DB per run, 900 s kill cap",
+  "definition": "B_full = median buildSeconds of valid runs (runSqlColdBuild wall clock only; census/integrity/checkpoint excluded)",
+  "B_full": 409.931,
+  "derived": {
+    "fullJobCapSeconds": 1229.793,
+    "fullGateSeconds": 327.945
+  },
+  "caveats": [
+    "Host load averages 15-21 during the runs (other sessions); B_full is therefore a loaded-host baseline, which makes the 0.8x relative gate easier, not harder. G11 must record its own load and compare under similar load or disclose the difference.",
+    "MAC-00 first instrumented cold run was 428.95 s process wall; not pooled with these runs (different protocol)."
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "valid": true,
+      "buildSeconds": 409.931,
+      "probeWallSeconds": 416.741,
+      "processWallSeconds": 420.475,
+      "cpuSeconds": 386.435,
+      "maxRssKiB": 626912,
+      "loadBefore": [
+        21.47,
+        21.22,
+        19.63
+      ],
+      "loadAfter": [
+        19.74,
+        19.24,
+        19.28
+      ],
+      "buildState": "READY",
+      "indexed": {
+        "java": 5887,
+        "xml": 4
+      },
+      "failedOrRecovered": 0,
+      "integrity": [
+        "ok"
+      ],
+      "foreignKeys": 0,
+      "dbBytes": 779730944,
+      "walPresent": false,
+      "exitCode": 0,
+      "processGroupGone": true
+    },
+    {
+      "run": 2,
+      "valid": true,
+      "buildSeconds": 419.671,
+      "probeWallSeconds": 426.688,
+      "processWallSeconds": 426.953,
+      "cpuSeconds": 386.983,
+      "maxRssKiB": 653488,
+      "loadBefore": [
+        18.28,
+        18.88,
+        19.14
+      ],
+      "loadAfter": [
+        16.06,
+        18.24,
+        18.91
+      ],
+      "buildState": "READY",
+      "indexed": {
+        "java": 5887,
+        "xml": 4
+      },
+      "failedOrRecovered": 0,
+      "integrity": [
+        "ok"
+      ],
+      "foreignKeys": 0,
+      "dbBytes": 779730944,
+      "walPresent": false,
+      "exitCode": 0,
+      "processGroupGone": true
+    },
+    {
+      "run": 3,
+      "valid": true,
+      "buildSeconds": 393.605,
+      "probeWallSeconds": 400.698,
+      "processWallSeconds": 401.076,
+      "cpuSeconds": 380.014,
+      "maxRssKiB": 655520,
+      "loadBefore": [
+        15.0,
+        17.58,
+        18.62
+      ],
+      "loadAfter": [
+        17.71,
+        17.24,
+        17.91
+      ],
+      "buildState": "READY",
+      "indexed": {
+        "java": 5887,
+        "xml": 4
+      },
+      "failedOrRecovered": 0,
+      "integrity": [
+        "ok"
+      ],
+      "foreignKeys": 0,
+      "dbBytes": 779730944,
+      "walPresent": false,
+      "exitCode": 0,
+      "processGroupGone": true
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-07",
+  "gateId": "G07",
+  "status": "PASS",
+  "dependency": {
+    "head": "6d6d277f83c8dbe9d652c87b0f0f36ac6e11dab5",
+    "requiredGates": [
+      "G03",
+      "G04",
+      "G06"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "5e80fafa3451a279394fabf2df89f8314ac51806341f27c91ccfe12edb249136",
+    "distInventorySha256": "2e5bf0fb41a9a104d031631150f445c187b95f6e5b463b13f3b5878e4993c251",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g07-rerun",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g07-rerun/result.json",
+      "sourceDigest": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+      "commands": 4,
+      "tests": 34,
+      "pass": 34,
+      "fail": 0,
+      "elapsedMs": 18753,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/java-index/snapshot/snapshot-store.test.js",
+        "dist/java-index/snapshot/workspace-tracker.test.js",
+        "dist/java-index/sql/logical-export.test.js",
+        "dist/mac-platform/clonefile.test.js"
+      ]
+    },
+    {
+      "name": "regression-g07-rerun",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/regression-g07-rerun/result.json",
+      "sourceDigest": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+      "commands": 4,
+      "tests": 421,
+      "pass": 421,
+      "fail": 0,
+      "elapsedMs": 109289,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/index-builder/build-scheduler.test.js",
+        "dist/index-builder/content-capture.test.js",
+        "dist/index-builder/execution-plan.test.js",
+        "dist/index-builder/integrity.test.js",
+        "dist/java-index/ast-extractor.test.js",
+        "dist/java-index/build-fingerprint.test.js",
+        "dist/java-index/builder-supervisor.test.js",
+        "dist/java-index/builder/cold-build.test.js",
+        "dist/java-index/builder/incremental.test.js",
+        "dist/java-index/builder/parse-cache.test.js",
+        "dist/java-index/builder/r08-evidence.test.js",
+        "dist/java-index/builder/review-fixes.test.js",
+        "dist/java-index/edge-builder.test.js",
+        "dist/java-index/entity-search.test.js",
+        "dist/java-index/framework-index-view.test.js",
+        "dist/java-index/java-index-file-parse.test.js",
+        "dist/java-index/java-parser-backend.test.js",
+        "dist/java-index/manifest.test.js",
+        "dist/java-index/mybatis-xml-extractor.test.js",
+        "dist/java-index/name-resolver.test.js",
+        "dist/java-index/router-facts.test.js",
+        "dist/java-index/router-integration.test.js",
+        "dist/java-index/router-java-index-cold.test.js",
+        "dist/java-index/router-java-index.test.js",
+        "dist/java-index/snapshot/query-pool.test.js",
+        "dist/java-index/snapshot/snapshot-store.test.js",
+        "dist/java-index/snapshot/workspace-tracker.test.js",
+        "dist/java-index/sql/bounded-cache.test.js",
+        "dist/java-index/sql/driver-async.test.js",
+        "dist/java-index/sql/driver.test.js",
+        "dist/java-index/sql/entity-search-bounded.test.js",
+        "dist/java-index/sql/entity-search-evidence-determinism.test.js",
+        "dist/java-index/sql/entity-search-intent.test.js",
+        "dist/java-index/sql/entity-search.test.js",
+        "dist/java-index/sql/entity-tokens.test.js",
+        "dist/java-index/sql/facts-store.test.js",
+        "dist/java-index/sql/knowledge-graph.test.js",
+        "dist/java-index/sql/logical-export.test.js",
+        "dist/java-index/sql/posting-delta.test.js",
+        "dist/java-index/sql/registry-view.test.js",
+        "dist/java-index/sql/rows.test.js",
+        "dist/java-index/sql/search-docs.test.js",
+        "dist/java-index/sql/sql-client-incremental.test.js",
+        "dist/java-index/sql/sql-client-lifecycle.test.js",
+        "dist/java-index/sql/sql-client.test.js",
+        "dist/java-index/sql/sql-queries.test.js",
+        "dist/java-index/sql/sql-read-ranges.test.js",
+        "dist/java-index/sql/sym.test.js",
+        "dist/java-index/sql/workspace-stat.test.js",
+        "dist/java-index/stable-id.test.js",
+        "dist/java-index/symbol-identity.test.js",
+        "dist/mac-platform/clonefile.test.js",
+        "dist/mac-platform/fsevents.test.js",
+        "dist/mac-platform/gradle-domain.test.js",
+        "dist/mac-platform/jdt-gradle-home.test.js",
+        "dist/mac-platform/native-exec.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "snapshot-store-mutation-kill-matrix",
+      "file": "g07-mutations-rerun.json",
+      "sha256": "71bea9617d645aa86b20231aac3aa3cf1bcd4d9af474e277e6d1e9ee8f1d3e77",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-resource-archive-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "0f96c538da2a9038b5796ba669af3fb41a2f26b4b19df83bf2d20abe228ddc5f",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "926efa9a4135a422ec42d94e29f43a0df615af308a56c7bdb9a5096176234b36",
+    "registeredPids": 80,
+    "ownedGroups": 0,
+    "launchdJobs": 3,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-07/20261016T082326Z/closeout/raw-evidence.tar.gz",
+      "sha256": "29ea48c98f13ec46d270d0daa58c631317a94c8db5b0acd9dc668732891fa759",
+      "fileCount": 43,
+      "bytes": 742882,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "eea7205b581cd25018c7a7dde58ffc7f0998e2ef2f4db057d5c93efd7a6f0b64",
+      "source": "33861459d859f7209fb48a456e7e6bd9e3338eac41aafd7bb73853f6add9a861",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "c5a30dd4d3f06a19279f15301f46018757138a84b40d86b4fbc1159fb1ae4f1d",
+  "notClaimed": [
+    "Power-loss durability: crash tests are process SIGKILL/in-process failures only; fsync behaviour under power loss is not tested",
+    "Periodic GC sweeper: MAC-09; this card calls the real lease-aware tryReclaim primitive directly",
+    "The rename->chmod crash window is covered by simulating its resulting state, not by a SIGKILL inside the window; a first-ever publish crash with no old binding is not exercised",
+    "Production integration (query-worker lease release after reap, assertOwner wiring, track-before-serve ordering, builder-capture contentManifestId carried in BuildPlan, removal of the old reconcile/VACUUM seed path): MAC-08/08B, NOT_RUN",
+    "readSnapshotContent reads a sealed snapshot without a SnapshotLease (fails closed; one job per workspace excludes the race): accepted limit, owner MAC-08",
+    "acquireBound skips the root check for an untracked workspace (a replaced root gets a different workspaceId): accepted limit, owner MAC-08 (track before serve)",
+    "In the tracker harness, publish re-derives plan.contentManifestId from the candidate DB itself, so the store content check on publish is self-referential there; MAC-08 must carry the builder capture id in BuildPlan (accepted limit, owner MAC-08)",
+    "Earlier accepted limits carried over unchanged: immutable vs readOnly not distinguishable by tests; buildKey uses the sealing process extractor version and has no resolver/JDK input; integrity+sha cost per publish (G11); driver sealed-path regex not path-normalized; duplicated snapshot ID regex"
+  ],
+  "next": "G07 PASS; manual next is MAC-08A (depends on MAC-05, MAC-06, MAC-07).",
+  "authorization": "User 2026-10-16: \"继续,按照的你的建议方案\" (do MAC-03B, close out G03B, then rerun G07 in a new run root, review, close out and compose; local commits only).",
+  "notes": "Main: final-g07-rerun 34/34 (snapshot-store, workspace-tracker, logical-export, clonefile) and regression-g07-rerun 421/421 (56 files) on source 33861459…, the committed G03B source. The MAC-07 code was committed at 0d557489 and first validated in runs/mac-07/20261016T065523Z (final-g07-fixed 22/22, regression-g07-fixed 231/231 on 5a4cd6ac…, review PASS); that run root is history and was not composed (not-composed.json) because G03B was still PLAN. Delta since then: acquireBound refuses a binding whose root was replaced; readSnapshotContent and currentBuildKey helpers; D07 stat identity (stays in the unsealed sibling workspace-stat.sqlite and does not reach sealed content). Mutation matrix is dev tier: the 22 earlier mutants plus M23_acquire_root, 23/23 killed.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-07/20261016T082326Z"
+}

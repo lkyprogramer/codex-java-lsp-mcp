@@ -4,13 +4,18 @@ type EvidenceGapState = {
   readonly skipped: boolean;
   readonly timeout: boolean;
   readonly lombokIncomplete?: boolean;
+  readonly errorCode?: string;
 };
 
 export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: ImpactOptions, semantic: EvidenceGapState): string[] {
-  const gaps = [
+  const includeAdvice = options.verbosity !== "compact";
+  const gaps = includeAdvice ? [
     "Run Gradle compile/test before claiming behavior.",
     "Framework wiring (e.g. Spring injection/call paths) is covered by JavaIndex facts where resolvable; use rg/runtime evidence for SQL/XML/YAML, logs, Nacos, and DB state."
-  ];
+  ] : [];
+  if (semantic.errorCode === "JDT_NOT_READY") {
+    gaps.push("LSP semantic enrichment is not available (JDT_NOT_READY; java_status reports semantic admission); results are JavaIndex plus rg evidence only.");
+  }
   if (semantic.skipped) {
     gaps.push("LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.");
   }
@@ -20,10 +25,10 @@ export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: Impact
   if (anchors.some(anchor => anchor.factSource === "fallback")) {
     gaps.push("Some source facts used the degraded fallback because JavaIndex facts were unavailable.");
   }
-  if (anchors.some(anchor => anchor.profile === "repository" || anchor.profile === "port")) {
+  if (includeAdvice && anchors.some(anchor => anchor.profile === "repository" || anchor.profile === "port")) {
     gaps.push("Review persistence/config evidence in the returned files (role=config or framework) before changing behavior.");
   }
-  if (options.testReadMode === "defer") {
+  if (includeAdvice && options.testReadMode === "defer") {
     gaps.push("Tests are returned as lower-priority candidates; use testReadMode=priority when verification planning is the main task.");
   }
   if (semantic.lombokIncomplete) {

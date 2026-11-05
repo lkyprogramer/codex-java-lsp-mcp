@@ -21,18 +21,19 @@ import type {
   StaticEdgeKind
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import type { DeclarationIdentity, SymbolResolution } from "./symbol-identity.js";
 
 export type JavaIndexOpenOptions = {
   leaseRoot?: string;
   worktree?: JavaIndexWorktreeIdentity;
-  siblingCacheBase?: string;
-  siblingDbPath?: string;
 };
 
 export type JavaIndexRequestOptions = {
   budget?: DeadlineBudget;
   signal?: AbortSignal;
   telemetry?: JavaIndexRpcTelemetrySink;
+  /** Request-scoped observation of a static facts read, including router memory hits. */
+  onStaticRead?: () => void;
 };
 
 export type JavaIndexRpcOperation =
@@ -95,6 +96,10 @@ export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
     && status.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === status.indexedGeneration);
 }
 
+export type EvidenceAnchor = { declarationId: string; kind: "TYPE" | "METHOD"; relativePath: string; contentHash: string; line: number; column: number };
+export type EvidenceSource = { relativePath: string; contentHash: string; startLine: number; endLine: number; sourceKind: string; relation: "result-map-type" | "declaration-document" };
+export type EvidenceSourcesResult = { generation: number; anchor?: EvidenceAnchor; sources: EvidenceSource[]; partial: boolean; reasons: string[] };
+
 export interface JavaIndexClientApi {
   open(generation: number, options?: JavaIndexOpenOptions, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   status(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
@@ -110,6 +115,7 @@ export interface JavaIndexClientApi {
   reconcile(generation: number, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   flush(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
+  queryEvidenceSources(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions): Promise<EvidenceSourcesResult>;
   queryAnchor(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions): Promise<AnchorFacts | undefined>;
   queryType(typeText: string, scopeFile?: string, requestOptions?: JavaIndexRequestOptions): Promise<JavaTypeLookupResult>;
   queryTypes(
@@ -179,6 +185,14 @@ export interface JavaIndexClientApi {
     annotationPrefixes: string[],
     requestOptions?: JavaIndexRequestOptions
   ): Promise<{ importPrefixFound: boolean; annotationPrefixFound: boolean }>;
+  /** mac1 public identity (§2.8): only a snapshot view serves these; other clients leave them out. */
+  resolveSymbolIds?(workspaceId: string, symbolIds: string[], requestOptions?: JavaIndexRequestOptions): Promise<SymbolResolution[]>;
+  declarationIdentities?(
+    workspaceId: string,
+    contentManifestId: string,
+    declarationKeys: string[],
+    requestOptions?: JavaIndexRequestOptions
+  ): Promise<DeclarationIdentity[]>;
   close(): Promise<void>;
   localStatus(): JavaIndexStatus;
 }

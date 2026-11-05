@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import {
   bindChunks,
   close,
   compactWalFile,
   DEFAULT_JOURNAL_SIZE_LIMIT_BYTES,
+  DEFAULT_PAGE_SIZE_BYTES,
   DEFAULT_WAL_AUTOCHECKPOINT_PAGES,
   inClause,
   openIndexDb,
@@ -16,7 +18,6 @@ import {
   withTransaction
 } from "./driver.js";
 import { SCHEMA_VERSION, ensureSchema } from "./schema.js";
-import { vacuumInto } from "./vacuum-into.js";
 
 function pragma(db: ReturnType<typeof openIndexDb>, name: string): unknown {
   const row = db.prepare(`PRAGMA ${name}`).get() as Record<string, unknown> | undefined;
@@ -56,6 +57,7 @@ test("file database enables WAL and incremental auto_vacuum", () => {
   const db = openIndexDb(file);
   try {
     assert.equal(pragma(db, "journal_mode"), "wal");
+    assert.equal(pragma(db, "page_size"), DEFAULT_PAGE_SIZE_BYTES);
     assert.equal(pragma(db, "auto_vacuum"), 2);
     assert.equal(pragma(db, "synchronous"), 1);
     assert.equal(pragma(db, "cache_size"), -32768);
@@ -68,6 +70,32 @@ test("file database enables WAL and incremental auto_vacuum", () => {
     assert.equal(first, second);
   } finally {
     close(db);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an existing file keeps its page size; a new one gets the default", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-page-"));
+  const file = path.join(dir, "index.sqlite");
+  try {
+    const legacy = new DatabaseSync(file);
+    legacy.exec("PRAGMA page_size=4096; CREATE TABLE t(v TEXT); INSERT INTO t VALUES ('kept')");
+    legacy.close();
+    const db = openIndexDb(file);
+    try {
+      assert.equal(pragma(db, "page_size"), 4096);
+      assert.equal(db.prepare("SELECT v FROM t").get()?.v, "kept");
+    } finally {
+      close(db);
+    }
+    const fresh = openIndexDb(path.join(dir, "fresh.sqlite"));
+    try {
+      ensureSchema(fresh);
+      assert.equal(pragma(fresh, "page_size"), DEFAULT_PAGE_SIZE_BYTES);
+    } finally {
+      close(fresh);
+    }
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -107,31 +135,83 @@ test("writer close truncates WAL; a held reader can delay that until compactWalF
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("vacuumInto copies a file database to a new path", () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "iod-vacuum-"));
-  const source = path.join(dir, "src.sqlite");
-  const dest = path.join(dir, "nested", "dst.sqlite");
-  const db = openIndexDb(source);
+// Cold-build lock follow-up: readers live in the MCP process while a builder
+// child owns the writer lock. A reader's close must never take (or wait for)
+// that lock, and the WAL compaction must never commit.
+test("read-only close never checkpoints, so it never waits on a live writer", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-ro-close-"));
+  const file = path.join(dir, "index.sqlite");
+  const writer = openIndexDb(file);
   try {
-    ensureSchema(db);
-    db.exec("INSERT INTO file(path, content_hash, generation, facts) VALUES ('a.java', 'h', 1, jsonb('{}'))");
+    writer.exec("CREATE TABLE t(x)");
+    writer.exec("INSERT INTO t VALUES (1)");
+    const reader = openIndexDb(file, { readOnly: true });
+    reader.prepare("SELECT x FROM t").get();
+    writer.exec("BEGIN IMMEDIATE");
+    writer.exec("INSERT INTO t VALUES (2)");
+    const started = Date.now();
+    close(reader);
+    const elapsed = Date.now() - started;
+    writer.exec("COMMIT");
+    assert.ok(elapsed < 1000, `read-only close blocked ${elapsed}ms on the writer lock`);
   } finally {
-    close(db);
-  }
-  vacuumInto(source, dest);
-  assert.equal(existsSync(dest), true);
-  const copied = openIndexDb(dest, { readOnly: true });
-  try {
-    assert.equal(copied.prepare("SELECT count(*) AS n FROM file").get()?.n, 1);
-    assert.equal(copied.prepare("SELECT path AS path FROM file").get()?.path, "a.java");
-  } finally {
-    close(copied);
+    close(writer);
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("vacuumInto rejects quoted paths", () => {
-  assert.throws(() => vacuumInto("/tmp/a.sqlite", "/tmp/o'reilly.sqlite"), /unsafe dest/);
+test("read-only close never resets the WAL under a writer's open cursor", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-ro-reset-"));
+  const file = path.join(dir, "index.sqlite");
+  const writer = openIndexDb(file);
+  try {
+    writer.exec("CREATE TABLE t(x)");
+    for (let i = 0; i < 5; i += 1) writer.exec(`INSERT INTO t VALUES (${i})`);
+    // a fully backfilled WAL: a TRUNCATE checkpoint from any connection,
+    // even a read-only one, would restart it
+    writer.exec("PRAGMA wal_checkpoint(PASSIVE)");
+    const cursor = writer.prepare("SELECT x FROM t").iterate();
+    cursor.next();
+    const reader = openIndexDb(file, { readOnly: true });
+    reader.prepare("SELECT x FROM t").get();
+    close(reader);
+    writer.exec("BEGIN IMMEDIATE");
+    writer.exec("INSERT INTO t VALUES (99)");
+    writer.exec("COMMIT");
+    cursor.return?.();
+  } finally {
+    close(writer);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("compactWalFile never commits and never waits on a live writer", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-compact-"));
+  const file = path.join(dir, "index.sqlite");
+  const writer = openIndexDb(file);
+  try {
+    writer.exec("PRAGMA wal_autocheckpoint=0");
+    writer.exec("CREATE TABLE t(x)");
+    for (let i = 0; i < 5; i += 1) writer.exec(`INSERT INTO t VALUES (${i})`);
+    // WAL frames not yet backfilled + an open cursor: any foreign commit
+    // (the writer pragmas did one) breaks this connection's next write.
+    const cursor = writer.prepare("SELECT x FROM t").iterate();
+    cursor.next();
+    compactWalFile(file);
+    writer.exec("BEGIN IMMEDIATE");
+    writer.exec("INSERT INTO t VALUES (99)");
+    writer.exec("COMMIT");
+    cursor.return?.();
+    writer.exec("BEGIN IMMEDIATE");
+    const started = Date.now();
+    compactWalFile(file);
+    const elapsed = Date.now() - started;
+    writer.exec("COMMIT");
+    assert.ok(elapsed < 1000, `compaction blocked ${elapsed}ms behind the writer`);
+  } finally {
+    close(writer);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("IN lists above SQLITE_MAX_VARIABLE_NUMBER fail unless chunked", () => {

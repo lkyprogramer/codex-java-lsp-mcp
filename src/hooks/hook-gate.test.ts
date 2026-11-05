@@ -21,7 +21,7 @@ function runHook(config: string, cwd: string, prompt: string): string {
   return JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
 }
 
-test("hook advice tells enabled projects to start a stopped LSP server", async () => {
+test("hook advice keeps enabled projects static-first and starts JDT on demand", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-hook-enabled-"));
   await mkdir(path.join(root, "src", "main", "java"), { recursive: true });
   await writeFile(path.join(root, "pom.xml"), "<project></project>");
@@ -33,10 +33,16 @@ test("hook advice tells enabled projects to start a stopped LSP server", async (
   }));
 
   const advice = runHook(config, root, "排查 Java service 调用链");
-  assert.match(advice, /不能只报告 LSP server 未启动/);
-  assert.match(advice, /start:false/);
+  // MAC-13 D09: no java_status precondition; the target tool's own result verifies repoRoot.
+  assert.doesNotMatch(advice, /start:false/);
+  assert.match(advice, /不必先调 java_status/);
+  assert.match(advice, /symbolId/);
   assert.match(advice, /started=false/);
-  assert.match(advice, /start:true/);
+  assert.doesNotMatch(advice, /start:true|必须立即/);
+  assert.match(advice, /静态查询不需要 JDT/);
+  assert.match(advice, /未知位置先用 java_symbol\(operation=query\)/);
+  assert.match(advice, /java_impact\(\{symbol:/);
+  assert.match(advice, /按需启动 JDT/);
   assert.match(advice, /semanticPolicy=auto/);
   assert.match(advice, /semanticPolicy=required/);
   assert.match(advice, /java_symbol/);
@@ -53,12 +59,15 @@ test("hook does not prestart JDT on a linked Git worktree", { skip: !hasGit() },
 
   const worktreeAdvice = runHook(config, family.linked, "排查 Java service 调用链");
   assert.match(worktreeAdvice, /Git worktree/);
-  assert.match(worktreeAdvice, /start:false/);
+  assert.doesNotMatch(worktreeAdvice, /start:false/);
   assert.doesNotMatch(worktreeAdvice, /start:true/);
   assert.match(worktreeAdvice, /java_impact/);
   assert.match(worktreeAdvice, /java_symbol/);
+  assert.match(worktreeAdvice, /按需启动 JDT/);
 
   const primaryAdvice = runHook(config, family.primary, "排查 Java service 调用链");
-  assert.match(primaryAdvice, /start:true/);
+  assert.doesNotMatch(primaryAdvice, /start:true|必须立即/);
   assert.doesNotMatch(primaryAdvice, /Git worktree/);
+  assert.match(primaryAdvice, /静态查询不需要 JDT/);
+  assert.match(primaryAdvice, /按需启动 JDT/);
 });

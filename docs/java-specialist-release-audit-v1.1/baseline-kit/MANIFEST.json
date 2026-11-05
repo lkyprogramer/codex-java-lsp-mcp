@@ -1,0 +1,32 @@
+{
+  "schema": "java-specialist-devkit/v1",
+  "version": "1.0",
+  "date": "2026-09-19",
+  "source_baseline": "d86dba38fccc9bf4b6d83703c9effacedbe9a972",
+  "dataset_hash": "c34a7c7c2f261bb273bc622739eae6beff8479ca96512c48942638cd912b8c4d",
+  "dataset_files": 132,
+  "task_groups": 36,
+  "query_variants": 72,
+  "split": {
+    "dev": 24,
+    "locked": 12
+  },
+  "corpus_clusters": 12,
+  "qa_tasks": 28,
+  "repair_tasks": 8,
+  "contract_specs": 32,
+  "source_probes": {
+    "passed": 3,
+    "failed": 9,
+    "scope": "real-source-functions-with-constructed-facts"
+  },
+  "kit_tests": {
+    "passed": 56,
+    "failed": 0
+  },
+  "full_upstream_repos": "NOT_BUNDLED_FETCH_PINNED_WITH_EXPLICIT_NETWORK",
+  "production_JDT_live_agent": "NOT_RUN",
+  "entry": "RUN_AI.md",
+  "limits": "docs/15-delivery-verification.md",
+  "integrity": "SHA256SUMS covers all delivered files except itself"
+}

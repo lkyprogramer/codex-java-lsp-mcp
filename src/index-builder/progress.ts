@@ -1,4 +1,8 @@
+import { computeExtractorVersion } from "../java-index/build-fingerprint.js";
+import type { SourceRootCoverage } from "../java-index/index-types.js";
 import { prepareCached, type IndexDatabase } from "../java-index/sql/driver.js";
+import type { LayoutContext } from "../layout-probe.js";
+import { noteBuilderWork } from "./builder-liveness.js";
 
 export type BuildPhase = "declare" | "resolve";
 
@@ -26,7 +30,8 @@ export function readMeta(db: IndexDatabase, key: string): string | undefined {
 export function writeMeta(db: IndexDatabase, key: string, value: string): void {
   prepareCached(
     db,
-    "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    // An unchanged value is not rewritten (no meta page write for this key).
+    "INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value<>excluded.value"
   ).run(key, value);
 }
 
@@ -41,6 +46,7 @@ export function readBuildProgress(db: IndexDatabase): BuildProgress | undefined 
 
 export function writeBuildProgress(db: IndexDatabase, progress: BuildProgress): void {
   writeMeta(db, "buildProgress", JSON.stringify(progress));
+  noteBuilderWork();
 }
 
 function countStar(db: IndexDatabase, table: "file" | "type" | "method" | "edge"): number {
@@ -87,12 +93,80 @@ export function clearIndexData(db: IndexDatabase): void {
     DELETE FROM search_doc_token;
     DELETE FROM search_doc;
     DELETE FROM search_doc_df;
-    DELETE FROM kg_summary;
+    DELETE FROM kg_edge_owner;
+    DELETE FROM kg_node_owner;
     DELETE FROM kg_edge;
     DELETE FROM kg_node;
     DELETE FROM mybatis_resource;
+    DELETE FROM resource_scan;
     DELETE FROM source_root_coverage;
     DELETE FROM file;
-    DELETE FROM meta WHERE key != 'schemaVersion';
+    DELETE FROM meta WHERE key NOT IN ('schemaVersion', 'identityVersion', 'factsRevision', 'factsEncoding');
   `);
+}
+
+/** Set when a job failed after its changes were lost; only a full traversal clears it. */
+export const COVERAGE_GAP = "coverageGap";
+
+/** The roots a publish reports: the indexed source roots and the symlinked (never walked) content roots. */
+export type CoverageRoots = { indexed: readonly string[]; symlinked: readonly string[] };
+
+export function coverageRoots(layout: Pick<LayoutContext, "sourceRoots" | "symlinkedRoots">): CoverageRoots {
+  return { indexed: layout.sourceRoots.map(root => root.relativePath), symlinked: layout.symlinkedRoots ?? [] };
+}
+
+/** A full source traversal, not a partial watcher update, establishes coverage. */
+export function publishIndexCoverage(
+  db: IndexDatabase,
+  generation: number,
+  { indexed: roots, symlinked }: CoverageRoots,
+  discovered?: readonly { sourceRoot: string }[]
+): IndexCounts {
+  const previous = readSourceRootCounts(db);
+  const baselineComplete = readMeta(db, "pipelineComplete") !== "0" && readMeta(db, "coverageRevision") === "1" && readMeta(db, COVERAGE_GAP) === undefined;
+  const rows = db.prepare(`SELECT source_root AS root, count(*) AS indexedFiles,
+    sum(parse_state='FAILED') AS failedFiles, sum(parse_state='RECOVERED') AS recoveredFiles
+    FROM file GROUP BY source_root`).all() as Array<{ root: string; indexedFiles: number; failedFiles: number; recoveredFiles: number }>;
+  const indexed = new Map(rows.map(row => [row.root, row]));
+  const counts: Record<string, Omit<SourceRootCoverage, "root" | "state" | "generation">> = {};
+  const upsert = prepareCached(db, `INSERT INTO source_root_coverage(root, state, generation) VALUES (?, ?, ?)
+    ON CONFLICT(root) DO UPDATE SET state=excluded.state, generation=excluded.generation`);
+  let complete = discovered !== undefined || baselineComplete;
+  // A changed layout has unvisited roots, even when the previous layout was complete.
+  const oldRoots = new Set((db.prepare("SELECT root FROM source_root_coverage").all() as Array<{ root: string }>).map(row => row.root));
+  db.exec("DELETE FROM source_root_coverage");
+  for (const root of roots) {
+    const row = indexed.get(root);
+    const indexedFiles = Number(row?.indexedFiles ?? 0);
+    const failedFiles = Number(row?.failedFiles ?? 0);
+    const discoveredFiles = discovered !== undefined
+      ? discovered.filter(file => file.sourceRoot === root).length
+      : baselineComplete && oldRoots.has(root) ? indexedFiles : previous[root]?.discoveredFiles ?? 0;
+    const covered = (discovered !== undefined || baselineComplete && oldRoots.has(root)) && discoveredFiles === indexedFiles && failedFiles === 0 && Number(row?.recoveredFiles ?? 0) === 0;
+    if (!covered) complete = false;
+    const state = covered ? "COMPLETE" : "DEGRADED";
+    upsert.run(root, state, generation);
+    counts[root] = { discoveredFiles, indexedFiles, failedFiles, recoveredFiles: Number(row?.recoveredFiles ?? 0), extractorVersion: computeExtractorVersion() };
+  }
+  // Content behind a symlinked root is not indexed: a gap on every publish, full or partial.
+  for (const root of symlinked) {
+    if (counts[root]) continue;
+    complete = false;
+    upsert.run(root, "DEGRADED", generation);
+    counts[root] = { discoveredFiles: 0, indexedFiles: 0, failedFiles: 0, recoveredFiles: 0, extractorVersion: computeExtractorVersion() };
+  }
+  writeMeta(db, "sourceRootCounts", JSON.stringify(counts));
+  writeMeta(db, "indexedGeneration", String(generation));
+  // Every caller publishes a finished job: a delta's own BUILDING phase marker
+  // is not a cold build to resume (compatibleDeltaBase rejects BUILDING bases).
+  writeMeta(db, "buildState", complete ? "READY" : "DEGRADED");
+  if (discovered !== undefined) {
+    writeMeta(db, "coverageRevision", "1");
+    db.prepare("DELETE FROM meta WHERE key=?").run(COVERAGE_GAP);
+  }
+  return refreshIndexCounts(db);
+}
+
+export function readSourceRootCounts(db: IndexDatabase): Record<string, Omit<SourceRootCoverage, "root" | "state" | "generation">> {
+  return JSON.parse(readMeta(db, "sourceRootCounts") ?? "{}");
 }

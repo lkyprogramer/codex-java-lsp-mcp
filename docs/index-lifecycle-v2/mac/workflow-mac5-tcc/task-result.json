@@ -1,0 +1,49 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "ILV2-MAC/5",
+  "workflowId": "WF-MAC5-TCC",
+  "status": "BLOCKED_ENV",
+  "dependency": null,
+  "identity": null,
+  "checks": [],
+  "evidence": [
+    {
+      "name": "a4-documents-read",
+      "file": "a4-tcc-probe.json",
+      "sha256": "faa248940263290d022d28ed7c798b3efc6dd2868626f0a8479a7a68903a1562",
+      "status": "BLOCKED_ENV_TCC",
+      "provenance": "Broker run a4-documents-read in throwaway run root runs/smoke-mac5/r1 (candidate source f8d1f2ef..., 2026-10-14T13:38:37Z): scripts/ilv2-mac-env-probe.mjs --timeout-ms 8000 --read <file under ~/Documents> --toolchains <frozen INPUT>, exit 2. The full bundle (result/command/stdout/stderr/plist/timeline) is archived from raw/a4-documents-read; the smoke root was deleted after its 8 PIDs, 2 groups and 2 launchd jobs were proven gone."
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "85e10e00f12f1baaeb3fe76b1b4a43aa04fdb911439478c4bfba24e22ab19cf4",
+    "registeredPids": 2,
+    "ownedGroups": 1,
+    "launchdJobs": 1,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/workflow-mac5-tcc/20261014T141855Z/closeout/raw-evidence.tar.gz",
+      "sha256": "f5c3d499a169f2271595cdb1f32b046d3c78114fe10ef1c49515924ba6044d5b",
+      "fileCount": 9,
+      "bytes": 24254,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": "NOT_RUN"
+  },
+  "validationIndexSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "notClaimed": [
+    "No TCC grant was given or recorded; the system dialog was not answered with Allow",
+    "Production launcher identity, code signing and a production read of business repositories: NOT_RUN",
+    "The cdhash-based identity of ad-hoc signed rebuilds is an inference, not measured"
+  ],
+  "next": "User decision TCC-LAUNCHER-IDENTITY before MAC-17 (status.json openDecisions).",
+  "authorization": "Current user instruction (A -> C -> B workflow revision). No OS privacy changes, no production calls.",
+  "notes": "An isolated launchd job whose Program is the native owner launcher exec'd the frozen Node and read a file under ~/Documents: tccd logged AUTHREQ_PROMPTING for kTCCServiceSystemPolicyDocumentsFolder with responsible_path = the launcher and binary_path = node. Path checks and the frozen toolchain were READY; launchd closeout was clean.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/workflow-mac5-tcc/20261014T141855Z"
+}

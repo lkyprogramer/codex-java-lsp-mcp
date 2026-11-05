@@ -6,12 +6,17 @@ import os from "node:os";
 import path from "node:path";
 import {
   buildEnvLock,
+  candidateSuiteSummary,
   COMPARISON_POLICY_ENV_LOCKED,
   FORMAL_REQUEST_DEADLINE_MS,
+  greenCandidateSuite,
   MATRIX_PROJECTS,
   MATRIX_ROUNDS,
   MATRIX_VARIANTS,
   MatrixValidationError,
+  P95_CONTRACT_LEGACY,
+  P95_CONTRACT_STRICT,
+  p95Gate,
   parseEnvAssignment,
   VERIFIER_VERSION,
   verifyMatrix
@@ -35,6 +40,59 @@ test("verifier accepts a complete frozen-scenario matrix that satisfies every pa
   assert.ok(result.projects.every(project => project.new.splits.holdout.attempts === 30));
   assert.equal(result.summaryFile, undefined);
   await assert.rejects(() => readFile(path.join(matrixDir, "matrix-summary.json")), /ENOENT/);
+});
+
+test("strict p95 contract: 100->140 FAILs, 100->125 PASSes, and a zero baseline is an invalid experiment", () => {
+  const strict = (oldP95, newP95) => p95Gate({ oldP95, newP95, contract: P95_CONTRACT_STRICT });
+  assert.deepEqual([strict(100, 140).status, strict(100, 140).ratio, strict(100, 140).thresholdMs], ["FAIL", 1.4, 125]);
+  assert.deepEqual([strict(100, 125).status, strict(100, 125).ratio, strict(100, 125).policy], ["PASS", 1.25, "newP95 <= oldP95 x 1.25"]);
+  assert.equal(strict(100, 125.0001).status, "FAIL", "no slack above the ratio");
+  for (const [oldP95, newP95] of [[0, 10], [0, 0], [-1, 10], [Number.NaN, 10], [100, Number.NaN], [100, -1]]) {
+    const gate = strict(oldP95, newP95);
+    assert.deepEqual([gate.status, gate.ratio], ["INVALID_EXPERIMENT", null], JSON.stringify([oldP95, newP95]));
+  }
+  assert.equal(p95Gate({ oldP95: 100, newP95: 120, contract: P95_CONTRACT_STRICT, limit: 1.5 }).status, "INVALID_EXPERIMENT", "the strict ratio is not configurable");
+  // The historical formula still judges historical manifests, unchanged: 100->140 passed under its 50 ms slack.
+  const legacy = p95Gate({ oldP95: 100, newP95: 140, contract: P95_CONTRACT_LEGACY, limit: 1.25 });
+  assert.deepEqual([legacy.status, legacy.thresholdMs], ["PASS", 150]);
+  assert.throws(() => p95Gate({ oldP95: 100, newP95: 100, contract: "unknown" }), /unknown p95 contract/);
+});
+
+test("the verifier judges a strict-contract matrix by the strict ratio and records old/new/ratio/policy", async t => {
+  const failing = await fixtureMatrix({ cipherlink: { newElapsedMs: 140 } }, { strictP95: true });
+  const passing = await fixtureMatrix({ cipherlink: { newElapsedMs: 125 } }, { strictP95: true });
+  const legacy = await fixtureMatrix({ cipherlink: { newElapsedMs: 140 } });
+  const zero = await fixtureMatrix({ cipherlink: { oldElapsedMs: 0 } }, { strictP95: true });
+  t.after(() => Promise.all([failing, passing, legacy, zero].map(dir => rm(path.dirname(dir), { recursive: true, force: true }))));
+  const cipher = result => result.projects.find(project => project.project === "cipherlink");
+
+  const failed = verifyMatrix({ matrixDir: failing, requireP95Contract: P95_CONTRACT_STRICT });
+  assert.deepEqual([failed.passed, failed.status, cipher(failed).gate.p95], [false, "FAIL", false]);
+  assert.deepEqual([cipher(failed).p95Contract.contractVersion, cipher(failed).p95Contract.oldP95Ms, cipher(failed).p95Contract.newP95Ms, cipher(failed).p95Contract.ratio, cipher(failed).p95Contract.status],
+    [P95_CONTRACT_STRICT, 100, 140, 1.4, "FAIL"]);
+  assert.equal(failed.configuration.p95Contract, P95_CONTRACT_STRICT);
+
+  const passed = verifyMatrix({ matrixDir: passing, requireP95Contract: P95_CONTRACT_STRICT });
+  assert.deepEqual([passed.passed, passed.status, cipher(passed).p95Contract.ratio], [true, "PASS", 1.25]);
+
+  // The same 100->140 matrix under the historical contract passes, so it can never stand in for the strict gate.
+  const historical = verifyMatrix({ matrixDir: legacy });
+  assert.deepEqual([historical.passed, cipher(historical).p95Contract.contractVersion, cipher(historical).p95Contract.thresholdMs], [true, P95_CONTRACT_LEGACY, 150]);
+  assert.throws(() => verifyMatrix({ matrixDir: legacy, requireP95Contract: P95_CONTRACT_STRICT }), /p95 contract v32-p95-ratio-or-50ms is not the required ilv2-p95-strict-ratio-v1/);
+
+  const invalid = verifyMatrix({ matrixDir: zero, requireP95Contract: P95_CONTRACT_STRICT });
+  assert.deepEqual([invalid.passed, invalid.status, cipher(invalid).p95Contract.status, cipher(invalid).delta.p95Ratio], [false, "INVALID_EXPERIMENT", "INVALID_EXPERIMENT", null]);
+});
+
+test("a strict-contract manifest must not carry the historical slack or a different ratio", async t => {
+  const matrixDir = await fixtureMatrix({}, { strictP95: true });
+  t.after(() => rm(path.dirname(matrixDir), { recursive: true, force: true }));
+  const manifestFile = path.join(path.dirname(matrixDir), "run-manifest.json");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  await writeFile(manifestFile, JSON.stringify({ ...manifest, comparisonPolicy: { ...manifest.comparisonPolicy, p95AbsoluteSlackMs: 50 } }));
+  assert.throws(() => verifyMatrix({ matrixDir, manifestFile }), /invalid executable-baseline comparison policy/);
+  await writeFile(manifestFile, JSON.stringify({ ...manifest, p95Limit: 1.5 }));
+  assert.throws(() => verifyMatrix({ matrixDir, manifestFile, p95Limit: 1.5 }), /fixes p95Limit at 1.25/);
 });
 
 test("verifier allows the Task36 P_read tolerance but rejects a larger regression", async t => {
@@ -203,6 +261,31 @@ test("verifier requires a valid private dependency inventory", async t => {
   await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 
   assert.throws(() => verifyMatrix({ matrixDir }), /dependency inventory/i);
+});
+
+const skippedTap = (lines, { tests = 3, pass = 2, skipped = 1, todo = 0 } = {}) => `TAP version 13\n${lines.join("\n")}\n1..${tests}\n# tests ${tests}\n# pass ${pass}\n# fail 0\n# cancelled 0\n# skipped ${skipped}\n# todo ${todo}\n# duration_ms 1\n`;
+
+test("a candidate suite is green with named skips and not with an unnamed skip, a todo or a miscount", () => {
+  const named = candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - driver # SKIP DRIVER_INPUT is not set"]));
+  assert.deepEqual(named.skippedTests, [{ name: "driver", reason: "DRIVER_INPUT is not set" }]);
+  assert.equal(greenCandidateSuite(named), true);
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - driver # SKIP"]))), false, "a skip must name why");
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - later # TODO"], { skipped: 0, todo: 1 }))), false);
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - c"], { skipped: 1 }))), false, "the skip count must match the named skips");
+  assert.equal(greenCandidateSuite(candidateSuiteSummary(skippedTap(["ok 1 - a # SKIP off"], { tests: 1, pass: 0 }))), false, "an all-skipped suite proves nothing");
+});
+
+test("verifier accepts named candidate skips only as the manifest records them", async t => {
+  const tap = skippedTap(["ok 1 - a", "ok 2 - b", "ok 3 - driver # SKIP DRIVER_INPUT is not set"]);
+  const scripts = skippedTests => ({ tap, discoveredTests: 3, passedTests: 2, skippedTests });
+  const recorded = await fixtureMatrix({}, { candidateScripts: scripts([{ name: "driver", reason: "DRIVER_INPUT is not set" }]) });
+  const unrecorded = await fixtureMatrix({}, { candidateScripts: scripts(undefined) });
+  const renamed = await fixtureMatrix({}, { candidateScripts: scripts([{ name: "other", reason: "DRIVER_INPUT is not set" }]) });
+  t.after(() => Promise.all([recorded, unrecorded, renamed].map(dir => rm(path.dirname(dir), { recursive: true, force: true }))));
+
+  assert.doesNotThrow(() => verifyMatrix({ matrixDir: recorded }));
+  assert.throws(() => verifyMatrix({ matrixDir: unrecorded }), /all-green suite/, "an unrecorded skip leaves the counts short");
+  assert.throws(() => verifyMatrix({ matrixDir: renamed }), /TAP summary/);
 });
 
 test("verifier rejects a candidate patch whose replay tree is not the declared executable tree", async t => {
@@ -498,11 +581,13 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
   for (const [suite, count] of [["dist", 10], ["scripts", 5]]) {
     const stdoutFile = path.join(candidateTestRoot, `${suite}.tap`);
     const stderrFile = path.join(candidateTestRoot, `${suite}.stderr`);
-    const stdout = `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1\n`;
+    const custom = suite === "scripts" ? fixtureOptions.candidateScripts : undefined;
+    const stdout = custom?.tap ?? `TAP version 13\n1..${count}\n# tests ${count}\n# pass ${count}\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1\n`;
     await Promise.all([writeFile(stdoutFile, stdout), writeFile(stderrFile, "")]);
     candidateTests[suite] = {
-      discoveredTests: count,
-      passedTests: count,
+      discoveredTests: custom?.discoveredTests ?? count,
+      passedTests: custom?.passedTests ?? count,
+      ...(custom?.skippedTests ? { skippedTests: custom.skippedTests } : {}),
       stdout: { file: stdoutFile, bytes: Buffer.byteLength(stdout), sha256: sha256(stdout) },
       stderr: { file: stderrFile, bytes: 0, sha256: sha256("") }
     };
@@ -592,6 +677,10 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
     repositories,
     scenarios
   };
+  if (fixtureOptions.strictP95) {
+    delete manifest.comparisonPolicy.p95AbsoluteSlackMs;
+    manifest.comparisonPolicy.p95ContractVersion = P95_CONTRACT_STRICT;
+  }
   const manifestFile = path.join(root, "run-manifest.json");
   const manifestContents = `${JSON.stringify(manifest, null, 2)}\n`;
   await writeFile(manifestFile, manifestContents);
@@ -605,7 +694,7 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
         const old = variant === "old";
         const runtime = old ? oldRuntime : newRuntime;
         const pRead = old ? 0.50 : (projectOverride.newPRead ?? 0.60);
-        const elapsedMs = old ? 100 : (projectOverride.newElapsedMs ?? 105);
+        const elapsedMs = old ? (projectOverride.oldElapsedMs ?? 100) : (projectOverride.newElapsedMs ?? 105);
         const rowIds = fixtureOptions.missingCandidateRow && project === "cipherlink" && variant === "new" && round === 2
           ? scenarios[project].rowIds.slice(0, 1)
           : scenarios[project].rowIds;

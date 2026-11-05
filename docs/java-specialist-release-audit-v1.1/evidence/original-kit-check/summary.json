@@ -1,0 +1,39 @@
+{
+  "schema": "kit-selfcheck/v1",
+  "passed": true,
+  "scope": "KIT_ONLY",
+  "product_release": "NOT_RUN",
+  "live_agent": "NOT_RUN",
+  "rows": [
+    {
+      "name": "dataset",
+      "exit": 0,
+      "timeout": false,
+      "output_limit": false
+    },
+    {
+      "name": "unit",
+      "exit": 0,
+      "timeout": false,
+      "output_limit": false
+    },
+    {
+      "name": "repair-oracles",
+      "exit": 0,
+      "timeout": false,
+      "output_limit": false
+    },
+    {
+      "name": "upstream",
+      "exit": 0,
+      "timeout": false,
+      "output_limit": false
+    },
+    {
+      "name": "faultcheck",
+      "exit": 0,
+      "timeout": false,
+      "output_limit": false
+    }
+  ]
+}

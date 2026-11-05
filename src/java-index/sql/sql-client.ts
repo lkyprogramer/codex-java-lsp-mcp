@@ -1,8 +1,4 @@
-import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { existsSync, rmSync, statSync } from "node:fs";
 import { probeLayout } from "../../layout-probe.js";
 import type { LayoutContext } from "../../layout-probe.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -12,6 +8,7 @@ import type {
   JavaIndexOpenOptions,
   JavaIndexRequestOptions
 } from "../java-index-client-api.js";
+import type { LocalBuilder, LocalBuilderJob } from "../local-builder.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "../entity-search.js";
 import type { DetailedEntitySearchResult, EntitySearchOptions } from "../entity-search.js";
 import type {
@@ -31,14 +28,13 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
-import { readIndexCounts, readMeta, writeBuildProgress, writeMeta } from "../../index-builder/progress.js";
-import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
+import { readIndexCounts, readMeta, readSourceRootCounts } from "../../index-builder/progress.js";
 import { noteTelemetryHydratePhases } from "../../telemetry/impact-telemetry.js";
-import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, isMemoryPath, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
 import { schemaVersionsMatch } from "./schema.js";
-
-const execFileAsync = promisify(execFile);
 import { SqlEntitySearch } from "./entity-search.js";
+import { absoluteNow, sharedQueryWorker } from "../../discovery/query-worker.js";
+import { queryEvidenceSources as readEvidenceSources } from "./evidence-sources.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
 import {
@@ -49,6 +45,12 @@ import {
   queryReadRanges as runReadRanges,
   type SqlQueryDeps
 } from "./sql-queries.js";
+
+/** The request deadline as the legacy search's remaining-time source. */
+function remainingMsOf(requestOptions: JavaIndexRequestOptions | undefined): (() => number) | undefined {
+  const budget = requestOptions?.budget;
+  return budget ? () => budget.remainingMs() : undefined;
+}
 
 function emptyStatus(state: JavaIndexStatus["state"] = "NEW"): JavaIndexStatus {
   return {
@@ -82,7 +84,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   constructor(
     private readonly repoRoot: string,
     private readonly dbPath: string,
-    private supervisor?: BuilderSupervisor,
+    /** Tests/benchmarks only: builds run here only when a caller injects a builder; this client never creates one. */
+    private readonly supervisor?: LocalBuilder,
     connIdleMs?: number
   ) {
     const fromEnv = Number(process.env.JAVA_LSP_CONN_IDLE_MS);
@@ -93,54 +96,20 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
         : 600_000;
   }
 
-  async open(generation: number, options?: JavaIndexOpenOptions, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+  async open(_generation: number, _options?: JavaIndexOpenOptions, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
     if (this.opened) {
       throw new JavaIntelligenceError("INDEX_PARTIAL", `Java index client cannot open from state ${this.lastStatus.state}`);
     }
     this.layout = probeLayout(this.repoRoot);
     try {
+      // An index written by another schema/identity/facts revision (an older
+      // product version) is never served: its facts follow other rules (e.g.
+      // locators). It is removed and rebuilt like a missing index.
+      if (existsSync(this.dbPath) && !this.existingSchemaMatches()) {
+        await sharedQueryWorker().release(this.dbPath);
+        for (const suffix of ["", "-wal", "-shm"]) rmSync(`${this.dbPath}${suffix}`, { force: true });
+      }
       if (!existsSync(this.dbPath)) {
-        let siblingReused = false;
-        if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
-          this.opened = true;
-          this.lastStatus = emptyStatus("BUILDING");
-          try {
-            const copied = await this.copySibling(options.siblingDbPath);
-            this.hydratePhases.siblingCopy = copied;
-            // A seed written by an older schema/identity pair must be rebuilt,
-            // never reused: mixing old identity strings with new ones would
-            // split one declaration's edges and facts across two ids.
-            if (!this.copiedSchemaMatches()) {
-              throw new JavaIntelligenceError("INDEX_PARTIAL", "sibling copy schema/identity mismatch; cold rebuild required");
-            }
-            this.retargetCopiedDb();
-            this.reload();
-            if (this.supervisor) {
-              const waitStarted = Date.now();
-              try {
-                const result = await this.supervisor.submit({ kind: "reconcile", generation, changed: [], deleted: [] });
-                this.hydratePhases.reconcileWait = Date.now() - waitStarted;
-                if (!result.ok) this.markDegraded(result.error ?? "reconcile failed");
-                else this.reload();
-              } catch (error) {
-                this.hydratePhases.reconcileWait = Date.now() - waitStarted;
-                this.markDegraded(error);
-              }
-            }
-            siblingReused = true;
-          } catch (error) {
-            // Discard the unusable copy and fall through to a cold rebuild.
-            // Its timing must not leak into reported hydrate phases.
-            this.hydratePhases = {};
-            rmSync(this.dbPath, { force: true });
-            this.reload();
-            this.markDegraded(error instanceof Error ? error.message : String(error));
-          }
-        }
-        if (siblingReused) {
-          noteTelemetryHydratePhases(this.hydratePhases);
-          return this.lastStatus;
-        }
         if (this.supervisor) {
           const builder = this.supervisor.status();
           this.lastStatus = { ...emptyStatus("BUILDING"), builder, pendingBackground: builder.queued };
@@ -193,6 +162,9 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.graph = undefined;
     this.search = undefined;
     this.lastStatus = { ...this.lastStatus, state: "CLOSED" };
+    // Always: a query queued before an idle drop may have reopened the
+    // worker's reader; release is a no-op without a worker.
+    await sharedQueryWorker().release(this.dbPath);
     await this.supervisor?.stop().catch(() => undefined);
   }
 
@@ -225,6 +197,14 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.dropConn();
     for (;;) {
       requestOptions?.budget?.throwIfExpired("awaitPrewarmReady");
+      // Without a budget this loop must still end once nothing can make the
+      // index READY: the client closed, or the cold build failed for good.
+      if (!this.opened || this.lastStatus.state === "CLOSED") {
+        throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client closed while waiting for prewarm");
+      }
+      if (this.lastStatus.state === "DEGRADED" && this.supervisor?.status().state !== "cold-building") {
+        throw new JavaIntelligenceError("INDEX_PARTIAL", this.lastStatus.lastError ?? "cold build failed");
+      }
       if (this.peekBuildState() === "READY") {
         this.reload();
         return this.lastStatus;
@@ -258,12 +238,27 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       : parentRemaining
         ? { remainingMs: parentRemaining }
         : undefined;
-    return deps.search.searchDetailed(
+    const limit = options.limit ?? ENTITY_SEARCH_DEFAULT_LIMIT;
+    const mode = options.mode ?? "auto";
+    if (isMemoryPath(this.dbPath)) {
+      // Same physical budget as the worker path: never an unbounded scan.
+      return deps.search.searchDetailed(task, limit, mode, { scope: options.scope, budget: budget ?? {} });
+    }
+    // R09: the scan runs on the shared read-only query worker so a broad
+    // query never blocks this event loop; the remaining time becomes one
+    // absolute deadline the worker checks at every stage and row boundary.
+    const remaining = budget?.remainingMs?.();
+    const deadlineAt = remaining === undefined || !Number.isFinite(remaining) ? undefined : absoluteNow() + Math.max(0, remaining);
+    return sharedQueryWorker().search({
+      dbPath: this.dbPath,
       task,
-      options.limit ?? ENTITY_SEARCH_DEFAULT_LIMIT,
-      options.mode ?? "auto",
-      { scope: options.scope, budget }
-    );
+      limit,
+      mode,
+      scope: options.scope,
+      maxPostings: budget?.maxPostings,
+      deadlineAt,
+      idleMs: this.connIdleMs
+    });
   }
   async queryGraphReachable(
     fromRelativePath: string,
@@ -274,14 +269,19 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
   async queryContextGraph(
     input: Parameters<JavaIndexClientApi["queryContextGraph"]>[0],
-    _requestOptions?: JavaIndexRequestOptions
+    requestOptions?: JavaIndexRequestOptions
   ): Promise<ContextGraphResult> {
     this.ensureConn();
     this.graph?.prefetch();
-    return runContextGraph(this.queryDeps(), input);
+    return runContextGraph(this.queryDeps(), input, remainingMsOf(requestOptions));
   }
-  async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, _requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
-    return runEntitySearch(this.queryDeps(), task, limit);
+  async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
+    return runEntitySearch(this.queryDeps(), task, limit, remainingMsOf(requestOptions));
+  }
+
+  async queryEvidenceSources(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions) {
+    const relative = this.toRelative(file);
+    return readEvidenceSources(this.requireDb(), relative ?? "", line, column, remainingMsOf(requestOptions));
   }
 
   async queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined> {
@@ -368,10 +368,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     return this.requireStore().repositoryFactMarkers(importPrefixes, annotationPrefixes);
   }
 
-  private requireSupervisor(_method: string): BuilderSupervisor {
-    if (!this.supervisor) {
-      this.supervisor = new BuilderSupervisor({ repoRoot: this.repoRoot, dbPath: this.dbPath });
-    }
+  private requireSupervisor(method: string): LocalBuilder {
+    if (!this.supervisor) throw new JavaIntelligenceError("INDEX_PARTIAL", `${method} needs an injected builder; this client only reads`);
     return this.supervisor;
   }
 
@@ -380,7 +378,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     return this.db;
   }
 
-  private async runBuilderJob(job: BuilderSupervisorJob): Promise<JavaIndexStatus> {
+  private async runBuilderJob(job: LocalBuilderJob): Promise<JavaIndexStatus> {
     const result = await this.requireSupervisor(job.kind).submit(job);
     if (!result.ok) throw new JavaIntelligenceError("INDEX_PARTIAL", result.error ?? "builder failed");
     this.reload(true);
@@ -398,6 +396,17 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       return;
     }
     this.db = openIndexDb(this.dbPath, { readOnly: true });
+    // A cold builder creates the file before its schema transaction finishes.
+    // Polling that transient file must retain BUILDING rather than construct
+    // readers over tables that do not yet exist.
+    if (this.lastStatus.state === "BUILDING" && !schemaVersionsMatch(this.db)) {
+      closeDb(this.db);
+      this.db = undefined;
+      return;
+    }
+    // A reload may follow a rebuilt/replaced file: drop the worker's reader
+    // of the old inode now instead of at its next request or idle timeout.
+    void sharedQueryWorker().release(this.dbPath);
     this.store = new SqlFactsStore(this.db);
     this.graph = new SqlKnowledgeGraph(this.db);
     this.search = new SqlEntitySearch(this.db);
@@ -438,7 +447,14 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.store = undefined;
     this.graph = undefined;
     this.search = undefined;
-    compactWalFile(this.dbPath);
+    // The query worker's reader goes first, so the compaction can be the
+    // file's last close. While a builder child is alive it is the only
+    // writer and truncates WAL on its own close; this process stays a reader.
+    const dbPath = this.dbPath;
+    const released = sharedQueryWorker().release(dbPath);
+    void released.finally(() => {
+      if (!this.supervisor || this.supervisor.status().state === "idle") compactWalFile(dbPath);
+    });
   }
 
   private clearIdle(): void {
@@ -459,48 +475,16 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     };
   }
 
-  private async copySibling(fromPath: string): Promise<number> {
-    mkdirSync(dirname(this.dbPath), { recursive: true });
-    const tmp = `${this.dbPath}.copying`;
-    rmSync(tmp, { force: true });
-    const helper = fileURLToPath(new URL("./vacuum-into.js", import.meta.url));
-    const started = Date.now();
+  /** Read-only check of an existing index file; unreadable counts as stale. */
+  private existingSchemaMatches(): boolean {
+    let db: IndexDatabase | undefined;
     try {
-      await execFileAsync(
-        process.execPath,
-        ["--disable-warning=ExperimentalWarning", helper, fromPath, tmp],
-        { timeout: 120_000 }
-      );
-    } catch (error) {
-      rmSync(tmp, { force: true });
-      const detail = error instanceof Error ? error.message : String(error);
-      throw new JavaIntelligenceError("INDEX_PARTIAL", `sibling VACUUM INTO failed: ${detail.slice(0, 400)}`);
-    }
-    if (!existsSync(tmp)) {
-      throw new JavaIntelligenceError("INDEX_PARTIAL", "sibling VACUUM INTO failed: missing output");
-    }
-    renameSync(tmp, this.dbPath);
-    return Date.now() - started;
-  }
-
-  private copiedSchemaMatches(): boolean {
-    const db = openIndexDb(this.dbPath);
-    try {
-      return schemaVersionsMatch(db);
+      db = openIndexDb(this.dbPath, { readOnly: true });
+      return schemaVersionsMatch(db) && (readMeta(db, "buildState") !== "READY" || readMeta(db, "coverageRevision") === "1");
+    } catch {
+      return false;
     } finally {
-      closeDb(db);
-    }
-  }
-
-  private retargetCopiedDb(): void {
-    const db = openIndexDb(this.dbPath);
-    try {
-      withTransaction(db, () => {
-        writeMeta(db, "repoRoot", this.repoRoot);
-        writeBuildProgress(db, { phase: "declare", done: 1, total: 1 });
-      });
-    } finally {
-      closeDb(db);
+      if (db) closeDb(db);
     }
   }
 
@@ -549,15 +533,16 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       state: string;
       generation: number | bigint;
     }>;
+    const counts = readSourceRootCounts(this.db);
     return rows.map(row => ({
       root: row.root,
       generation: typeof row.generation === "bigint" ? Number(row.generation) : Number(row.generation),
       state: row.state as SourceRootCoverage["state"],
-      discoveredFiles: 0,
-      indexedFiles: 0,
-      failedFiles: 0,
-      recoveredFiles: 0,
-      extractorVersion: ""
+      discoveredFiles: counts[row.root]?.discoveredFiles ?? 0,
+      indexedFiles: counts[row.root]?.indexedFiles ?? 0,
+      failedFiles: counts[row.root]?.failedFiles ?? 0,
+      recoveredFiles: counts[row.root]?.recoveredFiles ?? 0,
+      extractorVersion: counts[row.root]?.extractorVersion ?? ""
     }));
   }
 

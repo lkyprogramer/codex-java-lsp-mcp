@@ -45,27 +45,27 @@ const EXPECTED_CASES = [
   },
   {
     id: "java-index-crash",
-    testFile: "dist/java-index/sql/sql-client-lifecycle.test.js",
-    testNamePattern: "^failed sibling reconcile marks DEGRADED$",
-    expectedInvariant: "a worker crash rejects pending requests and degrades the client"
+    testFile: "dist/java-index/snapshot/query-pool.test.js",
+    testNamePattern: "^repeated child errors settle once without an unhandled error$",
+    expectedInvariant: "a crashing query worker settles its caller once and never crashes the owner"
   },
   {
     id: "snapshot-corruption",
-    testFile: "dist/java-index/sql/sql-client-lifecycle.test.js",
-    testNamePattern: "^failed sibling copy does not leave dest and falls back to cold build$",
-    expectedInvariant: "a corrupt sibling snapshot falls back to an empty OPEN store"
+    testFile: "dist/java-index/snapshot/snapshot-store.test.js",
+    testNamePattern: "^recovery refuses a binding that does not match its snapshot manifest$",
+    expectedInvariant: "a snapshot that does not match its binding is never served; recovery refuses it"
   },
   {
     id: "watcher-error",
-    testFile: "dist/repo-change-coordinator.test.js",
-    testNamePattern: "^degrade catches an async listener rejection and records the listener failure$",
-    expectedInvariant: "a watcher listener error is recorded without escaping the coordinator"
+    testFile: "dist/java-index/snapshot/workspace-tracker.test.js",
+    testNamePattern: "^stream-restart-requires-full-hash$",
+    expectedInvariant: "a lost or restarted change stream forces a full content hash before FRESH"
   },
   {
     id: "dirty-reconcile",
-    testFile: "dist/repo-runtime-manager.test.js",
-    testNamePattern: "^reconcileIfDirty leaves dirty set when reconcile fails, without failing the request$",
-    expectedInvariant: "failed dirty reconciliation remains dirty for a later retry"
+    testFile: "dist/java-index/snapshot/workspace-tracker.test.js",
+    testNamePattern: "^a full-stat signal during a path round survives it, and an abandoned periodic hash stays owed$",
+    expectedInvariant: "a change whose round is abandoned stays owed for a later round"
   },
   {
     id: "outside-repo-result",

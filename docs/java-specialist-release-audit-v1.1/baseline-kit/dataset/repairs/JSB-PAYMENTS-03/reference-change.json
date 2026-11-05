@@ -1,0 +1,6 @@
+{
+  "task_id": "JSB-PAYMENTS-03",
+  "path": "src/main/java/lab/payments/PaymentService.java",
+  "before": "String key = tenant;",
+  "after": "String key = tenant.length() + \":\" + tenant + requestId;"
+}

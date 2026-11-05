@@ -1,0 +1,20 @@
+{
+  "decision": "QUALIFICATION_FAIL",
+  "gates": {
+    "integrity": true,
+    "budget": true,
+    "anchors": false,
+    "qa_measurement_complete": false,
+    "qa_contract_floor": false
+  },
+  "scope": "STRUCTURED_QA_ONLY_NOT_RELEASE",
+  "full_release_requires": [
+    "all product-level contract tests measured and passed",
+    "independent locked task evaluation with no new critical regression",
+    "all 8 frozen repair outcomes measured on actual agent patches",
+    "full upstream corpus profile measured separately",
+    "actual paired task runs with provider usage or explicit cost-unmeasured restriction",
+    "macOS product build, native dependencies, JDT and existing release checks",
+    "review of per-case results and known limits"
+  ]
+}

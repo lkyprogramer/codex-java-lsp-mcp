@@ -1,0 +1,516 @@
+{
+  "schema": "java-specialist-public-answer-contract/v1.0",
+  "version": "public-qa/v1.0",
+  "taskFile": "evidence-protocol-experiment-evidence/tasks.jsonl",
+  "taskSha256": "dec9129e685b12510ab3f116e1245be549b6c468bfb820d157a2030542dc6eee",
+  "scope": "Public answer roles and representations only; no expected answer values or private required source coordinates. Original tasks and frozen scorer are unchanged.",
+  "selection": "Explicit evaluation overlay for these 28 already exposed regression QA tasks; it does not change public MCP tools.",
+  "ambiguityDecisions": [
+    {
+      "task": "JSB-MYBATIS-03",
+      "meaning": "guard is the positive name-collision predicate, not the insertion branch condition."
+    },
+    {
+      "task": "JSB-NOTIFICATIONS-01",
+      "meaning": "Both semantic choices are public enum tokens; select from implementation."
+    },
+    {
+      "task": "JSB-HIKARI-01",
+      "meaning": "direction describes complete scan order with the public hyphenated enum spelling."
+    },
+    {
+      "task": "JSB-ADMISSIONS-01",
+      "meaning": "The track collection is an array of string values sorted lexicographically; module identities remain distinct during retrieval."
+    },
+    {
+      "task": "JSB-PAGINATION-02",
+      "meaning": "Argument fields are simple identifiers in source call order; receivers are omitted."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "JSB-PAYMENTS-01",
+      "properties": {
+        "storageType": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Declared collection type expression used to store seen request IDs. Preserve generic arguments and the source type spelling; do not reduce it to a simple class name, add an undeclared package, or include explanation."
+        },
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method that checks or rejects duplicate requests. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-PAYMENTS-02",
+      "properties": {
+        "field": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Java receipt field carrying the amount. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "column": {
+          "type": "string",
+          "description": "XML column name mapped to that field. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "assembler": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method assembling the receipt from the input amount. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-INVENTORY-01",
+      "properties": {
+        "rejectsZero": {
+          "type": "boolean",
+          "description": "Whether the implementation rejects zero quantity."
+        },
+        "rejectsOverAvailable": {
+          "type": "boolean",
+          "description": "Whether it rejects quantity greater than available stock."
+        }
+      }
+    },
+    {
+      "id": "JSB-INVENTORY-02",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Cancellation entry method. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "callee": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method called to return reserved stock. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "stateField": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Reservation field recording the cancellation state. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-ACCESS-01",
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Policy method deciding temporary access. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+          },
+          "description": "Simple names of the two compared parameters, in declaration order. Do not return objects or qualified expressions."
+        }
+      }
+    },
+    {
+      "id": "JSB-ACCESS-02",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Entry method for the route named by the question. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "delegate": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Policy method called by that entry. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-ADMISSIONS-01",
+      "properties": {
+        "tracks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "String values returned by track in both modules. Include both declarations. Sort values lexicographically using code-point order; return strings only, without module/path objects.",
+          "order": "lexical"
+        }
+      }
+    },
+    {
+      "id": "JSB-ADMISSIONS-02",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method making the admission decision. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "format": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method formatting the display status, not a response-format label. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "accepted": {
+          "type": "string",
+          "description": "String literal returned by the display-status method for an admitted applicant, not the boolean decision result. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        }
+      }
+    },
+    {
+      "id": "JSB-PRICING-01",
+      "properties": {
+        "scale": {
+          "type": "integer",
+          "description": "Scale actually used by the implementation."
+        },
+        "implementedRounding": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Actual rounding enum constant, using its simple constant name without the enum owner. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-PRICING-02",
+      "properties": {
+        "assembler": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "InvoiceAssembler method assembling the invoice. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "policy": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Amount conversion or settlement method called by that assembler. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Invoice field storing the converted amount. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-PETCLINIC-01",
+      "properties": {
+        "field": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Validated pet-name field. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "blankCode": {
+          "type": "string",
+          "description": "Error code for a blank name. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "longCode": {
+          "type": "string",
+          "description": "Error code for an overlong name. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "maxLength": {
+          "type": "integer",
+          "description": "Maximum allowed name length."
+        }
+      }
+    },
+    {
+      "id": "JSB-PETCLINIC-02",
+      "properties": {
+        "newOnly": {
+          "type": "boolean",
+          "description": "Whether type validation applies only to new pets."
+        },
+        "birthDateNewOnly": {
+          "type": "boolean",
+          "description": "Whether the null birth-date check also applies only to new pets."
+        }
+      }
+    },
+    {
+      "id": "JSB-PETCLINIC-03",
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Validator method deciding supported classes. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "comparison": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method used for the class comparison, not its complete call expression. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "acceptsSubclass": {
+          "type": "boolean",
+          "description": "Whether subclasses of the pet class are accepted."
+        }
+      }
+    },
+    {
+      "id": "JSB-MYBATIS-01",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name assigned to the ordinary parameter described by the question. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "specialType1": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "First short special-parameter class name in alphabetical order. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "specialType2": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Second short special-parameter class name in alphabetical order. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-MYBATIS-02",
+      "properties": {
+        "listKey": {
+          "type": "string",
+          "description": "Built-in key specific to a List argument. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "collectionKey": {
+          "type": "string",
+          "description": "Built-in key shared by collection arguments. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "arrayKey": {
+          "type": "string",
+          "description": "Built-in key for an array argument. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "addsActualName": {
+          "type": "boolean",
+          "description": "Whether an available actual parameter name is also added as a map key."
+        }
+      }
+    },
+    {
+      "id": "JSB-MYBATIS-03",
+      "properties": {
+        "guard": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The positive collision-detection expression: true exactly when a generated generic name already exists among user parameter names. Return this predicate, not the negated condition that permits insertion, and omit the enclosing if and prose."
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Prefix used for generated generic parameter names. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "firstNumber": {
+          "type": "integer",
+          "description": "First numeric suffix appended to that prefix."
+        }
+      }
+    },
+    {
+      "id": "JSB-GSON-01",
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Helper implementing camel-case separation. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "result": {
+          "type": "string",
+          "description": "Exact return value for the concrete input in the question; trace every input character in the implementation. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        }
+      }
+    },
+    {
+      "id": "JSB-GSON-02",
+      "properties": {
+        "result": {
+          "type": "string",
+          "description": "Exact return value for the concrete naming-policy input. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Locale constant used for case conversion, without its owner. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "helper": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Helper implementing camel-case word separation. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-GSON-03",
+      "properties": {
+        "first": {
+          "type": "string",
+          "description": "Exact return value for the first input. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        },
+        "second": {
+          "type": "string",
+          "description": "Exact return value for the second input. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        }
+      }
+    },
+    {
+      "id": "JSB-NOTIFICATIONS-01",
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Method computing recipient count. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "countUnit": {
+          "type": "string",
+          "enum": [
+            "subscriptions",
+            "distinct_channels"
+          ],
+          "description": "Counting unit. Use subscriptions for subscription entries, or distinct_channels for distinct channel identifiers. Choose by the implementation; do not add prose or translate the token."
+        }
+      }
+    },
+    {
+      "id": "JSB-NOTIFICATIONS-02",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Audience-query entry method. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "delegate": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Counting method called by the entry. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Subscription field storing the channel identifier. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-LEDGER-01",
+      "properties": {
+        "initialDebit": {
+          "type": "integer",
+          "description": "Initial debit-side balance."
+        },
+        "initialCredit": {
+          "type": "integer",
+          "description": "Initial credit-side balance."
+        }
+      }
+    },
+    {
+      "id": "JSB-LEDGER-02",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Transfer submission entry method. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "field": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Command field passed to the transfer method. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "callee": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Invoked transfer method. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-PAGINATION-01",
+      "properties": {
+        "firstPage": {
+          "type": "integer",
+          "description": "First valid page number."
+        },
+        "returnType": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Declared return type of offset calculation, using a simple type name. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        }
+      }
+    },
+    {
+      "id": "JSB-PAGINATION-02",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Entry method forwarding PageRequest fields to offset calculation. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+          },
+          "description": "Simple field names in the actual call argument order. Omit receiver names and return strings only; never sort this array."
+        }
+      }
+    },
+    {
+      "id": "JSB-HIKARI-01",
+      "properties": {
+        "equality": {
+          "type": "string",
+          "enum": [
+            "equals",
+            "identity"
+          ],
+          "description": "Comparison strategy: equals means value equality; identity means the same object reference."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "head-to-tail",
+            "tail-to-head"
+          ],
+          "description": "Full scan direction. Use the hyphenated token describing the iteration order, not just its starting end."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Number of matching entries removed by one successful call."
+        }
+      }
+    },
+    {
+      "id": "JSB-HIKARI-02",
+      "properties": {
+        "clearsReferences": {
+          "type": "boolean",
+          "description": "Whether clear removes old element references."
+        },
+        "shrinksArray": {
+          "type": "boolean",
+          "description": "Whether clear shrinks the backing array."
+        }
+      }
+    },
+    {
+      "id": "JSB-HIKARI-03",
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Iterator method throwing on exhaustion. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "exception": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+          "description": "Exception short class name, without its package. Use only its simple identifier; omit package, owner, receiver, arguments, signature and explanation."
+        },
+        "message": {
+          "type": "string",
+          "description": "Exact exception message string. Return the exact string value without explanation; do not alter punctuation, case or whitespace."
+        }
+      }
+    }
+  ]
+}

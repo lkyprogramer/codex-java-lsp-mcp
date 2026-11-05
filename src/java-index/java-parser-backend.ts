@@ -43,6 +43,8 @@ export interface JavaSyntaxNode {
   readonly isMissing: boolean;
   readonly hasError: boolean;
   childForFieldName(name: string): JavaSyntaxNode | null;
+  /** Descendants of these types in document order, found natively: a JS walk of `children` marshals every node. */
+  descendantsOfType(types: string[]): readonly JavaSyntaxNode[];
   toString(): string;
 }
 

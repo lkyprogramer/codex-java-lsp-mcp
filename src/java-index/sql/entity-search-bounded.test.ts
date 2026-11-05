@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
-import { recordsFromBundle, type EntityRecord } from "../entity-search.js";
+import { recordsFromBundle, type EntityRecord, type EntitySearchOptions } from "../entity-search.js";
 import type { JavaFileBundle } from "../index-types.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
 import { searchEntitiesDetailed } from "../../test-support/entity-search-oracle.js";
@@ -13,6 +13,7 @@ import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { replaceAllEntities, writeEntityRecord } from "./entity-tokens.js";
 import { SqlEntitySearch } from "./entity-search.js";
+import { commitSearchDocStats, rebuildSearchDocDf, replaceSearchDocuments } from "./search-docs.js";
 
 const ALPHA_SOURCE = `package alpha;
 public class AlphaService {
@@ -217,4 +218,466 @@ test("T07 in-memory and SQL detailed results agree with no budget", () => {
       await teardown(fixture);
     }
   })();
+});
+// ---------------------------------------------------------------- R06
+// 20 high-frequency out-of-scope candidates that sort/rank ahead of the one
+// in-scope candidate; with limit 1 every route must still return the
+// in-scope one, and the posting budget must only be spent inside the scope.
+
+const TARGET = "z/src/main/java/demo/OrderService.java";
+
+function r06Record(entityId: string, relativePath: string, heavy: boolean): EntityRecord {
+  const repeat = (token: string) => (heavy ? [token, token, token] : [token]);
+  return {
+    entityId,
+    kind: "type",
+    fqn: "demo.OrderService",
+    simpleName: "OrderService",
+    relativePath,
+    identifierTokens: ["demo", "order", "service", "orderservice", ...repeat("refund")],
+    chunkTokens: repeat("ledger")
+  };
+}
+
+function r06Fixture() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  const records: EntityRecord[] = Array.from({ length: 20 }, (_, i) =>
+    r06Record(`a${String(i).padStart(2, "0")}`, `noise${i}/src/main/java/demo/OrderService.java`, true));
+  // a prefix sibling of the scope root and a LIKE-metacharacter path
+  records.push(r06Record("b-sibling", "zz/src/main/java/demo/OrderService.java", true));
+  records.push(r06Record("b-meta", "z_x/src/main/java/demo/OrderService.java", true));
+  records.push(r06Record("zz-target", TARGET, false));
+  replaceAllEntities(db, records);
+  const docs = records.map((record, index) => ({
+    documentId: `doc:${record.entityId}`,
+    declarationId: record.entityId,
+    source: { relativePath: record.relativePath, contentHash: "h", startLine: 1, endLine: 1 },
+    path: record.relativePath,
+    contentHash: "h",
+    representationVersion: 2 as const,
+    sourceKind: "comment" as const,
+    startLine: 1,
+    endLine: 1,
+    normalizedText: index < 22 ? "rollback rollback rollback compensation" : "rollback"
+  }));
+  for (const doc of docs) replaceSearchDocuments(db, doc.path, [doc]);
+  rebuildSearchDocDf(db);
+  commitSearchDocStats(db);
+  return { db, records };
+}
+
+test("R06: scope precedes every route's ranking and cap (limit 1, 20+ outside candidates)", () => {
+  const { db, records } = r06Fixture();
+  try {
+    const search = new SqlEntitySearch(db);
+    const cases: Array<[string, "auto" | "exact" | "text", string]> = [
+      ["demo.OrderService", "exact", "FQN"],
+      ["OrderService", "exact", "SIMPLE_NAME"],
+      ["refund", "auto", "BM25_IDENTIFIER"],
+      ["ledger", "auto", "CHUNK"],
+      ["rollback compensation", "text", "any"]
+    ];
+    for (const [task, mode, layer] of cases) {
+      const unscoped = search.searchDetailed(task, 1, mode);
+      assert.notEqual(unscoped.hits[0]?.relativePath, TARGET, `${task}: without scope an outside candidate wins (the fixture is adversarial)`);
+      for (const roots of [["z"], ["z/"], ["z/src/main/java"]]) {
+        const scoped = search.searchDetailed(task, 1, mode, { scope: { sourceRoots: roots } });
+        assert.equal(scoped.hits.length, 1, `${task} @ ${roots}: ${JSON.stringify(scoped.hits)}`);
+        assert.equal(scoped.hits[0]!.relativePath, TARGET);
+        if (layer !== "any") assert.equal(scoped.hits[0]!.layer, layer);
+      }
+      const oracle = searchEntitiesDetailed(records, task, 1, mode, { scope: { sourceRoots: ["z"] } });
+      if (mode !== "text") {
+        assert.deepEqual(search.searchDetailed(task, 1, mode, { scope: { sourceRoots: ["z"] } }).hits.map(hit => hit.entityId), oracle.hits.map(hit => hit.entityId), `${task}: SQL/oracle parity`);
+      }
+    }
+    // the document route: tokens that only the search docs carry
+    const docOnly = search.searchDetailed("compensation rollback", 1, "text", { scope: { sourceRoots: ["z"] } });
+    assert.equal(docOnly.hits[0]?.relativePath, TARGET);
+  } finally {
+    close(db);
+  }
+});
+
+test("R06: prefix siblings and LIKE metacharacters never widen the scope", () => {
+  const { db } = r06Fixture();
+  try {
+    const search = new SqlEntitySearch(db);
+    const z = search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["z"] } });
+    assert.deepEqual(z.hits.map(hit => hit.relativePath), [TARGET], "z must not match zz/ or z_x/");
+    assert.deepEqual(search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["%"] } }).hits, []);
+    assert.deepEqual(search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["z_"] } }).hits, []);
+    const two = search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["z", "zz"] } });
+    assert.deepEqual(two.hits.map(hit => hit.relativePath).sort(), [TARGET, "zz/src/main/java/demo/OrderService.java"].sort(), "several roots are a union of exact roots");
+  } finally {
+    close(db);
+  }
+});
+
+test("R06: the posting budget is only spent on in-scope postings", () => {
+  const { db } = r06Fixture();
+  try {
+    const search = new SqlEntitySearch(db);
+    const budget = { maxPostings: 3, remainingMs: () => 10_000 };
+    const unscoped = search.searchDetailed("refund ledger", 1, "auto", { budget });
+    assert.equal(unscoped.truncated, true, "outside postings alone exhaust this budget");
+    const scoped = search.searchDetailed("refund ledger", 1, "auto", { budget, scope: { sourceRoots: ["z"] } });
+    assert.equal(scoped.truncated, false, `scope is applied before billing: ${JSON.stringify(scoped)}`);
+    assert.equal(scoped.hits[0]?.relativePath, TARGET);
+    assert.ok(scoped.work.postings <= 2, `only the target's postings are visited, got ${scoped.work.postings}`);
+  } finally {
+    close(db);
+  }
+});
+
+// Scope follow-up: out-of-scope postings are never billed (R06), but the scan
+// still reads them, so it must consult the deadline while it does. 20k
+// out-of-scope entities share four chunk tokens (80k filtered postings) with
+// the one in-scope target; the scope filters them inside SQL, so without a
+// per-page check nothing would observe the deadline until the scan is over.
+test("scope-filtered postings are counted as examined work and stop at the deadline", () => {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  try {
+    const shared = ["ledger", "journal", "balance", "posting"];
+    const record = (entityId: string, relativePath: string): EntityRecord => ({
+      ...r06Record(entityId, relativePath, false),
+      chunkTokens: shared
+    });
+    const records: EntityRecord[] = Array.from({ length: 20_000 }, (_, i) =>
+      record(`n${String(i).padStart(5, "0")}`, `noise/src/main/java/demo/N${i}.java`));
+    records.push(record("zz-target", TARGET));
+    replaceAllEntities(db, records);
+    const search = new SqlEntitySearch(db);
+    const task = shared.join(" ");
+    const total = shared.length * records.length;
+    let checks = 0;
+    const complete = search.searchDetailed(task, 1, "auto", {
+      budget: { remainingMs: () => (checks += 1, 10_000) },
+      scope: { sourceRoots: ["z"] }
+    });
+    assert.equal(complete.stopReason, undefined);
+    assert.equal(complete.hits[0]?.relativePath, TARGET);
+    assert.equal(complete.work.postings, shared.length, "only the target's postings are billed");
+    assert.equal(complete.work.examined, total, "every filtered posting is counted as examined");
+    assert.ok(checks >= total / 2048, `the deadline is consulted at least once per page of filtered rows: ${checks} checks for ${total} rows`);
+
+    // a deadline that passes mid-scan stops it there
+    let calls = 0;
+    const stopAt = Math.floor(checks / 2);
+    const stopped = search.searchDetailed(task, 1, "auto", {
+      budget: { remainingMs: () => ((calls += 1) >= stopAt ? 0 : 10_000) },
+      scope: { sourceRoots: ["z"] }
+    });
+    assert.equal(stopped.stopReason, "deadline");
+    assert.ok((stopped.work.examined ?? 0) > 0 && (stopped.work.examined ?? 0) < total, `stopped mid-scan after ${stopped.work.examined} of ${total}`);
+  } finally {
+    close(db);
+  }
+});
+
+// ---------------------------------------------------------------- R07
+
+function r07Record(entityId: string, relativePath: string, overrides: Partial<EntityRecord> = {}): EntityRecord {
+  return {
+    entityId,
+    kind: "type",
+    fqn: "demo.OrderService",
+    simpleName: "OrderService",
+    relativePath,
+    identifierTokens: ["demo", "order", "service", "orderservice"],
+    chunkTokens: ["refund"],
+    ...overrides
+  };
+}
+
+function r07Db(records: EntityRecord[]) {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  replaceAllEntities(db, records);
+  return db;
+}
+
+test("R07: an exact miss is a miss - never a fuzzy BM25 hit", () => {
+  const records = [r07Record("a", "A.java"), r07Record("m", "A.java", { kind: "method", fqn: "demo.OrderService#refund", simpleName: "refund", identifierTokens: ["refund", "missing", "service"] })];
+  const db = r07Db(records);
+  try {
+    const search = new SqlEntitySearch(db);
+    for (const [task, mode] of [["demo.MissingService", "exact"], ["demo.MissingService", "auto"], ["MissingService", "auto"], ["MissingService", "exact"]] as const) {
+      const result = search.searchDetailed(task, 8, mode);
+      assert.equal(result.hits.length, 0, `${task}/${mode}: ${JSON.stringify(result.hits)}`);
+      assert.equal(result.exact, "miss");
+      assert.deepEqual(result.hits, searchEntitiesDetailed(records, task, 8, mode).hits);
+    }
+    // the same words as a text search do match fuzzily - that is the caller's choice
+    assert.ok(search.searchDetailed("missing service", 8, "text").hits.length > 0);
+  } finally {
+    close(db);
+  }
+});
+
+test("R07: exact match, ambiguous duplicates and camelCase method selectors", () => {
+  const records = [
+    r07Record("a", "a/OrderService.java"),
+    r07Record("b", "b/OrderService.java"),
+    r07Record("w", "W.java", { fqn: "demo.Widget", simpleName: "Widget", identifierTokens: ["widget"] }),
+    r07Record("w#update", "W.java", { kind: "method", fqn: "demo.Widget#updateWidget", simpleName: "updateWidget", identifierTokens: ["update", "widget"] })
+  ];
+  const db = r07Db(records);
+  try {
+    const search = new SqlEntitySearch(db);
+    const one = search.searchDetailed("demo.Widget", 8, "exact");
+    assert.deepEqual([one.exact, one.hits.map(h => h.entityId)], ["match", ["w"]]);
+    const two = search.searchDetailed("demo.OrderService", 8, "exact");
+    assert.deepEqual([two.exact, two.hits.map(h => h.entityId).sort()], ["ambiguous", ["a", "b"]]);
+    const method = search.searchDetailed("updateWidget", 8, "auto");
+    assert.deepEqual([method.exact, method.hits.map(h => h.entityId)], ["match", ["w#update"]], "a method selector resolves by name when no type has it");
+    const typeFirst = search.searchDetailed("Widget", 8, "exact");
+    assert.deepEqual(typeFirst.hits.map(h => h.entityId), ["w"], "a type of that name outranks same-named methods");
+    for (const [task, mode] of [["demo.Widget", "exact"], ["demo.OrderService", "exact"], ["updateWidget", "auto"], ["Widget", "exact"]] as const) {
+      const oracle = searchEntitiesDetailed(records, task, 8, mode);
+      const sql = search.searchDetailed(task, 8, mode);
+      assert.deepEqual([sql.exact, sql.hits.map(h => h.entityId)], [oracle.exact, oracle.hits.map(h => h.entityId)], `${task}: SQL/oracle parity`);
+    }
+  } finally {
+    close(db);
+  }
+});
+
+test("R07: limit 20 returns 20 and selectionLimited says when more matched (cap+1)", () => {
+  const make = (n: number) => Array.from({ length: n }, (_, i) => r07Record(`e${String(i).padStart(2, "0")}`, `${i}/A.java`));
+  for (const [count, limit, expectedHits, limited] of [[21, 20, 20, true], [20, 20, 20, false], [12, 10, 10, true], [3, 20, 3, false]] as const) {
+    const records = make(count);
+    const db = r07Db(records);
+    try {
+      const search = new SqlEntitySearch(db);
+      const text = search.searchDetailed("refund", limit, "text");
+      assert.equal(text.hits.length, expectedHits, `${count} candidates, limit ${limit}`);
+      assert.equal(text.selectionLimited, limited);
+      assert.equal(text.truncated, false, "a ranked top-K is not a budget truncation");
+      const exact = search.searchDetailed("demo.OrderService", limit, "exact");
+      assert.equal(exact.hits.length, expectedHits);
+      assert.equal(exact.selectionLimited, limited);
+      const oracle = searchEntitiesDetailed(records, "refund", limit, "text");
+      assert.deepEqual([text.selectionLimited, text.hits.map(h => h.entityId)], [oracle.selectionLimited, oracle.hits.map(h => h.entityId)]);
+    } finally {
+      close(db);
+    }
+  }
+  const db = r07Db(make(25));
+  try {
+    assert.equal(new SqlEntitySearch(db).searchDetailed("refund", 500, "text").hits.length, 20, "the SQL layer clamps to the shared cap of 20 (discovery rejects >20 earlier)");
+  } finally {
+    close(db);
+  }
+});
+
+// Keyset page boundaries: df is exactly two pages (4096) and the in-scope
+// rows sit at scan positions 2047, 2048 and 2049, around the first page end.
+test("scoped keyset pages neither skip nor repeat rows at a page boundary", () => {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  try {
+    const inScope = new Set([2046, 2047, 2048]);
+    const records: EntityRecord[] = Array.from({ length: 4096 }, (_, i) =>
+      r06Record(`e${String(i).padStart(4, "0")}`, inScope.has(i) ? `z/src/main/java/demo/E${i}.java` : `noise/src/main/java/demo/E${i}.java`, false));
+    replaceAllEntities(db, records);
+    const search = new SqlEntitySearch(db);
+    const scoped = search.searchDetailed("ledger", 10, "text", { budget: { remainingMs: () => 10_000 }, scope: { sourceRoots: ["z"] } });
+    assert.deepEqual(scoped.hits.map(hit => hit.entityId).sort(), ["e2046", "e2047", "e2048"]);
+    assert.equal(scoped.work.postings, 3);
+    assert.equal(scoped.work.examined, 4096);
+    assert.equal(scoped.stopReason, undefined);
+
+    // a route that starts with the posting budget already spent reads no page
+    const spent = search.searchDetailed("service ledger", 10, "text", {
+      budget: { maxPostings: 3, remainingMs: () => 10_000 },
+      scope: { sourceRoots: ["z"] }
+    });
+    assert.equal(spent.stopReason, "postings");
+    assert.equal(spent.work.postings, 3, "the identifier route billed the three in-scope rows");
+    assert.equal(spent.work.examined, 4096, "the chunk route did not scan its filtered pages");
+  } finally {
+    close(db);
+  }
+});
+
+// Legacy-path follow-up: search() (queryEntitySearch / the context-graph
+// lexical fallback) keeps its route semantics but is bounded like
+// searchDetailed - the default posting cap and the caller's deadline.
+test("legacy search() honors the caller deadline and the default posting cap", () => {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  try {
+    const records: EntityRecord[] = Array.from({ length: 20_000 }, (_, i) =>
+      r06Record(`n${String(i).padStart(5, "0")}`, `noise/src/main/java/demo/N${i}.java`, false));
+    // visited last (highest sym) and the best match: only an unbounded scan reaches it
+    records.push(r06Record("zz-target", TARGET, true));
+    replaceAllEntities(db, records);
+    const search = new SqlEntitySearch(db);
+    assert.deepEqual(search.search("ledger", 1, "text", { remainingMs: () => 0 }), [], "an expired deadline runs no scan");
+    const top = search.search("ledger", 1, "text", { remainingMs: () => 10_000 });
+    assert.equal(top.length, 1);
+    assert.notEqual(top[0]!.relativePath, TARGET, "the 20k posting cap stops the scan before the 20,001st posting");
+  } finally {
+    close(db);
+  }
+});
+
+test("K29 bounded ranking preserves locale ties across posting batches and fresh generations", () => {
+  const ids = Array.from({ length: 513 }, (_, i) => `${i % 2 ? "É" : "a"}:${String(512 - i).padStart(4, "0")}`);
+  const records = ids.map(id => r07Record(id, `${id}/A.java`));
+  const db = r07Db(records);
+  try {
+    const loaded: number[] = [];
+    const prepare = db.prepare.bind(db);
+    db.prepare = sql => {
+      const statement = prepare(sql);
+      const all = statement.all.bind(statement);
+      if (sql.includes("FROM entity_token t JOIN entity e")) statement.all = (...params) => {
+        assert.equal(db.isTransaction, true, "both ranked entrypoints read postings inside one snapshot");
+        const rows = Reflect.apply(all, statement, params) as ReturnType<typeof statement.all>;
+        loaded.push(rows.length);
+        return rows;
+      };
+      return statement;
+    };
+    const search = new SqlEntitySearch(db);
+    const result = search.searchDetailed("refund", 20, "text", { budget: { remainingMs: () => 10_000 } });
+    assert.deepEqual(result.hits.map(hit => hit.entityId), ids.slice().sort((a, b) => a.localeCompare(b)).slice(0, 20));
+    assert.equal(result.work.postings, 513, "all cutoff-tied candidates compete across three batches");
+    assert.equal(result.selectionLimited, true);
+    assert.ok(loaded.every(count => count <= 256), "SQL materializes at most one bounded batch");
+    loaded.length = 0;
+    const bounded = search.searchDetailed("refund", 20, "text", { budget: { maxPostings: 7, remainingMs: () => 10_000 } });
+    assert.ok(loaded.every(count => count <= 8), "SQL respects remaining posting budget plus the stop row");
+    assert.equal(bounded.work.postings, 7);
+    assert.equal(bounded.stopReason, "postings");
+    assert.equal(bounded.work.examined, loaded.reduce((sum, count) => sum + count, 0));
+    assert.deepEqual(search.search("refund", 20, "text").map(hit => hit.entityId), result.hits.map(hit => hit.entityId));
+    loaded.length = 0;
+    let checks = 0;
+    const expired = search.searchDetailed("refund", 20, "text", { budget: { remainingMs: () => ++checks < 30 ? 10_000 : 0 } });
+    assert.equal(expired.stopReason, "deadline");
+    assert.ok(expired.work.postings > 0 && expired.work.postings < 256, "deadline interrupts processing of the buffered batch");
+    assert.equal(expired.work.examined, loaded.reduce((sum, count) => sum + count, 0), "examined counts the entire materialized batch at a mid-batch deadline");
+    assert.equal(expired.work.examined, 256);
+    assert.ok(expired.work.examined > expired.work.postings);
+    replaceAllEntities(db, [r07Record("new", "z/A.java")]);
+    db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES ('indexedGeneration','2')").run();
+    const fresh = search.searchDetailed("refund", 20, "text");
+    assert.deepEqual(fresh.hits.map(hit => hit.entityId), ["new"]);
+    assert.equal(fresh.generation, 2);
+  } finally {
+    close(db);
+  }
+});
+
+test("K29 ID resolution visits complete tie tiers across bounded native batches", () => {
+  const ids = Array.from({ length: 1025 }, (_, i) => `${i % 2 ? "É" : "a"}:${String(1024 - i).padStart(4, "0")}`);
+  const db = r07Db(ids.map(id => r07Record(id, `${id}/A.java`)));
+  try {
+    const idBatches: number[] = [];
+    const prepare = db.prepare.bind(db);
+    db.prepare = sql => {
+      const statement = prepare(sql);
+      if (sql.startsWith("SELECT e.sym AS sym, s.text AS entityId FROM entity e JOIN sym s")) {
+        const all = statement.all.bind(statement);
+        statement.all = (...params) => {
+          assert.equal(db.isTransaction, true);
+          idBatches.push(params.length);
+          return Reflect.apply(all, statement, params) as ReturnType<typeof statement.all>;
+        };
+      }
+      return statement;
+    };
+    const result = new SqlEntitySearch(db).searchDetailed("refund", 20, "text", { budget: { remainingMs: () => 10_000 } });
+    assert.deepEqual(result.hits.map(hit => hit.entityId), ids.slice().sort((a, b) => a.localeCompare(b)).slice(0, 20));
+    assert.deepEqual(idBatches, [512, 512, 1]);
+    assert.equal(result.work.postings, 1025);
+    assert.equal(result.selectionLimited, true);
+  } finally {
+    close(db);
+  }
+});
+
+test("K29 posting array rows and pre-22.16 object rows preserve bounded query results", () => {
+  const rows = Array.from({ length: 600 }, (_, i) => r07Record(`id-${i}`, `${i % 2 ? "a" : "b"}/A${i}.java`));
+  const cases: Array<() => EntitySearchOptions> = [
+    () => ({ budget: { remainingMs: () => 10_000 } }),
+    () => ({ budget: { maxPostings: 7, remainingMs: () => 10_000 } }),
+    () => ({ scope: { sourceRoots: ["a"] }, budget: { remainingMs: () => 10_000 } }),
+    () => ({ scope: { sourceRoots: ["missing"] }, budget: { remainingMs: () => 10_000 } }),
+    () => { let checks = 0; return { budget: { remainingMs: () => ++checks < 30 ? 10_000 : 0 } }; }
+  ];
+  const outcomes = [];
+  for (const forceObjectRows of [false, true]) {
+    const db = r07Db(rows);
+    try {
+      for (const row of rows) replaceSearchDocuments(db, row.relativePath, [{
+        documentId: `doc:${row.entityId}`, declarationId: row.entityId, path: row.relativePath,
+        source: { relativePath: row.relativePath, contentHash: "h", startLine: 1, endLine: 1 },
+        contentHash: "h", representationVersion: 2, sourceKind: "comment",
+        startLine: 1, endLine: 1, normalizedText: "orphanword"
+      }]);
+      rebuildSearchDocDf(db);
+      commitSearchDocStats(db);
+      const arrayApiAvailable = typeof db.prepare("SELECT 1").setReturnArrays === "function";
+      const observed = new Set<string>();
+      const prepare = db.prepare.bind(db);
+      db.prepare = sql => {
+        const statement = prepare(sql);
+        if (sql.includes("FROM entity_token t JOIN entity e") || sql.includes("FROM search_doc_token t JOIN search_doc d")) {
+          if (forceObjectRows) Object.defineProperty(statement, "setReturnArrays", { value: undefined });
+          const all = statement.all.bind(statement);
+          statement.all = (...params) => {
+            const batch = Reflect.apply(all, statement, params) as ReturnType<typeof statement.all>;
+            if (batch.length) observed.add(Array.isArray(batch[0]) ? "array" : "object");
+            return batch;
+          };
+        }
+        return statement;
+      };
+      const search = new SqlEntitySearch(db);
+      outcomes.push(["refund", "orphanword", "refund orphanword"].flatMap(query => cases.map(options => {
+        const result = search.searchDetailed(query, 20, "text", options());
+        return { ...result, trace: result.trace?.map(({ beginMs: _begin, endMs: _end, ...stage }) => stage) };
+      })));
+      assert.deepEqual([...observed], [!forceObjectRows && arrayApiAvailable ? "array" : "object"]);
+      replaceAllEntities(db, [r07Record("fresh", "a/Fresh.java")]);
+      db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES ('indexedGeneration','2')").run();
+      const fresh = search.searchDetailed("refund", 20, "text");
+      assert.deepEqual(fresh.hits.map(hit => hit.entityId), ["fresh"]);
+      assert.equal(fresh.generation, 2);
+    } finally {
+      close(db);
+    }
+  }
+  assert.deepEqual(outcomes[0], outcomes[1], "row representation must not change results, accounting or deadline control flow");
+});
+
+test("K29 document ranking refills after whole score tiers with missing entities", () => {
+  const db = r07Db([r07Record("real-a", "a/A.java"), r07Record("real-b", "b/B.java")]);
+  try {
+    for (const [id, normalizedText] of [
+      ...Array.from({ length: 600 }, (_, i) => [`ghost-${i}`, "orphanword"]),
+      ["real-a", "orphanword padding"], ["real-b", "orphanword padding"]
+    ]) {
+      const relativePath = `${id}.java`;
+      replaceSearchDocuments(db, relativePath!, [{
+        documentId: `doc:${id}`, declarationId: id!, path: relativePath,
+        source: { relativePath, contentHash: "h", startLine: 1, endLine: 1 },
+        contentHash: "h", representationVersion: 2, sourceKind: "comment",
+        startLine: 1, endLine: 1, normalizedText: normalizedText!
+      }]);
+    }
+    rebuildSearchDocDf(db);
+    commitSearchDocStats(db);
+    const result = new SqlEntitySearch(db).searchDetailed("orphanword", 2, "text");
+    assert.deepEqual(result.hits.map(hit => hit.entityId), ["real-a", "real-b"]);
+    assert.equal(result.truncated, false);
+  } finally {
+    close(db);
+  }
 });

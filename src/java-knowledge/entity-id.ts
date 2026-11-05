@@ -15,6 +15,16 @@ export function knowledgeTypeId(relativePath: string, typeName: string): string 
   return `${knowledgeFileId(relativePath)}#${typeName}`;
 }
 
+/**
+ * A JavaIndex type's knowledge id. Every builder uses this one: local types
+ * have no FQN and keep their position-based JavaIndex id, because their
+ * simple names may repeat in different methods of the same file.
+ */
+export function knowledgeIdForType(type: { fileId: string; fqn?: string; typeId: string }): string {
+  const relativePath = type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId;
+  return knowledgeTypeId(relativePath, type.fqn || type.typeId);
+}
+
 export function knowledgeExternalTypeId(typeName: string): string {
   if (!typeName) throw new Error("external type id requires a type name");
   return `ext:${typeName}`;

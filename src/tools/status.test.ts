@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { javaStatus } from "./status.js";
 import type { ToolContext } from "./context.js";
 
@@ -210,6 +211,25 @@ test("java_status start consumes the same absolute request budget", async () => 
 
   assert.equal(observedBudget, budget);
 });
+
+for (const code of ["DEADLINE_EXCEEDED", "JDT_SERVER_ERROR"] as const) {
+  test(`java_status handles ${code} by code rather than deadline message`, async () => {
+    const failure = new JavaIntelligenceError(code, "Deadline exceeded at jdtls.project.import after 120000ms");
+    const context = {
+      repoRoot: "/tmp/demo",
+      session: {
+        async ensureStarted() { throw failure; },
+        status: () => testSessionStatus(false)
+      },
+      router: { rgCacheStatus: () => ({ entries: 0 }) }
+    } as unknown as ToolContext;
+    if (code === "DEADLINE_EXCEEDED") {
+      assert.equal((await javaStatus(context, { start: true })).started, false);
+    } else {
+      await assert.rejects(javaStatus(context, { start: true }), error => error === failure);
+    }
+  });
+}
 
 function testSessionStatus(started: boolean): Record<string, unknown> {
   return {

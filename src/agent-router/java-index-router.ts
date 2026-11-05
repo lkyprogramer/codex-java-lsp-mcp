@@ -5,14 +5,12 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
-import { probeLayout } from "../layout-probe.js";
-import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
+import { probeLayout, type LayoutContext } from "../layout-probe.js";
+import { normalizeRepoFile } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { JavaIndexClientApi, JavaIndexOpenOptions, JavaIndexRequestOptions } from "../java-index/java-index-client-api.js";
-import { BuilderSupervisor } from "../java-index/builder-supervisor.js";
-import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "../java-index/entity-search.js";
 import type {
   AnchorFacts,
@@ -36,16 +34,18 @@ import {
   MAX_FRAMEWORK_MYBATIS_NAMESPACES,
   bundleToFrameworkFileFacts,
   bundlesToRequestedDeclarations,
-  fqnOfTypeId,
   ownerTypeIdOf,
   relativePathOfLocalTypeId,
+  relativePathOfNamedTypeId,
   type FrameworkCallees,
   type FrameworkDeclarations,
   type FrameworkFileFacts,
   type FrameworkIndexStatus,
   type FrameworkMethodDeclaration,
   type FrameworkRepositoryFactMarkers,
-  type FrameworkIndexView
+  type FrameworkIndexView,
+  type FrameworkTypeName,
+  type FrameworkTypeTarget
 } from "../java-index/framework-index-view.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
 import {
@@ -194,11 +194,17 @@ type RouterRequestScope = {
 };
 
 /**
+ * Every index's request scope, keyed by index, in ONE AsyncLocalStorage. Node 22 propagates each enabled
+ * AsyncLocalStorage on every promise and keeps it until disable(): one per index (an owner opens one per
+ * workspace and snapshot) made every promise in the owner pay for every index it ever opened.
+ */
+const requestScopes = new AsyncLocalStorage<ReadonlyMap<RouterJavaIndex, RouterRequestScope>>();
+
+/**
  * High-level async index used by AgentRouter. Wraps JavaIndexClient and maps
  * V2 queries into the fact shapes collectors already understand.
  */
 export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkIndexView {
-  private readonly requestOptionsScope = new AsyncLocalStorage<RouterRequestScope>();
   private generation = 0;
   private opened = false;
   private openSource: JavaIndexOpenSource = "cold";
@@ -226,19 +232,14 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   constructor(
     private readonly repoRoot: string,
     private readonly client: JavaIndexClientApi,
-    private readonly openOptions: JavaIndexOpenOptions = {}
+    private readonly openOptions: JavaIndexOpenOptions = {},
+    // The caller's already-probed layout; without one the constructor walks the repository synchronously.
+    layout: LayoutContext = probeLayout(repoRoot)
   ) {
-    const layout = probeLayout(repoRoot);
     this.conventionalDeclarationRoots = layout.sourceRoots.map(root => root.relativePath);
     this.foregroundImplementationRoots = layout.sourceRoots
       .filter(root => root.sourceSet === "main")
       .map(root => root.relativePath);
-  }
-
-  static create(repoRoot: string, cacheDir = repoCacheRoot(repoRoot), openOptions: JavaIndexOpenOptions = {}): RouterJavaIndex {
-    const dbPath = path.join(cacheDir, "index.sqlite");
-    const supervisor = new BuilderSupervisor({ repoRoot, dbPath });
-    return new RouterJavaIndex(repoRoot, new SqlJavaIndexClient(repoRoot, dbPath, supervisor), openOptions);
   }
 
   rawClient(): JavaIndexClientApi {
@@ -246,7 +247,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   withRequestOptions<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T> {
-    const parent = this.requestOptionsScope.getStore();
+    const parent = this.requestScope();
     const controlBoundaryChanged = parent !== undefined && (
       (Object.hasOwn(options, "budget") && options.budget !== parent.options.budget)
       || (Object.hasOwn(options, "signal") && options.signal !== parent.options.signal)
@@ -258,15 +259,20 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       // safely share the request memo.
       memo: parent && !controlBoundaryChanged ? parent.memo : { queries: new Map() }
     };
-    return this.requestOptionsScope.run(scope, action);
+    // Other indexes' scopes stay in force inside this one.
+    return requestScopes.run(new Map(requestScopes.getStore()).set(this, scope), action);
+  }
+
+  private requestScope(): RouterRequestScope | undefined {
+    return requestScopes.getStore()?.get(this);
   }
 
   private currentRequestOptions(): JavaIndexRequestOptions {
-    return this.requestOptionsScope.getStore()?.options ?? {};
+    return this.requestScope()?.options ?? {};
   }
 
   private requestMemoized<T>(key: string, action: () => Promise<T>): Promise<T> {
-    const memo = this.requestOptionsScope.getStore()?.memo;
+    const memo = this.requestScope()?.memo;
     if (!memo) return action();
     const existing = memo.queries.get(key) as Promise<T> | undefined;
     if (existing) return existing;
@@ -640,6 +646,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     for (const absolutePath of admittedPaths) {
       const cached = this.factsByPath.get(absolutePath);
       if (cached?.generation === generation) {
+        this.currentRequestOptions().onStaticRead?.();
         outcomeByPath.set(absolutePath, {
           inputFile: absolutePath,
           absolutePath,
@@ -708,6 +715,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   ): FactsForFileItem {
     const cached = this.factsByPath.get(absolutePath);
     if (cached?.generation === generation && parseState === "COMPLETE") {
+      this.currentRequestOptions().onStaticRead?.();
       return { inputFile: absolutePath, absolutePath, state: "FOUND", facts: cached.facts };
     }
     return incompleteItem(absolutePath);
@@ -718,7 +726,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     generation: number
   ): Promise<Map<string, FactsForFileItem>> {
     const canonicalPaths = unique([...paths]).sort((left, right) => left.localeCompare(right));
-    const memo = this.requestOptionsScope.getStore()?.memo;
+    const memo = this.requestScope()?.memo;
     if (!memo) return this.hydrateFactsBatch(canonicalPaths, generation);
 
     const pending: Array<Promise<[string, FactsForFileItem]>> = [];
@@ -1098,7 +1106,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         return;
       }
     }
-    // Unit-test / benchmark path: open cold without sibling seed options.
+    // Unit-test / benchmark path: open the local index cold.
     try {
       const status = await this.client.open(generation, this.openOptions, this.currentRequestOptions());
       this.opened = true;
@@ -1147,6 +1155,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     generation: number
   ): Promise<FrameworkFileFacts[]> {
     const uncached = absolutePaths.filter(file => this.frameworkFactsByPath.get(file)?.generation !== generation);
+    if (uncached.length < absolutePaths.length) this.currentRequestOptions().onStaticRead?.();
     if (uncached.length > 0) {
       await this.loadFactsForFiles(uncached, generation, MAX_FRAMEWORK_FACT_FILES);
       for (const absolutePath of uncached) {
@@ -1167,12 +1176,12 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
 
   /**
    * Batch-hydrates arbitrary type/method/field ids (e.g. resolvedCallees'
-   * targetId values) into their declarations. A "type:<fqn>" owner resolves
-   * via one batched exact-fqn queryTypes() call (QUALIFIED strategy matches
-   * typeIdByFqn directly, so this cannot come back AMBIGUOUS); a
-   * "type-local:<path>:.." owner's file is already embedded in the id. Both
-   * paths converge on a single batched queryFiles() call, mirroring
-   * typesToFacts()'s existing group-by-file-then-hydrate-once pattern.
+   * targetId values) into their declarations. Every hydratable id names its
+   * file: a v2 owner embeds its path ("type:v2:<path>#<fqn>"), a
+   * "type-local:<path>:.." owner its path and position. A pre-v2 "type:<fqn>"
+   * id names no declaration and is reported missing; a name is resolved with
+   * typesByName first. All paths converge on a single batched queryFiles()
+   * call, mirroring typesToFacts()'s group-by-file-then-hydrate-once pattern.
    *
    * Bounded at both ends: more than MAX_DECLARATION_IDS_PER_CALL ids are never even
    * looked up (reported via `truncated`, not silently accepted), and if the
@@ -1187,45 +1196,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const uniqueIds = unique([...ids]);
     const boundedIds = uniqueIds.slice(0, MAX_DECLARATION_IDS_PER_CALL);
     const relativePaths = new Set<string>();
-    const fqnsNeedingLookup = new Set<string>();
     for (const id of boundedIds) {
       const ownerTypeId = ownerTypeIdOf(id);
-      if (!ownerTypeId) continue;
-      const localPath = relativePathOfLocalTypeId(ownerTypeId);
-      if (localPath) {
-        relativePaths.add(localPath);
-        continue;
-      }
-      const fqn = fqnOfTypeId(ownerTypeId);
-      if (fqn) fqnsNeedingLookup.add(fqn);
-    }
-    if (fqnsNeedingLookup.size > 0) {
-      const fqnLookups = [...fqnsNeedingLookup];
-      const lookups = await this.queryTypes(fqnLookups.map(typeText => ({ typeText })));
-      for (const lookup of lookups) {
-        if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
-      }
-      // A request may foreground-refresh its mapper/anchor while the initial
-      // background reconcile has not reached a dependent module yet. The
-      // mapper's import is then visible but its exact FQN declaration is not
-      // in the store. Try only the normal top-level Java path under already
-      // discovered source roots, refresh files that actually exist, then
-      // repeat the exact lookup once. This is deliberately not a name scan
-      // and never guesses an arbitrary binding.
-      const unresolvedFqns = fqnLookups.filter((_, index) => lookups[index]?.state !== "RESOLVED");
-      if (unresolvedFqns.length > 0 && summarizeCoverage(this.client.localStatus()) !== "complete") {
-        const candidates = conventionalDeclarationCandidates(this.repoRoot, this.conventionalDeclarationRoots, unresolvedFqns);
-        if (candidates.length > 0) {
-          await this.ensureFresh(candidates, this.generation);
-          const retries = await this.client.queryTypes(
-            unresolvedFqns.map(typeText => ({ typeText })),
-            this.currentRequestOptions()
-          );
-          for (const lookup of retries) {
-            if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
-          }
-        }
-      }
+      const relativePath = ownerTypeId && (relativePathOfLocalTypeId(ownerTypeId) ?? relativePathOfNamedTypeId(ownerTypeId));
+      if (relativePath) relativePaths.add(relativePath);
     }
     const boundedPaths = [...relativePaths].slice(0, MAX_DECLARATION_PATHS);
     const absolutePaths = boundedPaths.map(relative => path.resolve(this.repoRoot, relative));
@@ -1238,6 +1212,41 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       missingIds: [...result.missingIds, ...uniqueIds.slice(MAX_DECLARATION_IDS_PER_CALL)],
       truncated: uniqueIds.length > MAX_DECLARATION_IDS_PER_CALL
     };
+  }
+
+  /**
+   * One batched exact-name queryTypes() call, each name scoped to the file
+   * that wrote it, so the same FQN in another module or source set loses to
+   * the one the referring file compiles against; two equally visible
+   * declarations stay AMBIGUOUS and answer nothing.
+   */
+  async typesByName(names: readonly FrameworkTypeName[]): Promise<Array<FrameworkTypeTarget | undefined>> {
+    await this.ensureOpened(this.generation);
+    const bounded = names.slice(0, MAX_DECLARATION_IDS_PER_CALL);
+    if (bounded.length === 0) return names.map(() => undefined);
+    const queries = bounded.map(name => ({ typeText: name.fqn, ...(name.scopeFile ? { scopeFile: name.scopeFile } : {}) }));
+    // A copy: the memoized batch is shared with other callers of this request.
+    const lookups = [...await this.queryTypes(queries)];
+    // A request may foreground-refresh its mapper/anchor while the initial
+    // background reconcile has not reached a dependent module yet. The
+    // mapper's import is then visible but its exact FQN declaration is not
+    // in the store. Try only the normal top-level Java path under already
+    // discovered source roots, refresh files that actually exist, then
+    // repeat the exact lookup once. This is deliberately not a name scan
+    // and never guesses an arbitrary binding.
+    const unresolved = bounded.flatMap((_, index) => lookups[index]?.state === "RESOLVED" ? [] : [index]);
+    if (unresolved.length > 0 && summarizeCoverage(this.client.localStatus()) !== "complete") {
+      const candidates = conventionalDeclarationCandidates(this.repoRoot, this.conventionalDeclarationRoots, unique(unresolved.map(index => bounded[index]!.fqn)));
+      if (candidates.length > 0) {
+        await this.ensureFresh(candidates, this.generation);
+        const retries = await this.client.queryTypes(unresolved.map(index => queries[index]!), this.currentRequestOptions());
+        unresolved.forEach((index, at) => { if (retries[at]) lookups[index] = retries[at]!; });
+      }
+    }
+    return names.map((_, index) => {
+      const lookup = index < bounded.length ? lookups[index] : undefined;
+      return lookup?.state === "RESOLVED" ? { typeId: lookup.type.typeId, relativePath: relativePathOfFileId(lookup.type.fileId) } : undefined;
+    });
   }
 
   /**
@@ -1308,7 +1317,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const annotationPrefixes = unique([...input.annotationPrefixes]).slice(0, 16);
     const key = `${importPrefixes.join("\u0000")}|${annotationPrefixes.join("\u0000")}`;
     const cached = this.repositoryFactMarkerCache.get(key);
-    if (cached?.generation === this.generation) return cached.markers;
+    if (cached?.generation === this.generation) {
+      this.currentRequestOptions().onStaticRead?.();
+      return cached.markers;
+    }
     const markers = await this.client.queryRepositoryFactMarkers(
       importPrefixes,
       annotationPrefixes,

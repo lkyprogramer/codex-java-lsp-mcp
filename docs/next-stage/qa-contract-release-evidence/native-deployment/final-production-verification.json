@@ -1,0 +1,75 @@
+{
+  "schema": "final-deployment-verification/v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-11T12:46:57.789391+00:00",
+  "productionDeploymentPerformed": true,
+  "productionProof": {
+    "path": "native-deployment/production-attempt-8/production-proof.json",
+    "sha256": "03886f95d871b6132ae03547d4b47c40896c6ed8c77e8952291e09c31598247a"
+  },
+  "sourceDigest": "3ee9f884412d43e061699c42d11427fc70c3ba355d52bcc475d682db1c9dfcbc",
+  "sourceFiles": 611,
+  "measurementSourceDigest": "6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864",
+  "testOnlyAdoption": true,
+  "modelMeasurementsRelabeled": false,
+  "originalImmutableFilesChecked": 293,
+  "immutableMismatches": [],
+  "immutableManifestSha256": "7985f8752552e4bb44e0641a7b5e549edcf9ad3357632657b851851619a339cf",
+  "current": "releases/8f737ac7cd14-20261011T123708Z",
+  "previousCurrent": "releases/09b9851e888a-20260929T085025Z",
+  "healthAfterDocumentationEdits": {
+    "healthz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 198910,
+      "buildSha": "8f737ac7cd14",
+      "instanceId": "managed-8f737ac7cd14-20261011T123708Z-a055690f-9443-44f7-9dda-aaa2b394f76d"
+    },
+    "readyz": {
+      "status": "ok",
+      "state": "ready",
+      "activeRequests": 0,
+      "uptimeMs": 198912,
+      "buildSha": "8f737ac7cd14",
+      "instanceId": "managed-8f737ac7cd14-20261011T123708Z-a055690f-9443-44f7-9dda-aaa2b394f76d"
+    }
+  },
+  "mandatoryInstallerTests": {
+    "source": 1366,
+    "scripts": 436,
+    "failed": 0,
+    "skipped": 0
+  },
+  "actualSourceFilesInstalledAndHashed": 1780,
+  "projectConfigPreserved": true,
+  "environmentPreserved": {
+    "JAVA_HOME": true,
+    "JAVA_LSP_CACHE_BASE": true,
+    "JAVA_LSP_HTTP_PORT": true,
+    "JAVA_LSP_IDLE_TTL_MS": true,
+    "JAVA_LSP_OWNERSHIP_BASE": true,
+    "JDTLS_BIN": true,
+    "NODE_BIN": true,
+    "PATH": true
+  },
+  "productionRollback": "NOT_RUN_SUCCESSFUL_RELEASE_RETAINED",
+  "realProjectJdtAndProductionLoadAfterInstall": "NOT_RUN",
+  "primaryHead": "04058e43b8b2658864d0de09c8d6024e9928dfc5",
+  "primaryCommitOrPushPerformed": false,
+  "documentHashes": [
+    {
+      "path": "README.md",
+      "sha256": "26ff635c0fe02c9f76b4ba83ef1edec24fe3e254e3dd9adea2bebc56498a023f"
+    },
+    {
+      "path": "docs/phase-f/production-operations.md",
+      "sha256": "2a461ff9cba6aad7b0a893e0883e2142d42f0c51192067073e7d3ae406b758ae"
+    },
+    {
+      "path": "docs/next-stage/qa-contract-release-review.md",
+      "sha256": "2b23ad08b1e22f94d06f13b06f9ed7182b2b6e159b955222bd8043c392551f81"
+    }
+  ],
+  "gitDiffCheckExit": 0
+}

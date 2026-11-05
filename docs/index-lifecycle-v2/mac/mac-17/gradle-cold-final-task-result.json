@@ -1,0 +1,107 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-PLUGIN-MIRROR",
+  "status": "FAIL",
+  "dependency": null,
+  "identity": {
+    "sourceDigest": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "e5dde1f3d39af618421c8d9a448b074961c46b2d659af3244e4ccf9fcee5038f",
+    "distInventorySha256": "976b4e86d21fdb5734b34dbef5e476861fc9f3c442c79c07fee27d129205160a",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "final-once",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/final-once/result.json",
+      "sourceDigest": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 257734,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T134000Z-plugin-mirror-cold-once/final-cold.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "original-case-facts",
+      "file": "actual-analysis.json",
+      "sha256": "679d80aba10ee855e59c66cca5048b01ee5dad288a5716f85d4746d4577e97ba",
+      "status": "FAIL",
+      "provenance": "Original outcome, TAP/index, same-PID trace and cache census; no acceptance replay"
+    },
+    {
+      "name": "complete-known-resource-readback",
+      "file": "root-resource-observation.json",
+      "sha256": "82317834d039716f5ed28b0d0f46ece80f155aba50430dfdbc7a1acf504daf10",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "reused-source-components",
+      "file": "reused-component-evidence.json",
+      "sha256": "4b1df5946c4283cc31abc9bc473fe25253e1d657681cfa040abf1daa7d1684a6",
+      "status": "PASS",
+      "provenance": "Original8/8 and actual two-operation proof, no rerun"
+    },
+    {
+      "name": "actual-candidate-package-integrity",
+      "file": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T131000Z-gradle-home-properties/review-candidate-verification.json",
+      "sha256": "769b6d770456f289b6874cd01b2c922181846a707d09cb66c39b622d85d65a7b",
+      "status": "PASS",
+      "provenance": "One physical extraction/full identity at the R1325 new consumer; no qualified deployment claim"
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "299702dc905c1ed48ba6112e8f6a33e29da841a5938e6207828cec3397a444f9",
+    "registeredPids": 20,
+    "ownedGroups": 7,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T134000Z-plugin-mirror-cold-once/closeout/raw-evidence.tar.gz",
+      "sha256": "d8aa02f8000ecda9078c5d9f6ef4a0b8ad4671c6a0a8b7d68681a35d14308560",
+      "fileCount": 50,
+      "bytes": 5832045,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "ce7852edb1a1b32c5fccc757901124e28d0a1b76d6c85bc8edc49ec5d930b648",
+      "source": "22923c65250be78133c3c85727162b62a0f7da385b1bddb85c720be4af66b4b9",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "f5e5fab16b8e49e474c52f55b18ee4849d9545ae949a2634889221ce78aeddcd",
+  "notClaimed": [
+    "Clean cold semantic PASS",
+    "Formal G17 PASS",
+    "READY_FOR_DEPLOY",
+    "Production TCC/business read",
+    "Deployment",
+    "AI benefit",
+    "Unique cause of contextual Gradle download delay"
+  ],
+  "next": "Await user decision: dependency restoration as an installation phase with JDT startup remaining120s, or retain original empty-cache total120s and stop. No new cold case, retries, fullsuite or production action under unchanged boundary.",
+  "authorization": "Latest user authorized thorough local Gradle diagnosis/fix; original120s/15s, precise definitions/references, original deadline2026-11-03T18:00+08. No push or production.",
+  "notes": "Every original FAIL retained. R1310 was protocol-interfered by diagnostic SIGQUIT and is not a clean product cold-start verdict. Standalone HTTP client timings do not establish cause of slower real-build downloads.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T134000Z-plugin-mirror-cold-once"
+}

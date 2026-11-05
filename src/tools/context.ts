@@ -3,6 +3,7 @@
 // pos: Dependency bundle passed from server.ts into individual tools.
 import { AgentRouter } from "../agent-router/index.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
+import type { ViewLabels } from "../java-index/snapshot/request-view.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import { JdtlsSession } from "../jdtls-session.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
@@ -35,12 +36,8 @@ export type ToolContext = {
     importConcurrency: number;
     workspaceRetainedOnShutdown: boolean;
   };
-  watcher?: {
-    ready: boolean;
-    degraded: boolean;
-    pending: number;
-    lastStorm?: { observedAt: string; changeCount: number; affectedRoots: string[] };
-  };
+  /** The labels this request's one snapshot acquire froze (FRESH/STALE/NOT_READY). */
+  indexView?: ViewLabels;
   runBackgroundTask?: (operation: () => Promise<void>) => boolean;
   session: JdtlsSession;
   /** Router-facing JavaIndex V2 facts used by AgentRouter. */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STABLE_ID_VERSION, javaEdgeId, javaFileId, javaMethodId, javaTypeId, scopedNamedTypeId } from "./stable-id.js";
+import { STABLE_ID_VERSION, javaEdgeId, javaFileId, javaMethodId, javaTypeId, scopedNamedTypeId, splitOwnerMemberKey } from "./stable-id.js";
 
 test("T02: named type IDs are source-scoped so duplicate FQNs across files stay distinct", () => {
   const a = javaTypeId({
@@ -36,7 +36,7 @@ test("T02: source-scoped type IDs are stable to line shifts and change on rename
     range: { start: { line: 4, column: 12 }, end: { line: 9, column: 2 } }
   });
   assert.notEqual(before, renamed, "a rename changes the declaration id");
-  assert.equal(STABLE_ID_VERSION, 2, "identity version must be bumped with the v2 id format");
+  assert.equal(STABLE_ID_VERSION, 3, "normalized method keys must invalidate older identity metadata");
 });
 
 test("T02: separator and special characters are escaped in source-scoped ids", () => {
@@ -68,7 +68,7 @@ test("T02: method IDs derive from the source-scoped owner and stay per-file", ()
     range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } }
   });
   assert.notEqual(javaMethodId(ownerA, "save()"), javaMethodId(ownerB, "save()"), "same method on same-FQN owners in different files must have distinct ids");
-  assert.equal(javaMethodId(ownerA, "save()"), `method:${ownerA}#save()`);
+  assert.equal(javaMethodId(ownerA, "save()"), `method:v3:${ownerA}#save()`);
 });
 
 
@@ -89,7 +89,7 @@ test("local type IDs include relative path and source position", () => {
 test("method IDs use owner type and erased signature", () => {
   assert.equal(
     javaMethodId("type:demo.A", "save(java.lang.String,int)"),
-    "method:type:demo.A#save(java.lang.String,int)"
+    "method:v3:type:demo.A#save(java.lang.String,int)"
   );
 });
 
@@ -108,4 +108,12 @@ test("two call sites to the same target retain distinct root-independent edge ID
   });
   assert.notEqual(first, second);
   assert.equal(first.includes("/Users/"), false);
+});
+
+test("owner#member keys split only for v2 and local owners; pre-v2 owners are malformed", () => {
+  const owner = scopedNamedTypeId("src/main/java/a/B.java", "a.B");
+  assert.deepEqual(splitOwnerMemberKey(`${owner}#save(int)`), { owner, member: "save(int)" });
+  assert.deepEqual(splitOwnerMemberKey("type-local:src/A.java:3:4#run()"), { owner: "type-local:src/A.java:3:4", member: "run()" });
+  assert.equal(splitOwnerMemberKey("type:a.B#save(int)"), undefined);
+  assert.equal(splitOwnerMemberKey("a.B#save(int)"), undefined);
 });

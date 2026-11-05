@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
   bindCommandToIsolatedRepository,
   isolatedJdtBenchmarkEnvironment,
-  replaceRepoPlaceholder
+  replaceRepoPlaceholder,
+  resolveExports
 } from "./run-isolated-jdt-benchmark.mjs";
 
 test("real JDT benchmark environment forces private runtime state and detached repo selectors", () => {
@@ -41,7 +43,8 @@ test("real JDT benchmark environment forces private runtime state and detached r
   assert.equal(env.NODE_PATH, undefined);
   assert.equal(env.NODE_V8_COVERAGE, undefined);
   assert.equal(env._JAVA_OPTIONS, undefined);
-  assert.equal(env.GRADLE_USER_HOME, path.join(root, "gradle-home"));
+  assert.equal(env.GRADLE_USER_HOME, path.join(root, "service-state", "jdt-gradle-home"));
+  assert.equal(env.JAVA_LSP_SERVICE_STATE_ROOT, path.join(root, "service-state"));
   assert.equal(env.MAVEN_USER_HOME, path.join(root, "maven-home"));
   assert.equal(env.JAVA_LSP_ISOLATED_VALIDATION, "1");
   assert.equal(env.JAVA_LSP_ISOLATED_REPO_WORKTREE, "1");
@@ -58,7 +61,7 @@ test("real JDT benchmark binds the command repo root to the detached clone", () 
       ["node", "tool.js", "--repo-root", "{repo}", "--output", "{repo}/out.json"],
       "/tmp/repo"
     ),
-    ["node", "tool.js", "--repo-root", "/tmp/repo", "--output", "/tmp/repo/out.json"]
+    [process.execPath, "tool.js", "--repo-root", "/tmp/repo", "--output", "/tmp/repo/out.json"]
   );
   assert.throws(
     () => bindCommandToIsolatedRepository(["node", "tool.js", "--repo-root", "/active/repo"], "/tmp/repo"),
@@ -93,7 +96,7 @@ test("real JDT benchmark binds the command repo root to the detached clone", () 
       "/tmp/isolated/repo",
       "/tmp/isolated"
     ),
-    ["node", "tool.js", "--repo-root", "/tmp/isolated/repo", "--index-cache-dir", "/tmp/isolated/index"]
+    [process.execPath, "tool.js", "--repo-root", "/tmp/isolated/repo", "--index-cache-dir", "/tmp/isolated/index"]
   );
 });
 
@@ -102,4 +105,17 @@ test("real JDT benchmark replaces every repo placeholder without shell interpola
     replaceRepoPlaceholder(["node", "tool.js", "--repo-root", "{repo}", "--output", "{repo}/out.json"], "/tmp/repo"),
     ["node", "tool.js", "--repo-root", "/tmp/repo", "--output", "/tmp/repo/out.json"]
   );
+});
+
+test("real JDT evidence is exported out of the private state root before cleanup, never overwritten", () => {
+  const state = path.join(os.tmpdir(), "isolated-jdt-export-state");
+  const [entry] = resolveExports([`real-jdt-evidence.json=${path.join(os.tmpdir(), "raw-out", "real-jdt-evidence.json")}`], state);
+  assert.equal(entry.source, path.join(state, "real-jdt-evidence.json"));
+  assert.equal(entry.dest, path.join(os.tmpdir(), "raw-out", "real-jdt-evidence.json"));
+  assert.throws(() => resolveExports(["real-jdt-evidence.json"], state), /NAME=DEST/);
+  assert.throws(() => resolveExports(["../escape.json=/tmp/x.json"], state), /inside the state root/);
+  assert.throws(() => resolveExports([`/abs.json=${path.join(os.tmpdir(), "y.json")}`], state), /inside the state root/);
+  assert.throws(() => resolveExports(["a.json=relative/dest.json"], state), /absolute and outside/);
+  assert.throws(() => resolveExports([`a.json=${path.join(state, "inside.json")}`], state), /absolute and outside/);
+  assert.throws(() => resolveExports([`a.json=${os.tmpdir()}`], state), /already exists/);
 });

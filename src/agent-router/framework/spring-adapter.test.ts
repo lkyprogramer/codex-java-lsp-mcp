@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ResolvedAnchor } from "../../agent-types.js";
 import { RouterJavaIndex } from "../../java-index/router-java-index.js";
+import { localRouterIndex } from "../../java-index/local-index.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapterContext } from "./adapter.js";
 import type { CandidateEvidence } from "../evidence.js";
@@ -32,7 +33,7 @@ async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: n
 
 async function readyRouterAt(root: string): Promise<RouterJavaIndex> {
   const cacheDir = mkdtempSync(path.join(tmpdir(), "spring-fixture-cache-"));
-  const router = RouterJavaIndex.create(root, cacheDir);
+  const router = localRouterIndex(root, cacheDir);
   await router.open(1);
   await router.reconcile(1);
   await waitFor(async () => (await router.status()).pendingBackground === 0, 15_000);
@@ -228,7 +229,7 @@ test("fixture facts: OrderController.create resolves a unique CALLS edge to Orde
     assert.equal(truncated, false);
     assert.equal(callsEdges.length, 1, "OrderController.create must resolve exactly one CALLS edge");
     // v2: edge targets carry source-scoped declaration ids; the FQN stays embedded after the final "#".
-    assert.match(callsEdges[0]!.targetId, /^method:type:v2:.+#demo\.OrderService#create\(OrderRequest\)$/);
+    assert.match(callsEdges[0]!.targetId, /^method:v3:type:v2:.+#demo\.OrderService#create\(OrderRequest\)$/);
 
     const declarations = await router.declarationsById([callsEdges[0]!.targetId]);
     assert.equal(declarations.methods[0]!.name, "create");
@@ -491,6 +492,35 @@ test("springAdapter.collect chunks declarationsById past its 64-id-per-call cap 
     assert.equal(injections.length, TARGET_COUNT, "every one of the 70 distinct injection targets must resolve, not just the first 64");
     assert.equal(result.outcome.completion, "COMPLETE");
     assert.deepEqual(result.diagnostics, []);
+  } finally {
+    await router.close();
+  }
+});
+
+test("MAC-13 D08: an injected type whose FQN is also declared in test sources resolves to the one the service compiles against", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-scoped-target-"));
+  write(root, "src/main/java/demo/Dep.java", "package demo;\npublic class Dep {}\n");
+  write(root, "src/test/java/demo/Dep.java", "package demo;\npublic class Dep {}\n");
+  const servicePath = "src/main/java/demo/Service.java";
+  write(root, servicePath, [
+    "package demo;",
+    "",
+    "import org.springframework.stereotype.Service;",
+    "",
+    "@Service",
+    "class Service {",
+    "  private final Dep dep;",
+    "  Service(Dep dep) { this.dep = dep; }",
+    "}",
+    ""
+  ].join("\n"));
+  const router = await readyRouterAt(root);
+  try {
+    const candidate = path.join(root, servicePath);
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(candidate)], [candidate]));
+    const injections = result.outcome.evidence.filter(s => s.kind === "SPRING_INJECTION");
+    assert.ok(injections.length > 0, "the main-source Dep is the unique visible target, not an ambiguous alias");
+    assert.deepEqual([...new Set(injections.map(s => s.candidateFile))], [path.join(root, "src/main/java/demo/Dep.java")]);
   } finally {
     await router.close();
   }

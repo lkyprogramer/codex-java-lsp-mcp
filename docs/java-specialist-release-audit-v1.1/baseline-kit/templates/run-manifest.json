@@ -1,0 +1,16 @@
+{
+  "schema": "java-specialist-run-manifest/v1",
+  "source_sha": null,
+  "dirty_tree_hash": null,
+  "dataset_hash": null,
+  "corpus_hash": null,
+  "scorer_hash": null,
+  "scope": "UNMEASURED",
+  "model_id": null,
+  "host_id": null,
+  "raw_usage_available": false,
+  "locked_exposure": "NOT_ASSESSED",
+  "network_authorized": false,
+  "model_spend_authorized": false,
+  "commands": []
+}

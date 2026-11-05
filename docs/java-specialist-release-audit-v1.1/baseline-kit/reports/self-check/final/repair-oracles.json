@@ -1,0 +1,1037 @@
+{
+  "schema": "repair-oracle-validation/v1",
+  "not_sut_results": true,
+  "passed": true,
+  "rows": [
+    {
+      "task_id": "JSB-PAYMENTS-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-PAYMENTS-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "3333adff438444011005d30f342ff54849f2683299e78ad56301128c6dba1323",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "e11a1439311d879703f727f0100e8a750af2ec86ee4062aa89119de1c450c651",
+          "src/main/resources/mapper/ReceiptMapper.xml": "bd6bdae71328162c6a037e75539afd4bb0fb8e6036268042a48eb155fbebb876",
+          "src/main/java/lab/payments/AuditTrail.java": "51b8b713178d43b57b5b5fbccb71e1acd9cbb72bc7eb4ab297cbc736eeebf261",
+          "src/main/java/lab/payments/ReceiptAssembler.java": "1d09de9afb6d680598f0cabbd27d02bdc682830c5dd1289c1503b186fbb1220d",
+          "src/main/java/lab/payments/RetryPolicy.java": "f3564c58c2db2dafdeb7c739ff28d52d1fa30e03886502f7f9d75ba11fabe8f8",
+          "src/main/java/lab/payments/PaymentService.java": "bc37e8cc290b381475814d146409ccda9dfd0140d794da4df28be8928f3c86ea",
+          "src/main/java/lab/payments/Receipt.java": "80895c0fa3140438c59b7594af67bf19dfd2948f9d28d8a28e4b08ecca000534",
+          "src/main/java/lab/payments/PreviewService.java": "deefffb9a311837d4bd1bfa87fd07ce793111d96d8729d80e465e0572ef5aa8a"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-l6yw831r/classes",
+            "/tmp/java-bench-repair-l6yw831r/repo/src/main/java/lab/payments/AuditTrail.java",
+            "/tmp/java-bench-repair-l6yw831r/repo/src/main/java/lab/payments/PaymentService.java",
+            "/tmp/java-bench-repair-l6yw831r/repo/src/main/java/lab/payments/PreviewService.java",
+            "/tmp/java-bench-repair-l6yw831r/repo/src/main/java/lab/payments/Receipt.java",
+            "/tmp/java-bench-repair-l6yw831r/repo/src/main/java/lab/payments/ReceiptAssembler.java",
+            "/tmp/java-bench-repair-l6yw831r/repo/src/main/java/lab/payments/RetryPolicy.java",
+            "/tmp/java-bench-repair-l6yw831r/judge/FrozenPaymentsTest.java",
+            "/tmp/java-bench-repair-l6yw831r/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 558.4,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-l6yw831r/classes",
+            "FrozenJudgeRunner",
+            "lab.payments.FrozenPaymentsTest",
+            "/tmp/java-bench-repair-l6yw831r/judge-completed",
+            "d3c800dad183591de745cf1574d073a23007be7dc2627c4e"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.61,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: distinct requests\n\tat lab.payments.FrozenPaymentsTest.main(FrozenPaymentsTest.java:6)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-PAYMENTS-03",
+        "mode": "reference",
+        "frozen_test_sha256": "3333adff438444011005d30f342ff54849f2683299e78ad56301128c6dba1323",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "e11a1439311d879703f727f0100e8a750af2ec86ee4062aa89119de1c450c651",
+          "src/main/resources/mapper/ReceiptMapper.xml": "bd6bdae71328162c6a037e75539afd4bb0fb8e6036268042a48eb155fbebb876",
+          "src/main/java/lab/payments/AuditTrail.java": "51b8b713178d43b57b5b5fbccb71e1acd9cbb72bc7eb4ab297cbc736eeebf261",
+          "src/main/java/lab/payments/ReceiptAssembler.java": "1d09de9afb6d680598f0cabbd27d02bdc682830c5dd1289c1503b186fbb1220d",
+          "src/main/java/lab/payments/RetryPolicy.java": "f3564c58c2db2dafdeb7c739ff28d52d1fa30e03886502f7f9d75ba11fabe8f8",
+          "src/main/java/lab/payments/PaymentService.java": "2d7b63f3afa0db19aa5bb9c4fd0875516f41f4b14c381b8ef31bb976f8f7f102",
+          "src/main/java/lab/payments/Receipt.java": "80895c0fa3140438c59b7594af67bf19dfd2948f9d28d8a28e4b08ecca000534",
+          "src/main/java/lab/payments/PreviewService.java": "deefffb9a311837d4bd1bfa87fd07ce793111d96d8729d80e465e0572ef5aa8a"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-vqd4p0f9/classes",
+            "/tmp/java-bench-repair-vqd4p0f9/repo/src/main/java/lab/payments/AuditTrail.java",
+            "/tmp/java-bench-repair-vqd4p0f9/repo/src/main/java/lab/payments/PaymentService.java",
+            "/tmp/java-bench-repair-vqd4p0f9/repo/src/main/java/lab/payments/PreviewService.java",
+            "/tmp/java-bench-repair-vqd4p0f9/repo/src/main/java/lab/payments/Receipt.java",
+            "/tmp/java-bench-repair-vqd4p0f9/repo/src/main/java/lab/payments/ReceiptAssembler.java",
+            "/tmp/java-bench-repair-vqd4p0f9/repo/src/main/java/lab/payments/RetryPolicy.java",
+            "/tmp/java-bench-repair-vqd4p0f9/judge/FrozenPaymentsTest.java",
+            "/tmp/java-bench-repair-vqd4p0f9/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 516.787,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-vqd4p0f9/classes",
+            "FrozenJudgeRunner",
+            "lab.payments.FrozenPaymentsTest",
+            "/tmp/java-bench-repair-vqd4p0f9/judge-completed",
+            "507559dc0b01ced796cdf8bee9459a890090f77df9198fe9"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.518,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-INVENTORY-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-INVENTORY-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "0fd1d0b9fa08e20cb361f03ccfce19532a02c2f77eaeb2e4ae975530f094b60f",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "55546671f0100aeeb5da06d82e2628b1fb11b804c0c2d871bd187698adf847cc",
+          "src/main/java/lab/inventory/AuditTrail.java": "43e4451eab0243432ed9efba45c8e5af029d66098dd85e8bd4580cb5dad1de32",
+          "src/main/java/lab/inventory/StockService.java": "5a7ac88281ef400983c6065c0e26aae9804472d368fcee2ca3a008458d7bc9e9",
+          "src/main/java/lab/inventory/Reservation.java": "e44ef130afa2323f2c52060b105e517ad23d98af0223783ca86c90581a7b6405",
+          "src/main/java/lab/inventory/RetryPolicy.java": "c6e8c9a74835e617540bf591a6753cc416dfa3609326fabe4141706b32d1284e",
+          "src/main/java/lab/inventory/StockEndpoint.java": "b4f87ef0bdde71c3f786c47fa550587fb86737a845c73de3b90a19f05e371f0d",
+          "src/main/java/lab/inventory/PreviewService.java": "de29ff741a12f1e236479c55a51ff32b082948e0fc265631d9a9fce8574781c2"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-69lbx7px/classes",
+            "/tmp/java-bench-repair-69lbx7px/repo/src/main/java/lab/inventory/AuditTrail.java",
+            "/tmp/java-bench-repair-69lbx7px/repo/src/main/java/lab/inventory/PreviewService.java",
+            "/tmp/java-bench-repair-69lbx7px/repo/src/main/java/lab/inventory/Reservation.java",
+            "/tmp/java-bench-repair-69lbx7px/repo/src/main/java/lab/inventory/RetryPolicy.java",
+            "/tmp/java-bench-repair-69lbx7px/repo/src/main/java/lab/inventory/StockEndpoint.java",
+            "/tmp/java-bench-repair-69lbx7px/repo/src/main/java/lab/inventory/StockService.java",
+            "/tmp/java-bench-repair-69lbx7px/judge/FrozenInventoryTest.java",
+            "/tmp/java-bench-repair-69lbx7px/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 456.007,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-69lbx7px/classes",
+            "FrozenJudgeRunner",
+            "lab.inventory.FrozenInventoryTest",
+            "/tmp/java-bench-repair-69lbx7px/judge-completed",
+            "a4ceb98411b4bf0a3aaea8237d9409504290565691fa2ccb"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.897,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: idempotent release\n\tat lab.inventory.FrozenInventoryTest.main(FrozenInventoryTest.java:7)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-INVENTORY-03",
+        "mode": "reference",
+        "frozen_test_sha256": "0fd1d0b9fa08e20cb361f03ccfce19532a02c2f77eaeb2e4ae975530f094b60f",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "55546671f0100aeeb5da06d82e2628b1fb11b804c0c2d871bd187698adf847cc",
+          "src/main/java/lab/inventory/AuditTrail.java": "43e4451eab0243432ed9efba45c8e5af029d66098dd85e8bd4580cb5dad1de32",
+          "src/main/java/lab/inventory/StockService.java": "92519c3413dd389bef7c06f1fac0825078c068a4860b316295c85eb09c47aee0",
+          "src/main/java/lab/inventory/Reservation.java": "e44ef130afa2323f2c52060b105e517ad23d98af0223783ca86c90581a7b6405",
+          "src/main/java/lab/inventory/RetryPolicy.java": "c6e8c9a74835e617540bf591a6753cc416dfa3609326fabe4141706b32d1284e",
+          "src/main/java/lab/inventory/StockEndpoint.java": "b4f87ef0bdde71c3f786c47fa550587fb86737a845c73de3b90a19f05e371f0d",
+          "src/main/java/lab/inventory/PreviewService.java": "de29ff741a12f1e236479c55a51ff32b082948e0fc265631d9a9fce8574781c2"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-knu_p5cl/classes",
+            "/tmp/java-bench-repair-knu_p5cl/repo/src/main/java/lab/inventory/AuditTrail.java",
+            "/tmp/java-bench-repair-knu_p5cl/repo/src/main/java/lab/inventory/PreviewService.java",
+            "/tmp/java-bench-repair-knu_p5cl/repo/src/main/java/lab/inventory/Reservation.java",
+            "/tmp/java-bench-repair-knu_p5cl/repo/src/main/java/lab/inventory/RetryPolicy.java",
+            "/tmp/java-bench-repair-knu_p5cl/repo/src/main/java/lab/inventory/StockEndpoint.java",
+            "/tmp/java-bench-repair-knu_p5cl/repo/src/main/java/lab/inventory/StockService.java",
+            "/tmp/java-bench-repair-knu_p5cl/judge/FrozenInventoryTest.java",
+            "/tmp/java-bench-repair-knu_p5cl/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 513.143,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-knu_p5cl/classes",
+            "FrozenJudgeRunner",
+            "lab.inventory.FrozenInventoryTest",
+            "/tmp/java-bench-repair-knu_p5cl/judge-completed",
+            "6dfaf58b362abb2b91a629d735eda50260dfb76e5b8b3359"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.582,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-ACCESS-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-ACCESS-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "fc6016c1c9fdfb0101e1a12458de6d17ef7d74e8f2ad71bdc122c96355b3ce22",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "c888343fdcddf94bfbb569b3804ad41005bbaaa333968b4f90380aeb86b4c8bd",
+          "src/main/java/lab/access/AuditTrail.java": "824506c2d44a171abc638622565a12bf523a0f52dec9f4526b69f56d100c53ac",
+          "src/main/java/lab/access/RetryPolicy.java": "cc3ea7115a4e9daf12282605481e9195b21951102f337369ef7dcd8723f88786",
+          "src/main/java/lab/access/AccessEndpoint.java": "0235e1df9979df3a879ca598dec7c38b35a30ff85814d1aaf5f1ab5144a0662b",
+          "src/main/java/lab/access/SignedAccessPolicy.java": "35923cef4ccd5722e23cd5b97efbe104b371cdbf45591ab46bbbf1bdf5e9b86d",
+          "src/main/java/lab/access/AccessGrant.java": "4691700577c6c235eb4c57a329d91583363604e8299c2256eef935da71cf8480",
+          "src/main/java/lab/access/PreviewService.java": "9fac5e7f62699b60c00ccc00f8c902ce588aa19aa8d927ba701a408c027f3340"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-13ik57tp/classes",
+            "/tmp/java-bench-repair-13ik57tp/repo/src/main/java/lab/access/AccessEndpoint.java",
+            "/tmp/java-bench-repair-13ik57tp/repo/src/main/java/lab/access/AccessGrant.java",
+            "/tmp/java-bench-repair-13ik57tp/repo/src/main/java/lab/access/AuditTrail.java",
+            "/tmp/java-bench-repair-13ik57tp/repo/src/main/java/lab/access/PreviewService.java",
+            "/tmp/java-bench-repair-13ik57tp/repo/src/main/java/lab/access/RetryPolicy.java",
+            "/tmp/java-bench-repair-13ik57tp/repo/src/main/java/lab/access/SignedAccessPolicy.java",
+            "/tmp/java-bench-repair-13ik57tp/judge/FrozenAccessTest.java",
+            "/tmp/java-bench-repair-13ik57tp/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 486.103,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-13ik57tp/classes",
+            "FrozenJudgeRunner",
+            "lab.access.FrozenAccessTest",
+            "/tmp/java-bench-repair-13ik57tp/judge-completed",
+            "deac0f7e28bf50bfdd1319da58107deb3ec647a4e8e94456"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.537,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: exact expiry\n\tat lab.access.FrozenAccessTest.main(FrozenAccessTest.java:7)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-ACCESS-03",
+        "mode": "reference",
+        "frozen_test_sha256": "fc6016c1c9fdfb0101e1a12458de6d17ef7d74e8f2ad71bdc122c96355b3ce22",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "c888343fdcddf94bfbb569b3804ad41005bbaaa333968b4f90380aeb86b4c8bd",
+          "src/main/java/lab/access/AuditTrail.java": "824506c2d44a171abc638622565a12bf523a0f52dec9f4526b69f56d100c53ac",
+          "src/main/java/lab/access/RetryPolicy.java": "cc3ea7115a4e9daf12282605481e9195b21951102f337369ef7dcd8723f88786",
+          "src/main/java/lab/access/AccessEndpoint.java": "0235e1df9979df3a879ca598dec7c38b35a30ff85814d1aaf5f1ab5144a0662b",
+          "src/main/java/lab/access/SignedAccessPolicy.java": "39b351558224ef7ed5688b4cf003d1d68d5aaa2575af1c36c73092cb3f813138",
+          "src/main/java/lab/access/AccessGrant.java": "4691700577c6c235eb4c57a329d91583363604e8299c2256eef935da71cf8480",
+          "src/main/java/lab/access/PreviewService.java": "9fac5e7f62699b60c00ccc00f8c902ce588aa19aa8d927ba701a408c027f3340"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-12thsabw/classes",
+            "/tmp/java-bench-repair-12thsabw/repo/src/main/java/lab/access/AccessEndpoint.java",
+            "/tmp/java-bench-repair-12thsabw/repo/src/main/java/lab/access/AccessGrant.java",
+            "/tmp/java-bench-repair-12thsabw/repo/src/main/java/lab/access/AuditTrail.java",
+            "/tmp/java-bench-repair-12thsabw/repo/src/main/java/lab/access/PreviewService.java",
+            "/tmp/java-bench-repair-12thsabw/repo/src/main/java/lab/access/RetryPolicy.java",
+            "/tmp/java-bench-repair-12thsabw/repo/src/main/java/lab/access/SignedAccessPolicy.java",
+            "/tmp/java-bench-repair-12thsabw/judge/FrozenAccessTest.java",
+            "/tmp/java-bench-repair-12thsabw/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 501.897,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-12thsabw/classes",
+            "FrozenJudgeRunner",
+            "lab.access.FrozenAccessTest",
+            "/tmp/java-bench-repair-12thsabw/judge-completed",
+            "6665872c63d94d0e190c84620b4f2c4ba11ba98eb6e95b54"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.524,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-ADMISSIONS-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-ADMISSIONS-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "166e92d79f72fc0b3de43127382dc24d077284b1c9d35340b9c3c447e028b720",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "10489d664b3ae7e047a239afd2ba4882d73c455e62980c9f2d48373b537eedc4",
+          "modules/undergrad/pom.xml": "8223a40aa2b75d549506b1d763fc5f6aabe773b88923f6e3c9061ec2440b0040",
+          "modules/graduate/pom.xml": "723a56116c096e946457015ba3f79e738db67c3fecab0f7328f26949e9198493",
+          "modules/graduate/src/main/java/demo/Shared.java": "58dde2edbe8bfdc1184875b1a36c1690c8aa989dd904c0ba5d77d1167dfcc007",
+          "modules/undergrad/src/main/java/demo/Shared.java": "583f5f05831359eae467e942186519c26a2369c9d8dd70e133a328479014870d",
+          "src/main/java/lab/admissions/AuditTrail.java": "e48f10014709661419a98d41df0885389bb432c0418703cd487564a4e0804fc3",
+          "src/main/java/lab/admissions/DecisionAssembler.java": "eff13536820912f7dc1fc49f2276b1f1aa26b15ebeb6375c6eec73b4edff0597",
+          "src/main/java/lab/admissions/RetryPolicy.java": "0b88201ad80a58942a3f024135cd8e8d6c917b7ee6ae674f865888efb34d9380",
+          "src/main/java/lab/admissions/PreviewService.java": "bbf48d11cace49dc4dc6ec287c4b31b31db411c9a4a9a73f74efbb77eac51749",
+          "src/main/java/lab/admissions/AdmissionService.java": "1ede518061f6eda19359d2325a07b9cc1d2953d1ab33604eff9d1f5083f1a520"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-8ke1zr3l/classes",
+            "/tmp/java-bench-repair-8ke1zr3l/repo/src/main/java/lab/admissions/AdmissionService.java",
+            "/tmp/java-bench-repair-8ke1zr3l/repo/src/main/java/lab/admissions/AuditTrail.java",
+            "/tmp/java-bench-repair-8ke1zr3l/repo/src/main/java/lab/admissions/DecisionAssembler.java",
+            "/tmp/java-bench-repair-8ke1zr3l/repo/src/main/java/lab/admissions/PreviewService.java",
+            "/tmp/java-bench-repair-8ke1zr3l/repo/src/main/java/lab/admissions/RetryPolicy.java",
+            "/tmp/java-bench-repair-8ke1zr3l/judge/FrozenAdmissionsTest.java",
+            "/tmp/java-bench-repair-8ke1zr3l/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 524.613,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-8ke1zr3l/classes",
+            "FrozenJudgeRunner",
+            "lab.admissions.FrozenAdmissionsTest",
+            "/tmp/java-bench-repair-8ke1zr3l/judge-completed",
+            "ff8eb1b5bbe3757721df494aaffb0d03fe79682a77bacc52"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.53,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: threshold\n\tat lab.admissions.FrozenAdmissionsTest.main(FrozenAdmissionsTest.java:6)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-ADMISSIONS-03",
+        "mode": "reference",
+        "frozen_test_sha256": "166e92d79f72fc0b3de43127382dc24d077284b1c9d35340b9c3c447e028b720",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "10489d664b3ae7e047a239afd2ba4882d73c455e62980c9f2d48373b537eedc4",
+          "modules/undergrad/pom.xml": "8223a40aa2b75d549506b1d763fc5f6aabe773b88923f6e3c9061ec2440b0040",
+          "modules/graduate/pom.xml": "723a56116c096e946457015ba3f79e738db67c3fecab0f7328f26949e9198493",
+          "modules/graduate/src/main/java/demo/Shared.java": "58dde2edbe8bfdc1184875b1a36c1690c8aa989dd904c0ba5d77d1167dfcc007",
+          "modules/undergrad/src/main/java/demo/Shared.java": "583f5f05831359eae467e942186519c26a2369c9d8dd70e133a328479014870d",
+          "src/main/java/lab/admissions/AuditTrail.java": "e48f10014709661419a98d41df0885389bb432c0418703cd487564a4e0804fc3",
+          "src/main/java/lab/admissions/DecisionAssembler.java": "eff13536820912f7dc1fc49f2276b1f1aa26b15ebeb6375c6eec73b4edff0597",
+          "src/main/java/lab/admissions/RetryPolicy.java": "0b88201ad80a58942a3f024135cd8e8d6c917b7ee6ae674f865888efb34d9380",
+          "src/main/java/lab/admissions/PreviewService.java": "bbf48d11cace49dc4dc6ec287c4b31b31db411c9a4a9a73f74efbb77eac51749",
+          "src/main/java/lab/admissions/AdmissionService.java": "26b6e504671dd00bbb964ccf76d85990746fd04d25a5ef2c15030ad88690cb70"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-0x1ccqe6/classes",
+            "/tmp/java-bench-repair-0x1ccqe6/repo/src/main/java/lab/admissions/AdmissionService.java",
+            "/tmp/java-bench-repair-0x1ccqe6/repo/src/main/java/lab/admissions/AuditTrail.java",
+            "/tmp/java-bench-repair-0x1ccqe6/repo/src/main/java/lab/admissions/DecisionAssembler.java",
+            "/tmp/java-bench-repair-0x1ccqe6/repo/src/main/java/lab/admissions/PreviewService.java",
+            "/tmp/java-bench-repair-0x1ccqe6/repo/src/main/java/lab/admissions/RetryPolicy.java",
+            "/tmp/java-bench-repair-0x1ccqe6/judge/FrozenAdmissionsTest.java",
+            "/tmp/java-bench-repair-0x1ccqe6/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 552.805,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-0x1ccqe6/classes",
+            "FrozenJudgeRunner",
+            "lab.admissions.FrozenAdmissionsTest",
+            "/tmp/java-bench-repair-0x1ccqe6/judge-completed",
+            "065b29c1d43bdf704474eb0b50b50e3b2382ee2dacf721c0"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.685,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-PRICING-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-PRICING-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "010e364c82ef5cb6128cfd4bccd9d5505906f4cc6e3d5f55749b5b457b60edaf",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "fbe09e3d9d90775474f0ae9907c21e5c5fd911897705d54f7dbe9daecb3c866b",
+          "src/main/java/lab/pricing/AuditTrail.java": "c8fcb04ca8b3d7f0587a9fb152b0ecfedde8e75a60ced27021b4167682a89a6a",
+          "src/main/java/lab/pricing/InvoiceAssembler.java": "e2ed12f5dc7b9422dfb233865dc5c9513e6cf74a61196a48c73faeed72741777",
+          "src/main/java/lab/pricing/RetryPolicy.java": "33a017ce942f9702df8f436dac2b57fab39d6898e8c3153a844c1bccd536ad59",
+          "src/main/java/lab/pricing/MoneyPolicy.java": "e5f054b3703631187968bfd36d013e259f2af58fe8ce257eac46174d9d4ba5d6",
+          "src/main/java/lab/pricing/InvoiceLine.java": "d01087d10c0eeedbb0ac0ef0cfb94fb3d9283590b40d90a4744b77b6aed16d66",
+          "src/main/java/lab/pricing/PreviewService.java": "1c70e29474a58bb497be8b9a8223385a173a2430022c8a840373f48166972da0"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-2xu6dzj4/classes",
+            "/tmp/java-bench-repair-2xu6dzj4/repo/src/main/java/lab/pricing/AuditTrail.java",
+            "/tmp/java-bench-repair-2xu6dzj4/repo/src/main/java/lab/pricing/InvoiceAssembler.java",
+            "/tmp/java-bench-repair-2xu6dzj4/repo/src/main/java/lab/pricing/InvoiceLine.java",
+            "/tmp/java-bench-repair-2xu6dzj4/repo/src/main/java/lab/pricing/MoneyPolicy.java",
+            "/tmp/java-bench-repair-2xu6dzj4/repo/src/main/java/lab/pricing/PreviewService.java",
+            "/tmp/java-bench-repair-2xu6dzj4/repo/src/main/java/lab/pricing/RetryPolicy.java",
+            "/tmp/java-bench-repair-2xu6dzj4/judge/FrozenPricingTest.java",
+            "/tmp/java-bench-repair-2xu6dzj4/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 555.232,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-2xu6dzj4/classes",
+            "FrozenJudgeRunner",
+            "lab.pricing.FrozenPricingTest",
+            "/tmp/java-bench-repair-2xu6dzj4/judge-completed",
+            "7f5ea68de9d1dc18d207a5d37fdf436419a695b5d55a8bcd"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.547,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: positive tie\n\tat lab.pricing.FrozenPricingTest.main(FrozenPricingTest.java:6)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-PRICING-03",
+        "mode": "reference",
+        "frozen_test_sha256": "010e364c82ef5cb6128cfd4bccd9d5505906f4cc6e3d5f55749b5b457b60edaf",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "fbe09e3d9d90775474f0ae9907c21e5c5fd911897705d54f7dbe9daecb3c866b",
+          "src/main/java/lab/pricing/AuditTrail.java": "c8fcb04ca8b3d7f0587a9fb152b0ecfedde8e75a60ced27021b4167682a89a6a",
+          "src/main/java/lab/pricing/InvoiceAssembler.java": "e2ed12f5dc7b9422dfb233865dc5c9513e6cf74a61196a48c73faeed72741777",
+          "src/main/java/lab/pricing/RetryPolicy.java": "33a017ce942f9702df8f436dac2b57fab39d6898e8c3153a844c1bccd536ad59",
+          "src/main/java/lab/pricing/MoneyPolicy.java": "777d103f192962ca2b87f0bded8e433a963d7595ab67cd12d79d40482d0a82d1",
+          "src/main/java/lab/pricing/InvoiceLine.java": "d01087d10c0eeedbb0ac0ef0cfb94fb3d9283590b40d90a4744b77b6aed16d66",
+          "src/main/java/lab/pricing/PreviewService.java": "1c70e29474a58bb497be8b9a8223385a173a2430022c8a840373f48166972da0"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-jjparf_i/classes",
+            "/tmp/java-bench-repair-jjparf_i/repo/src/main/java/lab/pricing/AuditTrail.java",
+            "/tmp/java-bench-repair-jjparf_i/repo/src/main/java/lab/pricing/InvoiceAssembler.java",
+            "/tmp/java-bench-repair-jjparf_i/repo/src/main/java/lab/pricing/InvoiceLine.java",
+            "/tmp/java-bench-repair-jjparf_i/repo/src/main/java/lab/pricing/MoneyPolicy.java",
+            "/tmp/java-bench-repair-jjparf_i/repo/src/main/java/lab/pricing/PreviewService.java",
+            "/tmp/java-bench-repair-jjparf_i/repo/src/main/java/lab/pricing/RetryPolicy.java",
+            "/tmp/java-bench-repair-jjparf_i/judge/FrozenPricingTest.java",
+            "/tmp/java-bench-repair-jjparf_i/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 534.447,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-jjparf_i/classes",
+            "FrozenJudgeRunner",
+            "lab.pricing.FrozenPricingTest",
+            "/tmp/java-bench-repair-jjparf_i/judge-completed",
+            "fce1a9edb7700070be835c5d541afbe0eaa5b0267c2a1790"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.52,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-NOTIFICATIONS-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-NOTIFICATIONS-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "34f684431e01995423b61fc4afa986f00fe540387db8fe5d126bd0efff84ebf2",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "23c7aff77f5b36d40c0783df5b3b32023b322c7814da199c749a47945fe81d2a",
+          "src/main/java/lab/notifications/AuditTrail.java": "cbbd6c68ad7e0b5ba95893f52b4ff9bf73ba70f3bfc33130433915000b6d7e68",
+          "src/main/java/lab/notifications/RetryPolicy.java": "8acfa496bce94763956f076fdfa4144fe4b08ab97428f327ed072bd45c44c347",
+          "src/main/java/lab/notifications/DispatchBus.java": "967c3a46b33f7fee929297eba73da099acb482bd0477e3098491125d3b49ad87",
+          "src/main/java/lab/notifications/NotificationEndpoint.java": "fe3a53bcfcb7f457b2aba9c1346c039cb5debaed33f632943a6b3434a6409897",
+          "src/main/java/lab/notifications/Subscription.java": "aa4bd7e0fba32dbaa0f22e3eb304cdc21c5cd632df774181280dff13bade6c90",
+          "src/main/java/lab/notifications/PreviewService.java": "868c1fb9ac08efed17aee22b49e233f4abacfa2a33c2db543f74f0c94a617d52"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-6770dqzo/classes",
+            "/tmp/java-bench-repair-6770dqzo/repo/src/main/java/lab/notifications/AuditTrail.java",
+            "/tmp/java-bench-repair-6770dqzo/repo/src/main/java/lab/notifications/DispatchBus.java",
+            "/tmp/java-bench-repair-6770dqzo/repo/src/main/java/lab/notifications/NotificationEndpoint.java",
+            "/tmp/java-bench-repair-6770dqzo/repo/src/main/java/lab/notifications/PreviewService.java",
+            "/tmp/java-bench-repair-6770dqzo/repo/src/main/java/lab/notifications/RetryPolicy.java",
+            "/tmp/java-bench-repair-6770dqzo/repo/src/main/java/lab/notifications/Subscription.java",
+            "/tmp/java-bench-repair-6770dqzo/judge/FrozenNotificationsTest.java",
+            "/tmp/java-bench-repair-6770dqzo/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 469.538,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-6770dqzo/classes",
+            "FrozenJudgeRunner",
+            "lab.notifications.FrozenNotificationsTest",
+            "/tmp/java-bench-repair-6770dqzo/judge-completed",
+            "e76d2b11f19eac1cb9099d1627caeac62095f2ace0f7d2b1"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.572,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: sibling removal\n\tat lab.notifications.FrozenNotificationsTest.main(FrozenNotificationsTest.java:7)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-NOTIFICATIONS-03",
+        "mode": "reference",
+        "frozen_test_sha256": "34f684431e01995423b61fc4afa986f00fe540387db8fe5d126bd0efff84ebf2",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "23c7aff77f5b36d40c0783df5b3b32023b322c7814da199c749a47945fe81d2a",
+          "src/main/java/lab/notifications/AuditTrail.java": "cbbd6c68ad7e0b5ba95893f52b4ff9bf73ba70f3bfc33130433915000b6d7e68",
+          "src/main/java/lab/notifications/RetryPolicy.java": "8acfa496bce94763956f076fdfa4144fe4b08ab97428f327ed072bd45c44c347",
+          "src/main/java/lab/notifications/DispatchBus.java": "72bf48490e73598e8ff830c09294dc404ee9dbf3a5b8687b75d58a70bd739af9",
+          "src/main/java/lab/notifications/NotificationEndpoint.java": "fe3a53bcfcb7f457b2aba9c1346c039cb5debaed33f632943a6b3434a6409897",
+          "src/main/java/lab/notifications/Subscription.java": "aa4bd7e0fba32dbaa0f22e3eb304cdc21c5cd632df774181280dff13bade6c90",
+          "src/main/java/lab/notifications/PreviewService.java": "868c1fb9ac08efed17aee22b49e233f4abacfa2a33c2db543f74f0c94a617d52"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-ihzbx33c/classes",
+            "/tmp/java-bench-repair-ihzbx33c/repo/src/main/java/lab/notifications/AuditTrail.java",
+            "/tmp/java-bench-repair-ihzbx33c/repo/src/main/java/lab/notifications/DispatchBus.java",
+            "/tmp/java-bench-repair-ihzbx33c/repo/src/main/java/lab/notifications/NotificationEndpoint.java",
+            "/tmp/java-bench-repair-ihzbx33c/repo/src/main/java/lab/notifications/PreviewService.java",
+            "/tmp/java-bench-repair-ihzbx33c/repo/src/main/java/lab/notifications/RetryPolicy.java",
+            "/tmp/java-bench-repair-ihzbx33c/repo/src/main/java/lab/notifications/Subscription.java",
+            "/tmp/java-bench-repair-ihzbx33c/judge/FrozenNotificationsTest.java",
+            "/tmp/java-bench-repair-ihzbx33c/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 552.386,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-ihzbx33c/classes",
+            "FrozenJudgeRunner",
+            "lab.notifications.FrozenNotificationsTest",
+            "/tmp/java-bench-repair-ihzbx33c/judge-completed",
+            "f17a967e16521d1a3f900aa491ada7e86b39b55e6b3fc242"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.559,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-LEDGER-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-LEDGER-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "00861e6565745512e9ab88bb72095b5ac1a44ee48f51a9f4204c09b31593d9c0",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "34a8d4c565bd214d67bf4c90cc682444267c34edf8bff30d39c8b56fd9c8abc4",
+          "src/main/java/lab/ledger/AuditTrail.java": "8d147b301b611f7c9b149ed125994006c501d3ede40753e3816cc1f57f22c1a4",
+          "src/main/java/lab/ledger/RetryPolicy.java": "7642f14436969300165d1ea3acfadb980912178f4c86252070045ffe7fa57d33",
+          "src/main/java/lab/ledger/TransferCommand.java": "50528c4da235728b11501b76d882da75f3698727cc69a5014ee5b94117c00295",
+          "src/main/java/lab/ledger/Ledger.java": "9a202b7388153392770b79b0caa85ac5455229becddfa67736c41d07e5dc2bf8",
+          "src/main/java/lab/ledger/TransferEndpoint.java": "c6c9b01ff8ea5935c631f27c3eb4b72da984b457defa2c51c7ba3be345742f11",
+          "src/main/java/lab/ledger/PreviewService.java": "86cc17918a3f27bb265a16e530ab4d39ead30126b588cd55106d2418567ca3cc"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-8bma975w/classes",
+            "/tmp/java-bench-repair-8bma975w/repo/src/main/java/lab/ledger/AuditTrail.java",
+            "/tmp/java-bench-repair-8bma975w/repo/src/main/java/lab/ledger/Ledger.java",
+            "/tmp/java-bench-repair-8bma975w/repo/src/main/java/lab/ledger/PreviewService.java",
+            "/tmp/java-bench-repair-8bma975w/repo/src/main/java/lab/ledger/RetryPolicy.java",
+            "/tmp/java-bench-repair-8bma975w/repo/src/main/java/lab/ledger/TransferCommand.java",
+            "/tmp/java-bench-repair-8bma975w/repo/src/main/java/lab/ledger/TransferEndpoint.java",
+            "/tmp/java-bench-repair-8bma975w/judge/FrozenLedgerTest.java",
+            "/tmp/java-bench-repair-8bma975w/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 501.89,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-8bma975w/classes",
+            "FrozenJudgeRunner",
+            "lab.ledger.FrozenLedgerTest",
+            "/tmp/java-bench-repair-8bma975w/judge-completed",
+            "6c31b0662372b5b20afc7313b120838f1a6ab31efdc999b7"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.635,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: negative transfer\n\tat lab.ledger.FrozenLedgerTest.main(FrozenLedgerTest.java:6)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-LEDGER-03",
+        "mode": "reference",
+        "frozen_test_sha256": "00861e6565745512e9ab88bb72095b5ac1a44ee48f51a9f4204c09b31593d9c0",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "34a8d4c565bd214d67bf4c90cc682444267c34edf8bff30d39c8b56fd9c8abc4",
+          "src/main/java/lab/ledger/AuditTrail.java": "8d147b301b611f7c9b149ed125994006c501d3ede40753e3816cc1f57f22c1a4",
+          "src/main/java/lab/ledger/RetryPolicy.java": "7642f14436969300165d1ea3acfadb980912178f4c86252070045ffe7fa57d33",
+          "src/main/java/lab/ledger/TransferCommand.java": "50528c4da235728b11501b76d882da75f3698727cc69a5014ee5b94117c00295",
+          "src/main/java/lab/ledger/Ledger.java": "343d78b1831471b6a26365955e0b41dc7f2488faf6b7d699bac74a976eb8f8e4",
+          "src/main/java/lab/ledger/TransferEndpoint.java": "c6c9b01ff8ea5935c631f27c3eb4b72da984b457defa2c51c7ba3be345742f11",
+          "src/main/java/lab/ledger/PreviewService.java": "86cc17918a3f27bb265a16e530ab4d39ead30126b588cd55106d2418567ca3cc"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-b2k852xa/classes",
+            "/tmp/java-bench-repair-b2k852xa/repo/src/main/java/lab/ledger/AuditTrail.java",
+            "/tmp/java-bench-repair-b2k852xa/repo/src/main/java/lab/ledger/Ledger.java",
+            "/tmp/java-bench-repair-b2k852xa/repo/src/main/java/lab/ledger/PreviewService.java",
+            "/tmp/java-bench-repair-b2k852xa/repo/src/main/java/lab/ledger/RetryPolicy.java",
+            "/tmp/java-bench-repair-b2k852xa/repo/src/main/java/lab/ledger/TransferCommand.java",
+            "/tmp/java-bench-repair-b2k852xa/repo/src/main/java/lab/ledger/TransferEndpoint.java",
+            "/tmp/java-bench-repair-b2k852xa/judge/FrozenLedgerTest.java",
+            "/tmp/java-bench-repair-b2k852xa/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 451.725,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-b2k852xa/classes",
+            "FrozenJudgeRunner",
+            "lab.ledger.FrozenLedgerTest",
+            "/tmp/java-bench-repair-b2k852xa/judge-completed",
+            "13123022eb3bc0cf6424aad8888d4af825fe2e1a2da41439"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.525,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    },
+    {
+      "task_id": "JSB-PAGINATION-03",
+      "oracle_check_pass": true,
+      "baseline": {
+        "task_id": "JSB-PAGINATION-03",
+        "mode": "baseline",
+        "frozen_test_sha256": "ac0d569bd1c2ef9364a9b34db8616ccb3b9be2d4172e95f3759c580cd3b751f6",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "818c1904737707e3009c4ed8167a29c8d222aa62581d7127b7efc1f32ab445dc",
+          "src/main/java/lab/pagination/AuditTrail.java": "e63676a62aee3abf95a245df0dc5a2690e5de512db209e643361f28f11039ee9",
+          "src/main/java/lab/pagination/RetryPolicy.java": "1794d9d07c9dd418a812bbfea4c32d2405c1fd23e8c11b07e7d211b8dc806c8e",
+          "src/main/java/lab/pagination/PageEndpoint.java": "ed4fbc07f9808d692ef263696813bb2be65072bc5d013c461b1e98dc21097414",
+          "src/main/java/lab/pagination/PageRequest.java": "f20b36c45090626dbd44922ca7cfe6df4f0a8cf86bac7ea8ab0d413008a21b82",
+          "src/main/java/lab/pagination/PageWindow.java": "8e92e6ca3f3f187e415db61e6b21ad635810ddf598771d0850ed1b7f52a5b90f",
+          "src/main/java/lab/pagination/PreviewService.java": "1ead53b47e8f9be110816b15cf6ed5e14f556b5bf9413e127b037bd315524d91"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-xsz2774a/classes",
+            "/tmp/java-bench-repair-xsz2774a/repo/src/main/java/lab/pagination/AuditTrail.java",
+            "/tmp/java-bench-repair-xsz2774a/repo/src/main/java/lab/pagination/PageEndpoint.java",
+            "/tmp/java-bench-repair-xsz2774a/repo/src/main/java/lab/pagination/PageRequest.java",
+            "/tmp/java-bench-repair-xsz2774a/repo/src/main/java/lab/pagination/PageWindow.java",
+            "/tmp/java-bench-repair-xsz2774a/repo/src/main/java/lab/pagination/PreviewService.java",
+            "/tmp/java-bench-repair-xsz2774a/repo/src/main/java/lab/pagination/RetryPolicy.java",
+            "/tmp/java-bench-repair-xsz2774a/judge/FrozenPaginationTest.java",
+            "/tmp/java-bench-repair-xsz2774a/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 451.543,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-xsz2774a/classes",
+            "FrozenJudgeRunner",
+            "lab.pagination.FrozenPaginationTest",
+            "/tmp/java-bench-repair-xsz2774a/judge-completed",
+            "1f2b7f41bb44ce677f08fdf31c2877b5c6490afa773cee47"
+          ],
+          "exit_code": 1,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.523,
+          "stdout": "",
+          "stderr": "Exception in thread \"main\" java.lang.reflect.InvocationTargetException\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:118)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat FrozenJudgeRunner.main(FrozenJudgeRunner.java:7)\nCaused by: java.lang.AssertionError: overflow\n\tat lab.pagination.FrozenPaginationTest.main(FrozenPaginationTest.java:5)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\t... 2 more\n"
+        },
+        "status": "TEST_FAILED",
+        "validated_success": false,
+        "frozen_test_completed": false
+      },
+      "reference": {
+        "task_id": "JSB-PAGINATION-03",
+        "mode": "reference",
+        "frozen_test_sha256": "ac0d569bd1c2ef9364a9b34db8616ccb3b9be2d4172e95f3759c580cd3b751f6",
+        "judge_wrapper_sha256": "74c1f6e982f0cc2e5d26c388dc67b48d3b9446c29e6541c71e7ddef136379232",
+        "candidate_tree": {
+          "pom.xml": "818c1904737707e3009c4ed8167a29c8d222aa62581d7127b7efc1f32ab445dc",
+          "src/main/java/lab/pagination/AuditTrail.java": "e63676a62aee3abf95a245df0dc5a2690e5de512db209e643361f28f11039ee9",
+          "src/main/java/lab/pagination/RetryPolicy.java": "1794d9d07c9dd418a812bbfea4c32d2405c1fd23e8c11b07e7d211b8dc806c8e",
+          "src/main/java/lab/pagination/PageEndpoint.java": "ed4fbc07f9808d692ef263696813bb2be65072bc5d013c461b1e98dc21097414",
+          "src/main/java/lab/pagination/PageRequest.java": "f20b36c45090626dbd44922ca7cfe6df4f0a8cf86bac7ea8ab0d413008a21b82",
+          "src/main/java/lab/pagination/PageWindow.java": "77ff2e2e17f46b90e6cc63218b9be370083407c35d073db0a89b782a4e3e8032",
+          "src/main/java/lab/pagination/PreviewService.java": "1ead53b47e8f9be110816b15cf6ed5e14f556b5bf9413e127b037bd315524d91"
+        },
+        "compile": {
+          "argv": [
+            "javac",
+            "-encoding",
+            "UTF-8",
+            "-proc:none",
+            "--release",
+            "8",
+            "-d",
+            "/tmp/java-bench-repair-hm6eot9f/classes",
+            "/tmp/java-bench-repair-hm6eot9f/repo/src/main/java/lab/pagination/AuditTrail.java",
+            "/tmp/java-bench-repair-hm6eot9f/repo/src/main/java/lab/pagination/PageEndpoint.java",
+            "/tmp/java-bench-repair-hm6eot9f/repo/src/main/java/lab/pagination/PageRequest.java",
+            "/tmp/java-bench-repair-hm6eot9f/repo/src/main/java/lab/pagination/PageWindow.java",
+            "/tmp/java-bench-repair-hm6eot9f/repo/src/main/java/lab/pagination/PreviewService.java",
+            "/tmp/java-bench-repair-hm6eot9f/repo/src/main/java/lab/pagination/RetryPolicy.java",
+            "/tmp/java-bench-repair-hm6eot9f/judge/FrozenPaginationTest.java",
+            "/tmp/java-bench-repair-hm6eot9f/judge/FrozenJudgeRunner.java"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 437.644,
+          "stdout": "",
+          "stderr": "warning: [options] source value 8 is obsolete and will be removed in a future release\nwarning: [options] target value 8 is obsolete and will be removed in a future release\nwarning: [options] To suppress warnings about obsolete options, use -Xlint:-options.\n3 warnings\n"
+        },
+        "run": {
+          "argv": [
+            "java",
+            "-Xmx128m",
+            "-cp",
+            "/tmp/java-bench-repair-hm6eot9f/classes",
+            "FrozenJudgeRunner",
+            "lab.pagination.FrozenPaginationTest",
+            "/tmp/java-bench-repair-hm6eot9f/judge-completed",
+            "9e0e5407361701dd0c71ba311ad0f4518dd8bc77407d7c27"
+          ],
+          "exit_code": 0,
+          "timeout": false,
+          "output_limit": false,
+          "elapsed_ms": 50.491,
+          "stdout": "",
+          "stderr": ""
+        },
+        "status": "PASS",
+        "validated_success": true,
+        "frozen_test_completed": true
+      }
+    }
+  ]
+}

@@ -6,7 +6,8 @@ test("retryable JDT failures back off and explicit reset clears the gate", () =>
   let now = 1_000;
   const backoff = new JdtRestartBackoff(() => now);
 
-  backoff.recordFailure("JDT_SERVER_ERROR");
+  backoff.recordFailure("JDT_SERVER_ERROR", "Deadline exceeded at jdtls.project.import");
+  assert.equal(backoff.status().lastErrorMessage, "Deadline exceeded at jdtls.project.import");
   assert.deepEqual(backoff.check(), {
     allowed: false,
     retryAfterMs: 500,
@@ -24,6 +25,8 @@ test("retryable JDT failures back off and explicit reset clears the gate", () =>
 
   backoff.reset();
   assert.equal(backoff.check().allowed, true);
+  assert.equal(backoff.status().lastErrorCode, undefined);
+  assert.equal(backoff.status().lastErrorMessage, undefined);
 });
 
 test("JDT configuration failures require explicit reset", () => {

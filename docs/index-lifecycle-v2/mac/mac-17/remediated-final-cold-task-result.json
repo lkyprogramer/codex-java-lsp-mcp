@@ -1,0 +1,100 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-REMEDIATED-COLD-ONCE",
+  "status": "FAIL",
+  "dependency": null,
+  "identity": {
+    "sourceDigest": "cfce7c772405fdff35401908244e10213d7cde248223722d1a01fffc0c8b95c1",
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+    "buildStampSha256": "5a7efae23f67ea2422c9984208076c213dc68f322b90f417da76cfb0df21b23a",
+    "distInventorySha256": "2139f90389f90a78403ba65fc3ef12444dea746ee822b29a1e0bb5c7cb4bb8d2",
+    "dependencySha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+  },
+  "checks": [
+    {
+      "name": "final-once",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node exited with 1 (no signal)",
+      "result": "raw/validation/final-once/result.json",
+      "sourceDigest": "cfce7c772405fdff35401908244e10213d7cde248223722d1a01fffc0c8b95c1",
+      "commands": 1,
+      "tests": 1,
+      "pass": 0,
+      "fail": 1,
+      "elapsedMs": 278446,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T094800Z-remediated-cold-once/final-cold.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "original-failed-cold-case",
+      "file": "final-analysis.json",
+      "sha256": "b178dd3a45e73dbbb9fa0f896d1cf60096b6943148de20ba630dd953e9efdd36",
+      "status": "FAIL",
+      "provenance": "Original same-PID trace, original TAP/actions/cache; no replay"
+    },
+    {
+      "name": "actual-unqualified-candidate-package",
+      "file": "unqualified-candidate-verification.json",
+      "sha256": "3127c5db2c411a50aeb96c9651b66f8f60736f53a3f43f27b8d568586cd6deb2",
+      "status": "PASS",
+      "provenance": "One package physical extraction and complete identity; not acceptance"
+    },
+    {
+      "name": "complete-known-resource-readback",
+      "file": "root-resource-observation.json",
+      "sha256": "a80d138927b6f63c5ec34b4263f88a69df7b62f878b4082a38bf175195fa692e",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "437c6f19c146775dd2caf68be3eea86cc2dbbdb2228368fb8fa2545bd8f57e87",
+    "registeredPids": 17,
+    "ownedGroups": 5,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T094800Z-remediated-cold-once/closeout/raw-evidence.tar.gz",
+      "sha256": "ae487d192f394a53301280262085f8782fb5902903c7bb3682e6bd1a4d2e9ca5",
+      "fileCount": 27,
+      "bytes": 190698925,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "750f3d3c2e7443f9a65bf1fa60cbb4d7015122537bb4028a4de2ccd4773a2d85",
+      "source": "cfce7c772405fdff35401908244e10213d7cde248223722d1a01fffc0c8b95c1",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "23948c4199c8e9addf21bc2ac2a9facc8d8c9887593460edab76b974a4faa409",
+  "notClaimed": [
+    "Complete cold semantic PASS",
+    "Formal G17 PASS",
+    "Ready for deploy",
+    "Production TCC/business read",
+    "Deployment",
+    "Runtime backoff verified by this failed case",
+    "AI benefit"
+  ],
+  "next": "Stopped and candidate disabled after the single authorized failure. No automatic retry, further optimization, fullsuite or production action. Preserve history and artifacts.",
+  "authorization": "Exactly one additional remediated cold semantic case, isolated business copy, original120s/15s and precise definition/reference; failure then stop; no push/production. Hard deadline2026-11-03T18:00:00+08:00.",
+  "notes": "TAP1/0PASS/1FAIL. Before home physically empty. One JDT48371, original startup budget→TERM119994.570ms, exit120221.143ms. Still required dependency metadata/binary downloads/model import, no ServiceReady, precise semantics NOT_RUN. Actual source init/private JVM properties/proxy/marker verified. History and prep failures retained.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T094800Z-remediated-cold-once"
+}

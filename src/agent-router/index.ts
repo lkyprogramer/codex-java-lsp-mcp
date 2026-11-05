@@ -405,7 +405,11 @@ export class AgentRouter {
     }));
     internalObserver?.readPlanCoordinates?.(readPlanResult.selectedCoordinateRangesByPath);
     internalObserver?.productionRanking?.(productionRankedEvidence, readPlanResult.selectedPaths);
-    const { selectedCoordinateRangesByPath: _selectedCoordinateRangesByPath, ...publicReadPlanMetrics } = readPlanResult;
+    const {
+      selectedCoordinateRangesByPath: _selectedCoordinateRangesByPath,
+      compactPositionGaps,
+      ...publicReadPlanMetrics
+    } = readPlanResult;
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
     const pathById = new Map([...idByPath].map(([absolutePath, id]) => [id, absolutePath]));
@@ -446,6 +450,7 @@ export class AgentRouter {
         ...evidenceGaps(anchors, options, { ...semantic, lombokIncomplete: lombok.taskGapDetected }),
         ...readPlanResult.evidenceGaps
       ],
+      compactPositionGaps,
       freshness: {
         requestGeneration: freshness.generation,
         indexedGeneration: sourceAfter.javaIndex.indexedGeneration,

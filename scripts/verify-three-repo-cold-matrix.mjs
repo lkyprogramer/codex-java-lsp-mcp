@@ -20,8 +20,43 @@ export const CONTINUE_POLICY_IN_POOL_FIFO = "in-pool-fifo";
 const EPSILON = 1e-12;
 const P_READ_TOLERANCE = 0.02;
 const P95_ABSOLUTE_SLACK_MS = 50;
+/**
+ * p95 contract versions. LEGACY is the formula historical v32/v3.2 manifests were judged by
+ * (newP95 <= max(oldP95 x limit, oldP95 + 50 ms)); it still verifies those manifests unchanged and is
+ * never relabelled. STRICT is the ILV2 plan's commitment (MAC-08C): newP95 <= oldP95 x 1.25, no slack.
+ */
+export const P95_CONTRACT_LEGACY = "v32-p95-ratio-or-50ms";
+export const P95_CONTRACT_STRICT = "ilv2-p95-strict-ratio-v1";
+export const P95_STRICT_RATIO = 1.25;
 
-export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Limit = 1.25, summaryFile } = {}) {
+/** One cell's p95 verdict with its inputs, so a report shows old/new/ratio and the policy that judged it. */
+export function p95Gate({ oldP95, newP95, contract, limit = P95_STRICT_RATIO }) {
+  const valid = Number.isFinite(oldP95) && oldP95 > 0 && Number.isFinite(newP95) && newP95 >= 0;
+  if (contract === P95_CONTRACT_STRICT) {
+    // A zero or invalid baseline has no ratio: it is an invalid experiment, never a silent pass.
+    if (!valid || limit !== P95_STRICT_RATIO) {
+      return { contractVersion: contract, oldP95Ms: oldP95, newP95Ms: newP95, ratio: null, limit, thresholdMs: null,
+        policy: "newP95 <= oldP95 x 1.25", status: "INVALID_EXPERIMENT",
+        reason: !valid ? "old p95 must be a positive finite baseline and new p95 finite" : "strict contract ratio is fixed at 1.25" };
+    }
+    const thresholdMs = oldP95 * P95_STRICT_RATIO;
+    return { contractVersion: contract, oldP95Ms: oldP95, newP95Ms: newP95, ratio: newP95 / oldP95, limit, thresholdMs,
+      policy: "newP95 <= oldP95 x 1.25", status: newP95 <= thresholdMs + EPSILON ? "PASS" : "FAIL" };
+  }
+  if (contract === P95_CONTRACT_LEGACY) {
+    const thresholdMs = Math.max(oldP95 * limit, oldP95 + P95_ABSOLUTE_SLACK_MS);
+    return { contractVersion: contract, oldP95Ms: oldP95, newP95Ms: newP95, ratio: newP95 / oldP95, limit, thresholdMs,
+      policy: `newP95 <= max(oldP95 x ${limit}, oldP95 + ${P95_ABSOLUTE_SLACK_MS} ms)`, status: newP95 <= thresholdMs + EPSILON ? "PASS" : "FAIL" };
+  }
+  throw new MatrixValidationError(`unknown p95 contract: ${contract}`);
+}
+
+/** The p95 contract a manifest was produced under; manifests from before the strict contract are LEGACY. */
+export function manifestP95Contract(policy) {
+  return policy?.p95ContractVersion ?? P95_CONTRACT_LEGACY;
+}
+
+export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Limit = 1.25, summaryFile, requireP95Contract } = {}) {
   if (!matrixDir) throw new MatrixValidationError("--matrix-dir is required");
   if (!Number.isInteger(expectedRuns) || expectedRuns <= 0) {
     throw new MatrixValidationError("expectedRuns must be a positive integer");
@@ -36,6 +71,11 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
     expectedRuns,
     p95Limit
   );
+  const p95Contract = manifestP95Contract(manifest.value.comparisonPolicy);
+  // A gate that names the strict contract cannot be met by a manifest judged under another one.
+  if (requireP95Contract !== undefined && p95Contract !== requireP95Contract) {
+    throw new MatrixValidationError(`manifest p95 contract ${p95Contract} is not the required ${requireP95Contract}`);
+  }
   const cells = [];
   const projectSummaries = [];
 
@@ -48,8 +88,9 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
 
     const oldRun = byVariant.get("old");
     const newRun = byVariant.get("new");
-    const p95Ratio = newRun.p95 / oldRun.p95;
-    const p95ThresholdMs = Math.max(oldRun.p95 * p95Limit, oldRun.p95 + P95_ABSOLUTE_SLACK_MS);
+    const p95 = p95Gate({ oldP95: oldRun.p95, newP95: newRun.p95, contract: p95Contract, limit: p95Limit });
+    const p95Ratio = p95.ratio;
+    const p95ThresholdMs = p95.thresholdMs;
     const oldHoldout = oldRun.splits.holdout;
     const newHoldout = newRun.splits.holdout;
     const gate = {
@@ -58,7 +99,7 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
       recall: newRun.recall + EPSILON >= oldRun.recall,
       pRead: newRun.pRead + P_READ_TOLERANCE + EPSILON >= oldRun.pRead,
       estimatedTokens: newRun.estimatedTokensP50 <= oldRun.estimatedTokensP50 + EPSILON,
-      p95: newRun.p95 <= p95ThresholdMs + EPSILON,
+      p95: p95.status === "PASS",
       rangeLineRecall: completeRangeGate(newRun.rangeEvidence.line),
       rangeCoordinateRecall: completeRangeGate(newRun.rangeEvidence.coordinate),
       holdoutRReadMust: newHoldout.minReadMust === 1,
@@ -85,6 +126,7 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
           rTaskBlocking: newHoldout.rTaskBlocking - oldHoldout.rTaskBlocking
         }
       },
+      p95Contract: p95,
       gate,
       passed: Object.values(gate).every(Boolean)
     });
@@ -96,6 +138,8 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
     verifierVersion: VERIFIER_VERSION,
     expectedRuns,
     p95Limit,
+    // Historical inputs keep their original hash; only strict-contract runs hash the contract in.
+    ...(p95Contract === P95_CONTRACT_LEGACY ? {} : { p95Contract }),
     cells: cells.map(cell => ({
       file: path.basename(cell.file),
       sha256: cell.sha256,
@@ -123,13 +167,17 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
       variants: MATRIX_VARIANTS,
       expectedCells: MATRIX_PROJECTS.length * MATRIX_ROUNDS.length * MATRIX_VARIANTS.length,
       expectedRuns,
-      p95Limit
+      p95Limit,
+      p95Contract
     },
     scenarioFiles,
     cells,
     projects: projectSummaries,
     warnings: [],
     stderrWaivedLines: cells.reduce((sum, cell) => sum + cell.stderrWaivedLines, 0),
+    // INVALID_EXPERIMENT is not a FAIL of the candidate: the run cannot judge it at all.
+    status: projectSummaries.some(project => project.p95Contract.status === "INVALID_EXPERIMENT") ? "INVALID_EXPERIMENT"
+      : projectSummaries.every(project => project.passed) ? "PASS" : "FAIL",
     passed: projectSummaries.every(project => project.passed)
   };
 
@@ -459,6 +507,9 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   if (value.p95Limit !== p95Limit) {
     throw new MatrixValidationError(`${file}: manifest p95Limit must be ${p95Limit}`);
   }
+  if (manifestP95Contract(value.comparisonPolicy) === P95_CONTRACT_STRICT && value.p95Limit !== P95_STRICT_RATIO) {
+    throw new MatrixValidationError(`${file}: the strict p95 contract fixes p95Limit at ${P95_STRICT_RATIO}`);
+  }
   if (value.requestDeadlineMs !== FORMAL_REQUEST_DEADLINE_MS) {
     throw new MatrixValidationError(`${file}: manifest requestDeadlineMs must be ${FORMAL_REQUEST_DEADLINE_MS}`);
   }
@@ -469,7 +520,7 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   for (const suite of ["dist", "scripts"]) {
     const result = value.candidateTests?.[suite];
     if (!result || !Number.isInteger(result.discoveredTests) || result.discoveredTests <= 0
-      || result.passedTests !== result.discoveredTests) {
+      || result.passedTests + (result.skippedTests ?? []).length !== result.discoveredTests) {
       throw new MatrixValidationError(`${file}: candidate ${suite} tests must prove a non-empty all-green suite`);
     }
     validateCandidateTestEvidence(result, file, suite);
@@ -542,12 +593,18 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   return { file, value, sha256: sha256(bytes), scenarioDescriptors };
 }
 
+/** LEGACY manifests carry the 50 ms slack and no contract version; STRICT ones carry the version and no slack. */
+function validP95Policy(policy) {
+  if (policy.p95ContractVersion === undefined) return policy.p95AbsoluteSlackMs === P95_ABSOLUTE_SLACK_MS;
+  return policy.p95ContractVersion === P95_CONTRACT_STRICT && policy.p95AbsoluteSlackMs === undefined;
+}
+
 function validateComparisonPolicy(policy, value, file) {
   if (!policy
     || policy.baselineRevision !== value.runtimes?.old?.commit
     || policy.goldenSchema !== "java-intelligence-v32-range-holdout-v2"
     || policy.pReadTolerance !== P_READ_TOLERANCE
-    || policy.p95AbsoluteSlackMs !== P95_ABSOLUTE_SLACK_MS
+    || !validP95Policy(policy)
     || policy.taskBlockingBaseline !== "attempt-or-derived-attribution") {
     throw new MatrixValidationError(`${file}: invalid executable-baseline comparison policy`);
   }
@@ -644,17 +701,43 @@ function validateHashBoundFile(entry, manifestFile, label) {
 function validateCandidateTestEvidence(result, manifestFile, suite) {
   validateHashBoundFile(result.stdout, manifestFile, `candidate ${suite} test stdout`);
   validateHashBoundFile(result.stderr, manifestFile, `candidate ${suite} test stderr`);
-  const stdout = readFileSync(result.stdout.file, "utf8");
-  const summary = name => {
-    const match = [...stdout.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gm"))].at(-1);
-    return match ? Number(match[1]) : undefined;
-  };
-  if (summary("tests") !== result.discoveredTests
-    || summary("pass") !== result.passedTests
-    || summary("fail") !== 0
-    || summary("cancelled") !== 0) {
+  const summary = candidateSuiteSummary(readFileSync(result.stdout.file, "utf8"));
+  if (summary.tests !== result.discoveredTests
+    || summary.pass !== result.passedTests
+    || JSON.stringify(summary.skippedTests) !== JSON.stringify(result.skippedTests ?? [])
+    || !greenCandidateSuite(summary)) {
     throw new MatrixValidationError(`${manifestFile}: candidate ${suite} TAP summary does not match the manifest`);
   }
+}
+
+// Env-gated measurement drivers skip outside their own runs, so a green
+// candidate suite is: nothing failed, cancelled or left todo, and every test
+// that did not pass is a skip that names its reason.
+export function candidateSuiteSummary(tap) {
+  const count = name => {
+    const match = [...tap.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gm"))].at(-1);
+    return match ? Number(match[1]) : undefined;
+  };
+  const skippedTests = [...tap.matchAll(/^\s*ok \d+ - (.+?) # SKIP(?: (.*))?$/gm)]
+    .map(match => ({ name: match[1], reason: (match[2] ?? "").trim() }));
+  return {
+    tests: count("tests"),
+    pass: count("pass"),
+    fail: count("fail"),
+    cancelled: count("cancelled"),
+    skipped: count("skipped") ?? 0,
+    todo: count("todo") ?? 0,
+    skippedTests
+  };
+}
+
+export function greenCandidateSuite(summary) {
+  return Number.isInteger(summary.tests) && summary.tests > 0
+    && Number.isInteger(summary.pass) && summary.pass > 0
+    && summary.fail === 0 && summary.cancelled === 0 && summary.todo === 0
+    && summary.pass + summary.skipped === summary.tests
+    && summary.skippedTests.length === summary.skipped
+    && summary.skippedTests.every(entry => entry.reason.length > 0);
 }
 
 function validateDependencyInventory(dependencies, manifestFile) {
@@ -822,7 +905,8 @@ function parseCli(args) {
     expectedRuns: numberOption(options.get("--expected-runs"), 5, "--expected-runs"),
     p95Limit: numberOption(options.get("--p95-limit"), 1.25, "--p95-limit"),
     manifestFile: options.get("--manifest"),
-    summaryFile: options.get("--summary-file")
+    summaryFile: options.get("--summary-file"),
+    requireP95Contract: options.get("--require-p95-contract")
   };
 }
 
@@ -834,7 +918,7 @@ function numberOption(value, fallback, flag) {
 }
 
 function printUsage() {
-  console.log(`usage: node scripts/verify-three-repo-cold-matrix.mjs --matrix-dir <dir> [--manifest <run-manifest.json>] [--expected-runs 5] [--p95-limit 1.10] [--summary-file <file>]`);
+  console.log(`usage: node scripts/verify-three-repo-cold-matrix.mjs --matrix-dir <dir> [--manifest <run-manifest.json>] [--expected-runs 5] [--p95-limit 1.25] [--summary-file <file>] [--require-p95-contract ${P95_CONTRACT_STRICT}]`);
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -855,9 +939,12 @@ if (isMain) {
         oldPRead: project.old.pRead.toFixed(4),
         newPRead: project.new.pRead.toFixed(4),
         newRReadMust: project.new.rReadMust.toFixed(4),
-        p95Ratio: project.delta.p95Ratio.toFixed(3),
+        p95Ratio: project.delta.p95Ratio === null ? "n/a" : project.delta.p95Ratio.toFixed(3),
+        p95Policy: project.p95Contract.contractVersion,
+        p95: project.p95Contract.status,
         gate: project.passed ? "PASS" : "FAIL"
       })));
+      console.log(`status: ${result.status}`);
       console.log(`summary: ${result.summaryFile}`);
       if (result.warnings.length > 0) console.warn(`warnings:\n${result.warnings.join("\n")}`);
       if (!result.passed) process.exitCode = 1;

@@ -13,6 +13,7 @@ import { HttpServerLifecycle, type HttpServerLifecycleSnapshot } from "./http-se
 import { createMcpServer } from "./mcp-server-factory.js";
 import { installProcessCrashMarkers } from "./process-crash-markers.js";
 import { installConsoleTimestamps } from "./log.js";
+import { advertiseOwnerEndpoint } from "./stdio-owner-proxy.js";
 
 export const HTTP_LOOPBACK_HOST = "127.0.0.1";
 export const HTTP_BODY_LIMIT_BYTES = 100 * 1024;
@@ -64,6 +65,7 @@ export class JavaLspHttpServer {
   private nodeServer?: Server;
   private startPromise?: Promise<JavaLspHttpServerAddress>;
   private shutdownPromise?: Promise<void>;
+  private withdrawEndpoint?: () => Promise<void>;
 
   constructor(options: JavaLspHttpServerOptions = {}) {
     this.configuredPort = normalizePort(options.port ?? httpPortFromEnvironment(), options.port !== undefined);
@@ -125,7 +127,13 @@ export class JavaLspHttpServer {
         throw new Error("HTTP daemon did not receive a TCP address.");
       }
       const port = (address as AddressInfo).port;
-      return { host: HTTP_LOOPBACK_HOST, port, url: `http://${HTTP_LOOPBACK_HOST}:${port}/mcp` };
+      const url = `http://${HTTP_LOOPBACK_HOST}:${port}/mcp`;
+      // stdio entries find this owner here; they forward only (contract §1).
+      this.withdrawEndpoint = await advertiseOwnerEndpoint(url).catch(error => {
+        this.reportError("[codex-java-lsp] owner endpoint advertisement failed", error);
+        return undefined;
+      });
+      return { host: HTTP_LOOPBACK_HOST, port, url };
     } catch (error) {
       await this.application.close({ releaseOwnership: true }).catch(closeError => {
         this.reportError("[codex-java-lsp] failed to close application after HTTP startup failure", closeError);
@@ -173,6 +181,11 @@ export class JavaLspHttpServer {
       });
       active = { protocol, transport };
       this.activeProtocols.add(active);
+      // A client that disconnects cancels its request: closing the protocol aborts the handler's signal.
+      const cancelled = active;
+      response.once("close", () => {
+        if (!response.writableFinished) void cancelled.protocol.close().catch(() => undefined);
+      });
       await protocol.connect(transport);
       await transport.handleRequest(request, response, request.body);
     } catch (error) {
@@ -215,6 +228,7 @@ export class JavaLspHttpServer {
       return;
     }
 
+    await this.withdrawEndpoint?.().catch(error => this.reportError("[codex-java-lsp] owner endpoint withdrawal failed", error));
     const drain = this.lifecycle.drain(deadlineMs);
     const serverClosed = closeServer(server);
     server.closeIdleConnections?.();

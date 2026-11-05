@@ -16,7 +16,7 @@ export type RequestFreshnessMode =
   | "WATCHER_DEGRADED"
   | "RECONCILING";
 
-export type IndexOpenSource = "own-snapshot" | "sibling-seed" | "cold";
+export type IndexOpenSource = "own-snapshot" | "cold";
 
 export type RequestContext = {
   requestId: string;
@@ -28,7 +28,7 @@ export type RequestContext = {
   cacheReadAllowed: boolean;
   cacheWriteAllowed: boolean;
   negativeLookupAllowed: boolean;
-  /** How JavaIndex was populated for this runtime (own snapshot, sibling seed, or cold). */
+  /** How JavaIndex was populated for this runtime (its own snapshot, or a cold local build). */
   indexOpenSource?: IndexOpenSource;
   mode: RequestMode;
   budget: DeadlineBudget;

@@ -1,0 +1,33 @@
+# Release evidence copier (prepared only)
+
+Author did not package the real release, read credentials, send model requests, run benchmarks/compilers/installers or execute an existing suite. Only the new offline proof was run against temporary fake evidence. The parent executes after all model writers stop.
+
+```sh
+node ROOT/p4-release/package-evidence.mjs --destination ABS_NEW_DIRECTORY --bundle ABS_PARENT_PROVIDED_FILE.bundle
+```
+
+Destination must be absolute, new and outside the original task root. Overwrite is refused. The bundle is copied unchanged; this script does not create or verify a Git commit, source SHA or Git bundle content. The parent's a77b6428 source/package claim remains explicitly a parent claim.
+
+Preconditions: current state.p4Candidate source digest 6d031e959f5b9a2824f0165b9deeb4aab98ba5cd3679312c8973139ffa129864 / 611 files; final QA56, repairs16 and public72 COMPLETE with exact task/arm/repeat universe, no missing rows and matching preregistration source/config; state.p4FinalQA, p4FinalRepairs and p4FinalPublic status PASS with matching sourceDigest and explicit review.status PASS plus original report/review hashes. Final engineering/JDT references must exist and match hashes. These copying guards do not infer original release gate PASS.
+
+Selectors: all root-level task files; baseline, p0-contract, p1-protocol, p2-eight, p3-full, p3-repairs and p4-release. Historical 5f files and current 6d files retain their original directories, rows and profiles. No metrics are combined or recomputed. This includes raw model requests/responses, submissions, actual source receipts/snapshots, model candidates, original frozen judge files, scorer packs, preregistrations/plans, engineering/K/JDT/capacity-before-and-after/offline logs and reviews, package-source-manifest-r2/review/build+HTTP logs, and original/current launchers.
+
+Exclusions are contextual: p4-release/package-candidate* source clones; known block-root mcp-cache/cache/xdg/home/temp/tmp/node_modules/dist outputs; known release-root generated outputs; judge tmp/classes compiler output; .git metadata. Model candidates and snapshots preserve all original paths, including genuine cache/classes/temp/home/dist source package names. Judge source/input trees are preserved. Selected symlinks are rejected; credential files fail closed. Formal JSON/JSONL file references inside this task are checked: filtered evidence files can be explicitly restored one by one, while formal references to excluded source clones, credentials or compiled outputs fail rather than silently disappear. Skipped subtrees are counted without enumerating their descendants.
+
+Supplements: state.p4Engineering.jdt.path is copied unchanged to raw/jdt-evidence.json with its original hash; the old readonly helper identified by launch-final.mjs is copied to launchers/old-readonly-helper.mjs; the parent's bundle is copied to source/source.bundle. The copier never opens Pi settings/models or serializes process environment/key values.
+
+Outputs: copied-files-inventory.json records every copied original file's source path, destination path, SHA-256, original mode, bytes and selector. Generated inventory/authority are excluded from that inventory to avoid self-reference. package-authority.json records copy verification, filtering counts, versions/config, source identities and limitations. It always states NO_GO / EVIDENCE_COPY_ONLY_NOT_RELEASE_AUTHORITY; absent independent locked evidence cannot become a release PASS. Parent release-evidence.json, original verify_release and overall review remain the authority. Raw absolute paths are not rewritten; inventory provides the original-to-copy map. On error, the new destination retains package-incomplete.json and is not qualified evidence.
+
+Offline proof: `node --test ROOT/p4-release/package-evidence.offline.test.mjs` passed 3/3, zero skip/fail. It verifies binary original-byte SHA and mode, new destination/no-overwrite, contextual cache filtering while real org/apache/ibatis/cache source survives, restoration of a formally referenced report, compiled-reference and escaping-symlink rejection, and all three original final denominators with explicit review gating. Fixtures are synthetic and provide no real release acceptance. Initial canonical-path failures are retained in package-evidence.offline-red.tap; final proof is package-evidence.offline-r2-final.tap.
+
+## Frozen binding correction
+
+Independent review identified missing copied-launcher/helper binding. The copier now requires the three phases to bind the actual final/original launcher bytes, actual old helper bytes, candidate protocol SHA, canonical candidate root, reader count1, protocol version and actual public contract path/version/SHA. Shared product/native tool schemas must match across phases; each phase submission schema map must have exactly its own planned task IDs and match those entries in the public36-task map. It does not incorrectly equate QA28/repair8/public36 submission-map sizes.
+
+Copy-time expected SHA checks also apply to the final/original launcher, helper, public contract and candidate protocol, so a post-guard replacement cannot be accepted as new unbound bytes. The actual candidate protocol is additionally preserved unchanged at contracts/evaluation-protocol.json. No real original launcher/helper/protocol was edited.
+
+A real temporary-file helper drift case reproduced the missing rejection in package-evidence.binding-red.tap. The corrected narrow test rejects helper, launcher and shared-tool drift (package-evidence.binding-green.tap). The cumulative new offline proof passes4/4 in package-evidence.binding-cumulative.tap, including copy-time expected-SHA rejection. Earlier3/3 history remains untouched. No real collect/package/model/compile/installer/suite was run for this correction.
+
+## Generated negative fixture exclusion
+
+The parent's first real collect failed before creating a destination because full-public-prep/offline-test-*/r2-bound-tree/Link.java is an intentional negative-test symlink fixture. The selector now excludes precisely p4-release/full-public-prep/offline-test-* generated subtrees. Prep modules and final stdout/stderr/TAP evidence remain selected. The narrow new fake-fixture test reproduces that symlink rejection before correction (package-evidence.fixture-red.tap), then proves exclusion, retention of formal prep artifacts/raw, and continued symlink rejection in actual model candidate and source-snapshot layouts (package-evidence.fixture-green.tap). Only this one new test ran; previous tests and proof/reviews were not rerun or replaced. No real ROOT collect/copy or source/gold/scorer changes were performed by this author.

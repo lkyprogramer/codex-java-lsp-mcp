@@ -12,9 +12,9 @@ import type { JavaFileBundle } from "../index-types.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
-import { close, openIndexDb } from "./driver.js";
+import { close, openIndexDb, withTransaction } from "./driver.js";
 import { ensureSchema } from "./schema.js";
-import { readBundle, readMyBatisResource, writeBundle, writeMyBatisResource } from "./rows.js";
+import { beginBundleMemo, endBundleMemo, forgetBundle, readBundle, readMyBatisResource, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "./rows.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
@@ -59,13 +59,29 @@ test("writeBundle/readBundle round-trips java-index-v2 and matches JavaIndexStor
     for (const bundle of bundles) {
       writeBundle(db, bundle);
       const read = readBundle(db, bundle.file.relativePath);
-      assert.deepEqual(read, bundle, bundle.file.relativePath);
+      // Parse-time stat is workspace-local: observed on parse, never persisted as a fact.
+      const { observed, ...facts } = bundle;
+      assert.ok(observed, bundle.file.relativePath);
+      assert.deepEqual(read, facts, bundle.file.relativePath);
     }
     const first = bundles[0]!;
     const rewritten = { ...first, file: { ...first.file, generation: 2, contentHash: "rewritten" } };
     writeBundle(db, rewritten);
     assert.deepEqual(readBundle(db, first.file.relativePath)?.file.generation, 2);
     assert.equal(db.prepare("SELECT count(*) AS n FROM file WHERE path=?").get(first.file.relativePath)?.n, 1);
+  } finally {
+    close(db);
+  }
+});
+
+test("file surrogate ids stop at the safe-integer boundary", async () => {
+  const [bundle] = await parseFixtures();
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    db.prepare("INSERT INTO file(id, path, content_hash, generation, facts) VALUES (9007199254740991, 'edge.java', 'h', 1, x'00')").run();
+    assert.throws(() => writeBundle(db, bundle!), /unsafe rowid|invalid rowid|too large/);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM file WHERE path=?").get(bundle!.file.relativePath)?.n, 0);
   } finally {
     close(db);
   }
@@ -191,22 +207,115 @@ test("artificially injected identical type_id keeps the documented last-write-wi
   }
 });
 
+test("a kept bundle is read again once a write touches its file row, edges or members, or the transaction rolls back", async () => {
+  const bundles = await parseFixtures();
+  const first = bundles.find(bundle => bundle.types.length > 0)!;
+  const other = bundles.find(bundle => bundle !== first)!;
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    for (const bundle of bundles) writeBundle(db, bundle);
+    beginBundleMemo(db);
+    const path0 = first.file.relativePath;
+    const kept = readBundle(db, path0)!;
+    assert.equal(readBundle(db, path0), kept, "unchanged rows are read once");
+    assert.equal(readBundle(db, other.file.relativePath), readBundle(db, other.file.relativePath));
+
+    updateBundleFacts(db, { ...kept, file: { ...kept.file, generation: 7 } });
+    const updated = readBundle(db, path0)!;
+    assert.notEqual(updated, kept);
+    assert.equal(updated.file.generation, 7);
+
+    const typeId = first.types[0]!.typeId;
+    const edge = { edgeId: "", fromId: typeId, toId: typeId, kind: "DECLARES" as const, confidence: 1, range: first.types[0]!.range, sourceFile: path0, generation: 7, resolution: { kind: "AST_EXPLICIT" as const } };
+    replaceBundleEdges(db, path0, [edge]);
+    assert.deepEqual(readBundle(db, path0)!.edges.map(edge => edge.fromId), [typeId]);
+    // The same edge written for another file moves its row there (duplicate FQNs).
+    replaceBundleEdges(db, other.file.relativePath, [{ ...edge, sourceFile: other.file.relativePath }]);
+    assert.deepEqual(readBundle(db, path0)!.edges, [], "an edge row moved away is not served from the file that held it");
+    replaceBundleEdges(db, path0, [edge]);
+
+    // A member row that moves to another file changes the bundle that held it.
+    const holder = readBundle(db, path0)!;
+    const thief = structuredClone(first);
+    thief.file = { ...thief.file, relativePath: "dup/" + path0 };
+    writeBundle(db, thief);
+    assert.notEqual(readBundle(db, path0), holder);
+
+    const beforeRollback = readBundle(db, other.file.relativePath)!;
+    assert.throws(() => withTransaction(db, () => {
+      writeBundle(db, { ...other, file: { ...other.file, generation: 9 } });
+      assert.equal(readBundle(db, other.file.relativePath)!.file.generation, 9);
+      throw new Error("abort");
+    }), /abort/);
+    assert.deepEqual(readBundle(db, other.file.relativePath), beforeRollback, "a rolled-back write is not served");
+
+    forgetBundle(db, other.file.relativePath);
+    db.prepare("DELETE FROM file WHERE path=?").run(other.file.relativePath);
+    assert.equal(readBundle(db, other.file.relativePath), undefined);
+    endBundleMemo(db);
+    assert.notEqual(readBundle(db, path0), readBundle(db, path0), "outside a memo every read is fresh");
+  } finally {
+    endBundleMemo(db);
+    close(db);
+  }
+});
+
+test("an edge whose range only shifted keeps its row; a range another file holds still moves that row here", async () => {
+  const bundles = await parseFixtures();
+  const first = bundles.find(bundle => bundle.types.length > 0)!;
+  const other = bundles.find(bundle => bundle !== first)!;
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    for (const bundle of bundles) writeBundle(db, bundle);
+    const path0 = first.file.relativePath, typeId = first.types[0]!.typeId;
+    const at = (line: number) => ({ start: { line, column: 1 }, end: { line, column: 9 } });
+    const edge = (line: number, confidence = 1) => ({ edgeId: "", fromId: typeId, toId: typeId, kind: "DECLARES" as const, confidence, range: at(line),
+      sourceFile: path0, generation: 7, resolution: { kind: "AST_EXPLICIT" as const } });
+    const rows = () => db.prepare("SELECT id, sl, confidence, generation FROM edge WHERE file_id=(SELECT id FROM file WHERE path=?) ORDER BY id").all(path0)
+      .map(row => [Number(row.id), Number(row.sl), Number(row.confidence), Number(row.generation)]);
+    replaceBundleEdges(db, path0, [edge(10), edge(20), edge(30)]);
+    const ids = rows().map(row => row[0]);
+
+    // Two lines inserted above: every range shifts, no row is replaced.
+    replaceBundleEdges(db, path0, [edge(12), edge(22, 0.5), edge(32)].map(e => ({ ...e, generation: 8 })));
+    assert.deepEqual(rows(), [[ids[0], 12, 1, 8], [ids[1], 22, 0.5, 8], [ids[2], 32, 1, 8]]);
+    assert.deepEqual(readBundle(db, path0)!.edges.map(e => e.range?.start.line), [12, 22, 32]);
+
+    // One edge kept, one removed, one new range: the leftover row takes the new range.
+    replaceBundleEdges(db, path0, [edge(12), edge(40)]);
+    assert.deepEqual(rows().map(row => row.slice(0, 2)), [[ids[0], 12], [ids[1], 40]]);
+
+    // The target range belongs to another file (duplicate FQNs): that row moves here, as an insert did before.
+    replaceBundleEdges(db, other.file.relativePath, [{ ...edge(50), sourceFile: other.file.relativePath }]);
+    replaceBundleEdges(db, path0, [edge(12), edge(50)]);
+    assert.deepEqual(readBundle(db, path0)!.edges.map(e => e.range?.start.line).sort(), [12, 50]);
+    assert.deepEqual(readBundle(db, other.file.relativePath)!.edges.filter(e => e.fromId === typeId), []);
+    assert.equal(rows().length, 2);
+  } finally {
+    close(db);
+  }
+});
+
 const NO_FACTS_TABLES = ["edge", "kg_node", "kg_edge", "entity"] as const;
 const TEXT_BLOB_ALLOW = new Set([
   "meta.key", "meta.value",
-  "sym.text",
+  "sym.hash", "sym.text",
   "file.path", "file.content_hash", "file.source_root", "file.module", "file.package", "file.parse_state", "file.facts",
   "type.fqn", "type.simple_name", "type.kind", "type.facts",
   "field.name", "field.facts",
   "method.name", "method.facts",
   "kg_node.simple_name",
-  "kg_summary.facts",
   "entity.kind", "entity.fqn", "entity.simple_name", "entity.simple_name_lc",
   "mybatis_resource.path", "mybatis_resource.namespace", "mybatis_resource.content_hash", "mybatis_resource.facts",
-  // T05: document kind is source metadata and content_hash pins each document
-  // to the file content it was derived from (freshness anchor).
-  "search_doc.kind", "search_doc.content_hash",
-  "source_root_coverage.root", "source_root_coverage.state"
+  // T05: document kind is source metadata. Its freshness anchor is the source
+  // row's content_hash (file or mybatis_resource), not a copy (MAC-05).
+  "search_doc.kind",
+  "source_root_coverage.root", "source_root_coverage.state",
+  // R08 review: one row per resource XML ever examined (same shape as
+  // mybatis_resource's path/hash), so reconcile can skip unchanged XML.
+  "resource_scan.path", "resource_scan.content_hash"
 ]);
 
 test("schema v5 has no facts on reconstructable tables and no extra TEXT/BLOB columns", () => {
@@ -285,7 +394,7 @@ test("T02: overloaded methods keep distinct owner-scoped IDs under one v2 owner"
     const owner = bundle.types[0]!.typeId;
     assert.ok(owner.startsWith("type:v2:"), "owner is a v2 source-scoped id");
     for (const id of ids) {
-      assert.ok(id.startsWith(`method:${owner}#`), `method id ${id} is scoped under owner ${owner}`);
+      assert.ok(id.startsWith(`method:v3:${owner}#`), `method id ${id} is scoped under owner ${owner}`);
     }
     const db = openIndexDb(":memory:");
     try {

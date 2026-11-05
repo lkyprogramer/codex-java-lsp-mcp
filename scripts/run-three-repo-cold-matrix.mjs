@@ -4,11 +4,11 @@
 // pos: Reusable real-repository acceptance runner; all code and Java inputs run from private local clones.
 import { createHash } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { access, chmod, copyFile, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRegisteredBrokerRoot, verifyRuntime } from "./ilv2-mac-contracts.mjs";
 import {
   aggregateJavaIndexRpcSidecar,
   DIAGNOSTIC_RPC_GATE_POLICY
@@ -16,12 +16,16 @@ import {
 import {
   assignmentsFromPairs,
   buildEnvLock,
+  candidateSuiteSummary,
   COMPARISON_POLICY_ENV_LOCKED,
   COMPARISON_POLICY_EXECUTABLE,
   ENV_AB_ALLOWLIST,
   fingerprintTreatment,
   FORMAL_REQUEST_DEADLINE_MS,
+  greenCandidateSuite,
   MATRIX_PROJECTS,
+  P95_CONTRACT_STRICT,
+  P95_STRICT_RATIO,
   parseEnvAssignment,
   VERIFIER_VERSION,
   verifyMatrix
@@ -53,6 +57,7 @@ const RUNTIME_STATE_KEYS = [
   "JDTLS_LOG_DIR",
   "JAVA_LSP_PROJECTS_JSON",
   "GRADLE_USER_HOME",
+  "JAVA_LSP_SERVICE_STATE_ROOT",
   "MAVEN_USER_HOME"
 ];
 
@@ -70,7 +75,8 @@ export function matrixRuntimeEnvironment(root, telemetry = "0") {
     JDTLS_DATA_DIR: path.join(root, "jdt-data"),
     JDTLS_LOG_DIR: path.join(root, "jdt-logs"),
     JAVA_LSP_PROJECTS_JSON: path.join(root, "projects.json"),
-    GRADLE_USER_HOME: path.join(root, "gradle-home"),
+    GRADLE_USER_HOME: path.join(root, "service-state", "jdt-gradle-home"),
+    JAVA_LSP_SERVICE_STATE_ROOT: path.join(root, "service-state"),
     MAVEN_USER_HOME: path.join(root, "maven-home")
   };
 }
@@ -109,12 +115,13 @@ function runtimeStateDescriptor(environment) {
 }
 
 async function main() {
+  await verifyRuntime();
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
 
   const sourceRoot = path.resolve(cli.candidateRoot);
   const outputDir = path.resolve(cli.outputDir);
-  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "codex-java-lsp-mcp-three-repo-"));
+  const workspaceRoot = await createRegisteredBrokerRoot("codex-java-lsp-mcp-three-repo-");
   const baselineRoot = path.join(workspaceRoot, "baseline");
   const candidateRoot = path.join(workspaceRoot, "candidate");
   const scenarioDir = path.join(outputDir, "frozen-scenarios");
@@ -192,7 +199,7 @@ async function main() {
       .map(([project, scenario]) => `${scenario.sha256}  frozen-scenarios/${project}.scenarios.jsonl`)
       .join("\n") + "\n");
 
-    await build(baselineRoot, isolatedEnv);
+    await build(baselineRoot, isolatedEnv, { legacyBaseline: true });
     await build(candidateRoot, isolatedEnv);
     const candidateTests = await runCandidateTests(candidateRoot, isolatedEnv, path.join(outputDir, "candidate-tests"));
 
@@ -231,7 +238,8 @@ async function main() {
         baselineRevision: runtimes.old.commit,
         goldenSchema: "java-intelligence-v32-range-holdout-v2",
         pReadTolerance: 0.02,
-        p95AbsoluteSlackMs: 50,
+        // MAC-08C: new runs are judged by the strict ratio only; the 50 ms slack is a historical contract.
+        p95ContractVersion: P95_CONTRACT_STRICT,
         taskBlockingBaseline: "attempt-or-derived-attribution",
         ...(envLock ? { envLock } : {})
       },
@@ -347,16 +355,26 @@ async function main() {
       manifestFile: manifest.file,
       expectedRuns: cli.runs,
       p95Limit: cli.p95Limit,
-      summaryFile: path.join(outputDir, "matrix-summary.json")
+      summaryFile: path.join(outputDir, "matrix-summary.json"),
+      requireP95Contract: P95_CONTRACT_STRICT
     });
     printResult(result);
     if (!result.passed) process.exitCode = 1;
   } finally {
     if (!cli.keepWorktrees) {
+      // Candidate tests leave sealed (read-only) snapshot directories under the workspace tmp.
+      await writableTree(workspaceRoot);
       await rm(workspaceRoot, { recursive: true, force: true });
     } else {
       console.log(`preserved isolated local clones/cache: ${workspaceRoot}`);
     }
+  }
+}
+
+async function writableTree(dir) {
+  try { await chmod(dir, 0o755); } catch { return; }
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    if (entry.isDirectory()) await writableTree(path.join(dir, entry.name));
   }
 }
 
@@ -420,8 +438,20 @@ async function symlinkNodeModules(isolatedNodeModules, worktreeRoot) {
   await symlink(isolatedNodeModules, target, "dir");
 }
 
-async function build(root, env) {
+export function matrixNativeBuildArguments(root, { legacyBaseline = false } = {}) {
+  const script = path.join(root, "scripts/build-macos-native.mjs");
+  const source = path.join(root, "native/macos/ilv2-mac.c");
+  if (legacyBaseline && !existsSync(script) && !existsSync(source)) return [];
+  if (!existsSync(script) || !existsSync(source)) throw new Error("native build inputs missing");
+  return [script];
+}
+
+async function build(root, env, options) {
+  const nativeArgs = matrixNativeBuildArguments(root, options);
   await run(process.execPath, [path.join(root, "node_modules", ".bin", "tsc"), "-p", path.join(root, "tsconfig.json")], { cwd: root, env });
+  // The frozen historical baseline predates the native implementation. It
+  // remains that source tree; only a current candidate must build the helper.
+  if (nativeArgs.length) await run(process.execPath, nativeArgs, { cwd: root, env });
   await run(process.execPath, [path.join(root, "scripts", "write-build-stamp.mjs")], { cwd: root, env });
 }
 
@@ -445,11 +475,14 @@ async function runCandidateTests(candidateRoot, env, evidenceRoot) {
   return { dist, scripts };
 }
 
-function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
+async function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
+  // Fixture evidence (owner-fixture closeouts, request-view rows) lands next to the suite's TAP, never in a raw/ the matrix root lacks.
+  const fixtureEvidence = path.join(evidenceRoot, `${label}.evidence`);
+  await mkdir(fixtureEvidence);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env: isolatedChildEnvironment(env),
+      env: isolatedChildEnvironment({ ...env, ILV2_EVIDENCE_ROOT: fixtureEvidence }),
       stdio: ["ignore", "pipe", "pipe"]
     });
     const stdout = [];
@@ -470,19 +503,16 @@ function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
         const stdoutFile = path.join(evidenceRoot, `${label}.tap`);
         const stderrFile = path.join(evidenceRoot, `${label}.stderr`);
         await Promise.all([writeFile(stdoutFile, stdoutBytes), writeFile(stderrFile, stderrBytes)]);
-        const stdoutText = stdoutBytes.toString("utf8");
-        const tests = [...stdoutText.matchAll(/^# tests (\d+)$/gm)].at(-1);
-        const passed = [...stdoutText.matchAll(/^# pass (\d+)$/gm)].at(-1);
-        const discoveredTests = tests ? Number(tests[1]) : 0;
-        const passedTests = passed ? Number(passed[1]) : 0;
+        const summary = candidateSuiteSummary(stdoutBytes.toString("utf8"));
         if (code !== 0) {
           reject(new Error(`${label} candidate tests exited with ${code}: ${stderrBytes.toString("utf8")}`));
-        } else if (discoveredTests <= 0 || passedTests !== discoveredTests) {
-          reject(new Error(`${label} candidate tests did not prove a non-empty all-green suite`));
+        } else if (!greenCandidateSuite(summary)) {
+          reject(new Error(`${label} candidate tests did not prove a non-empty suite with no failed, cancelled, todo or unexplained skipped test`));
         } else {
           resolve({
-            discoveredTests,
-            passedTests,
+            discoveredTests: summary.tests,
+            passedTests: summary.pass,
+            skippedTests: summary.skippedTests,
             stdout: { file: stdoutFile, bytes: stdoutBytes.byteLength, sha256: sha256(stdoutBytes) },
             stderr: { file: stderrFile, bytes: stderrBytes.byteLength, sha256: sha256(stderrBytes) }
           });
@@ -562,7 +592,11 @@ async function runtimeIdentity(root) {
     commit: (await capture("git", ["-C", root, "rev-parse", "HEAD^{commit}"])).trim(),
     commitTree: (await capture("git", ["-C", root, "rev-parse", "HEAD^{tree}"])).trim(),
     executableTree: (await capture("git", ["-C", root, "write-tree"])).trim(),
-    buildStamp: JSON.parse(await readFile(path.join(root, "dist", "build-stamp.json"), "utf8"))
+    buildStamp: JSON.parse(await readFile(path.join(root, "dist", "build-stamp.json"), "utf8")),
+    runtime: await verifyRuntime(),
+    native: existsSync(path.join(root, "dist/native/manifest.json"))
+      ? JSON.parse(await readFile(path.join(root, "dist/native/manifest.json"), "utf8"))
+      : "NOT_APPLICABLE_LEGACY_BASELINE"
   };
 }
 
@@ -628,7 +662,7 @@ async function persistUntrackedInputs(sourceRoot, outputRoot, inputs) {
 }
 
 function isCandidateSourceInput(file) {
-  return /^(src|golden|fixtures|scripts)\//.test(file)
+  return /^(src|golden|fixtures|scripts|native)\//.test(file)
     || /^(?:package(?:-lock)?\.json|tsconfig\.json)$/.test(file);
 }
 
@@ -908,6 +942,9 @@ export function parseCli(args) {
     && fingerprintTreatment(oldTreatment) === fingerprintTreatment(newTreatment)) {
     throw new Error("env-locked-same-tree requires different old/new treatments");
   }
+  const p95Limit = numberOption(options.get("--p95-limit"), P95_STRICT_RATIO, "--p95-limit");
+  // The strict p95 contract fixes the ratio: a looser --p95-limit cannot be run under it.
+  if (!flags.has("--help") && p95Limit !== P95_STRICT_RATIO) throw new Error(`--p95-limit must be ${P95_STRICT_RATIO} under ${P95_CONTRACT_STRICT}`);
   return {
     help: flags.has("--help"),
     keepWorktrees: flags.has("--keep-worktrees"),
@@ -916,7 +953,7 @@ export function parseCli(args) {
     baseline: required(options.get("--baseline") || process.env.THREE_REPO_BASELINE_SHA, "--baseline"),
     outputDir: required(options.get("--output-dir"), "--output-dir"),
     runs: numberOption(options.get("--runs"), 5, "--runs"),
-    p95Limit: numberOption(options.get("--p95-limit"), 1.25, "--p95-limit"),
+    p95Limit,
     comparisonPolicy,
     oldTreatment,
     newTreatment,
@@ -950,6 +987,7 @@ export function isolatedChildEnvironment(overrides = {}) {
   }
   for (const name of [
     "JDTLS_EXTRA_ARGS",
+    "JAVA_LSP_SERVICE_STATE_ROOT",
     "JAVA_LSP_RESOURCE_TELEMETRY_FILE",
     "JAVA_LSP_RESOURCE_INTERVAL_MS",
     "JAVA_LSP_REPO_ROOT",
@@ -987,9 +1025,12 @@ function printResult(result) {
     oldPRead: project.old.pRead.toFixed(4),
     newPRead: project.new.pRead.toFixed(4),
     newRReadMust: project.new.rReadMust.toFixed(4),
-    p95Ratio: project.delta.p95Ratio.toFixed(3),
+    p95Ratio: project.delta.p95Ratio === null ? "n/a" : project.delta.p95Ratio.toFixed(3),
+    p95Policy: project.p95Contract.contractVersion,
+    p95: project.p95Contract.status,
     gate: project.passed ? "PASS" : "FAIL"
   })));
+  console.log(`status: ${result.status}`);
   console.log(`summary: ${result.summaryFile}`);
   if (result.warnings.length > 0) console.warn(`warnings:\n${result.warnings.join("\n")}`);
 }

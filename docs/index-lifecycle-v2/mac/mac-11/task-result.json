@@ -1,0 +1,240 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-11",
+  "gateId": "G11",
+  "status": "PASS",
+  "dependency": {
+    "head": "52d44cb654af84b229bf62f73b274e1dff19ef2b",
+    "requiredGates": [
+      "G09"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "c0456ad98feecafd219a49ceaf2fc5c04098b827c036dc17d0441bc220a65474",
+    "nativeSourceDigest": "5cf63981c0c0433a25c28e44410edaabc2ea5c609fe5b68efe84739748c47561",
+    "buildStampSha256": "9a8cbb264318ed19592c964d265f460c18ec70dd88a448d20233be3146cb01f1",
+    "distInventorySha256": "39a8ee6027c2c3ef942a402d0e92bbefaa4672deaefe488038bf293bdb6b2bd1",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "supplement-g11-gate-proof",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/supplement-g11-gate-proof/result.json",
+      "sourceDigest": "dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 805,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-name-pattern=^G11 recorded evidence completes the gate only after verified supplementation$",
+        "scripts/ilv2-mac-system-loop-reanalyze.test.mjs"
+      ]
+    },
+    {
+      "name": "supplement-g11-01",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/supplement-g11-01/result.json",
+      "sourceDigest": "dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 3334149,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-timeout=21600000",
+        "--test-name-pattern=^G11 system loop on isolated lishu-v2 run copies$",
+        "scripts/ilv2-mac-system-loop.test.mjs"
+      ]
+    },
+    {
+      "name": "supplement-g11-02",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/supplement-g11-02/result.json",
+      "sourceDigest": "dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c",
+      "commands": 1,
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "elapsedMs": 293836,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-timeout=21600000",
+        "--test-name-pattern=^G11 system loop on isolated lishu-v2 run copies$",
+        "scripts/ilv2-mac-system-loop.test.mjs"
+      ]
+    },
+    {
+      "name": "independent-supplement-g11",
+      "role": "independent-rerun",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/independent-supplement-g11/result.json",
+      "sourceDigest": "dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c",
+      "commands": 4,
+      "tests": 39,
+      "pass": 37,
+      "fail": 0,
+      "elapsedMs": 6894,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/ilv2-mac-system-loop.test.mjs",
+        "scripts/ilv2-mac-system-loop-reanalyze.test.mjs"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "cache-runtime-tests",
+      "file": "cache-regression-reuse.json",
+      "sha256": "d0ba5d59edb12d8a79e99755221342a24dcdf68beebe437897fa8d1128a423d5",
+      "status": "PASS",
+      "provenance": "61 formal tests; final compiled JS byte-identical"
+    },
+    {
+      "name": "prior-affected-tests",
+      "file": "affected-regression-reuse.json",
+      "sha256": "05f60d2bea3e010479044fe1ccde37f2dff12ac7a2d641c25f7b6bcd473cc8b8",
+      "status": "PASS",
+      "provenance": "89 tests before cache-metadata repair, only unaffected behavior reused"
+    },
+    {
+      "name": "system-loop-functional-evidence",
+      "file": "correctness-reuse.json",
+      "sha256": "33a6a40e37a45619244829a72fde534372ef1931a610f3f018b0e8b6da18a8c5",
+      "status": "PARTIAL_REUSE",
+      "provenance": "804f candidate: four functional hard gates PASS, deadline FAIL preserved"
+    },
+    {
+      "name": "deadline-failure",
+      "file": "deadline-failure.json",
+      "sha256": "0ce0d259d16f5fef25bc04528e5e3fe4faa79b3311c10c5591bfc8ce0c4667f7",
+      "status": "FAIL",
+      "provenance": "Original profiled real deadline violation, never reclassified INVALID"
+    },
+    {
+      "name": "previous-regression-provenance",
+      "file": "reused-regressions.json",
+      "sha256": "adce4b8702cfafdc2cf3d80aec3e5ff50a46c4af42a620b0782f09d5a399a1b0",
+      "status": "PARTIAL_REUSE",
+      "provenance": "Historical unaffected modules only; no new full-suite claim"
+    },
+    {
+      "name": "independent-rerun-summary",
+      "file": "independent-rerun-summary.json",
+      "sha256": "576a4b49820650511c243d2a2c35769a63c032968691c809de99b16d31f49404",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "g11-measurements",
+      "file": "closeout/g11-measurement-summary.json",
+      "sha256": "79def9a441c67f7c43a3168f4ca37f20af70207848c5153fe2bec07c3e54182f",
+      "status": "PASS",
+      "provenance": "All raw attempts preserved, sufficient valid samples, measured performanceReady=false"
+    },
+    {
+      "name": "g11-actual-execution",
+      "file": "closeout/g11-actual-execution.json",
+      "sha256": "16db7d186cfd1e52629080175cf3a16c475fab7e3719770300f413686b9989a2",
+      "status": "PASS",
+      "provenance": "Actual main and two supplements: calls, five original hard gates and normal bootout"
+    },
+    {
+      "name": "g11-provenance-and-attempts",
+      "file": "closeout/g11-combined-proof.json",
+      "sha256": "e2c4eea984724f58705a2f85ed5c23eaad7c9bd8bdd91728afdee74a3e9547d1",
+      "status": "PASS",
+      "provenance": "Actual recorded proof test1/1; raw/command/stdout hashes, no duplicate or product/native drift"
+    },
+    {
+      "name": "g11-stage-profile",
+      "file": "closeout/g11-stage-profile.json",
+      "sha256": "8bac1e87d19705447d6875d24463a4fa86921cd4236b98e9c2e94f75b4e7d312",
+      "status": "MEASURED",
+      "provenance": "Actual round seal/publish costs, MAC12 measured inputs"
+    },
+    {
+      "name": "host-window-adjudication",
+      "file": "closeout/performance-host-window-adjudication.json",
+      "sha256": "3692ece837440d2c911dc38e6eb5d5c589e6e8240a44e3356366d4af1a6f9747",
+      "status": null,
+      "provenance": "Undated since-boot summary excluded;602 dated window records, no sleep"
+    },
+    {
+      "name": "independent-affected-verification",
+      "file": "independent-supplement-summary.json",
+      "sha256": "91453f26a372848a30ba4f2d4c1ae592f670fb993e44fc7114cd434f35f220d9",
+      "status": "PASS",
+      "provenance": "Fresh executor/build37PASS2SKIP; prior unchanged native/protocol boundaries reused"
+    },
+    {
+      "name": "independent-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "921f9140fb5c675eb87251958b9ac23bd0316e0add23918655087c68a1becf4e",
+      "status": "PASS",
+      "provenance": "Independent actual resource and extracted archive verification required before compose"
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "b46de0a83c31c2584d12ad9949d79f871423dafb1bcfbedce80996c3c4f8fa4c",
+    "registeredPids": 332,
+    "ownedGroups": 20,
+    "launchdJobs": 17,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-11/20261021T074300Z/closeout/raw-evidence.tar.gz",
+      "sha256": "045f1043e15e3d7baad60937d24bcbd49d9dc282d9ab6d3b58160e6bee23a1e6",
+      "fileCount": 361,
+      "bytes": 204065452,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "5f1ad824e3829439aabf5f22df4fdb2f9f1e1446eee0f72e43c8fc14f2f3fc10",
+      "source": "dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "4d4836ffe27f3cc332386e1d5da13ff63cc309c1071c2a85218a8b5b42cd58d4",
+  "notClaimed": [
+    "performanceReady=false. Measured FAIL: seedLe20 p95=56.456s/5s, seedTo200 p95=72.780s/15s, singleFileBuild p95=3.689s/2s, editFirstCorrect p95=63.198s/3s, heartbeat max=2311ms/2000ms; assigned MAC-12. G11 measurement completion is not performance attainment.",
+    "The 804f long system loop remains a formal FAIL for request 6151 (4031.79 ms against the original 4000 ms bound). Its four unaffected hard gates are partial reuse, not a new-candidate whole-loop PASS.",
+    "The removed synchronous Git classification has a deterministic RED/GREEN proof, 61 affected tests and a separate real refresh-boundary check. This does not claim that all synchronous owner I/O is gone or that every workload meets deadlines.",
+    "The public refresh fixture records six warm symbol calls and 24 refresh requests; fresh() setup polling is not included in its per-call deadline claim. It proves forced PGID exit, not graceful shutdown or launchd bootout; the prior real loop supplies separate bootout evidence.",
+    "No unrelated full test suite was rerun on the new candidate. Previous full regression evidence covers only unchanged behavior.",
+    "build-key race prevention and wasted-work elimination are not implemented; safe refusal and stable-input convergence are verified.",
+    "Seal concurrency limits, seal timeout and read-only verify behavior remain for MAC-12. Historical limitations retained: non-oracle queries and cross-file mixed captures not exhaustively audited; EAGAIN liveness timer behavior, oversized-input deduplication, mixed editFirstCorrect windows, and registration/setup gate coverage are not repaired here.",
+    "New full valid windows had load1 2.43-3.51; historical baseline had15-21. Absolute comparison threshold is met, but no controlled same-load relative-speedup claim.",
+    "Latest independent37PASS/2SKIP covers changed analysis only; real loop and aggregate proof skipped there, actually executed separately. Earlier real lock/builder/stdio/HTTP exit evidence is reused only with verified identical441compiledJS/native/runtime. No new whole-suite PASS."
+  ],
+  "next": "MAC-12: optimize measured seal.manifest/verify/publish first; all applicable absolute G12 performance gates remain required.",
+  "authorization": null,
+  "notes": "G11 hard gates PASS and all measurements complete; performanceReady=false. Exact frozen source dff8bef922c09183729361d8e3b4529fbfa27bd45a3bf9c3a390a0834b1a6a2c. Original main FAIL preserved; verified actual identical441compiledJS/native/runtime permits five hard gates reuse plus bounded missing-sample supplementation. No unrelated full suite rerun. Valid slow and INVALID attempts retained. Five measured performance FAILs assigned MAC-12; G11 PASS is not performance attainment.",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-11/20261021T074300Z"
+}

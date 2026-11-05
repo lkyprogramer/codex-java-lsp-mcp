@@ -1,0 +1,544 @@
+{
+  "schema": "mac17-current-baseline-summary/v1",
+  "status": "BLOCKED_ENV",
+  "candidateStatus": "NOT_READY",
+  "sourceCommit": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5",
+  "runRoot": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "scopeUpdate": {
+    "schema": "mac17-user-scope-update/v1",
+    "at": "2026-11-02T03:17:14.007136+00:00",
+    "source": "User direct instruction: stop considering compatibility/rollback, disable use on failure, reduce validation cost",
+    "activeScope": [
+      "Complete already-running install/upgrade outcome readback",
+      "Find first cold Gradle import terminal cause and give minimum solution",
+      "Own resource cleanup and precise bounded report"
+    ],
+    "cancelled": [
+      "Rollback investigation/repair/reverification",
+      "Compatibility investigation/repair/reverification",
+      "Additional full installer/suites/matrices/canary"
+    ],
+    "failurePolicy": "Stop use on a new-version fault; no compatibility or rollback restoration work",
+    "unchanged": [
+      "Preserve original failures",
+      "Do not relax timeouts",
+      "No optimization/push/production",
+      "Deadline 2026-11-03T18:00:00+08:00"
+    ],
+    "codeBoundary": "This scope update stops work and verification; it does not claim existing rollback/compatibility code was removed."
+  },
+  "baseline": {
+    "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.7.2\nBuildVersion:\t\t25G332\n",
+    "clang": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+    "toolchain": {
+      "schema": "mac17-current-toolchain-baseline/v1",
+      "frozenAt": "2026-11-02T02:23:45.637701+00:00",
+      "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.7.2\nBuildVersion:\t\t25G332\n",
+      "clangVersion": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+      "compilerPath": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "compilerRealpath": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang",
+      "compilerSha256": "7def90dd8829726686213a747fc5bff1583df933dae5edc55d755479e0bfe00a",
+      "sdkPath": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+      "sdkVersion": "26.5",
+      "sdkSettingsSha256": "f8d005f09381389167f9e0aeaa169bc9e7dff162ef22ca2fd8e98df7ff1acafe",
+      "codesignIdentity": "88D3D5B012A07363E20D2FA440C0D2C9F86255B8",
+      "codesignKeychain": "/Users/luo/Library/Keychains/login.keychain-db",
+      "history": "Historical OS/clang, failures and artifacts remain unchanged; historical native hashes are not this baseline."
+    }
+  },
+  "checks": [
+    {
+      "label": "A",
+      "validationName": "1793587090477-62cc8992-7f0c-4b86-9e55-eb72805d49c2",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+        "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+        "nativeSha256": "ec6b51bbd3cc58a623a52a020735833ac55c84a6c64b2015e3f1131c6400ce08",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "17359ffb411592816f08a5390710a8b8710cded1ce894f5544da9cfb52928c7b",
+        "distInventorySha256": "014ec4d04b42b21cdedf752f25118577424522089afd176e9895a3c420eb2276",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": [
+        {
+          "tests": 1601,
+          "pass": 1601,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 675,
+          "pass": 665,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 10,
+          "todo": 0
+        }
+      ],
+      "namedSkips": [
+        "ok 211 - MAC-10 chain: frozen dataset, stable oracles, six pinned dev tasks through native and product, paired compare # SKIP ILV2_MAC10_DATASET is not set",
+        "ok 301 - MAC12 actual seal worker task timeline # SKIP MAC12 actual seal task trace not selected",
+        "ok 302 - MAC12 facts decoder allocation costs on a registered database # SKIP MAC12 decoder allocation profile not selected",
+        "ok 303 - MAC12 bounded verification compares actual complete seal publication # SKIP MAC12 complete seal comparison not selected",
+        "ok 304 - MAC12 complete integrity partition costs on a registered database # SKIP MAC12 integrity cost profile not selected",
+        "ok 305 - MAC12 posting reference validation alternatives # SKIP MAC12 reference alternatives not selected",
+        "ok 306 - MAC12 remaining seal validation check costs # SKIP MAC12 check profile not selected",
+        "ok 307 - MAC12 seal validation preserves data checks without an unused logical manifest # SKIP MAC12 paired comparison not selected",
+        "ok 332 - G11 recorded evidence completes the gate only after verified supplementation # SKIP No recorded evidence plan selected",
+        "ok 371 - G11 system loop on isolated lishu-v2 run copies # SKIP ILV2_MAC11_INPUTS names the frozen input record list"
+      ]
+    },
+    {
+      "label": "B",
+      "validationName": "1793588224271-2e5b7dfd-312f-4a1c-9227-abc596baa424",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "identity": {
+        "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+        "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+        "nativeSha256": "dce3896c0894eb06c4f33880057f4cb619f4cefb84040fe44d22f3ff48628f3f",
+        "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+        "buildStampSha256": "25058bfe214e98608633b8f01ea775a502c72b696b7d04897da233ae85bd40f0",
+        "distInventorySha256": "314f47a15209b03b48ae555aab0a1800eb411c41028e8b7e04bad4e2eb34c463",
+        "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+      },
+      "tap": [
+        {
+          "tests": 1601,
+          "pass": 1601,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 675,
+          "pass": 665,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 10,
+          "todo": 0
+        }
+      ],
+      "namedSkips": [
+        "ok 211 - MAC-10 chain: frozen dataset, stable oracles, six pinned dev tasks through native and product, paired compare # SKIP ILV2_MAC10_DATASET is not set",
+        "ok 301 - MAC12 actual seal worker task timeline # SKIP MAC12 actual seal task trace not selected",
+        "ok 302 - MAC12 facts decoder allocation costs on a registered database # SKIP MAC12 decoder allocation profile not selected",
+        "ok 303 - MAC12 bounded verification compares actual complete seal publication # SKIP MAC12 complete seal comparison not selected",
+        "ok 304 - MAC12 complete integrity partition costs on a registered database # SKIP MAC12 integrity cost profile not selected",
+        "ok 305 - MAC12 posting reference validation alternatives # SKIP MAC12 reference alternatives not selected",
+        "ok 306 - MAC12 remaining seal validation check costs # SKIP MAC12 check profile not selected",
+        "ok 307 - MAC12 seal validation preserves data checks without an unused logical manifest # SKIP MAC12 paired comparison not selected",
+        "ok 332 - G11 recorded evidence completes the gate only after verified supplementation # SKIP No recorded evidence plan selected",
+        "ok 371 - G11 system loop on isolated lishu-v2 run copies # SKIP ILV2_MAC11_INPUTS names the frozen input record list"
+      ]
+    }
+  ],
+  "releaseIdentities": [
+    {
+      "label": "A",
+      "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+      "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+      "dependencies": {
+        "schemaVersion": 1,
+        "algorithm": "sha256-path-type-size-content-v1",
+        "fileCount": 4110,
+        "directoryCount": 667,
+        "symlinkCount": 7,
+        "totalBytes": 59091316,
+        "sha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+      },
+      "dist": {
+        "schemaVersion": 1,
+        "algorithm": "sha256-path-type-size-content-v1",
+        "fileCount": 451,
+        "directoryCount": 21,
+        "symlinkCount": 0,
+        "totalBytes": 4428088,
+        "sha256": "79f95e9911f1d09f8067a7e9eb334c89e4d896b6b1caade5ff18e515802cce52"
+      },
+      "codesign": {
+        "strictVerify": "PASS",
+        "team": "2UVGT2J459",
+        "cdHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+        "designatedRequirement": "identifier \"com.lky.codex-java-lsp-mcp.ilv2-mac\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: KAIYAO LUO (KFHZHX2HVP)\" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */"
+      }
+    },
+    {
+      "label": "B",
+      "nativeSha256": "a069c73fdb34bd328a3bd589774e9eaf79c7bedbaeceffa4c32884780185483d",
+      "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+      "dependencies": {
+        "schemaVersion": 1,
+        "algorithm": "sha256-path-type-size-content-v1",
+        "fileCount": 4110,
+        "directoryCount": 667,
+        "symlinkCount": 7,
+        "totalBytes": 59091316,
+        "sha256": "c946463d46d70252584a16eca1b2dae903dbc937c913fc05004aef2eb07fa3fa"
+      },
+      "dist": {
+        "schemaVersion": 1,
+        "algorithm": "sha256-path-type-size-content-v1",
+        "fileCount": 451,
+        "directoryCount": 21,
+        "symlinkCount": 0,
+        "totalBytes": 4428088,
+        "sha256": "6499a5f0f6f1cb5dc0928a244f883dbaf647e62f3b1df5f4fa6eada998139b30"
+      },
+      "codesign": {
+        "strictVerify": "PASS",
+        "team": "2UVGT2J459",
+        "cdHash": "64c1294487a7180fe03ceb3f15b36dca6651fd74",
+        "designatedRequirement": "identifier \"com.lky.codex-java-lsp-mcp.ilv2-mac\" and anchor apple generic and certificate leaf[subject.CN] = \"Apple Development: KAIYAO LUO (KFHZHX2HVP)\" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */"
+      }
+    }
+  ],
+  "candidate": {
+    "schema": "mac17-review-candidate-verification/v1",
+    "status": "PASS",
+    "candidateStatus": "NOT_READY",
+    "reason": "Local installation validated; cold Gradle semantic acceptance remains failed/blocked. No production authorization.",
+    "sourceCommit": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5",
+    "releaseA": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/tmp/runtime/releases/174227f978a0-20261102T023743Z",
+    "archive": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/review-candidate-174227f978a0.tar.gz",
+    "archiveSha256": "bdafaa6ccd270db710fa16e30e1f434506a70fee55aa9670740a7b4292dc81c2",
+    "archiveBytes": 20321713,
+    "inventorySha256": "c2269eef658ed246eae66ef92f7eee60e2dcbb34bc2c516a5e7f9a70d4511ec3",
+    "files": 6505,
+    "directories": 1183,
+    "symlinks": 7,
+    "logicalBytes": 105075159,
+    "physicalVerification": "PASS",
+    "physicalExtractions": 1,
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "dependencies": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4110,
+      "directoryCount": 667,
+      "symlinkCount": 7,
+      "totalBytes": 59091316,
+      "sha256": "91f167d337df6e348b662efa522244b8ae9957677b7f63ac1e37e0325f6c7c45"
+    },
+    "dist": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 451,
+      "directoryCount": 21,
+      "symlinkCount": 0,
+      "totalBytes": 4428088,
+      "sha256": "79f95e9911f1d09f8067a7e9eb334c89e4d896b6b1caade5ff18e515802cce52"
+    }
+  },
+  "confirmedFacts": {
+    "installA": "Full CLI exit0 and installed-A actual managed identity/health readback",
+    "installB": "Full CLI exit0 and installed-B actual managed identity/health readback",
+    "fullTests": [
+      {
+        "label": "A",
+        "validationName": "1793587090477-62cc8992-7f0c-4b86-9e55-eb72805d49c2",
+        "status": "SELECTED_COMMANDS_PASSED",
+        "identity": {
+          "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+          "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+          "nativeSha256": "ec6b51bbd3cc58a623a52a020735833ac55c84a6c64b2015e3f1131c6400ce08",
+          "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+          "buildStampSha256": "17359ffb411592816f08a5390710a8b8710cded1ce894f5544da9cfb52928c7b",
+          "distInventorySha256": "014ec4d04b42b21cdedf752f25118577424522089afd176e9895a3c420eb2276",
+          "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+        },
+        "tap": [
+          {
+            "tests": 1601,
+            "pass": 1601,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          {
+            "tests": 675,
+            "pass": 665,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 10,
+            "todo": 0
+          }
+        ],
+        "namedSkips": [
+          "ok 211 - MAC-10 chain: frozen dataset, stable oracles, six pinned dev tasks through native and product, paired compare # SKIP ILV2_MAC10_DATASET is not set",
+          "ok 301 - MAC12 actual seal worker task timeline # SKIP MAC12 actual seal task trace not selected",
+          "ok 302 - MAC12 facts decoder allocation costs on a registered database # SKIP MAC12 decoder allocation profile not selected",
+          "ok 303 - MAC12 bounded verification compares actual complete seal publication # SKIP MAC12 complete seal comparison not selected",
+          "ok 304 - MAC12 complete integrity partition costs on a registered database # SKIP MAC12 integrity cost profile not selected",
+          "ok 305 - MAC12 posting reference validation alternatives # SKIP MAC12 reference alternatives not selected",
+          "ok 306 - MAC12 remaining seal validation check costs # SKIP MAC12 check profile not selected",
+          "ok 307 - MAC12 seal validation preserves data checks without an unused logical manifest # SKIP MAC12 paired comparison not selected",
+          "ok 332 - G11 recorded evidence completes the gate only after verified supplementation # SKIP No recorded evidence plan selected",
+          "ok 371 - G11 system loop on isolated lishu-v2 run copies # SKIP ILV2_MAC11_INPUTS names the frozen input record list"
+        ]
+      },
+      {
+        "label": "B",
+        "validationName": "1793588224271-2e5b7dfd-312f-4a1c-9227-abc596baa424",
+        "status": "SELECTED_COMMANDS_PASSED",
+        "identity": {
+          "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+          "runtimeManifestSha256": "26112d6328ccb37718c004f6bac4f6c62fbe99d3808ff7f5870db550429de058",
+          "nativeSha256": "dce3896c0894eb06c4f33880057f4cb619f4cefb84040fe44d22f3ff48628f3f",
+          "nativeSourceDigest": "1b6bd6da574389b84a07b200b9f5d66a46b4d06e39b987cd5777f697011cdae5",
+          "buildStampSha256": "25058bfe214e98608633b8f01ea775a502c72b696b7d04897da233ae85bd40f0",
+          "distInventorySha256": "314f47a15209b03b48ae555aab0a1800eb411c41028e8b7e04bad4e2eb34c463",
+          "dependencySha256": "b98c82f00de9c1d77cef1fe947256fcffe2a80fd77a9939b90805dab08da1e4c"
+        },
+        "tap": [
+          {
+            "tests": 1601,
+            "pass": 1601,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          {
+            "tests": 675,
+            "pass": 665,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 10,
+            "todo": 0
+          }
+        ],
+        "namedSkips": [
+          "ok 211 - MAC-10 chain: frozen dataset, stable oracles, six pinned dev tasks through native and product, paired compare # SKIP ILV2_MAC10_DATASET is not set",
+          "ok 301 - MAC12 actual seal worker task timeline # SKIP MAC12 actual seal task trace not selected",
+          "ok 302 - MAC12 facts decoder allocation costs on a registered database # SKIP MAC12 decoder allocation profile not selected",
+          "ok 303 - MAC12 bounded verification compares actual complete seal publication # SKIP MAC12 complete seal comparison not selected",
+          "ok 304 - MAC12 complete integrity partition costs on a registered database # SKIP MAC12 integrity cost profile not selected",
+          "ok 305 - MAC12 posting reference validation alternatives # SKIP MAC12 reference alternatives not selected",
+          "ok 306 - MAC12 remaining seal validation check costs # SKIP MAC12 check profile not selected",
+          "ok 307 - MAC12 seal validation preserves data checks without an unused logical manifest # SKIP MAC12 paired comparison not selected",
+          "ok 332 - G11 recorded evidence completes the gate only after verified supplementation # SKIP No recorded evidence plan selected",
+          "ok 371 - G11 system loop on isolated lishu-v2 run copies # SKIP ILV2_MAC11_INPUTS names the frozen input record list"
+        ]
+      }
+    ],
+    "originalFirstUse": {
+      "status": "FAIL",
+      "firstFailure": {
+        "phase": "first-static",
+        "message": "MCP tool error"
+      },
+      "startCalls": 1,
+      "firstStaticMs": 137496.857292,
+      "firstSemanticMs": null,
+      "elapsedMs": 259792.68675,
+      "sessionPid": 51122,
+      "newFiles": 4163,
+      "newArtifacts": 1365,
+      "logicalBytes": 562214400,
+      "allocatedBytes": 584261632,
+      "distributionPresent": true,
+      "distributionDownloaded": false,
+      "distributionDownloadFiles": [],
+      "cleanup": "NOT_OWNED_BY_ATTACH_DRIVER; root must close installed owner and Gradle resources"
+    },
+    "originalTerminalFailure": "JDT import failed; original firstFailure static NOT_READY is an earlier transient",
+    "observationFirstUse": {
+      "status": "BLOCKED_ENV",
+      "firstFailure": {
+        "phase": "first-static",
+        "message": "MCP tool error"
+      },
+      "startCalls": 1,
+      "firstStaticMs": 135062.195209,
+      "firstSemanticMs": null,
+      "elapsedMs": 204476.060209,
+      "sessionPid": 54035,
+      "newFiles": 239,
+      "newArtifacts": 0,
+      "logicalBytes": 195604448,
+      "allocatedBytes": 206741504,
+      "distributionPresent": true,
+      "distributionDownloaded": false,
+      "distributionDownloadFiles": [],
+      "cleanup": "NOT_OWNED_BY_ATTACH_DRIVER; root must close installed owner and Gradle resources"
+    },
+    "observationTerminalFailure": "Gradle Spring Boot plugin marker 4.0.6 cannot resolve; position/definition oracle failed; references not reached",
+    "observationJdt": {
+      "pid": 54035,
+      "initializeStart": {
+        "type": "budget-enter",
+        "at": "2026-11-02T03:32:43.930Z",
+        "monotonicMs": 135963.506792,
+        "observerPid": 52455,
+        "stage": "jdtls.initialize",
+        "childPid": 54035,
+        "deadlineAtMs": 255887.15025,
+        "remainingMs": 119924,
+        "capMs": 120000
+      },
+      "importStart": {
+        "type": "budget-enter",
+        "at": "2026-11-02T03:32:50.257Z",
+        "monotonicMs": 142290.225,
+        "observerPid": 52455,
+        "stage": "jdtls.project.import",
+        "childPid": 54035,
+        "deadlineAtMs": 255887.15025,
+        "remainingMs": 113597,
+        "capMs": null
+      },
+      "importResolved": {
+        "type": "budget-resolve",
+        "at": "2026-11-02T03:33:25.547Z",
+        "monotonicMs": 177579.532209,
+        "observerPid": 52455,
+        "stage": "jdtls.project.import",
+        "childPid": 54035
+      },
+      "caller15sRejection": {
+        "type": "budget-reject",
+        "at": "2026-11-02T03:32:58.845Z",
+        "monotonicMs": 150878.600459,
+        "observerPid": 52455,
+        "stage": "jdtls.start.wait",
+        "childPid": 54035,
+        "deadlineAtMs": 150871.161542,
+        "remainingMs": 0,
+        "error": {
+          "name": "JavaIntelligenceError",
+          "code": "DEADLINE_EXCEEDED",
+          "message": "Deadline exceeded during jdtls.start.wait after 14986ms",
+          "stack": "JavaIntelligenceError: Deadline exceeded during jdtls.start.wait after 14986ms\n    at Timeout.<anonymous> (file:///Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/tmp/runtime/releases/174227f978a0-20261102T023743Z/dist/runtime/deadline-budget.js:62:24)\n    at listOnTimeout (node:internal/timers:588:17)\n    at process.processTimers (node:internal/timers:523:7)"
+        }
+      },
+      "killCause": "Explicit final stopInternal cleanup, not project.import deadline",
+      "artifactIdentityAfter": "UNCHANGED"
+    },
+    "httpsChecks": {
+      "defaultRoutes": [
+        {
+          "mode": "direct",
+          "result": "errorType=javax.net.ssl.SSLHandshakeException\nerrorMessage=Remote host terminated the handshake\ncause=java.io.EOFException:SSL peer shut down incorrectly\nelapsedMs=271\n"
+        },
+        {
+          "mode": "explicit-existing-proxy",
+          "result": "errorType=javax.net.ssl.SSLHandshakeException\nerrorMessage=Remote host terminated the handshake\ncause=java.io.EOFException:SSL peer shut down incorrectly\nelapsedMs=206\n"
+        }
+      ],
+      "sameProxyTls12Result": "httpStatus=200\nelapsedMs=5456\n",
+      "tlsVerification": "Default enabled in all probes; no trust bypass"
+    },
+    "separateChecksumFailure": "JDT services.gradle.org snapshot checksum request TLS EOF; not the plugin resolution exception chain"
+  },
+  "inferences": [
+    {
+      "claim": "Original shared120s initialization/import start budget exhausted",
+      "confidence": "HIGH; original shared-start rejection stage and kill initiator were not captured; single observed run did not reproduce this failure"
+    },
+    {
+      "claim": "Isolated JVM TLS/network settings are a targeted environment mitigation candidate",
+      "confidence": "Supported by same-JDK same-proxy same-artifact HEAD comparison only; protocol-level root cause and full Gradle resolution not proven"
+    }
+  ],
+  "proposedMitigation": {
+    "status": "NOT_IMPLEMENTED",
+    "scope": "Only isolated JDT/Gradle JVM settings; no global proxy/truststore/JDK mutation",
+    "jvmArguments": [
+      "-Djdk.tls.client.protocols=TLSv1.2",
+      "-Dhttps.protocols=TLSv1.2",
+      "-Dhttps.proxyHost=127.0.0.1",
+      "-Dhttps.proxyPort=8888"
+    ],
+    "existingConfigurationPoints": [
+      "JDTLS_EXTRA_ARGS for JDT launcher",
+      "java.import.gradle.jvmArguments for Gradle JVM"
+    ],
+    "preserve": [
+      "15s public request",
+      "120s shared JDT start",
+      "Certificate verification",
+      "Frozen JDK/Gradle versions",
+      "Original semantic oracle and file inputs"
+    ],
+    "failurePolicy": "Stop use of new version; no retries/compatibility/rollback",
+    "futureValidation": "One actual cold-home semantic check only after explicit implementation authorization; reuse installation evidence, no fullsuite/installer repetition"
+  },
+  "notValidated": [
+    "Full Gradle dependency/model import with proposed JVM settings",
+    "Exact definition and references under proposed settings",
+    "Original120s failure signal initiator/root stage",
+    "Current-native two-hour SLO (old source-level evidence separate)",
+    "Production fixed-launcher TCC, business read and upgrade reread",
+    "Deployment/MAC18/19/AI benefit"
+  ],
+  "cancelled": [
+    "Compatibility and rollback investigation/repair/reverification per latest user instruction"
+  ],
+  "historicalFailuresPreserved": [
+    "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023000Z-new-baseline-acceptance",
+    "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1",
+    "Older G17FAIL and closed runs/packages untouched"
+  ],
+  "resourceReview": {
+    "status": "PASS",
+    "fileSha256": "2fef7e84ab22d957b1b121ac16143343fa4d8b97d6f415dc03d95a4e4765f1ae",
+    "fixtureSlots": 0,
+    "externalFixtureJobs": 0,
+    "runRootArgvResiduals": 0,
+    "pidReuseCorrection": {
+      "historicalOwnedPid": 77707,
+      "originalObservedExit": 0,
+      "currentProcess": "Foreign Chrome, not touched",
+      "correctionSha256": "a352e015082badf7b89c2acd8fe8f190ea9466842117487d193fe4752588e38a"
+    }
+  },
+  "closeout": [
+    {
+      "root": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023000Z-new-baseline-acceptance",
+      "status": "PASS",
+      "closeoutSha256": "cebda7df5abcdc7eea5008005015e5e00903b21cc45ffc5f74b95e5151c0e17c",
+      "archive": {
+        "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023000Z-new-baseline-acceptance/closeout/raw-evidence.tar.gz",
+        "sha256": "d6a912391f87a7cc4aec8b909eb4e212d26e05ee00e5601d29d53690b368c3bb",
+        "fileCount": 37,
+        "bytes": 77284,
+        "physicalVerification": "PASS"
+      },
+      "registeredPids": 11,
+      "ownedGroups": 3,
+      "jobs": 2,
+      "expiredResidualBytes": 0,
+      "unregisteredPaths": []
+    },
+    {
+      "root": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1",
+      "status": "PASS",
+      "closeoutSha256": "1dbd2b449170e12f3e91842be04b17044796ab994b9d001d44d55840740d25d8",
+      "archive": {
+        "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T023500Z-new-baseline-acceptance-retry1/closeout/raw-evidence.tar.gz",
+        "sha256": "2dcaf9be7b817dfb26db033160e62acb6d08f8ddd79cb6358b34f3092db0499d",
+        "fileCount": 851,
+        "bytes": 97657217,
+        "physicalVerification": "PASS"
+      },
+      "registeredPids": 357,
+      "ownedGroups": 80,
+      "jobs": 69,
+      "expiredResidualBytes": 0,
+      "unregisteredPaths": []
+    }
+  ],
+  "reviewedFactSourceSha256": "7b6bbf7ec2ace3ba4007f84db77aaa28134cbcc7dac349df709a1cf8692f1429",
+  "postReviewDerivedFields": [
+    "resourceReview",
+    "closeout"
+  ],
+  "reportedAt": "2026-11-02T04:10:27.395354+00:00"
+}

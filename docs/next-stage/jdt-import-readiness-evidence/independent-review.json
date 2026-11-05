@@ -1,0 +1,78 @@
+{
+  "status": "PASS_FOR_IMPLEMENTATION_INSTALL_AND_AGENT_RECOVERY",
+  "reviewer": "/root/p3_independent_review",
+  "sourceBinding": {
+    "README.md": "f89200bdf39a5c353a3bb4f4ae0d97ddcb5bac678d1b27f33511374249037d51",
+    "src/jdtls-semantic-backend.ts": "3158c59700cfbb7403e80b0d33a5e1789a5139ffde82e54c5475f41e1a94052d",
+    "src/jdtls-session.ts": "67f386ca383b5baa25ca8c936897b4de70944c6b40179c4936f6d1942728b99b",
+    "src/jdtls-session.test.ts": "8051f4125a6665833c132f82e407c066ec76bf71c5ccd1f8bda033fa0066336f",
+    "src/test-support/fake-jdtls.test.ts": "bfa9253760f3ea58dacfcb527ea2dd7361f058649b801bd5d93097052aca04d4",
+    "src/tools/status.ts": "1c393b2fcb243a72d73ea988a0173eb7011214c9d582203b65bad583e005a356",
+    "src/tools/symbol.ts": "da734e21a7de2ac347f099bb6c9f65725c5b033af1cfc66b1f2172f706d94858",
+    "src/http-server.test.ts": "f600c1b8a951143b9fa90258ee7d69af8378856e1e6643ca0ff3df57be1a8f47",
+    "src/tools/output-shape.test.ts": "90baaf3aceecff211fad0443995ca38b7178c28f7e110866eb9cd04c9236298b"
+  },
+  "findings": {
+    "before": {
+      "P1": 1,
+      "P2": 2
+    },
+    "fixed": 3,
+    "remainingBlocking": 0
+  },
+  "targetedTests": 146,
+  "focusedTests": 6,
+  "rawRedFailures": 3,
+  "releaseFixtureCorrections": {
+    "status": "PASS_FOR_FULL_SUITE_RERUN",
+    "files": [
+      "src/http-server.test.ts",
+      "src/tools/output-shape.test.ts"
+    ],
+    "fullRunBeforeRepair": {
+      "tests": 1371,
+      "pass": 1368,
+      "fail": 3
+    },
+    "narrowRerunAfterRepair": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0
+    },
+    "productionCodeUnchanged": true,
+    "assertionsUnchanged": true
+  },
+  "previousStageLimits": [
+    "ServiceReady covers initial import only, not all later build/index or APT generated semantics.",
+    "A/B first references timeout retained.",
+    "Cold recovery uses a separate real type/path index probe; 25.33s and 34.65s are cumulative harness elapsed times.",
+    "Native install and original real Agent acceptance are not yet claimed."
+  ],
+  "limits": [
+    "Initial references was not ready; required impact still PARTIAL_TIMEOUT. Successful later exact references are the task acceptance evidence.",
+    "Original Agent answer says only source and static references, which is imprecise; actual trace contains real JDT references. Original answer is retained unchanged.",
+    "CLI stderr contains existing configuration warnings and another MCP endpoint 14242 connection failure; Java endpoint 38456 succeeded. Zero-error logs are not claimed.",
+    "No application build/start or database operation observed in this Agent trace; runtime business behavior is not claimed."
+  ],
+  "finalAcceptance": {
+    "reviewer": "/root/p3_independent_review",
+    "status": "PASS",
+    "method": "read-only raw logs, actual installed source hashes, Agent calls and business source audit; no tests or JDT repeated",
+    "installedBuild": "83aa814049e5",
+    "sourceAndScriptPass": [
+      1371,
+      436
+    ],
+    "fail": 0,
+    "skip": 0,
+    "sourceHashesMatched": 9,
+    "recoveredJdtReferences": [
+      11,
+      9,
+      4
+    ],
+    "coldFailureAndImpactPartialRetained": true,
+    "remainingBlockingFindings": 0
+  }
+}

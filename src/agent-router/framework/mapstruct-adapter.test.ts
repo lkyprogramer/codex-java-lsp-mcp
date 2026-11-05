@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ResolvedAnchor } from "../../agent-types.js";
 import { RouterJavaIndex } from "../../java-index/router-java-index.js";
+import { localRouterIndex } from "../../java-index/local-index.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapterContext } from "./adapter.js";
 import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
@@ -31,7 +32,7 @@ async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: n
 
 async function readyRouterAt(root: string): Promise<RouterJavaIndex> {
   const cacheDir = mkdtempSync(path.join(tmpdir(), "mapstruct-fixture-cache-"));
-  const router = RouterJavaIndex.create(root, cacheDir);
+  const router = localRouterIndex(root, cacheDir);
   await router.open(1);
   await router.reconcile(1);
   await waitFor(async () => (await router.status()).pendingBackground === 0, 15_000);
@@ -320,7 +321,7 @@ test("collect resolves a cross-module uses declaration before the background rec
     "package school;\nimport org.mapstruct.Mapper;\nimport common.IdConverter;\n@Mapper(uses = IdConverter.class)\ninterface OrderMapper {}\n"
   );
   const cacheDir = mkdtempSync(path.join(tmpdir(), "mapstruct-cold-cross-module-cache-"));
-  const router = RouterJavaIndex.create(root, cacheDir);
+  const router = localRouterIndex(root, cacheDir);
   await router.open(1);
   try {
     const mapper = path.join(root, "modules/school/src/main/java/school/OrderMapper.java");

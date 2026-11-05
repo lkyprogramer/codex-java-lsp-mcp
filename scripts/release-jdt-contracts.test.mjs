@@ -1,0 +1,62 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { INTERLEAVED_ROUNDS, assertInterleavedIsolation, assertIsolationOracle, assertReferenceOracle, assertSharedOracle, fixtureSources, isolationSources, prepareFixture } from './release-jdt-contracts.mjs';
+
+// Gateway counters are cumulative in the owner; the oracle judges deltas from the base read.
+const base = { inflight: 0, sharedJoins: 3, abortedNoWaiters: 1, completeWrites: 7 };
+const complete = {
+  shortCode: 'DEADLINE_EXCEEDED', whileShortExited: { inflight: 1, sharedJoins: 4, abortedNoWaiters: 1, base },
+  longOutcome: { completion: 'COMPLETE' }, settled: { inflight: 0, completeWrites: 8, abortedNoWaiters: 1 }
+};
+test('K28 oracle rejects successful summaries without actual waiter isolation', () => {
+  assertSharedOracle(complete);
+  for (const wrong of [
+    { ...complete, shortCode: undefined }, { ...complete, settled: { ...complete.settled, completeWrites: 9 } },
+    { ...complete, whileShortExited: { ...complete.whileShortExited, sharedJoins: 3 } },
+    { ...complete, whileShortExited: { ...complete.whileShortExited, inflight: 0 } },
+    { ...complete, whileShortExited: { ...complete.whileShortExited, abortedNoWaiters: 2 } },
+    { ...complete, longOutcome: { completion: 'PARTIAL' } },
+    { ...complete, settled: { ...complete.settled, inflight: 1 } }
+  ]) assert.throws(() => assertSharedOracle(wrong));
+});
+test('real reference oracle requires exact caller selection', () => {
+  const reference = position => ({ groups: [{ files: [{ path: 'src/main/java/probe/Caller.java', positions: [position] }] }] });
+  assertReferenceOracle(reference({ line: 5, column: 23 }));
+  assert.throws(() => assertReferenceOracle({ groups: [] }));
+  assert.throws(() => assertReferenceOracle(reference({ line: 5, column: 22 })));
+});
+test('fixture is dependency-free Maven source with stable selection positions', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'release-jdt-fixture-'));
+  try {
+    prepareFixture(root);
+    for (const [file, source] of Object.entries(fixtureSources)) assert.equal(readFileSync(path.join(root, file), 'utf8'), source);
+    assert.equal(fixtureSources['src/main/java/probe/Target.java'].split('\n')[4].slice(22, 29), 'compute');
+    assert.equal(fixtureSources['src/main/java/probe/Caller.java'].split('\n')[4].slice(22, 29), 'compute');
+    assert.ok(!fixtureSources['pom.xml'].includes('<dependencies>'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+test('interleaved isolation needs every round, both issue orders, both files and no crosstalk', () => {
+  const a = { hover: 'compute(int value)' }, b = { hover: 'compute(long value)' };
+  const rounds = Array.from({ length: INTERLEAVED_ROUNDS }, (_, round) => ({ round, order: round % 2 ? ['b', 'a'] : ['a', 'b'],
+    file: round % 4 < 2 ? 'src/main/java/probe/Target.java' : 'src/main/java/probe/Caller.java', a, b }));
+  assertInterleavedIsolation({ rounds, crosstalk: 0 });
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.slice(1), crosstalk: 0 }), 'a missing round');
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.map(round => ({ ...round, order: ['a', 'b'] })), crosstalk: 0 }), 'one issue order only');
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.map(round => ({ ...round, file: 'src/main/java/probe/Target.java' })), crosstalk: 0 }), 'declaration only');
+  assert.throws(() => assertInterleavedIsolation({ rounds: rounds.map((round, i) => i === 5 ? { ...round, a: b } : round), crosstalk: 0 }), 'a round answered from the other worktree');
+  assert.throws(() => assertInterleavedIsolation({ rounds, crosstalk: 1 }));
+});
+test('same-URI isolation oracle requires each worktree to answer from its own content', () => {
+  const a = { hover: 'static int compute(int value)' }, b = { hover: 'static int compute(long value)' };
+  assertIsolationOracle({ a, b });
+  assert.throws(() => assertIsolationOracle({ a, b: a }), 'worktree b answered with worktree a content');
+  assert.throws(() => assertIsolationOracle({ a: b, b }));
+  assert.throws(() => assertIsolationOracle({ a: { hover: a.hover + ' compute(long value)' }, b }));
+  for (const file of Object.keys(isolationSources)) {
+    assert.notEqual(isolationSources[file], fixtureSources[file]);
+    assert.equal(isolationSources[file].split('\n')[4].slice(22, 29), 'compute', 'same selection position in both worktrees');
+  }
+});

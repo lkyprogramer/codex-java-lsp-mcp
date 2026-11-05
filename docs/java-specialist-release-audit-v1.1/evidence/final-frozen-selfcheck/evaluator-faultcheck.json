@@ -1,0 +1,47 @@
+{
+  "schema": "evaluator-fault-injection/v1",
+  "not_product_results": true,
+  "passed": true,
+  "rows": [
+    {
+      "mutant": "ignore-stale-hash",
+      "detected": true,
+      "test": "test_hash_mismatch_invalid",
+      "run": {
+        "argv": [
+          "/opt/pyvenv/bin/python",
+          "-m",
+          "unittest",
+          "harness.tests.test_scoring.ScoringTests.test_hash_mismatch_invalid",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timeout": false,
+        "output_limit": false,
+        "elapsed_ms": 609.579,
+        "stdout": "",
+        "stderr": "test_hash_mismatch_invalid (harness.tests.test_scoring.ScoringTests.test_hash_mismatch_invalid) ... FAIL\n\n======================================================================\nFAIL: test_hash_mismatch_invalid (harness.tests.test_scoring.ScoringTests.test_hash_mismatch_invalid)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/evaluator-fault-i84z_06r/harness/tests/test_scoring.py\", line 38, in test_hash_mismatch_invalid\n    r=self.score(self.row(regions=[self.region(content_hash='0'*64)])); self.assertFalse(r['valid'])\n                                                                        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^\nAssertionError: True is not false\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=1)\n"
+      }
+    },
+    {
+      "mutant": "plan-is-read",
+      "detected": true,
+      "test": "test_plan_plus_answer_without_received_source_is_not_success",
+      "run": {
+        "argv": [
+          "/opt/pyvenv/bin/python",
+          "-m",
+          "unittest",
+          "harness.tests.test_scoring.EvidenceBoundaryTests.test_plan_plus_answer_without_received_source_is_not_success",
+          "-v"
+        ],
+        "exit_code": 1,
+        "timeout": false,
+        "output_limit": false,
+        "elapsed_ms": 601.941,
+        "stdout": "",
+        "stderr": "test_plan_plus_answer_without_received_source_is_not_success (harness.tests.test_scoring.EvidenceBoundaryTests.test_plan_plus_answer_without_received_source_is_not_success) ... FAIL\n\n======================================================================\nFAIL: test_plan_plus_answer_without_received_source_is_not_success (harness.tests.test_scoring.EvidenceBoundaryTests.test_plan_plus_answer_without_received_source_is_not_success)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/evaluator-fault-xm2_t6uu/harness/tests/test_scoring.py\", line 88, in test_plan_plus_answer_without_received_source_is_not_success\n    self.assertFalse(self.score(self.row(regions=[self.region()],answer={'operation':'commit'}))['qa_contract_pass'])\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: True is not false\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nFAILED (failures=1)\n"
+      }
+    }
+  ]
+}

@@ -1,33 +1,59 @@
-import type { JavaImportFact, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, TypeResolutionStrategy } from "./index-types.js";
+import type {
+  JavaFileFacts,
+  JavaImportFact,
+  JavaMethodFacts,
+  JavaSourceSet,
+  JavaTypeFacts,
+  JavaTypeRef,
+  TypeResolutionStrategy
+} from "./index-types.js";
+
+/** Where a declaration (or the code referring to one) is compiled. */
+export type DeclarationLocation = {
+  module: string;
+  sourceSet: JavaSourceSet;
+  sourceRoot?: string;
+};
 
 export type TypeRegistryView = {
   byId: ReadonlyMap<string, JavaTypeFacts>;
-  byFqn: ReadonlyMap<string, string>;
+  // Every declaration of an FQN (several when the same FQN is declared in
+  // different source roots), ids sorted. Choosing one is the resolver's job
+  // (selectVisibleDeclaration), never a lookup-time "lowest id wins".
+  byFqn: { get(fqn: string): readonly string[] | undefined };
+  // Compilation location of a declaration; undefined when unknown.
+  locationOf(typeId: string): DeclarationLocation | undefined;
   bySimpleName: ReadonlyMap<string, ReadonlySet<string>>;
   nestedByOwnerAndSimpleName: ReadonlyMap<string, string>;
   // Populated for Task 18's bounded call resolution (same-owner/receiver/
   // super-chain method lookup by owner type); Task 17 itself never reads it.
-  methodsByOwnerTypeId: { get(ownerTypeId: string): readonly JavaMethodFacts[] | undefined };
+  // `name` is a hint: a view may return only the methods so named, so
+  // callers filter by name either way.
+  methodsByOwnerTypeId: { get(ownerTypeId: string, name?: string): readonly JavaMethodFacts[] | undefined };
 };
+
+export function locationOfFile(file: Pick<JavaFileFacts, "module" | "sourceSet" | "sourceRoot">): DeclarationLocation {
+  return { module: file.module, sourceSet: file.sourceSet, sourceRoot: file.sourceRoot };
+}
 
 export function buildTypeRegistryView(
   types: readonly JavaTypeFacts[],
   methods: readonly JavaMethodFacts[] = [],
-  methodsOfOwner?: (ownerTypeId: string) => readonly JavaMethodFacts[]
+  methodsOfOwner?: (ownerTypeId: string) => readonly JavaMethodFacts[],
+  files: readonly JavaFileFacts[] = []
 ): TypeRegistryView {
   const byId = new Map<string, JavaTypeFacts>();
-  const byFqn = new Map<string, string>();
+  const byFqn = new Map<string, string[]>();
   const bySimpleName = new Map<string, Set<string>>();
   const nestedByOwnerAndSimpleName = new Map<string, string>();
+  const fileLocations = new Map(files.map(file => [file.fileId, locationOfFile(file)]));
 
   for (const type of types) {
     byId.set(type.typeId, type);
     if (type.fqn) {
-      // Several declarations can share one FQN (duplicate in different source
-      // roots); keep the lowest v2 id - the same deterministic winner the
-      // SQL store (facts-store typeIdByFqn) returns.
-      const existing = byFqn.get(type.fqn);
-      if (!existing || type.typeId < existing) byFqn.set(type.fqn, type.typeId);
+      const bucket = byFqn.get(type.fqn);
+      if (!bucket) byFqn.set(type.fqn, [type.typeId]);
+      else if (!bucket.includes(type.typeId)) bucket.push(type.typeId);
     }
 
     const bucket = bySimpleName.get(type.simpleName);
@@ -38,6 +64,7 @@ export function buildTypeRegistryView(
       nestedByOwnerAndSimpleName.set(`${type.enclosingTypeId}#${type.simpleName}`, type.typeId);
     }
   }
+  for (const ids of byFqn.values()) ids.sort();
 
   const methodsByOwnerTypeId = new Map<string, JavaMethodFacts[]>();
   if (!methodsOfOwner) {
@@ -51,12 +78,77 @@ export function buildTypeRegistryView(
   return {
     byId,
     byFqn,
+    locationOf(typeId: string) {
+      const type = byId.get(typeId);
+      return type ? fileLocations.get(type.fileId) : undefined;
+    },
     bySimpleName,
     nestedByOwnerAndSimpleName,
     methodsByOwnerTypeId: methodsOfOwner
       ? { get(ownerTypeId: string) { const found = methodsOfOwner(ownerTypeId); return found.length === 0 ? undefined : found; } }
       : methodsByOwnerTypeId
   };
+}
+
+export type DeclarationSelection =
+  | { kind: "none" }
+  | { kind: "unique"; typeId: string }
+  | { kind: "ambiguous"; typeIds: string[] };
+
+/**
+ * Picks the declaration a reference compiled at `from` can see among
+ * several declarations of one FQN, using only facts the layout proves:
+ *  - the referring module's own source set first; a test source set then
+ *    sees its module's main sources; main never sees test;
+ *  - another module's test sources are never visible;
+ *  - another module's main sources (inter-module dependencies are not
+ *    known) and declarations with an unknown location come last.
+ * The first non-empty tier decides: one candidate binds, several stay
+ * AMBIGUOUS. With no referring location every candidate is in the last
+ * tier, so duplicates are AMBIGUOUS rather than an arbitrary pick.
+ */
+/** False only when the layout proves `target` invisible from `from`. */
+export function declarationVisible(from: DeclarationLocation | undefined, target: DeclarationLocation | undefined): boolean {
+  if (!from || !target) return true;
+  if (!isMainOrTest(from.sourceSet) || !isMainOrTest(target.sourceSet)) return true;
+  if (target.sourceSet === "main") return true;
+  // target is a test source set: only its own module's test code sees it.
+  return target.module === from.module && from.sourceSet === "test";
+}
+
+function isMainOrTest(sourceSet: JavaSourceSet): boolean {
+  return sourceSet === "main" || sourceSet === "test";
+}
+
+export function selectVisibleDeclaration(
+  candidates: readonly string[] | undefined,
+  from: DeclarationLocation | undefined,
+  locationOf: (typeId: string) => DeclarationLocation | undefined
+): DeclarationSelection {
+  if (!candidates || candidates.length === 0) return { kind: "none" };
+  const tiers: string[][] = [[], [], []];
+  const known = (location: DeclarationLocation | undefined): location is DeclarationLocation =>
+    location !== undefined && (location.sourceSet === "main" || location.sourceSet === "test");
+  for (const typeId of candidates) {
+    const target = locationOf(typeId);
+    if (!known(from) || !known(target)) {
+      tiers[2]!.push(typeId);
+      continue;
+    }
+    if (target.module === from.module) {
+      if (target.sourceSet === from.sourceSet) tiers[0]!.push(typeId);
+      else if (from.sourceSet === "test" && target.sourceSet === "main") tiers[1]!.push(typeId);
+      // main -> test of the same module: not visible.
+    } else if (target.sourceSet === "main") {
+      tiers[2]!.push(typeId);
+    }
+    // another module's test sources: not visible.
+  }
+  for (const tier of tiers) {
+    if (tier.length === 1) return { kind: "unique", typeId: tier[0]! };
+    if (tier.length > 1) return { kind: "ambiguous", typeIds: [...tier].sort() };
+  }
+  return { kind: "none" };
 }
 
 export type JavaResolutionContext = {
@@ -67,6 +159,9 @@ export type JavaResolutionContext = {
   // Type-level and current-method-level type parameter names combined by the
   // caller; a method's own <T> must not leak into a sibling method's scope.
   typeParameterNames: ReadonlySet<string>;
+  // Where the referring code is compiled. Absent = unknown: duplicate FQNs
+  // then stay AMBIGUOUS instead of being guessed.
+  location?: DeclarationLocation;
 };
 
 type ResolveOutcome =
@@ -174,7 +269,17 @@ const JAVA_LANG_SIMPLE_NAMES = new Set([
 ]);
 
 export class JavaNameResolver {
-  constructor(private readonly registry: TypeRegistryView) {}
+  constructor(private readonly registry: TypeRegistryView, private readonly outcomes?: Map<string, ResolveOutcome>) {}
+
+  /**
+   * This resolver for one file's contexts (one package, import list and
+   * location) while the registry stays unchanged: a name resolves once per
+   * enclosing scope. Type parameters, the one per-member input, are checked
+   * before the memo.
+   */
+  forFile(): JavaNameResolver {
+    return new JavaNameResolver(this.registry, new Map());
+  }
 
   resolveTypeText(text: string, context: JavaResolutionContext): JavaTypeRef {
     const parsed = parseTypeText(text);
@@ -231,23 +336,47 @@ export class JavaNameResolver {
     }
   }
 
+  private visibleOnly(candidates: ReadonlySet<string> | undefined, context: JavaResolutionContext): ReadonlySet<string> | undefined {
+    if (!candidates || !context.location) return candidates;
+    const from = context.location;
+    return new Set([...candidates].filter(id => declarationVisible(from, this.registry.locationOf(id))));
+  }
+
+  // FQN -> the declaration visible from the referring location, or every
+  // equally visible declaration as AMBIGUOUS; undefined when the repo has no
+  // visible declaration of that FQN (the caller's next step applies).
+  private pick(fqn: string, context: JavaResolutionContext, strategy: TypeResolutionStrategy): ResolveOutcome | undefined {
+    const selection = selectVisibleDeclaration(this.registry.byFqn.get(fqn), context.location, id => this.registry.locationOf(id));
+    if (selection.kind === "unique") return { kind: "repo", typeId: selection.typeId, strategy };
+    if (selection.kind === "ambiguous") return { kind: "ambiguous", typeIds: selection.typeIds };
+    return undefined;
+  }
+
   // The exact 10-step order from architecture V3 §9.8. Each step is
   // checked in order; the first step that produces any candidate(s) -
   // whether a single unambiguous one or several - ends resolution there.
   // A step producing multiple candidates is immediately AMBIGUOUS; it does
   // not pool with candidates a later step might also find.
   private resolveBaseName(dottedBase: string, context: JavaResolutionContext): ResolveOutcome {
-    const simpleName = simpleNameOf(dottedBase);
-
     // Step 1: type parameter declared in the current method/type scope.
     if (!dottedBase.includes(".") && context.typeParameterNames.has(dottedBase)) {
       return { kind: "type_variable", name: dottedBase };
     }
+    if (!this.outcomes) return this.resolveInScope(dottedBase, context);
+    const key = `${context.enclosingTypeIds.join("\n")}\n${dottedBase}`;
+    let outcome = this.outcomes.get(key);
+    if (!outcome) { outcome = this.resolveInScope(dottedBase, context); this.outcomes.set(key, outcome); }
+    return outcome;
+  }
+
+  // Steps 2-10, which read the context's package, imports, location and enclosing types only.
+  private resolveInScope(dottedBase: string, context: JavaResolutionContext): ResolveOutcome {
+    const simpleName = simpleNameOf(dottedBase);
 
     // Step 2: source text is already a qualified name.
     if (dottedBase.includes(".")) {
-      const exact = this.registry.byFqn.get(dottedBase);
-      if (exact) return { kind: "repo", typeId: exact, strategy: "QUALIFIED" };
+      const exact = this.pick(dottedBase, context, "QUALIFIED");
+      if (exact) return exact;
 
       // "Outer.Inner" written without a package prefix uses "." between
       // segments, but this repo's FQN convention uses "$" for nesting
@@ -259,8 +388,8 @@ export class JavaNameResolver {
       const nestedGuess = context.packageName
         ? `${context.packageName}.${dottedBase.split(".").join("$")}`
         : dottedBase.split(".").join("$");
-      const nestedMatch = this.registry.byFqn.get(nestedGuess);
-      if (nestedMatch) return { kind: "repo", typeId: nestedMatch, strategy: "QUALIFIED" };
+      const nestedMatch = this.pick(nestedGuess, context, "QUALIFIED");
+      if (nestedMatch) return nestedMatch;
 
       return { kind: "external", qualifiedName: dottedBase, strategy: "QUALIFIED" };
     }
@@ -271,8 +400,8 @@ export class JavaNameResolver {
       imp => !imp.wildcard && !imp.static && simpleNameOf(imp.qualifiedName) === simpleName
     );
     if (explicitImport) {
-      const repoTypeId = this.registry.byFqn.get(explicitImport.qualifiedName);
-      if (repoTypeId) return { kind: "repo", typeId: repoTypeId, strategy: "EXPLICIT_IMPORT" };
+      const repoType = this.pick(explicitImport.qualifiedName, context, "EXPLICIT_IMPORT");
+      if (repoType) return repoType;
       // A framework/JDK type with no repo source is still EXTERNAL, not
       // UNRESOLVED - useful for annotation/framework metadata and overload
       // hints even though it never becomes a readPlan candidate.
@@ -292,8 +421,8 @@ export class JavaNameResolver {
 
     // Step 5: current package.
     const samePackageFqn = context.packageName ? `${context.packageName}.${simpleName}` : simpleName;
-    const samePackageId = this.registry.byFqn.get(samePackageFqn);
-    if (samePackageId) return { kind: "repo", typeId: samePackageId, strategy: "SAME_PACKAGE" };
+    const samePackage = this.pick(samePackageFqn, context, "SAME_PACKAGE");
+    if (samePackage) return samePackage;
 
     // Step 6: java.lang.
     if (JAVA_LANG_SIMPLE_NAMES.has(simpleName)) {
@@ -304,8 +433,9 @@ export class JavaNameResolver {
     const wildcardCandidates = new Set<string>();
     for (const imp of context.imports) {
       if (!imp.wildcard || imp.static) continue;
-      const candidateId = this.registry.byFqn.get(`${imp.qualifiedName}.${simpleName}`);
-      if (candidateId) wildcardCandidates.add(candidateId);
+      const picked = this.pick(`${imp.qualifiedName}.${simpleName}`, context, "WILDCARD_IMPORT");
+      if (picked?.kind === "repo") wildcardCandidates.add(picked.typeId);
+      if (picked?.kind === "ambiguous") for (const id of picked.typeIds) wildcardCandidates.add(id);
     }
     if (wildcardCandidates.size === 1) {
       return { kind: "repo", typeId: [...wildcardCandidates][0]!, strategy: "WILDCARD_IMPORT" };
@@ -314,8 +444,10 @@ export class JavaNameResolver {
       return { kind: "ambiguous", typeIds: [...wildcardCandidates] };
     }
 
-    // Step 8: unique repo-global simple name.
-    const globalCandidates = this.registry.bySimpleName.get(simpleName);
+    // Step 8: unique repo-global simple name. Declarations the referring
+    // location provably cannot see (main -> test, another module's test) are
+    // never candidates; no visibility preference is added to this heuristic.
+    const globalCandidates = this.visibleOnly(this.registry.bySimpleName.get(simpleName), context);
     if (globalCandidates && globalCandidates.size === 1) {
       return { kind: "repo", typeId: [...globalCandidates][0]!, strategy: "REPO_UNIQUE_SIMPLE_NAME" };
     }

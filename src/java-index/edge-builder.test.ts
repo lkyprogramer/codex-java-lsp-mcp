@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-backend.js";
 import { extractJavaFile, type ExtractedJavaFile, type ExtractJavaInput } from "./ast-extractor.js";
 import { JavaNameResolver, buildTypeRegistryView } from "./name-resolver.js";
-import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
+import { buildStaticEdges, resolveFileRefs, sameResolution } from "./edge-builder.js";
 import type { StaticEdge, StaticEdgeKind } from "./index-types.js";
 import { javaParameterId } from "./stable-id.js";
 
@@ -21,7 +21,6 @@ function baseInput(overrides: Partial<ExtractJavaInput> & { content: string; rel
     module: "demo-module",
     sourceSet: "main",
     size: Buffer.byteLength(overrides.content, "utf8"),
-    mtimeMs: 0,
     contentHash: "test",
     generation: 1,
     ...overrides
@@ -366,6 +365,54 @@ test("a call argument's structured type hint resolves to its repo type via the s
   assert.equal(hint.resolution.state, "RESOLVED_REPO");
   if (hint.resolution.state === "RESOLVED_REPO") {
     assert.equal(hint.resolution.typeId, marker.typeId);
+  }
+});
+
+test("sameResolution agrees with comparing the serialized facts, for every fixture and against a smaller registry", async () => {
+  const backend = await createJavaParserBackend();
+  const files = (readdirSync(fixturesRoot, { recursive: true }) as string[]).filter(file => file.endsWith(".java")).sort();
+  const raws = files.map(file => extractFixture(backend, file));
+  const registry = buildTypeRegistryView(raws.flatMap(raw => raw.types), raws.flatMap(raw => raw.methods));
+  const resolver = new JavaNameResolver(registry);
+  // Half the types missing: refs fall to EXTERNAL/UNRESOLVED, or to another candidate.
+  const partial = buildTypeRegistryView(raws.flatMap((raw, index) => index % 2 ? [] : raw.types), raws.flatMap(raw => raw.methods));
+  const partialResolver = new JavaNameResolver(partial);
+  const serialized = (bundle: ExtractedJavaFile) => JSON.stringify([bundle.file, bundle.types, bundle.fields, bundle.methods]);
+  let same = 0, moved = 0;
+  for (const raw of raws) {
+    const resolved = resolveFileRefs(raw, resolver, registry);
+    const decoded = JSON.parse(serialized(resolved)) as [ExtractedJavaFile["file"], ExtractedJavaFile["types"], ExtractedJavaFile["fields"], ExtractedJavaFile["methods"]];
+    const stored: ExtractedJavaFile = { file: decoded[0], types: decoded[1], fields: decoded[2], methods: decoded[3] };
+    for (const next of [resolveFileRefs(stored, resolver, registry), resolveFileRefs(stored, partialResolver, partial), resolveFileRefs(raw, resolver, registry)]) {
+      const expected = serialized(stored) === serialized(next);
+      assert.equal(sameResolution(stored, next), expected, raw.file.relativePath);
+      if (expected) same++; else moved++;
+    }
+  }
+  assert.ok(same >= raws.length && moved > 0, `same ${same} moved ${moved}`);
+});
+
+test("a method's type parameter shadows a same-named class only in that method, though names resolve once per file", async () => {
+  const backend = await createJavaParserBackend();
+  const source = [
+    "package demo;",
+    "class T {}",
+    "class Holder {",
+    "  <T> T generic(T value) { return value; }",
+    "  T plain(T value) { return value; }",
+    "  class Inner { T nested; }",
+    "}",
+    ""
+  ].join("\n");
+  const raw = extractFromRawSource(backend, source, "src/main/java/demo/Holder.java");
+  const registry = buildTypeRegistryView(raw.types, raw.methods);
+  const resolved = resolveFileRefs(raw, new JavaNameResolver(registry), registry);
+  const classT = resolved.types.find(type => type.simpleName === "T")!;
+  const method = (name: string) => resolved.methods.find(item => item.name === name)!;
+  assert.equal(method("generic").parameters[0]!.type.resolution.state, "TYPE_VARIABLE");
+  assert.equal(method("generic").returnType!.resolution.state, "TYPE_VARIABLE");
+  for (const ref of [method("plain").parameters[0]!.type, method("plain").returnType!, resolved.fields.find(field => field.name === "nested")!.type]) {
+    assert.deepEqual(ref.resolution, { state: "RESOLVED_REPO", typeId: classT.typeId, strategy: "SAME_PACKAGE" });
   }
 });
 

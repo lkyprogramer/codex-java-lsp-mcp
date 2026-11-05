@@ -141,3 +141,9 @@ f78b610 docs(m2): final milestone report - live track measured   ← M2 边界
 - [x] 实际未完成的测试未写 ALL_PASS（runtime 级契约/独立 benchmark 重跑项如实 NOT_RUN；fullPublicCorpus 与 Agent repair 已在 closure 轮实测关闭）
 - [x] semantic 实验关闭后产品完整可用（边界 6 命令 + probe + selfcheck 全绿）
 - [x] 提交不是安装授权（permittedToDeploy=false，线上 daemon 未动）
+## 历史更正（release-audit-v1.1 R00，2026-09-26，不删除原文与数字）
+
+1. **releaseDecision 的 `liveAgentOutcome=MEASURED`**：所依据的 LIVE/agent/repair 运行（含 M3 各轮与 closure 48 runs）已在 `docs/next-stage/invalidated-runs.json` 全部登记为 INVALID_EXPERIMENT（A01 冻结 fixture 字节漂移 + W01–W05 最终消息载荷丢失 + E01–E04 评分缺陷）。这些数字保留为历史记录，不再支撑能力归因；"0/33 失败是模型拒绝而非 harness"的归因**不被这些数据支持**（v1.1 审计报告第 47 行口径）。0/24 结果仍是当时工作区状态的真实性失败。
+2. **本边界"dataset 零 diff"在字节口径不成立**：Unicode fixture 曾从 CRLF 漂移为 LF（原哈希 `294cd139…` → `42f1c89b…`），R00 已按唯一确认的原样恢复字节并加 `.gitattributes -text`；登记见 `docs/next-stage/baseline-b9.md`。
+3. **检索层 A2/A3 recall 数字不受影响**（不经过模型 chat loop）；`fullPublicCorpus=MEASURED` 的检索层测量维持。
+4. 原 `permittedToDeploy=false` 语义不变：它是授权字段，不是质量证明；v1.1 收口（R12/R13）之前不产生任何新的部署结论。

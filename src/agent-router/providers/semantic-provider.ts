@@ -56,6 +56,18 @@ function liveSemanticWeightBonus(rawReason: string): number {
 
 export async function collectPersistedSemanticEvidence(input: ProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
+  // Contract §2.1: while the Gradle domain is not READY, auto delivers provable static results
+  // only; edges an earlier JDT session persisted are not reused.
+  try { input.session?.assertSemanticAdmission?.(); } catch (error) {
+    return {
+      providerId: SEMANTIC_PROVIDER_ID,
+      providerVersion: SEMANTIC_PROVIDER_VERSION,
+      evidence: [],
+      completion: "FAILED",
+      elapsedMs: Date.now() - startedAt,
+      degradation: `persisted semantic not admitted: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
   const candidatesByAnchor = new Map(input.anchors.map(anchor => [anchor.id, new Map<string, CandidateFile>()]));
   const persistedResult = await timed(input.phaseMs, "persistedSemantic", async () => collectPersistedSemanticCandidates({
     candidates: new Map<string, CandidateFile>(),

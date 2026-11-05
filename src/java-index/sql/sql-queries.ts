@@ -19,7 +19,7 @@ import type { JavaIndexClientApi } from "../java-index-client-api.js";
 import type { ContextGraphResult, GraphDigest, GraphReachable } from "../index-types.js";
 
 export type EntitySearchPort = {
-  search(task: string, limit?: number): EntityHit[];
+  search(task: string, limit?: number, mode?: EntitySearchMode, options?: { remainingMs?: () => number }): EntityHit[];
   // T07: budgeted, scoped retrieval reporting explicit partial results.
   searchDetailed(
     task: string,
@@ -63,16 +63,17 @@ export function queryGraphReachable(deps: SqlQueryDeps, fromRelativePath: string
 export function queryEntitySearch(
   deps: SqlQueryDeps,
   task: string,
-  limit = ENTITY_SEARCH_DEFAULT_LIMIT
+  limit = ENTITY_SEARCH_DEFAULT_LIMIT,
+  remainingMs?: () => number
 ): EntityHit[] {
   const cap = Math.min(
     ENTITY_SEARCH_MAX_LIMIT,
     Math.max(1, Number.isFinite(limit) ? Number(limit) : ENTITY_SEARCH_DEFAULT_LIMIT)
   );
-  return deps.search.search(task, cap);
+  return deps.search.search(task, cap, "auto", remainingMs ? { remainingMs } : {});
 }
 
-export function queryContextGraph(deps: SqlQueryDeps, input: ContextGraphInput): ContextGraphResult {
+export function queryContextGraph(deps: SqlQueryDeps, input: ContextGraphInput, remainingMs?: () => number): ContextGraphResult {
   const graph = deps.graph;
   const relativePath = relativePathOf(deps, input.fromRelativePath);
   const compiled = compileIntent(input.intent, {
@@ -92,7 +93,7 @@ export function queryContextGraph(deps: SqlQueryDeps, input: ContextGraphInput):
       tokenBudget: input.tokenBudget
     }, false, anchorMethodStartIds(graph, deps.store, relativePath, input.anchorLine));
   if (input.mode !== "navigate" && shouldLexicalFallback(result, input.taskText ?? "")) {
-    const hits = deps.search.search(input.taskText ?? "", 5);
+    const hits = deps.search.search(input.taskText ?? "", 5, "auto", remainingMs ? { remainingMs } : {});
     for (const hit of hits) {
       if (result.bundles.some(bundle => bundle.path === hit.relativePath)) continue;
       result.bundles.push({

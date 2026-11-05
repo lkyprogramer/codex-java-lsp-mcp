@@ -1,0 +1,11 @@
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -1,5 +1,8 @@
+ pluginManagement {
+     repositories {
++        maven {
++            url = uri("https://maven.aliyun.com/repository/public")
++        }
+         gradlePluginPortal()
+         mavenCentral()
+     }

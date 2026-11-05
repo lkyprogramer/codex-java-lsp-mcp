@@ -338,17 +338,19 @@ async function isolatedBehaviorCases() {
       expectedSelectedTestCount: 1,
       references: ["src/worktree-cache-cleanup.test.ts: fast-only runtime ownerToken janitor protection"]
     },
+    // MAC-08B deleted the fs.watch coordinator these two cases first exercised; they now point at
+    // the replacement call graph (layout probing for worktree containers, publish -> JDT batch).
     linked_worktree_ignore: {
-      files: ["dist/repo-change-coordinator.test.js", "dist/worktree-storm.test.js"],
-      pattern: "^(a linked-worktree \\.git file and common-dir are ignored|linked-worktree git metadata never advances Java generation, even under a large burst)$",
-      expectedSelectedTestCount: 2,
-      references: ["src/repo-change-coordinator.test.ts", "src/worktree-storm.test.ts"]
+      files: ["dist/layout-probe.test.js"],
+      pattern: "^probeLayout never descends linked-worktree containers$",
+      expectedSelectedTestCount: 1,
+      references: ["src/layout-probe.test.ts"]
     },
     storm_foreground_anchor: {
-      files: ["dist/worktree-storm.test.js"],
-      pattern: "^a 500-file batch is delivered as one storm with a bounded, non-empty affectedRoots list, and marks the generation dirty$",
+      files: ["dist/repo-runtime-manager.test.js"],
+      pattern: "^changeBatchFor maps build files and a build-key change to BUILD_CHANGE and a large publish to one storm$",
       expectedSelectedTestCount: 1,
-      references: ["src/worktree-storm.test.ts"]
+      references: ["src/repo-runtime-manager.test.ts: a 500-file publish is one storm batch with bounded affectedRoots"]
     },
     snapshot_generation_rebase: {
       files: ["dist/repo-generation.test.js"],

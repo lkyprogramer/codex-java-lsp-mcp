@@ -1,0 +1,174 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-08A",
+  "gateId": "G08A",
+  "status": "PASS",
+  "dependency": {
+    "head": "b5bf5ac3",
+    "requiredGates": [
+      "G05",
+      "G06",
+      "G07"
+    ]
+  },
+  "identity": {
+    "sourceDigest": "c7f2ae23dd1671d73715b2d32038979098c8355c46c6b4d0be68088d3c4efdc3",
+    "runtimeManifestSha256": "34d525e17d3260dd3cd9c11c60a4328a9a3df45c95d08eacba09f78fa3fc1524",
+    "nativeSha256": "448bc5df4f2a1b3b59aeb7de2fb1b11749ce16a18cf1685542a601d76132a570",
+    "nativeSourceDigest": "125e24147d36e10b0682327260bcfec582960fdd235741be63d03318d27b877c",
+    "buildStampSha256": "48632760a726f3eba44233ec47d7410bdaa7640920b737714ea6fc06938cbde1",
+    "distInventorySha256": "7a62bf1e86f5d296ad59867261aa36ca29cf48c8157623a1e6916895f5e574c0",
+    "dependencySha256": "539b433a44977afae90a96f9338cf783d76d2d5259d453aef1db1dc739971f7d"
+  },
+  "checks": [
+    {
+      "name": "final-g08a",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/final-g08a/result.json",
+      "sourceDigest": "c7f2ae23dd1671d73715b2d32038979098c8355c46c6b4d0be68088d3c4efdc3",
+      "commands": 1,
+      "tests": 22,
+      "pass": 22,
+      "fail": 0,
+      "elapsedMs": 15210,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/java-index/snapshot/request-view.test.js",
+        "dist/java-index/snapshot/query-pool.test.js"
+      ]
+    },
+    {
+      "name": "regression-g08a",
+      "role": "main",
+      "status": "SELECTED_COMMANDS_PASSED",
+      "mainError": null,
+      "result": "raw/validation/regression-g08a/result.json",
+      "sourceDigest": "c7f2ae23dd1671d73715b2d32038979098c8355c46c6b4d0be68088d3c4efdc3",
+      "commands": 1,
+      "tests": 426,
+      "pass": 426,
+      "fail": 0,
+      "elapsedMs": 114866,
+      "argv": [
+        "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+        "--test",
+        "--test-concurrency=1",
+        "dist/index-builder/build-scheduler.test.js",
+        "dist/index-builder/content-capture.test.js",
+        "dist/index-builder/execution-plan.test.js",
+        "dist/index-builder/integrity.test.js",
+        "dist/java-index/ast-extractor.test.js",
+        "dist/java-index/build-fingerprint.test.js",
+        "dist/java-index/builder-supervisor.test.js",
+        "dist/java-index/builder/cold-build.test.js",
+        "dist/java-index/builder/incremental.test.js",
+        "dist/java-index/builder/parse-cache.test.js",
+        "dist/java-index/builder/r08-evidence.test.js",
+        "dist/java-index/builder/review-fixes.test.js",
+        "dist/java-index/edge-builder.test.js",
+        "dist/java-index/entity-search.test.js",
+        "dist/java-index/framework-index-view.test.js",
+        "dist/java-index/java-index-file-parse.test.js",
+        "dist/java-index/java-parser-backend.test.js",
+        "dist/java-index/manifest.test.js",
+        "dist/java-index/mybatis-xml-extractor.test.js",
+        "dist/java-index/name-resolver.test.js",
+        "dist/java-index/router-facts.test.js",
+        "dist/java-index/router-integration.test.js",
+        "dist/java-index/router-java-index-cold.test.js",
+        "dist/java-index/router-java-index.test.js",
+        "dist/java-index/snapshot/query-pool.test.js",
+        "dist/java-index/snapshot/snapshot-store.test.js",
+        "dist/java-index/snapshot/workspace-tracker.test.js",
+        "dist/java-index/sql/bounded-cache.test.js",
+        "dist/java-index/sql/driver-async.test.js",
+        "dist/java-index/sql/driver.test.js",
+        "dist/java-index/sql/entity-search-bounded.test.js",
+        "dist/java-index/sql/entity-search-evidence-determinism.test.js",
+        "dist/java-index/sql/entity-search-intent.test.js",
+        "dist/java-index/sql/entity-search.test.js",
+        "dist/java-index/sql/entity-tokens.test.js",
+        "dist/java-index/sql/facts-store.test.js",
+        "dist/java-index/sql/knowledge-graph.test.js",
+        "dist/java-index/sql/logical-export.test.js",
+        "dist/java-index/sql/posting-delta.test.js",
+        "dist/java-index/sql/registry-view.test.js",
+        "dist/java-index/sql/rows.test.js",
+        "dist/java-index/sql/search-docs.test.js",
+        "dist/java-index/sql/sql-client-incremental.test.js",
+        "dist/java-index/sql/sql-client-lifecycle.test.js",
+        "dist/java-index/sql/sql-client.test.js",
+        "dist/java-index/sql/sql-queries.test.js",
+        "dist/java-index/sql/sql-read-ranges.test.js",
+        "dist/java-index/sql/sym.test.js",
+        "dist/java-index/sql/workspace-stat.test.js",
+        "dist/java-index/stable-id.test.js",
+        "dist/java-index/symbol-identity.test.js",
+        "dist/mac-platform/clonefile.test.js",
+        "dist/mac-platform/fsevents.test.js",
+        "dist/mac-platform/gradle-domain.test.js",
+        "dist/mac-platform/jdt-gradle-home.test.js",
+        "dist/mac-platform/native-exec.test.js",
+        "dist/java-index/snapshot/request-view.test.js"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "request-view-mutation-kill-matrix",
+      "file": "g08a-mutations.json",
+      "sha256": "c324b966dc70d6b4fc9042a0c7cb4c9500953bdd0994ba38f5752653d1084de5",
+      "status": "PASS",
+      "provenance": null
+    },
+    {
+      "name": "independent-resource-archive-closeout",
+      "file": "closeout/independent-closeout.json",
+      "sha256": "d350d013a5ce773cf753de1c319c38b47a781c2c7f588ed709dac9bdee05775b",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "987e940a8d393dab340f1009ecbb995296efce53f64cad7593413e61c4a21786",
+    "registeredPids": 86,
+    "ownedGroups": 1,
+    "launchdJobs": 4,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-08a/20261017T032856Z/closeout/raw-evidence.tar.gz",
+      "sha256": "8e0efe856926c2eba341263d803f0bbf2fffe24740cee0d90ead9b5ab160c132",
+      "fileCount": 47,
+      "bytes": 809187,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "91b7021b331e83273478088dd1b0f5530e1a17802c4e138d3e3b26ab16a0fdfb",
+      "source": "c7f2ae23dd1671d73715b2d32038979098c8355c46c6b4d0be68088d3c4efdc3",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "b1af2de0637a65d339313fdba0989d903da4e241e6fdfb039af3a35d3cf55944",
+  "notClaimed": [
+    "Production call graph: the request view is not yet reachable from the MCP tools; repo-runtime-manager still uses the old runtime at this source. Wiring, stdio relay and old-path deletion are MAC-08B (G08B), NOT_RUN",
+    "Capacity and three-repo latency (K29, strict p95 ratio): MAC-08C (G08C), NOT_RUN",
+    "Tracker signals in request-view tests are injected deterministically; native FSEvents delivery is G03B evidence, not re-proven here",
+    "G06C was not rerun after the query pool rewrite; its PASS evidence is stale for MAC-14 reuse (owner MAC-14)",
+    "Review findings carried as accepted limits with owners (see independent-review.json acceptedLimits); none is fixed in this source"
+  ],
+  "next": "G08A PASS; next is MAC-08B (depends on MAC-08A).",
+  "authorization": "User 2026-10-17: \"完成 MAC-08\" (all three sub-gates through the full gate flow; local commits only).",
+  "notes": "Main: final-g08a 22/22 (request-view, query-pool) and regression-g08a 426/426 on source c7f2ae23… = ec9f9388 + b5bf5ac3. Stalls of resolve/create/SQL/preview returned 1.0-3.1 ms after their deadline; prepare-stall waited 1027.8 ms then served STALE; prepare-after-hint returned FRESH at 336.5 ms. The first run root runs/mac-08a/20261017T030510Z (b0ca6506, 21/21 and 425/425, review PASS) is history and not composed (not-composed.json): mutant M1 exposed owner stop() being held by a stalled workspace start, fixed in b5bf5ac3. Mutation matrix is dev tier: 12/12 killed (M8 by runner timeout).",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-08a/20261017T032856Z"
+}

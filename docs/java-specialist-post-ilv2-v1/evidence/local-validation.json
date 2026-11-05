@@ -1,0 +1,171 @@
+{
+  "schema": "post-ilv2/local-validation/v1",
+  "classification": "KIT_ONLY_NOT_PRODUCT_VALIDATION",
+  "suite": {
+    "tests": 28,
+    "passed": 28,
+    "failed": 0
+  },
+  "redControl": {
+    "tests": 28,
+    "failures": 24,
+    "reason": "INTENTIONALLY_PERMISSIVE_CHECKER_STUB",
+    "expectedExitCode": 1
+  },
+  "mutants": [
+    {
+      "mutation": "missing_source_hash_guard",
+      "exitCode": 1,
+      "killed": true,
+      "classification": "CHECKER_MUTATION_NOT_PRODUCT",
+      "summary": "FAILED (failures=1)"
+    },
+    {
+      "mutation": "missing_final_text_guard",
+      "exitCode": 1,
+      "killed": true,
+      "classification": "CHECKER_MUTATION_NOT_PRODUCT",
+      "summary": "FAILED (failures=2)"
+    }
+  ],
+  "fixtures": {
+    "schema": "post-ilv2/fixture-validation/v1",
+    "classification": "KIT_ONLY_NOT_PRODUCT_TEST",
+    "caseCount": 24,
+    "groupCount": 8,
+    "fileCount": 27,
+    "labelErrors": [],
+    "compilation": [
+      {
+        "group": "navigation",
+        "sources": 3,
+        "exitCode": 0,
+        "elapsedMs": 1133.225,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "ranges",
+        "sources": 2,
+        "exitCode": 0,
+        "elapsedMs": 1044.086,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "binding",
+        "sources": 2,
+        "exitCode": 0,
+        "elapsedMs": 764.885,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "resources",
+        "sources": 2,
+        "exitCode": 0,
+        "elapsedMs": 1015.718,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "unicode",
+        "sources": 2,
+        "exitCode": 0,
+        "elapsedMs": 927.659,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "frameworks",
+        "sources": 6,
+        "exitCode": 0,
+        "elapsedMs": 906.309,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "guards",
+        "sources": 1,
+        "exitCode": 0,
+        "elapsedMs": 1003.058,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "identity-module-a",
+        "sources": 1,
+        "exitCode": 0,
+        "elapsedMs": 741.65,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "group": "identity-module-b",
+        "sources": 1,
+        "exitCode": 0,
+        "elapsedMs": 805.316,
+        "stdout": "",
+        "stderr": ""
+      }
+    ],
+    "controls": [
+      {
+        "group": "navigation",
+        "main": "example.NavigationControl",
+        "exitCode": 0,
+        "elapsedMs": 52.791,
+        "stdout": "JDK_CONTROL_NORMAL_RETURN\n",
+        "stderr": ""
+      },
+      {
+        "group": "ranges",
+        "main": "example.RangeControl",
+        "exitCode": 0,
+        "elapsedMs": 80.796,
+        "stdout": "JDK_CONTROL_NORMAL_RETURN\n",
+        "stderr": ""
+      },
+      {
+        "group": "binding",
+        "main": "example.BindingControl",
+        "exitCode": 0,
+        "elapsedMs": 86.36,
+        "stdout": "JDK_CONTROL_NORMAL_RETURN\n",
+        "stderr": ""
+      },
+      {
+        "group": "unicode",
+        "main": "example.UnicodeControl",
+        "exitCode": 0,
+        "elapsedMs": 67.285,
+        "stdout": "JDK_CONTROL_NORMAL_RETURN\n",
+        "stderr": ""
+      }
+    ],
+    "productTests": "NOT_RUN",
+    "macNativeTests": "NOT_RUN",
+    "realJdt": "NOT_RUN",
+    "javac": {
+      "exitCode": 0,
+      "elapsedMs": 418.536,
+      "stdout": "javac 21.0.12.1\n",
+      "stderr": ""
+    },
+    "java": {
+      "exitCode": 0,
+      "elapsedMs": 118.315,
+      "stdout": "",
+      "stderr": "openjdk version \"21.0.12.1\" 2026-08-18\nOpenJDK Runtime Environment (build 21.0.12.1+1-1-deb13u1-Debian)\nOpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-deb13u1-Debian, mixed mode, sharing)\n"
+    },
+    "status": "PASS"
+  },
+  "projectHead": "b1475cddac01ab6ce589a1d465578d5ab7772533",
+  "actualProductBuild": "NOT_RUN",
+  "macNative": "NOT_RUN",
+  "realJdt": "NOT_RUN",
+  "privateBusinessBenchmark": "NOT_RUN",
+  "liveModelCalls": 0,
+  "embeddingCalls": 0,
+  "independentProductReview": "NOT_PERFORMED"
+}

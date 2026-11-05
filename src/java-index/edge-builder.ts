@@ -10,7 +10,7 @@ import type {
 } from "./index-types.js";
 import type { SourceRange } from "../runtime/source-range.js";
 import { javaEdgeId, javaParameterId } from "./stable-id.js";
-import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
+import { JavaNameResolver, locationOfFile, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
 
 // Confidence keys on strategy name, not resolution state - EXTERNAL/QUALIFIED
 // and RESOLVED_REPO/QUALIFIED both read the same QUALIFIED entry. JAVA_LANG
@@ -42,7 +42,9 @@ function baseContext(bundle: ExtractedJavaFile, enclosingTypeIds: string[], type
     packageName: bundle.file.packageName,
     imports: bundle.file.imports,
     enclosingTypeIds,
-    typeParameterNames
+    typeParameterNames,
+    // Duplicate FQNs bind by the referring file's module/source set.
+    location: locationOfFile(bundle.file)
   };
 }
 
@@ -56,6 +58,18 @@ function ownScopeContext(bundle: ExtractedJavaFile, type: JavaTypeFacts, byId: R
 
 function memberScopeContext(bundle: ExtractedJavaFile, type: JavaTypeFacts, byId: ReadonlyMap<string, JavaTypeFacts>): JavaResolutionContext {
   return baseContext(bundle, ancestorChain(type.typeId, byId), new Set(type.typeParameters.map(p => p.name)));
+}
+
+/** memberScopeContext once per owner type of one file. */
+function memberScopes(bundle: ExtractedJavaFile, byId: ReadonlyMap<string, JavaTypeFacts>): (owner: JavaTypeFacts | undefined) => JavaResolutionContext {
+  const scopes = new Map<string, JavaResolutionContext>();
+  let none: JavaResolutionContext | undefined;
+  return owner => {
+    if (!owner) return none ??= baseContext(bundle, [], new Set());
+    let scope = scopes.get(owner.typeId);
+    if (!scope) { scope = memberScopeContext(bundle, owner, byId); scopes.set(owner.typeId, scope); }
+    return scope;
+  };
 }
 
 function withMethodTypeParameters(context: JavaResolutionContext, method: JavaMethodFacts): JavaResolutionContext {
@@ -80,7 +94,9 @@ export function resolveFileRefs(
   resolver: JavaNameResolver,
   registry: TypeRegistryView
 ): ExtractedJavaFile {
+  resolver = resolver.forFile();
   const typesById = new Map(bundle.types.map(t => [t.typeId, t]));
+  const memberScope = memberScopes(bundle, registry.byId);
 
   const resolvedTypes = bundle.types.map(type => {
     const ctx = ownScopeContext(bundle, type, registry.byId);
@@ -93,15 +109,12 @@ export function resolveFileRefs(
   });
 
   const resolvedFields = bundle.fields.map(field => {
-    const owner = typesById.get(field.ownerTypeId);
-    const ctx = owner ? memberScopeContext(bundle, owner, registry.byId) : baseContext(bundle, [], new Set());
+    const ctx = memberScope(typesById.get(field.ownerTypeId));
     return { ...field, type: resolver.resolveTypeRef(field.type, ctx) };
   });
 
   const resolvedMethods = bundle.methods.map(method => {
-    const owner = typesById.get(method.ownerTypeId);
-    const ownerCtx = owner ? memberScopeContext(bundle, owner, registry.byId) : baseContext(bundle, [], new Set());
-    const ctx = withMethodTypeParameters(ownerCtx, method);
+    const ctx = withMethodTypeParameters(memberScope(typesById.get(method.ownerTypeId)), method);
     return {
       ...method,
       ...(method.returnType ? { returnType: resolver.resolveTypeRef(method.returnType, ctx) } : {}),
@@ -119,6 +132,48 @@ export function resolveFileRefs(
   });
 
   return { file: bundle.file, types: resolvedTypes, fields: resolvedFields, methods: resolvedMethods };
+}
+
+/**
+ * Whether resolveFileRefs(`bundle`) produced facts that serialize as
+ * `bundle`'s own: it rewrites only type refs' resolution, qualified name and
+ * type arguments, and copies everything else, so only those are compared.
+ */
+export function sameResolution(bundle: ExtractedJavaFile, resolved: ExtractedJavaFile): boolean {
+  const refs = (left: readonly JavaTypeRef[], right: readonly JavaTypeRef[]) =>
+    left.length === right.length && left.every((ref, index) => sameRef(ref, right[index]!));
+  return bundle.types.every((type, index) => {
+    const other = resolved.types[index]!;
+    return refs(type.extends, other.extends) && refs(type.implements, other.implements) && refs(type.permits, other.permits);
+  })
+    && bundle.fields.every((field, index) => sameRef(field.type, resolved.fields[index]!.type))
+    && bundle.methods.every((method, index) => {
+      const other = resolved.methods[index]!;
+      return (method.returnType === undefined ? other.returnType === undefined : other.returnType !== undefined && sameRef(method.returnType, other.returnType))
+        && method.parameters.every((parameter, at) => sameRef(parameter.type, other.parameters[at]!.type))
+        && refs(method.throws, other.throws) && refs(method.localTypes, other.localTypes)
+        && method.callSites.every((callSite, at) => {
+          const site = other.callSites[at]!;
+          return (callSite.receiverDeclaredType === undefined ? site.receiverDeclaredType === undefined
+            : site.receiverDeclaredType !== undefined && sameRef(callSite.receiverDeclaredType, site.receiverDeclaredType))
+            && refs(callSite.argumentTypeHints, site.argumentTypeHints);
+        });
+    });
+}
+
+function sameRef(left: JavaTypeRef, right: JavaTypeRef): boolean {
+  if (left === right) return true;
+  if (left.qualifiedName !== right.qualifiedName || left.typeArguments.length !== right.typeArguments.length) return false;
+  const [a, b] = [left.resolution, right.resolution];
+  if (a.state !== b.state) return false;
+  switch (a.state) {
+    case "RESOLVED_REPO": { const other = b as typeof a; if (a.typeId !== other.typeId || a.strategy !== other.strategy) return false; break; }
+    case "EXTERNAL": { const other = b as typeof a; if (a.qualifiedName !== other.qualifiedName || a.strategy !== other.strategy) return false; break; }
+    case "TYPE_VARIABLE": if (a.name !== (b as typeof a).name) return false; break;
+    case "AMBIGUOUS": { const other = (b as typeof a).candidates; if (a.candidates.length !== other.length || a.candidates.some((id, at) => id !== other[at])) return false; break; }
+    case "UNRESOLVED": break;
+  }
+  return left.typeArguments.every((arg, index) => sameRef(arg, right.typeArguments[index]!));
 }
 
 type EdgeTarget = { toId: string; confidence: number; typeStrategy: TypeResolutionStrategy };
@@ -168,7 +223,7 @@ function walkSuperChain(
     if (visited.has(superTypeId)) continue;
     visited.add(superTypeId);
 
-    const candidates = (registry.methodsByOwnerTypeId.get(superTypeId) ?? []).filter(
+    const candidates = (registry.methodsByOwnerTypeId.get(superTypeId, name) ?? []).filter(
       m => m.name === name && arityOf(m) === arity
     );
     if (candidates.length === 1) {
@@ -213,7 +268,7 @@ function resolveCallSite(
     if (!callSite.receiverDeclaredType || callSite.receiverDeclaredType.resolution.state !== "RESOLVED_REPO") return undefined;
     const ownerTypeId = callSite.receiverDeclaredType.resolution.typeId;
     const ownerStrategy = callSite.receiverDeclaredType.resolution.strategy;
-    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId) ?? []).filter(m => m.name === callSite.name);
+    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId, callSite.name) ?? []).filter(m => m.name === callSite.name);
     if (candidates.length !== 1) return undefined;
     return {
       toId: candidates[0]!.methodId,
@@ -224,12 +279,24 @@ function resolveCallSite(
     };
   }
 
+  // An explicit super receiver bypasses same-owner lookup and runtime
+  // dispatch. Syntax extraction keeps the receiver text even without a
+  // declared receiver type; treating it as unqualified would bind an override.
+  if (callSite.receiverText === "super") {
+    const owner = registry.byId.get(method.ownerTypeId);
+    if (!owner) return undefined;
+    const match = walkSuperChain(owner, callSite.name, callSite.arity, registry, new Set([method.ownerTypeId]));
+    if (!match) return undefined;
+    return { toId: match.method.methodId, kind: "CALLS", confidence: 0.85,
+      resolutionKind: "SUPER_CHAIN_NAME_ARITY", typeStrategy: match.typeStrategy };
+  }
+
   // METHOD_INVOCATION
   if (callSite.receiverDeclaredType) {
     if (callSite.receiverDeclaredType.resolution.state !== "RESOLVED_REPO") return undefined;
     const ownerTypeId = callSite.receiverDeclaredType.resolution.typeId;
     const ownerStrategy = callSite.receiverDeclaredType.resolution.strategy;
-    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId) ?? []).filter(
+    const candidates = (registry.methodsByOwnerTypeId.get(ownerTypeId, callSite.name) ?? []).filter(
       m => m.name === callSite.name && arityOf(m) === callSite.arity
     );
     if (candidates.length !== 1) return undefined;
@@ -247,7 +314,7 @@ function resolveCallSite(
   }
 
   // Unqualified call: same owner first, per architecture's priority order.
-  const sameOwnerCandidates = (registry.methodsByOwnerTypeId.get(method.ownerTypeId) ?? []).filter(
+  const sameOwnerCandidates = (registry.methodsByOwnerTypeId.get(method.ownerTypeId, callSite.name) ?? []).filter(
     m => m.name === callSite.name && arityOf(m) === callSite.arity
   );
   if (sameOwnerCandidates.length === 1) {
@@ -276,10 +343,12 @@ export function buildStaticEdges(
   registry: TypeRegistryView,
   resolver: JavaNameResolver
 ): StaticEdge[] {
+  resolver = resolver.forFile();
   const edges: StaticEdge[] = [];
   const sourceFile = bundle.file.relativePath;
   const generation = bundle.file.generation;
   const typesById = new Map(bundle.types.map(t => [t.typeId, t]));
+  const memberScope = memberScopes(bundle, registry.byId);
 
   function pushEdge(
     fromId: string,
@@ -339,15 +408,11 @@ export function buildStaticEdges(
   for (const field of bundle.fields) {
     const target = repoEdgeTarget(field.type);
     if (target) pushEdge(field.fieldId, target.toId, "FIELD_TYPE", target.confidence, field.type.range, "TYPE_REFERENCE", target.typeStrategy);
-    const owner = typesById.get(field.ownerTypeId);
-    const ctx = owner ? memberScopeContext(bundle, owner, registry.byId) : baseContext(bundle, [], new Set());
-    annotationEdges(field.fieldId, field.annotations, ctx);
+    annotationEdges(field.fieldId, field.annotations, memberScope(typesById.get(field.ownerTypeId)));
   }
 
   for (const method of bundle.methods) {
-    const owner = typesById.get(method.ownerTypeId);
-    const ownerCtx = owner ? memberScopeContext(bundle, owner, registry.byId) : baseContext(bundle, [], new Set());
-    const methodCtx = withMethodTypeParameters(ownerCtx, method);
+    const methodCtx = withMethodTypeParameters(memberScope(typesById.get(method.ownerTypeId)), method);
 
     if (method.returnType) {
       const target = repoEdgeTarget(method.returnType);

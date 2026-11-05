@@ -1,0 +1,220 @@
+{
+  "schema": "post-ilv2/fixture-manifest/v1",
+  "files": [
+    {
+      "path": "fixtures/projects/binding/pom.xml",
+      "sha256": "93a9aaf8f6d190e763f5e4ab6d90165653111e834537620d213de96b1ce2f472",
+      "bytes": 208
+    },
+    {
+      "path": "fixtures/projects/binding/src/main/java/example/BindingDemo.java",
+      "sha256": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+      "bytes": 781
+    },
+    {
+      "path": "fixtures/projects/frameworks/pom.xml",
+      "sha256": "aad6bf15be4443c9b34053c9e5db12a93ac4c0ee95a0496f276a383803c151d4",
+      "bytes": 211
+    },
+    {
+      "path": "fixtures/projects/frameworks/src/main/java/example/GlobalPayment.java",
+      "sha256": "2f50f2852f0f918b664b72d125d3f8f2cabd341700934b293374aff567c43def",
+      "bytes": 193
+    },
+    {
+      "path": "fixtures/projects/frameworks/src/main/java/example/OrderController.java",
+      "sha256": "ae39a68290d21a4ae7421db4952274d149445feb6bf594f086cc2c151988719d",
+      "bytes": 383
+    },
+    {
+      "path": "fixtures/projects/frameworks/src/main/java/example/PaymentRoute.java",
+      "sha256": "9cb9550e5723823dbe852eb49cbd5a3c418a7b39350194e8224737d992e0885c",
+      "bytes": 67
+    },
+    {
+      "path": "fixtures/projects/frameworks/src/main/java/example/RegionalPayment.java",
+      "sha256": "e6999b361b6ae206d9c1dab4e147b19af18ca15bf5f280dd07d8c060117f4229",
+      "bytes": 199
+    },
+    {
+      "path": "fixtures/projects/frameworks/src/main/java/org/springframework/context/annotation/Profile.java",
+      "sha256": "4eb83b5a50934bba172833788bc3e1ba0435b484c47b01e70cd3590002fd8f67",
+      "bytes": 189
+    },
+    {
+      "path": "fixtures/projects/frameworks/src/main/java/org/springframework/web/bind/annotation/GetMapping.java",
+      "sha256": "8a7f7f0404131d30c52fbb91f0797b1df1cecdfef48ce2f61edf93dd0bd6b5cc",
+      "bytes": 206
+    },
+    {
+      "path": "fixtures/projects/guards/pom.xml",
+      "sha256": "a0baf336ea185fcd3ea2dfd12e272248997eb497ad3b28d09341c08cda228cc2",
+      "bytes": 207
+    },
+    {
+      "path": "fixtures/projects/guards/src/main/java/example/BoundaryService.java",
+      "sha256": "8568a4a978f0ef7e95d137e77c290e990f4a067476c9fc213f83223ddf934d4c",
+      "bytes": 17338
+    },
+    {
+      "path": "fixtures/projects/identity/module-a/pom.xml",
+      "sha256": "a9d09f6840fde97aa23c3dfb42019ef9b5d2c4d0a418ca7dafa0adaed277ea57",
+      "bytes": 209
+    },
+    {
+      "path": "fixtures/projects/identity/module-a/src/main/java/demo/Shared.java",
+      "sha256": "b4f5fbd77abd068286d815e4f3c57ed5a74829a8bd5774a11c84aaa615b0699b",
+      "bytes": 198
+    },
+    {
+      "path": "fixtures/projects/identity/module-b/pom.xml",
+      "sha256": "a35044d0b5f2698e2842925f27f2694b73133a405f3e6038d67ca71815ca0c16",
+      "bytes": 209
+    },
+    {
+      "path": "fixtures/projects/identity/module-b/src/main/java/demo/Shared.java",
+      "sha256": "633f42dddd41b1cda29090a98a0868d63fb14c204af2b5c153def5055dc45ad8",
+      "bytes": 198
+    },
+    {
+      "path": "fixtures/projects/identity/pom.xml",
+      "sha256": "c47bb9d546004f00e6347a9e0e79fefa8677b5c68a87b89b0df10786f15aeb8c",
+      "bytes": 228
+    },
+    {
+      "path": "fixtures/projects/navigation/pom.xml",
+      "sha256": "d2e03ebb1e5edb84f540a422a22100d8948345af651098412d8dab75974f4be8",
+      "bytes": 211
+    },
+    {
+      "path": "fixtures/projects/navigation/src/main/java/example/OrderService.java",
+      "sha256": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+      "bytes": 597
+    },
+    {
+      "path": "fixtures/projects/navigation/src/main/java/example/StockLedger.java",
+      "sha256": "60565558dc18f338a8d225081c0eba177ab61181e9891dfab951ca6918e3db82",
+      "bytes": 334
+    },
+    {
+      "path": "fixtures/projects/ranges/pom.xml",
+      "sha256": "92ee031776063665d8d1b4470fef02986c03cef625293b394f2bc633f4678dd8",
+      "bytes": 207
+    },
+    {
+      "path": "fixtures/projects/ranges/src/main/java/example/LongWorkflow.java",
+      "sha256": "bf11346aa5e3eedd85e278815fd7c04da1d1f314b3acdf97c54a11b350ce62de",
+      "bytes": 8552
+    },
+    {
+      "path": "fixtures/projects/resources/pom.xml",
+      "sha256": "740d8a63eeea9ba5d9972e76cd8d3930236b1f36ab2e3dbdca730ce41c829aa7",
+      "bytes": 210
+    },
+    {
+      "path": "fixtures/projects/resources/src/main/java/example/OrderMapper.java",
+      "sha256": "d440aa186f7e0a627d4098dcb7328390e7cd2608d6fa9887ac7174e68092a974",
+      "bytes": 88
+    },
+    {
+      "path": "fixtures/projects/resources/src/main/java/example/OrderRow.java",
+      "sha256": "c97ac643a27005383bb420317a6d08a668b20c798bd4c5c127d009f49218b0cc",
+      "bytes": 100
+    },
+    {
+      "path": "fixtures/projects/resources/src/main/resources/mappers/OrderMapper.xml",
+      "sha256": "95be8efef682e75f4d6699ccc086e9551fe0b363fa36db1e7f3c7a2ff12753f7",
+      "bytes": 421
+    },
+    {
+      "path": "fixtures/projects/unicode/pom.xml",
+      "sha256": "c22b2f0f7335ded5253699878c3b14ffe8b8e9cdedcb50cf8dd9b731563436e6",
+      "bytes": 208
+    },
+    {
+      "path": "fixtures/projects/unicode/src/main/java/example/UnicodeService.java",
+      "sha256": "36ecd11c6fbad20d895b0e383a498225d6092fe003b65de0a492593756a3ae7d",
+      "bytes": 274
+    }
+  ],
+  "groupCount": 8,
+  "caseCount": 24,
+  "compileUnits": [
+    {
+      "group": "navigation",
+      "sourceRoots": [
+        "fixtures/projects/navigation/src/main/java"
+      ]
+    },
+    {
+      "group": "ranges",
+      "sourceRoots": [
+        "fixtures/projects/ranges/src/main/java"
+      ]
+    },
+    {
+      "group": "binding",
+      "sourceRoots": [
+        "fixtures/projects/binding/src/main/java"
+      ]
+    },
+    {
+      "group": "resources",
+      "sourceRoots": [
+        "fixtures/projects/resources/src/main/java"
+      ]
+    },
+    {
+      "group": "unicode",
+      "sourceRoots": [
+        "fixtures/projects/unicode/src/main/java"
+      ]
+    },
+    {
+      "group": "frameworks",
+      "sourceRoots": [
+        "fixtures/projects/frameworks/src/main/java"
+      ]
+    },
+    {
+      "group": "guards",
+      "sourceRoots": [
+        "fixtures/projects/guards/src/main/java"
+      ]
+    },
+    {
+      "group": "identity-module-a",
+      "sourceRoots": [
+        "fixtures/projects/identity/module-a/src/main/java"
+      ]
+    },
+    {
+      "group": "identity-module-b",
+      "sourceRoots": [
+        "fixtures/projects/identity/module-b/src/main/java"
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "group": "binding",
+      "file": "evaluator/controls/BindingControl.java",
+      "main": "example.BindingControl"
+    },
+    {
+      "group": "navigation",
+      "file": "evaluator/controls/NavigationControl.java",
+      "main": "example.NavigationControl"
+    },
+    {
+      "group": "ranges",
+      "file": "evaluator/controls/RangeControl.java",
+      "main": "example.RangeControl"
+    },
+    {
+      "group": "unicode",
+      "file": "evaluator/controls/UnicodeControl.java",
+      "main": "example.UnicodeControl"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import type { GeneratedCodeStatus } from "../../generated-code.js";
 import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import { RouterJavaIndex } from "../../java-index/router-java-index.js";
+import { localRouterIndex } from "../../java-index/local-index.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { lombokCompleteness } from "./lombok-adapter.js";
 
@@ -36,7 +37,7 @@ async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: n
 
 async function readyRouter(): Promise<RouterJavaIndex> {
   const cacheDir = mkdtempSync(path.join(tmpdir(), "lombok-fixture-cache-"));
-  const router = RouterJavaIndex.create(repoRoot, cacheDir);
+  const router = localRouterIndex(repoRoot, cacheDir);
   await router.open(1);
   await router.reconcile(1);
   await waitFor(async () => (await router.status()).pendingBackground === 0, 15_000);

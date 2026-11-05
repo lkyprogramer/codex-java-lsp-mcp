@@ -1,0 +1,5 @@
+<mapper namespace="demo.UserMapper">
+  <select id="find" resultType="java.lang.String">
+    select display_name from users where id = #{id}
+  </select>
+</mapper>

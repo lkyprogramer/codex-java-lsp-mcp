@@ -4,10 +4,14 @@
 <dict>
   <key>Label</key>
   <string>__LABEL__</string>
+  <key>Program</key>
+  <string>__RUNNER__</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
     <string>__RUNNER__</string>
+    <string>owner</string>
+    <string>__CACHE_ROOT__</string>
+    <string>__SERVER_ENTRY__</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__RUNTIME_DIR__</string>
@@ -19,7 +23,9 @@
     <false/>
   </dict>
   <key>ThrottleInterval</key>
-  <integer>10</integer>
+  <integer>1</integer>
+  <key>AbandonProcessGroup</key>
+  <false/>
   <key>SoftResourceLimits</key>
   <dict>
     <key>NumberOfFiles</key>

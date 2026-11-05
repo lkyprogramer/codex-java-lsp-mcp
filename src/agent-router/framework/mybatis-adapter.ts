@@ -25,9 +25,9 @@ import {
   frameworkRepositoryMarkers,
   frameworkSeedFiles,
   frameworkStatus,
-  relativePathLookup,
   rankableFrameworkMethods,
-  resolveFrameworkTargets
+  resolveFrameworkTargets,
+  type FrameworkTarget
 } from "./shared.js";
 
 export const MYBATIS_ADAPTER_ID = "mybatis";
@@ -51,7 +51,7 @@ type MyBatisEvidenceKind =
   | "MYBATIS_RESULT_TYPE"
   | "MYBATIS_RESULT_MAP";
 
-/** Evidence whose target file is already known - a namespace/statement match against a resource, or a type-kind match once declarationsById has resolved its raw XML text to a repo file. */
+/** Evidence whose target file is already known - a namespace/statement match against a resource, or a type-kind match once typesByName has resolved its raw XML text to a repo file. */
 type ResolvedEvidence = {
   kind: MyBatisEvidenceKind;
   sourceFile: string;
@@ -62,11 +62,11 @@ type ResolvedEvidence = {
   anchorIds: readonly string[];
 };
 
-/** A raw XML type-name string still needing declarationsById resolution against the Java graph. */
+/** A raw XML type-name string still needing typesByName resolution against the Java graph. */
 type PendingTypeEvidence = {
   kind: "MYBATIS_PARAMETER_TYPE" | "MYBATIS_RESULT_TYPE" | "MYBATIS_RESULT_MAP";
   sourceFile: string;
-  targetId: string;
+  target: FrameworkTarget;
   weight: number;
   confidence: number;
   detail: string;
@@ -96,10 +96,10 @@ async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   return status.coverage !== "complete";
 }
 
-/** A dot-qualified name is the only shape MyBatis XML parameterType/resultType/resultMap-type text can safely be treated as a fully-qualified Java type - built-in aliases ("string", "long", "map") and bare simple names are never guessed at. */
-function qualifiedTypeId(rawText: string | undefined): string | undefined {
+/** A dot-qualified name is the only shape MyBatis XML parameterType/resultType/resultMap-type text can safely be treated as a fully-qualified Java type - built-in aliases ("string", "long", "map") and bare simple names are never guessed at. XML has no Java scope: the name resolves repo-wide, and a duplicated FQN answers nothing. */
+function qualifiedTypeTarget(rawText: string | undefined): FrameworkTarget | undefined {
   if (!rawText || !rawText.includes(".")) return undefined;
-  return `type:${rawText}`;
+  return { typeName: { fqn: rawText } };
 }
 
 function crossNamespaceResultMapReference(resultMap: string): { namespace: string; id: string } | undefined {
@@ -223,13 +223,13 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       // Type-kind evidence is tied to the statement/resource itself, not to a
       // specific overloaded method - emitted unconditionally, independent of
       // the ambiguity/rankability check above.
-      const parameterTypeId = qualifiedTypeId(statement.parameterType);
-      if (parameterTypeId) {
-        pendingTypeTargets.push({ kind: "MYBATIS_PARAMETER_TYPE", sourceFile: resourceAbsolutePath, targetId: parameterTypeId, weight: MYBATIS_PARAMETER_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} parameterType`, anchorIds: typeContext.anchorIds });
+      const parameterTypeTarget = qualifiedTypeTarget(statement.parameterType);
+      if (parameterTypeTarget) {
+        pendingTypeTargets.push({ kind: "MYBATIS_PARAMETER_TYPE", sourceFile: resourceAbsolutePath, target: parameterTypeTarget, weight: MYBATIS_PARAMETER_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} parameterType`, anchorIds: typeContext.anchorIds });
       }
-      const resultTypeId = qualifiedTypeId(statement.resultType);
-      if (resultTypeId) {
-        pendingTypeTargets.push({ kind: "MYBATIS_RESULT_TYPE", sourceFile: resourceAbsolutePath, targetId: resultTypeId, weight: MYBATIS_RESULT_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultType`, anchorIds: typeContext.anchorIds });
+      const resultTypeTarget = qualifiedTypeTarget(statement.resultType);
+      if (resultTypeTarget) {
+        pendingTypeTargets.push({ kind: "MYBATIS_RESULT_TYPE", sourceFile: resourceAbsolutePath, target: resultTypeTarget, weight: MYBATIS_RESULT_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultType`, anchorIds: typeContext.anchorIds });
       }
       if (statement.resultMap) {
         const localResultMap = resource.resultMaps.find(candidate => candidate.id === statement.resultMap);
@@ -240,22 +240,20 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
           ?? (externalReference
             ? resourceByNamespace.get(externalReference.namespace)?.resultMaps.find(candidate => candidate.id === externalReference.id)
             : undefined);
-        const resultMapTypeId = qualifiedTypeId(resultMapFact?.type);
-        if (resultMapTypeId) {
-          pendingTypeTargets.push({ kind: "MYBATIS_RESULT_MAP", sourceFile: resourceAbsolutePath, targetId: resultMapTypeId, weight: MYBATIS_RESULT_MAP_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultMap ${statement.resultMap}`, anchorIds: typeContext.anchorIds });
+        const resultMapTypeTarget = qualifiedTypeTarget(resultMapFact?.type);
+        if (resultMapTypeTarget) {
+          pendingTypeTargets.push({ kind: "MYBATIS_RESULT_MAP", sourceFile: resourceAbsolutePath, target: resultMapTypeTarget, weight: MYBATIS_RESULT_MAP_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultMap ${statement.resultMap}`, anchorIds: typeContext.anchorIds });
         }
       }
     }
   }
 
-  const targetIds = [...new Set(pendingTypeTargets.map(item => item.targetId))];
-  const resolved = timedOut || targetIds.length === 0
-    ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut }
-    : await resolveFrameworkTargets(context, targetIds);
+  const resolved = timedOut || pendingTypeTargets.length === 0
+    ? { relativePathOf: () => undefined, truncated: false, timedOut }
+    : await resolveFrameworkTargets(context, pendingTypeTargets.map(item => item.target));
   timedOut = timedOut || resolved.timedOut;
-  const relativePathByTypeId = relativePathLookup(resolved.declarations);
   for (const item of pendingTypeTargets) {
-    const relativePath = relativePathByTypeId.get(item.targetId);
+    const relativePath = resolved.relativePathOf(item.target);
     if (!relativePath) continue;
     resolvedEvidence.push({
       kind: item.kind,
@@ -294,7 +292,6 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     }
   }
 
-  if (resolved.declarations.truncated) diagnostics.push(`mybatis adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);
   if (timedOut) diagnostics.push("mybatis adapter: deadline exhausted before all bounded framework work completed");
 
   return {
@@ -302,7 +299,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: MYBATIS_ADAPTER_ID,
       providerVersion: MYBATIS_ADAPTER_VERSION,
       evidence,
-      completion: timedOut ? "PARTIAL_TIMEOUT" : limited || resolved.declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
+      completion: timedOut ? "PARTIAL_TIMEOUT" : limited ? "PARTIAL_LIMIT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata: {},

@@ -82,6 +82,23 @@ export async function resolveWorktreeIdentity(inputRoot: string): Promise<Worktr
   return { repoRoot, repoHash, familyHash, isLinkedWorktree: familyHash !== hashRepoPath(path.join(repoRoot, ".git")) };
 }
 
+/** Destructive GC requires fresh Git evidence about this exact root, without the family-hash fallback. */
+export async function isLinkedWorktreeRoot(canonicalRoot: string): Promise<boolean> {
+  try {
+    const env = { ...process.env };
+    delete env.GIT_DIR;
+    delete env.GIT_COMMON_DIR;
+    delete env.GIT_WORK_TREE;
+    const { stdout } = await run("git", ["-C", canonicalRoot, "rev-parse", "--path-format=absolute",
+      "--show-toplevel", "--git-dir", "--git-common-dir"], { env, timeout: 1000 });
+    const [root, gitDir, commonDir, extra] = stdout.trimEnd().split("\n");
+    return extra === undefined && Boolean(root && gitDir && commonDir && canonicalPath(root) === canonicalRoot
+      && canonicalPath(gitDir) !== canonicalPath(commonDir));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The scoping key for cross-process JDT/sweep leases: linked worktrees of the
  * same Git repo share one family and so must not run a second JDT for "the

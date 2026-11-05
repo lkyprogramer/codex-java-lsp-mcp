@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -12,8 +13,9 @@ import { encodeFacts, STATIC_EDGE_SELECT } from "../sql/rows.js";
 import { internSym } from "../sql/sym.js";
 import { probeLayout } from "../../layout-probe.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
-import { applyBuilderJob, runBuilderServe } from "../../index-builder/incremental.js";
+import { applyBuilderJob } from "../../index-builder/incremental.js";
 import { readMeta } from "../../index-builder/progress.js";
+import { currentBuildKey } from "../sql/snapshot-manifest.js";
 import { discoverJavaFiles } from "../manifest.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -110,14 +112,20 @@ function cascadeCounts(db: ReturnType<typeof openIndexDb>, relativePath: string)
   };
 }
 
+function fileFacts(db: ReturnType<typeof openIndexDb>) {
+  return db.prepare("SELECT id, path, content_hash, size, generation, hex(facts) AS facts FROM file ORDER BY path").all()
+    .concat(db.prepare("SELECT path, content_hash FROM resource_scan ORDER BY path").all());
+}
+
 function fileIdentity(db: ReturnType<typeof openIndexDb>) {
   return (db.prepare(
-    "SELECT path, content_hash AS contentHash, generation, mtime_ms AS mtime FROM file ORDER BY path"
-  ).all() as Array<{ path: string; contentHash: string; generation: number; mtime: number }>).map(row => ({
+    "SELECT f.path AS path, f.content_hash AS contentHash, f.generation AS generation, s.mtime_ns AS mtime FROM file f LEFT JOIN ws.file_stat s ON s.path=f.path ORDER BY f.path"
+  ).all() as Array<{ path: string; contentHash: string; generation: number; mtime: string }>).map(row => ({
     path: row.path,
     contentHash: row.contentHash,
     generation: Number(row.generation),
-    mtime: Number(row.mtime)
+    // Nanoseconds exceed 2^53: compared as bigints, never as Numbers.
+    mtime: BigInt(row.mtime)
   }));
 }
 
@@ -195,6 +203,7 @@ test("reconcile with rewritten mtimes does not reparse identical Java content", 
   const incremental = await cold(repo, 1);
   try {
     const before = fileIdentity(incremental.db);
+    const factsBefore = fileFacts(incremental.db);
     const edgesBefore = edgeSnapshot(incremental.db);
     await bumpAllJavaMtimes(repo, Date.now() + 120_000);
     const result = await applyBuilderJob({
@@ -210,6 +219,8 @@ test("reconcile with rewritten mtimes does not reparse identical Java content", 
       before.map(row => ({ path: row.path, contentHash: row.contentHash, generation: row.generation }))
     );
     assert.ok(after.every((row, index) => row.mtime > before[index]!.mtime), "mtime stamps must follow the checkout");
+    // The restamp lands in the workspace stat store; file facts keep their bytes.
+    assert.deepEqual(fileFacts(incremental.db), factsBefore);
     assert.deepEqual(edgeSnapshot(incremental.db), edgesBefore);
   } finally {
     close(incremental.db);
@@ -279,6 +290,28 @@ test("reconcile sees an external edit and matches recold-build", async () => {
   }
 });
 
+test("a job whose round captured other build inputs is refused before any write", async () => {
+  const repo = await copyFixtures();
+  const incremental = await cold(repo, 1);
+  try {
+    const before = fileFacts(incremental.db);
+    const expected = readMeta(incremental.db, "buildFingerprint");
+    for (const job of [{ id: 1, kind: "full" as const, generation: 2 }, { id: 2, kind: "refresh" as const, generation: 2, changed: [serviceRel] }]) {
+      const refused = await applyBuilderJob({ repoRoot: repo, db: incremental.db, job: { ...job, buildKey: "0".repeat(64) } });
+      assert.deepEqual([refused.ok, refused.error], [false, "buildKey changed before build"]);
+    }
+    assert.equal(readMeta(incremental.db, "indexedGeneration"), "1");
+    assert.equal(readMeta(incremental.db, "buildFingerprint"), expected);
+    assert.deepEqual(fileFacts(incremental.db), before, "nothing was rebuilt");
+    const matching = await applyBuilderJob({ repoRoot: repo, db: incremental.db,
+      job: { id: 3, kind: "refresh", generation: 2, changed: [serviceRel], buildKey: currentBuildKey(expected!) } });
+    assert.equal(matching.ok, true, matching.error);
+  } finally {
+    close(incremental.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
 test("refresh with more owned ids than SQLITE_MAX_VARIABLE_NUMBER still completes", async () => {
   const repo = await copyFixtures();
   const built = await cold(repo, 1);
@@ -321,27 +354,39 @@ test("refresh with more owned ids than SQLITE_MAX_VARIABLE_NUMBER still complete
   }
 });
 
-test("serve mode answers refresh JSON jobs then exits", async () => {
+// A stat row that matches the file on disk but vouches for a different hash
+// than the facts (a torn main/ws commit, a foreign or stale stat store) must
+// never let reconcile skip the file.
+async function forgeStat(db: ReturnType<typeof openIndexDb>, repo: string, relativePath: string, kind: "java" | "resource") {
+  const file = path.join(repo, relativePath);
+  const info = await stat(file, { bigint: true });
+  const hash = createHash("sha256").update(await readFile(file, "utf8"), "utf8").digest("hex");
+  db.prepare(`INSERT INTO ws.file_stat(path, kind, content_hash, size, mtime_ns, ctime_ns, ino, dev) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, size=excluded.size, mtime_ns=excluded.mtime_ns,
+      ctime_ns=excluded.ctime_ns, ino=excluded.ino, dev=excluded.dev`)
+    .run(relativePath, kind, hash, Number(info.size), String(info.mtimeNs), String(info.ctimeNs), String(info.ino), String(info.dev));
+  return hash;
+}
+
+test("a stat row matching the disk but not the facts hash forces Java and XML re-reads", async () => {
   const repo = await copyFixtures();
-  const built = await cold(repo, 1);
+  const incremental = await cold(repo, 1);
   try {
     const service = path.join(repo, serviceRel);
-    const original = await readFile(service, "utf8");
-    await writeFile(service, original.replace("class OrderService", "class OrderService /* serve */"));
-    const chunks: string[] = [];
-    const lines = (async function* () {
-      yield JSON.stringify({ id: 7, kind: "refresh", generation: 2, changed: [service], deleted: [] });
-      yield JSON.stringify({ kind: "exit" });
-    })();
-    await runBuilderServe(repo, built.db, lines, { write: chunk => chunks.push(String(chunk)) });
-    assert.equal(chunks.length, 1);
-    const payload = JSON.parse(chunks[0]!) as { id: number; ok: boolean; indexedGeneration: number; files: number };
-    assert.equal(payload.id, 7);
-    assert.equal(payload.ok, true, JSON.stringify(payload));
-    assert.equal(payload.indexedGeneration, 2);
-    assert.ok(payload.files > 0);
+    await writeFile(service, (await readFile(service, "utf8")).replace("repository.save", "repository.save /* torn */"));
+    const javaHash = await forgeStat(incremental.db, repo, serviceRel, "java");
+    const xmlRel = "src/main/resources/mapper/ItemMapper.xml";
+    const xml = path.join(repo, xmlRel);
+    await writeFile(xml, (await readFile(xml, "utf8")).replace("</mapper>", "<!-- torn --></mapper>"));
+    const xmlHash = await forgeStat(incremental.db, repo, xmlRel, "resource");
+    const result = await applyBuilderJob({ repoRoot: repo, db: incremental.db, job: { id: 9, kind: "reconcile", generation: 2 } });
+    assert.equal(result.ok, true, result.error);
+    const java = incremental.db.prepare("SELECT content_hash AS hash, generation FROM file WHERE path=?").get(serviceRel) as { hash: string; generation: number };
+    assert.deepEqual({ hash: java.hash, generation: Number(java.generation) }, { hash: javaHash, generation: 2 });
+    const scanned = incremental.db.prepare("SELECT content_hash AS hash FROM resource_scan WHERE path=?").get(xmlRel) as { hash: string };
+    assert.equal(scanned.hash, xmlHash);
   } finally {
-    close(built.db);
+    close(incremental.db);
     await rm(repo, { recursive: true, force: true });
   }
 });

@@ -17,9 +17,10 @@ import {
   bundlesToRequestedDeclarations,
   fqnOfTypeId,
   ownerTypeIdOf,
-  relativePathOfLocalTypeId
+  relativePathOfLocalTypeId,
+  relativePathOfNamedTypeId
 } from "./framework-index-view.js";
-import { javaParameterId } from "./stable-id.js";
+import { javaMethodId, javaParameterId } from "./stable-id.js";
 
 const RANGE = { start: { line: 1, column: 1 }, end: { line: 1, column: 5 } };
 
@@ -68,7 +69,6 @@ function file(overrides: Partial<JavaFileFacts> = {}): JavaFileFacts {
     allTypeIds: ["type:demo.Widget"],
     contentHash: "h",
     size: 1,
-    mtimeMs: 0,
     parseState: "COMPLETE",
     parseErrorCount: 0,
     generation: 1,
@@ -92,22 +92,26 @@ test("T02: v2 source-scoped ids parse through the # separator in owner/fqn looku
   const owner = `type:v2:${encodeURIComponent("modules/a/src/main/java/demo/Shared.java")}#demo.Shared`;
   assert.equal(ownerTypeIdOf(owner), owner, "a v2 type id is its own owner");
   assert.equal(fqnOfTypeId(owner), "demo.Shared", "fqnOfTypeId must decode the v2 fqn segment");
-  assert.equal(ownerTypeIdOf(`method:${owner}#save(java.lang.String,int)`), owner);
+  assert.equal(ownerTypeIdOf(javaMethodId(owner, "save(java.lang.String,int)")), owner);
+  assert.equal(ownerTypeIdOf(`method:${owner}#save(java.lang.String,int)`), undefined, "pre-v3 method keys are not aliases");
   assert.equal(ownerTypeIdOf(`field:${owner}#count`), owner);
-  assert.equal(ownerTypeIdOf(javaParameterId(`method:${owner}#save()`, 0)), undefined, "v2 parameter ids stay unresolved");
+  assert.equal(ownerTypeIdOf(javaParameterId(javaMethodId(owner, "save()"), 0)), undefined, "v2 parameter ids stay unresolved");
   const tricky = `type:v2:${encodeURIComponent("a #b/Shared.java")}#demo.Shared`;
   assert.equal(fqnOfTypeId(tricky), "demo.Shared");
-  assert.equal(ownerTypeIdOf(`method:${tricky}#run()`), tricky);
+  assert.equal(ownerTypeIdOf(javaMethodId(tricky, "run()")), tricky);
 });
 
-test("ownerTypeIdOf: types/type-local ids are their own owner, field/method ids are split on the first #", () => {
-  assert.equal(ownerTypeIdOf("type:demo.Widget"), "type:demo.Widget");
-  assert.equal(ownerTypeIdOf("type-local:src/main/java/demo/W.java:3:1"), "type-local:src/main/java/demo/W.java:3:1");
-  assert.equal(ownerTypeIdOf("field:type:demo.Widget#name"), "type:demo.Widget");
-  assert.equal(ownerTypeIdOf("method:type:demo.Widget#run()"), "type:demo.Widget");
+test("ownerTypeIdOf: type-local ids are their own owner, field/method ids split at their owner; pre-v2 owners name nothing", () => {
+  const local = "type-local:src/main/java/demo/W.java:3:1";
+  assert.equal(ownerTypeIdOf(local), local);
+  assert.equal(ownerTypeIdOf(`field:${local}#name`), local);
+  assert.equal(ownerTypeIdOf(javaMethodId(local, "run()")), local);
   // A parameter id (method:...#sig#pN) is deliberately not resolved - parameters
   // are reached through their owning method's own declaration, not standalone.
-  assert.equal(ownerTypeIdOf(javaParameterId("method:type:demo.Widget#run()", 0)), undefined);
+  assert.equal(ownerTypeIdOf(javaParameterId(javaMethodId(local, "run()"), 0)), undefined);
+  assert.equal(ownerTypeIdOf("type:demo.Widget"), undefined);
+  assert.equal(ownerTypeIdOf("field:type:demo.Widget#name"), undefined);
+  assert.equal(ownerTypeIdOf("method:type:demo.Widget#run()"), undefined);
   assert.equal(ownerTypeIdOf("external:java.lang.Deprecated"), undefined);
 });
 
@@ -270,4 +274,32 @@ test("bundlesToRequestedDeclarations returns only the requested ids across multi
 
   assert.deepEqual(result.fields.map(f => f.fieldId), [fieldA.fieldId]);
   assert.deepEqual(result.missingIds, ["field:type:demo.C#missing"]);
+});
+
+test("MAC-13 D08: a pre-v2 bare-FQN id names no declaration; exact v2 ids answer from their own file", () => {
+  const owner = (path: string) => `type:v2:${encodeURIComponent(path)}#demo.Shared`;
+  const field = (ownerTypeId: string): JavaFieldFacts => ({
+    fieldId: `field:${ownerTypeId}#count`,
+    ownerTypeId,
+    name: "count",
+    type: unresolvedRef("int"),
+    modifiers: [],
+    annotations: [],
+    range: RANGE
+  });
+  const a = field(owner("a/src/main/java/demo/Shared.java"));
+  const b = field(owner("b/src/main/java/demo/Shared.java"));
+  const only = field(`type:v2:${encodeURIComponent("a/src/main/java/demo/Only.java")}#demo.Only`);
+  const bundleA: JavaFileBundle = { file: file({ relativePath: "a/src/main/java/demo/Shared.java" }), types: [], fields: [a, only], methods: [], edges: [] };
+  const bundleB: JavaFileBundle = { file: file({ relativePath: "b/src/main/java/demo/Shared.java" }), types: [], fields: [b], methods: [], edges: [] };
+  for (const order of [[bundleA, bundleB], [bundleB, bundleA]]) {
+    const result = bundlesToRequestedDeclarations(order, ["field:type:demo.Shared#count", b.fieldId, "field:type:demo.Only#count", only.fieldId]);
+    assert.deepEqual(result.fields.map(f => f.fieldId), [b.fieldId, only.fieldId]);
+    assert.deepEqual(result.missingIds, ["field:type:demo.Shared#count", "field:type:demo.Only#count"], "no bare-FQN alias, unique or shared, is answered");
+  }
+  assert.equal(ownerTypeIdOf("field:type:demo.Only#count"), undefined, "a pre-v2 owner names no file");
+  assert.equal(ownerTypeIdOf("type:demo.Only"), undefined);
+  assert.equal(relativePathOfNamedTypeId(owner("a/src/main/java/demo/Shared.java")), "a/src/main/java/demo/Shared.java");
+  assert.equal(relativePathOfNamedTypeId(`type:v2:${encodeURIComponent("src/main/java/a#b%c.java")}#demo.X`), "src/main/java/a#b%c.java", "an escaped path decodes intact");
+  assert.equal(relativePathOfNamedTypeId("type-local:src/main/java/A.java:1:1"), undefined);
 });

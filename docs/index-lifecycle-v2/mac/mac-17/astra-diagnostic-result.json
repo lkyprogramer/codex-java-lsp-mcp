@@ -1,0 +1,113 @@
+{
+  "schema": "ilv2-task-result/v2",
+  "generatedBy": "scripts/ilv2-mac-task-result.mjs",
+  "taskId": "MAC-17",
+  "workflowId": "WF-M17-ASTRA-DIAG",
+  "status": "FAIL",
+  "dependency": {
+    "G17": "FAIL preserved",
+    "implementationHead": "174227f978a012f9c9bb525c5f3e658aa3e0c9a5"
+  },
+  "identity": {
+    "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+    "runtimeManifestSha256": null,
+    "nativeSha256": null,
+    "nativeSourceDigest": null,
+    "buildStampSha256": null,
+    "distInventorySha256": null,
+    "dependencySha256": null
+  },
+  "checks": [
+    {
+      "name": "astra-tapi-once",
+      "role": "main",
+      "status": "FAIL",
+      "mainError": "Actual TAPI model failed; preserve complete cause and debug log",
+      "result": "raw/tapi-model/result.json",
+      "sourceDigest": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "commands": 1,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0,
+      "elapsedMs": 120330,
+      "argv": [
+        "/opt/homebrew/Cellar/openjdk/25.0.2/libexec/openjdk.jdk/Contents/Home/bin/java",
+        "-Duser.home=/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/tmp/home",
+        "-cp",
+        "/opt/homebrew/Cellar/jdtls/1.56.0/libexec/plugins/org.gradle.toolingapi_8.9.0.v20250827-0209-s.jar:/opt/homebrew/Cellar/jdtls/1.56.0/libexec/plugins/slf4j.api_2.0.17.jar",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/Probe.java",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/tmp/repo",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/tmp/gradle-home",
+        "/opt/homebrew/Cellar/gradle/9.3.1/libexec",
+        "/opt/homebrew/Cellar/openjdk/25.0.2/libexec/openjdk.jdk/Contents/Home",
+        "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/observe.init.gradle"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "name": "astra-diagnostic-facts",
+      "file": "diagnostic-summary.json",
+      "sha256": "86546371a6a991082150fac33f0a2fa09a5b2f4398eb0c3a6a3af531d1b6d0f9",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "actual-probe-outcome",
+      "file": "diagnostic-outcome.json",
+      "sha256": "d5f8919a5f76f0391f64546d40a39722e6bfa42f6d23817334e36c3bb216dafc",
+      "status": "FAIL",
+      "provenance": null
+    },
+    {
+      "name": "actual-resource-readback",
+      "file": "resource-closeout-observation.json",
+      "sha256": "9ccf3af3bddba10dc5cc29f10dbaf25d46ca75758ef841caa387cb7c48869ce8",
+      "status": "PASS",
+      "provenance": null
+    }
+  ],
+  "closeout": {
+    "status": "PASS",
+    "sha256": "2cae6ca9bd9069831bf7277d8dbb5d96d981af2257f51b468a21fc6665283f25",
+    "registeredPids": 5,
+    "ownedGroups": 2,
+    "launchdJobs": 0,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "carryOver": [],
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis/closeout/raw-evidence.tar.gz",
+      "sha256": "8ab39c463f24b289c35dcd49e1cdef88d09ba0f3011a48c40c1f97823a00014c",
+      "fileCount": 10,
+      "bytes": 50156701,
+      "physicalVerification": "PASS"
+    }
+  },
+  "independent": {
+    "review": {
+      "status": "PASS",
+      "sha256": "f8942dd4bcb1db7cbba2466c4b437131b15b0c21ef054dc9346ae0a4abdcddcf",
+      "source": "5754a52848cc99719326eecd8fdaf02673756477b02f46e78fdd7e40609a59ff",
+      "openFindings": []
+    }
+  },
+  "validationIndexSha256": "e33f9df2afbb868b497c5f8a5a9c63cd0afac30fdca8b3337a5d93f2fabe542a",
+  "notClaimed": [
+    "Historical marker root cause proven",
+    "Full model/semantic acceptance PASS",
+    "G17PASS",
+    "READY_FOR_DEPLOY",
+    "DEPLOYED",
+    "AI benefit"
+  ],
+  "next": "Report confirmed harness/JDT proxy defects and one bounded original-path diagnosis proposal. No automatic further runtime or product modification.",
+  "authorization": "User requested Astra xhigh diagnosis and complete solution; one actual120sTAPI diagnostic under same private environment. No push/production. Self cutoff2026-11-02T16:00+08; originalharddeadline2026-11-03T18:00+08.",
+  "notes": [
+    "One diagnostic command, no TAP test; no acceptance PASS",
+    "Same flags actually observed during build; real marker GET succeeded",
+    "Full model still downloading when original120sdiagnostic cap terminated it",
+    "Historical failures preserved; no timeout/certificate/dependency change"
+  ],
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261102T072800Z-astra-gradle-diagnosis"
+}

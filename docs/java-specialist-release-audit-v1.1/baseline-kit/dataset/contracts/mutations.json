@@ -1,0 +1,107 @@
+[
+  {
+    "id": "MUT-DELETE",
+    "fixture": "admissions",
+    "actions": [
+      {
+        "op": "index"
+      },
+      {
+        "op": "delete",
+        "path": "modules/undergrad/src/main/java/demo/Shared.java"
+      },
+      {
+        "op": "wait_fresh",
+        "timeout_ms": 5000
+      },
+      {
+        "op": "query",
+        "query": "demo.Shared"
+      }
+    ],
+    "assertions": [
+      "only graduate source remains",
+      "deleted path never returned"
+    ]
+  },
+  {
+    "id": "MUT-RENAME",
+    "fixture": "payments",
+    "actions": [
+      {
+        "op": "index"
+      },
+      {
+        "op": "rename",
+        "from": "src/main/java/lab/payments/PaymentService.java",
+        "to": "src/main/java/lab/payments/PaymentServiceRenamed.java"
+      },
+      {
+        "op": "wait_fresh",
+        "timeout_ms": 5000
+      },
+      {
+        "op": "query",
+        "query": "PaymentService"
+      }
+    ],
+    "assertions": [
+      "old path removed",
+      "new path declared parser recovery if Java filename/class mismatches; no old complete result"
+    ]
+  },
+  {
+    "id": "MUT-COMMENT",
+    "fixture": "payments",
+    "actions": [
+      {
+        "op": "index"
+      },
+      {
+        "op": "replace_text",
+        "path": "src/main/java/lab/payments/PaymentService.java",
+        "before": "package lab.payments;",
+        "after": "package lab.payments;\n/** 昨日任务的新关键词：幂等收款入口。 */"
+      },
+      {
+        "op": "wait_fresh",
+        "timeout_ms": 5000
+      },
+      {
+        "op": "query",
+        "query": "幂等收款入口"
+      }
+    ],
+    "assertions": [
+      "new hash in result",
+      "no restart required"
+    ]
+  },
+  {
+    "id": "MUT-RESOURCE",
+    "fixture": "payments",
+    "actions": [
+      {
+        "op": "index"
+      },
+      {
+        "op": "replace_text",
+        "path": "src/main/resources/mapper/ReceiptMapper.xml",
+        "before": "amount_cents",
+        "after": "posted_cents"
+      },
+      {
+        "op": "wait_fresh",
+        "timeout_ms": 5000
+      },
+      {
+        "op": "query",
+        "query": "posted_cents"
+      }
+    ],
+    "assertions": [
+      "new column evidence",
+      "old resource hash not accepted"
+    ]
+  }
+]

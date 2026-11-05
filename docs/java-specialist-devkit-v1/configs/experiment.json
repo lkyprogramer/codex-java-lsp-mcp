@@ -2,12 +2,12 @@
  "schema": "java-specialist-experiment/v1",
  "approved_network": true,
  "approved_model_spend": true,
- "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。 M3 终局阶段用户追加授权：同一 OpenRouter key 改用 nvidia/nemotron-3-embed-1b:free（免费、2048 维）以绕过 lfm 免费档日额度限制；仅换 provider 身份，机制/维度自适应/预算/双臂对称不变。 终局阶段用户追加授权:SiliconFlow Qwen3-VL-Embedding-8B(4096 维)作为 embedding provider,凭据存仓库外 siliconflow.env.json。",
+ "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。 M3 终局阶段用户追加授权：同一 OpenRouter key 改用 nvidia/nemotron-3-embed-1b:free（免费、2048 维）以绕过 lfm 免费档日额度限制；仅换 provider 身份，机制/维度自适应/预算/双臂对称不变。 终局阶段用户追加授权:SiliconFlow Qwen3-VL-Embedding-8B(4096 维)作为 embedding provider,凭据存仓库外 siliconflow.env.json。 R11 (2026-10-10): 用户授权 SiliconFlow Qwen/Qwen3-VL-Embedding-8B(1024 维, dimensions 参数)作为唯一 embedding provider, openclaw/Qwen3.8-next 作为 agent chat 模型(cost 0); 凭据在仓库根 .env(git-ignored)与 ~/.pi/agent/models.json, 不进仓库/日志。",
  "embedding_provider": {
   "endpoint": "https://api.siliconflow.cn/v1/embeddings",
   "model": "Qwen/Qwen3-VL-Embedding-8B",
-  "dimensions": 4096,
-  "credential_ref": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/siliconflow.env.json (outside repo)",
+  "dimensions": 1024,
+  "credential_ref": ".env in the checkout root (git-ignored, SILICONFLOW_API_KEY); bound to *.siliconflow.cn",
   "provider_history": [
    {
     "model": "liquid/lfm-2.5-embedding-350m:free",
@@ -28,6 +28,11 @@
     "model": "Qwen/Qwen3-VL-Embedding-8B",
     "dimensions": 4096,
     "note": "用户授权 SiliconFlow 端点(独立 key, 无日额度墙);终局 repair 矩阵与 full 12/12 profile 以该 provider 重跑;跨语言 cos 0.69 vs 0.47"
+   },
+   {
+    "model": "Qwen/Qwen3-VL-Embedding-8B",
+    "dimensions": 1024,
+    "note": "R11: dimensions=1024 (MRL); ordered search_doc_text input (schema v8); declaration and query vectors cached under cacheIdentity"
    }
   ]
  },
@@ -49,15 +54,18 @@
   ],
   "model_profiles": 1,
   "arms": [
-   "improved-lexical",
-   "lexical-plus-optional-discovery"
+   "control (native tools)",
+   "product (A2: java_symbol + native)",
+   "a2-lexical-block",
+   "a3-rrf-block"
   ],
   "repeats_per_arm": 3,
-  "max_agent_turns": 20,
+  "max_agent_turns": 16,
   "max_wall_seconds": 180,
   "max_model_input_tokens": 64000,
   "max_model_output_tokens": 12000,
-  "raw_usage_required": true
+  "raw_usage_required": true,
+  "note": "max_wall_seconds / max_model_*_tokens are recorded limits of the earlier protocol; the R11 drivers enforce max_agent_turns=16 and the task budget, and record provider usage per attempt."
  },
  "rules": [
   "Network and paid inference require separate explicit user authorization.",
@@ -65,5 +73,40 @@
   "Each arm shares model, system prompt, native tools and task budget.",
   "Compare stock zvec as a system; claim dense-only effect only on aligned representations.",
   "Repeats are averaged within tasks, then analyzed by corpus clusters."
- ]
+ ],
+ "chat_model": {
+  "provider": "openclaw (OpenAI-compatible)",
+  "model": "openclaw/Qwen3.8-next",
+  "credential_ref": "~/.pi/agent/models.json (outside repo)"
+ },
+ "r11_protocol": {
+  "doc": "docs/next-stage/experiment-v1.1.md",
+  "questions": {
+   "product_increment": "native (control) vs improved A2 (product), scripts/evaluate-java-task.mjs --arms product,control; paired kit comparison via scripts/eval-pilot-compare.mjs",
+   "dense_mechanism_retrieval": "A2 lexical top-K vs A3 RRF(lexical, dense) top-K, plus the non-semantic control a2-seeded-fill (driver removed after NO_GO; history at a2-static-fixes.md / commit d157b58)",
+   "dense_mechanism_agent": "same model/prompt/tools/budget; candidate block lexical top-K vs RRF top-K (driver removed after NO_GO; commit d157b58)"
+  },
+  "fusion": {
+   "method": "RRF",
+   "k0": 60,
+   "candidate_k": 10,
+   "channel_pool_k": 10,
+   "dedup": "declarationId"
+  },
+  "renderer": "declaration-head-window/v1: declaration start, floor(max_lines/max_regions) lines, clipped to the remaining task budget; stale files dropped",
+  "budget": {
+   "max_regions": 8,
+   "max_lines": 160,
+   "max_bytes": 16000,
+   "source": "task budget (all dev tasks share it)"
+  },
+  "scorer": "frozen kit harness/scoring.py (harness score/compare; scoreWithFrozenKit for agent QA); repair: frozen judge",
+  "decision": "decideFourWay/v2: GO_OPTIONAL needs Recall@10 delta >= gates.dense_recall_at_10_min_delta with lower bound > 0 over >= 8 clusters, A3 beating the seeded-fill control (lower > 0), MRR and line-recall lower bounds >= 0, agent QA lower bound >= 0 and prompt-token median ratio <= gates.dense_input_token_median_max_ratio; NO_GO when the Recall@10 upper bound < gate over >= 8 clusters; else INCONCLUSIVE; invalid/over-budget rows -> INVALID_EXPERIMENT",
+  "zvec": "not run: a native zvec system profile would be a separate system-level comparison, never mixed with this same-representation ablation",
+  "eval_protocol": "eval-protocol/v1.2 (scripts/evaluate-java-task.mjs EVAL_PROTOCOL_VERSION): per-round received-source ledger for both arms (QA), 80-line default read window, java_symbol head previews and no_vocabulary_overlap diagnosis",
+  "retrieval_variants": "all (kit primary + language variants), stratified by variant",
+  "follow_up": "docs/next-stage/a2-static-fixes.md (retrieval dense decision NO_GO under v1.2 with name locators)",
+  "dense_closed": "dense experiment closed: drivers and the product search_doc_text table (index schema v8) removed, schema v9; experiments/semantic-discovery keeps only provider.mjs and repair-judge.mjs, which the frozen audit imports by path",
+  "evidence_pilot": "docs/next-stage/a2-evidence-pilot.md (eval-protocol/v1.3: declaration ranges, preview-is-not-evidence guidance; REVERT by the pre-registered token guard)"
+ }
 }

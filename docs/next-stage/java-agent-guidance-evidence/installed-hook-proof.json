@@ -1,0 +1,51 @@
+{
+  "status": "PASS",
+  "buildSha": "48bad915c854",
+  "records": [
+    {
+      "id": "static-primary",
+      "seconds": 0.098,
+      "output": {
+        "continue": true,
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (direct-root)。Java 语义任务按 AGENTS.md 的工具指引执行；首次使用或切换仓库时用 java_status({repoRoot:\"/Users/luo/Documents/program/exam-parent-v3\",start:false}) 校验 repoRoot。未知位置先用 java_symbol(operation=query) 静态定位，再按真实锚点调用 java_impact；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。"
+        }
+      }
+    },
+    {
+      "id": "semantic-primary",
+      "seconds": 0.312,
+      "output": {
+        "continue": true,
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (direct-root)。Java 语义任务按 AGENTS.md 的工具指引执行；首次使用或切换仓库时用 java_status({repoRoot:\"/Users/luo/Documents/program/cipherlink\",start:false}) 校验 repoRoot。未知位置先用 java_symbol(operation=query) 静态定位，再按真实锚点调用 java_impact；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。"
+        }
+      }
+    },
+    {
+      "id": "static-worktree",
+      "seconds": 0.323,
+      "output": {
+        "continue": true,
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (git-worktree-family)，这是 Git worktree。Java 语义任务按 AGENTS.md 的工具指引执行；首次使用或切换仓库时用 java_status({repoRoot:\"/Users/luo/Documents/program/cipherlink-worktrees/fix-brooks-audit\",start:false}) 校验 repoRoot。未知位置先用 java_symbol(operation=query) 静态定位，再按真实锚点调用 java_impact；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。"
+        }
+      }
+    },
+    {
+      "id": "documentation-only",
+      "seconds": 0.712,
+      "output": {
+        "continue": true,
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (direct-root)。Java 语义任务按 AGENTS.md 的工具指引执行；首次使用或切换仓库时用 java_status({repoRoot:\"/Users/luo/Documents/program/exam-parent-v3\",start:false}) 校验 repoRoot。未知位置先用 java_symbol(operation=query) 静态定位，再按真实锚点调用 java_impact；静态查询不需要 JDT，started=false 不代表工具不可用。需要语义结果时按需启动 JDT；java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT，需要精确实现或引用时传 semanticPolicy=required，或用 java_symbol(position/references)。"
+        }
+      }
+    }
+  ],
+  "timeoutSeconds": 5
+}

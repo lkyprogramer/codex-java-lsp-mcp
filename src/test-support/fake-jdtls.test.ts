@@ -3,6 +3,7 @@
 // pos: The single shared JDT fake; do not create per-test duplicates.
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { pathToFileURL } from "node:url";
 import type {
   JdtlsChild,
   JdtlsConnection,
@@ -109,6 +110,7 @@ export class FakeJdtlsConnection implements JdtlsConnection {
   errors = new Map<string, unknown>();
   disposed = false;
   listening = false;
+  autoServiceReady = true;
 
   /** Deferreds `sendRequest` is already awaiting. A parked `pending` entry is not in flight. */
   private readonly inFlight = new Set<Deferred<unknown>>();
@@ -148,6 +150,9 @@ export class FakeJdtlsConnection implements JdtlsConnection {
 
   sendNotification(method: string): void {
     this.notifications.push(method);
+    if (method === "initialized" && this.autoServiceReady) {
+      queueMicrotask(() => this.emitNotification("language/status", { type: "ServiceReady", message: "ServiceReady" }));
+    }
   }
 
   onRequest(method: string, handler: (...args: any[]) => unknown): void {
@@ -197,6 +202,7 @@ export type FakeAttemptOptions = {
   initialize?: Deferred<unknown>;
   initializeResult?: unknown;
   initializeError?: unknown;
+  autoServiceReady?: boolean;
   /** Extra canned responses keyed by LSP method. */
   responses?: Record<string, unknown>;
   /** Per-call response functions keyed by LSP method; win over `responses`. */
@@ -232,6 +238,7 @@ export class FakeJdtlsTransportFactory implements JdtlsTransportFactory {
     if (options.exitsOnKill === false) child.exitsOnKill = false;
     if (options.surviveSignals) child.surviveSignals = new Set(options.surviveSignals);
     const connection = new FakeJdtlsConnection();
+    connection.autoServiceReady = options.autoServiceReady ?? true;
     if (options.initialize) {
       connection.pending.set("initialize", options.initialize);
     } else if (options.initializeError) {
@@ -240,6 +247,15 @@ export class FakeJdtlsTransportFactory implements JdtlsTransportFactory {
       connection.responses.set("initialize", options.initializeResult ?? { capabilities: {} });
     }
     connection.responses.set("shutdown", null);
+    if (!Object.hasOwn(options.responses ?? {}, "workspace/executeCommand")) {
+      connection.handlers.set("workspace/executeCommand", params => {
+        const command = params as { command?: string; arguments?: unknown[] };
+        if (command.command !== "java.project.getAll" || command.arguments?.length !== 0) {
+          throw new Error("No fake response for this workspace command");
+        }
+        return [pathToFileURL(input.cwd).toString()];
+      });
+    }
     for (const [method, value] of Object.entries(options.responses ?? {})) {
       connection.responses.set(method, value);
     }

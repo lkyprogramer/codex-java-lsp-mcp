@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { realpath, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -18,7 +19,7 @@ import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/par
 import { close, openIndexDb, type IndexDatabase } from "./driver.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { ensureSchema } from "./schema.js";
-import { writeBundle, writeMyBatisResource } from "./rows.js";
+import { updateBundleFacts, writeBundle, writeMyBatisResource } from "./rows.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
@@ -91,6 +92,46 @@ function sorted<T>(values: Iterable<T>): T[] {
   return [...values].sort();
 }
 
+test("forgetFile drops every cached read one file's rewritten facts fed, and nothing else", async () => {
+  const bundles = await loadResolvedBundles();
+  const db = openIndexDb(":memory:");
+  try {
+    const store = fill(db, bundles);
+    const bundle = bundles.find(item => item.fields.length > 0 && item.methods.length > 0)!;
+    const other = bundles.find(item => item !== bundle && item.types.length > 0)!;
+    const type = bundle.types.find(item => item.methodIds.length > 0)!;
+    const method = bundle.methods.find(item => item.ownerTypeId === type.typeId)!;
+    const field = bundle.fields[0]!;
+    const otherType = other.types[0]!;
+    const read = () => ({
+      file: store.filesByPath.get(bundle.file.relativePath)?.contentHash,
+      type: store.typesById.get(type.typeId)?.modifiers,
+      method: store.methodsById.get(method.methodId)?.modifiers,
+      owned: store.methodsOfOwner(type.typeId).find(item => item.methodId === method.methodId)?.modifiers,
+      field: store.fieldsById.get(field.fieldId)?.modifiers,
+      other: store.typesById.get(otherType.typeId)?.modifiers
+    });
+    const cached = read();
+    const mark = <T extends { modifiers: string[] }>(item: T): T => ({ ...item, modifiers: [...item.modifiers, "strictfp"] });
+    updateBundleFacts(db, {
+      ...bundle,
+      file: { ...bundle.file, contentHash: "rewritten" },
+      types: bundle.types.map(mark),
+      methods: bundle.methods.map(mark),
+      fields: bundle.fields.map(mark)
+    });
+    assert.deepEqual(read(), cached, "reads before forgetFile come from the cache");
+    const otherBefore = store.typesById.get(otherType.typeId);
+    store.forgetFile(bundle);
+    const after = read();
+    assert.equal(after.file, "rewritten");
+    for (const key of ["type", "method", "owned", "field"] as const) assert.ok(after[key]?.includes("strictfp"), key);
+    assert.equal(store.typesById.get(otherType.typeId), otherBefore, "another file's entry stays cached");
+  } finally {
+    close(db);
+  }
+});
+
 test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndexStore", async () => {
   const bundles = await loadResolvedBundles();
   const db = openIndexDb(":memory:");
@@ -105,6 +146,7 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
     assert.equal([...asIter.iterFiles()].length, [...asHeapIter.iterFiles()].length);
     const paths = bundles.map(bundle => bundle.file.relativePath);
     const typeIds = [...sql.iterTypes()].map(type => type.typeId);
+    const heapRegistry = buildTypeRegistryView(bundles.flatMap(bundle => bundle.types), [], undefined, bundles.map(bundle => bundle.file));
     const methodIds = [...sql.iterMethods()].map(method => method.methodId);
     const fieldIds = [...sql.iterFields()].map(field => field.fieldId);
 
@@ -112,7 +154,7 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
     assert.equal(sql.typesById.size, store.typesById.size);
     assert.equal(sql.methodsById.size, store.methodsById.size);
     assert.equal(sql.fieldsById.size, store.fieldsById.size);
-    assert.equal(sql.typeIdByFqn.size, store.typeIdByFqn.size);
+    assert.equal(sql.typeIdsByFqn.size, store.typeIdsByFqn.size);
     assert.equal(sql.typeIdsBySimpleName.size, store.typeIdsBySimpleName.size);
     assert.equal(sql.methodIdsByOwnerAndName.size, store.methodIdsByOwnerAndName.size);
 
@@ -131,8 +173,14 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
       assert.deepEqual(sql.typesById.get(typeId), jsonClone(store.typesById.get(typeId)), typeId);
       const type = store.typesById.get(typeId)!;
       if (type.fqn) {
-        assert.equal(sql.typeIdByFqn.get(type.fqn), typeId);
-        assert.deepEqual(sql.typeByFqn(type.fqn), jsonClone(store.typeByFqn(type.fqn)));
+        // Every declaration of the FQN, never a single winner; SQL and the
+        // in-memory registry list the same candidates.
+        assert.ok(sql.typeIdsByFqn.get(type.fqn)?.includes(typeId), typeId);
+        assert.deepEqual([...(sql.typeIdsByFqn.get(type.fqn) ?? [])], [...(heapRegistry.byFqn.get(type.fqn) ?? [])], type.fqn);
+        assert.deepEqual(sql.typesByFqn(type.fqn).map(found => found.typeId), [...(sql.typeIdsByFqn.get(type.fqn) ?? [])]);
+        const file = sql.file(relativePathOfFileId(type.fileId))!;
+        assert.deepEqual(sql.declarationLocation(typeId), { module: file.module, sourceSet: file.sourceSet, sourceRoot: file.sourceRoot });
+        assert.deepEqual(heapRegistry.locationOf(typeId), sql.declarationLocation(typeId));
       }
       assert.deepEqual(sql.methodsOfOwner(typeId), jsonClone(store.methodsOfOwner(typeId)), typeId);
       assert.deepEqual(sorted(sql.typeIdsBySimpleName.get(type.simpleName) ?? []), sorted(store.typeIdsBySimpleName.get(type.simpleName) ?? []));
@@ -292,4 +340,24 @@ test("SqlFactsStore reference queries, anchor, and typeLookup match JavaIndexSto
   } finally {
     close(db);
   }
+});
+
+
+test("methodsNamed equals owner filtering for overloads, constructors, local owners and replaced cached facts", async()=>{
+ const repo=await mkdtemp(path.join(tmpdir(),"methods-named-"));const db=openIndexDb(":memory:");ensureSchema(db);
+ const backend=await createJavaParserBackend();const cache=new ParseTreeCache({...DEFAULT_PARSE_TREE_CACHE_OPTIONS,maxEntries:8});
+ const file=path.join(repo,"src/main/java/demo",`nested#${"long-owner-".repeat(12)}`,"Owner.java");
+ const parse=async(source:string,generation:number)=>{await writeFile(file,source);return parseJavaSourceFile({repoRoot:repo,resolvedRepoRoot:await realpath(repo),inputPath:file,generation,backend,cache});};
+ try{
+ await mkdir(path.dirname(file),{recursive:true});
+ const original=await parse("package demo; class Owner { Owner() {} Owner(int n) {} void find() {} int find(int n) { return n; } void finder() {} void scope() { class Local { Local() {} void find() {} } } }",1);
+ writeBundle(db,original);const store=new SqlFactsStore(db);
+ const check=(bundle:JavaFileBundle)=>{for(const type of bundle.types){const all=store.methodsOfOwner(type.typeId);for(const name of new Set([...all.map(method=>method.name),"missing","find","finder","Owner","Local","<init>"])) assert.deepEqual(store.methodsNamed(type.typeId,name),all.filter(method=>method.name===name),`${type.typeId} ${name}`);}assert.deepEqual(store.methodsNamed("missing-owner","find"),[]);};
+ const owner=original.types.find(type=>type.simpleName==="Owner")!;
+ assert.equal(original.methods.filter(method=>method.ownerTypeId===owner.typeId && method.constructor).length,2);
+ assert.equal(store.methodsNamed(owner.typeId,"find").length,2);assert.ok(original.types.some(type=>type.simpleName==="Local" && !type.fqn));check(original);
+ const rewritten=await parse("package demo; class Owner { Owner(String s) {} void find(String s) {} void scope() { class Local { Local(int n) {} void find(int n) {} } } }",2);
+ writeBundle(db,rewritten);store.forgetFile(original);check(rewritten);
+ assert.equal(store.methodsNamed(owner.typeId,"find").length,1);assert.deepEqual(store.methodsNamed(owner.typeId,"finder"),[]);
+ }finally{close(db);await rm(repo,{recursive:true,force:true});}
 });

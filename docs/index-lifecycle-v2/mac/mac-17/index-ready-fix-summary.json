@@ -1,0 +1,177 @@
+{
+  "schema": "mac17-index-ready-fix-summary/v1",
+  "status": "PASS",
+  "scope": "Current frozenJDT1.56 and isolated frozen business first-semantic case with prepared dependencies; no formalG17 or deployment claim",
+  "sourceDigest": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+  "buildLabel": "ff81b8ddbcb8+p597d55ae122f",
+  "productPatchSha256": "597d55ae122f4b0d95b9977dbcb8f02d8a47030e2de5345523a832abaa1e19a5",
+  "codeDelta": [
+    "src/jdtls-session.ts",
+    "src/jdtls-session.test.ts",
+    "src/test-support/fake-jdtls.test.ts"
+  ],
+  "lifecycleChecks": {
+    "tests": 17,
+    "pass": 17,
+    "fail": 0,
+    "skipped": 0
+  },
+  "realAcceptance": {
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "skipped": 0,
+    "indexFence": {
+      "schema": "mac17-index-fence-acceptance-proof/v1",
+      "status": "PASS",
+      "sourceDigest": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+      "jdtPid": 29078,
+      "singleJdt": true,
+      "serviceReadyAt": "2026-11-03T01:55:18.913Z",
+      "fenceSentAt": "2026-11-03T01:55:18.913Z",
+      "fenceReturnedAt": "2026-11-03T01:56:33.268Z",
+      "fenceMs": 74356.25350000002,
+      "projectUriCount": 21,
+      "validProjectUris": true,
+      "noEarlyReady": true,
+      "onlyRealSemanticsAfterFence": true,
+      "clientReadyAt": "2026-11-03T01:56:33.271Z",
+      "spawnToReadyMs": 106150,
+      "positionMs": 455.37979200002155,
+      "positionSucceeded": true,
+      "referenceMs": 430.44812499999534,
+      "referenceSucceeded": true,
+      "referenceRequests": 1,
+      "originalStartupCapMs": 120000,
+      "originalSemanticCapMs": 10000,
+      "originalPublicCapMs": 15000,
+      "probe": "NONE",
+      "warmup": "NONE",
+      "gateScope": "Single real prepared-cache first semantics; original exact definition/reference oracle, fixedPID and actual gatewaymiss proof. Not formalG17/production acceptance."
+    },
+    "firstUse": {
+      "status": "PASS",
+      "acceptanceClass": "PREPARED_CACHE_FIRST_SEMANTIC",
+      "preparedManifest": {
+        "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/raw/final/gradle-prepare/artifact-manifest.json",
+        "sha256": "ed8a879bddc251738aa16ebc9ca1ed12e2e773789891bac2eaf4124a6840098f",
+        "count": 1395,
+        "logicalBytes": 324604180
+      },
+      "firstFailure": {
+        "phase": "first-static",
+        "message": "MCP tool error"
+      },
+      "startCalls": 1,
+      "firstStaticMs": 131666.311667,
+      "firstSemanticMs": 109091.80349999998,
+      "elapsedMs": 244470.747458,
+      "sessionPid": 29078,
+      "newFiles": 1307,
+      "newArtifacts": 0,
+      "logicalBytes": 568126986,
+      "allocatedBytes": 600850432,
+      "distributionPresent": true,
+      "distributionDownloaded": false,
+      "distributionDownloadFiles": [],
+      "cleanup": "NOT_OWNED_BY_ATTACH_DRIVER; root must close installed owner and Gradle resources"
+    },
+    "installation": {
+      "status": "PASS",
+      "startedAt": "2026-11-03T01:50:37.517Z",
+      "endedAt": "2026-11-03T01:52:30.705Z",
+      "elapsedMs": 113188,
+      "projectModel": "PASS",
+      "aptModel": "PASS",
+      "projectCount": 23,
+      "requiredBinaryCount": 399,
+      "processorFiles": 1,
+      "artifactManifest": {
+        "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/raw/final/gradle-prepare/artifact-manifest.json",
+        "sha256": "ed8a879bddc251738aa16ebc9ca1ed12e2e773789891bac2eaf4124a6840098f",
+        "count": 1395,
+        "logicalBytes": 324604180
+      },
+      "cacheTotals": {
+        "files": 5521,
+        "directories": 6292,
+        "logicalBytes": 568149252,
+        "allocatedBytes": 600915968,
+        "artifactFiles": 1395,
+        "artifactBytes": 324604180
+      },
+      "resourceExit": "PASS",
+      "buildProperties": "PASS",
+      "failure": null,
+      "cleanupFailure": null
+    }
+  },
+  "redRetained": {
+    "tests": 5,
+    "fail": 5,
+    "missingFenceBehaviorFailures": 4,
+    "unitFixtureBudgetFailureBeforeInitialize": 1,
+    "fixtureNote": "Initial injected150ms cap was below setup cost; corrected to injected2s for lifecycle deadline test. Real startup120s/semantic10s/public15s unchanged."
+  },
+  "candidate": {
+    "status": "PASS",
+    "archive": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/review-candidate-7805669821c9.tar.gz",
+    "archiveSha256": "c6fc6ab4ff760c57af65d7d03838378dba40538820868d330219c7ca12148ba3",
+    "inventorySha256": "1890fbc5466123a108efcf9cc22487d94441d18e098446bf1402b8a4cf783855",
+    "fileCount": 6508,
+    "directoryCount": 1183,
+    "symlinkCount": 7,
+    "logicalBytes": 105128686,
+    "physicalVerification": "PASS",
+    "verificationCount": 1,
+    "nativeSha256": "7fa9bd85b10cc5414b5c6bb495263d7bdfa5662541f8c6a8f0de902aa538a2e3",
+    "boundary": "Package integrity only; scoped isolated result is separate; not formal G17 or production approval"
+  },
+  "dependencyReuse": {
+    "status": "PASS",
+    "count": 1395,
+    "changedOrMissing": 0,
+    "originalManifestSha256": "31c709da2f383a963d3e3ab8e63dd6ee91ba22983bac311589f8099abdef5ad4",
+    "currentManifestSha256": "ed8a879bddc251738aa16ebc9ca1ed12e2e773789891bac2eaf4124a6840098f",
+    "scope": "Reuse original downloaded dependency identities; selected old manifest only, no physical archive re-verification"
+  },
+  "independent": {
+    "status": "PASS",
+    "source": "7805669821c95e8995b10adae6a005e614c0ab90dc81548f20296a359f82be0d",
+    "scope": "Scoped frozen-input first-semantic repair, original raw evidence and actual complete resource exit; not formalG17 or production",
+    "openFindings": [],
+    "resourceReadback": {
+      "status": "PASS",
+      "pids": 19,
+      "ownedGroups": 7,
+      "allESRCH": true,
+      "exactRootProcesses": 0,
+      "isolatedLaunchdJobs": 0,
+      "fixtureSlots": 0,
+      "externalFixtureJobs": 0,
+      "method": "Independent actual kill0/ps/launchctl/read-only SQLite; no kill/reset"
+    }
+  },
+  "closeout": {
+    "status": "PASS",
+    "pids": 19,
+    "ownedGroups": 7,
+    "unregisteredPaths": [],
+    "expiredResidualBytes": 0,
+    "archive": {
+      "path": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix/closeout/raw-evidence.tar.gz",
+      "sha256": "e5ff6532a59865fb968babac24596412321a29c3f4464c35a927a2a4f5158062",
+      "fileCount": 52,
+      "bytes": 10894834,
+      "physicalVerification": "PASS"
+    }
+  },
+  "historicalFailures": "RETAINED",
+  "formalG17": "FAIL_RETAINED",
+  "productionTCCBusinessRead": "NOT_RUN",
+  "fullTestsNormalInstallerNativeBuildNewCanary": "NOT_RUN_USER_EXCLUDED",
+  "compatibilityRollback": "NOT_RUN_USER_CANCELLED",
+  "pushProduction": "NOT_RUN",
+  "deadline": "2026-11-03T18:00:00+08:00",
+  "privateEvidence": "/Users/luo/Developer/ilv2-work/codex-java-lsp-mcp/ilv2-mac/runs/mac-17/20261103T014500Z-index-ready-fix"
+}
