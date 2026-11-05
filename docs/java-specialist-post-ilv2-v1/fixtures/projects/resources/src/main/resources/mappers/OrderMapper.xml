@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="example.OrderMapper">
+    <resultMap id="order" type="example.OrderRow">
+        <id property="orderId" column="order_id"/>
+        <result property="customerName" column="customer_name"/>
+    </resultMap>
+    <select id="findOrder" resultMap="order">
+        SELECT order_id, customer_name FROM purchase_order WHERE order_id = #{orderId}
+    </select>
+</mapper>

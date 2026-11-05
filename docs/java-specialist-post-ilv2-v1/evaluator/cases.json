@@ -1,0 +1,570 @@
+{
+  "schema": "post-ilv2/mechanism-cases/v1",
+  "classification": "ORIGINAL_EXPOSED_MECHANISM_FIXTURES_NOT_BUSINESS_BENCHMARK",
+  "groups": 8,
+  "cases": [
+    {
+      "caseId": "NAVIGATION-01",
+      "groupId": "navigation",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "订单取消后在哪里归还库存？",
+      "expectedBehavior": "应比较cancel与cancelPreview/cancelNotice，定位有release调用的cancel。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/OrderService.java",
+          "contentHash": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+          "startLine": 5,
+          "endLine": 8
+        }
+      ],
+      "taskCards": [
+        "Q03",
+        "Q04"
+      ]
+    },
+    {
+      "caseId": "NAVIGATION-02",
+      "groupId": "navigation",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "OrderService有哪几个与cancel有关的方法？",
+      "expectedBehavior": "outline保留不同声明，不把名称前缀命中当唯一目标。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/OrderService.java",
+          "contentHash": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+          "startLine": 5,
+          "endLine": 5
+        },
+        {
+          "path": "src/main/java/example/OrderService.java",
+          "contentHash": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+          "startLine": 10,
+          "endLine": 10
+        },
+        {
+          "path": "src/main/java/example/OrderService.java",
+          "contentHash": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+          "startLine": 16,
+          "endLine": 16
+        }
+      ],
+      "taskCards": [
+        "Q03"
+      ]
+    },
+    {
+      "caseId": "NAVIGATION-03",
+      "groupId": "navigation",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "找到库存释放方法及取消调用点。",
+      "expectedBehavior": "caller与callee源码片段分别有来源，不为整个文件计已读。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/OrderService.java",
+          "contentHash": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+          "startLine": 7,
+          "endLine": 7
+        },
+        {
+          "path": "src/main/java/example/StockLedger.java",
+          "contentHash": "60565558dc18f338a8d225081c0eba177ab61181e9891dfab951ca6918e3db82",
+          "startLine": 7,
+          "endLine": 7
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q05",
+        "Q07"
+      ]
+    },
+    {
+      "caseId": "IDENTITY-01",
+      "groupId": "identity",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "查询demo.Shared，但未提供module。",
+      "expectedBehavior": "返回多个候选/AMBIGUOUS，不按字典序选唯一声明。",
+      "requiredEvidence": [
+        {
+          "path": "module-a/src/main/java/demo/Shared.java",
+          "contentHash": "b4f5fbd77abd068286d815e4f3c57ed5a74829a8bd5774a11c84aaa615b0699b",
+          "startLine": 2,
+          "endLine": 2
+        },
+        {
+          "path": "module-b/src/main/java/demo/Shared.java",
+          "contentHash": "633f42dddd41b1cda29090a98a0868d63fb14c204af2b5c153def5055dc45ad8",
+          "startLine": 2,
+          "endLine": 2
+        }
+      ],
+      "taskCards": [
+        "Q03",
+        "Q08"
+      ]
+    },
+    {
+      "caseId": "IDENTITY-02",
+      "groupId": "identity",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "只查module-b中的Shared#owner。",
+      "expectedBehavior": "scope确定时只返回billing模块的声明，symbolId不能跨workspace套用。",
+      "requiredEvidence": [
+        {
+          "path": "module-b/src/main/java/demo/Shared.java",
+          "contentHash": "633f42dddd41b1cda29090a98a0868d63fb14c204af2b5c153def5055dc45ad8",
+          "startLine": 3,
+          "endLine": 3
+        }
+      ],
+      "taskCards": [
+        "Q03",
+        "Q04"
+      ]
+    },
+    {
+      "caseId": "IDENTITY-03",
+      "groupId": "identity",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "在module-a查看select的两个重载。",
+      "expectedBehavior": "两个签名拥有不同身份；选择String不能指向int。",
+      "requiredEvidence": [
+        {
+          "path": "module-a/src/main/java/demo/Shared.java",
+          "contentHash": "b4f5fbd77abd068286d815e4f3c57ed5a74829a8bd5774a11c84aaa615b0699b",
+          "startLine": 4,
+          "endLine": 4
+        },
+        {
+          "path": "module-a/src/main/java/demo/Shared.java",
+          "contentHash": "b4f5fbd77abd068286d815e4f3c57ed5a74829a8bd5774a11c84aaa615b0699b",
+          "startLine": 5,
+          "endLine": 5
+        }
+      ],
+      "taskCards": [
+        "Q03",
+        "Q08"
+      ]
+    },
+    {
+      "caseId": "RANGES-01",
+      "groupId": "ranges",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "读取LongWorkflow.apply第201行附近。",
+      "expectedBehavior": "必须包含201行，不只取方法头尾；预算内partial语义诚实。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/LongWorkflow.java",
+          "contentHash": "bf11346aa5e3eedd85e278815fd7c04da1d1f314b3acdf97c54a11b350ce62de",
+          "startLine": 201,
+          "endLine": 201
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q07"
+      ]
+    },
+    {
+      "caseId": "RANGES-02",
+      "groupId": "ranges",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "同时查看取消分支和上限分支。",
+      "expectedBehavior": "同方法两个分离位置都保留；不能一个大区间跨越全部填充行。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/LongWorkflow.java",
+          "contentHash": "bf11346aa5e3eedd85e278815fd7c04da1d1f314b3acdf97c54a11b350ce62de",
+          "startLine": 201,
+          "endLine": 201
+        },
+        {
+          "path": "src/main/java/example/LongWorkflow.java",
+          "contentHash": "bf11346aa5e3eedd85e278815fd7c04da1d1f314b3acdf97c54a11b350ce62de",
+          "startLine": 321,
+          "endLine": 321
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q07"
+      ]
+    },
+    {
+      "caseId": "RANGES-03",
+      "groupId": "ranges",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "用apply的symbolId读取整个方法。",
+      "expectedBehavior": "80行预算不足以给完整方法，必须BODY_PARTIAL且不宣称整函数已读。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/LongWorkflow.java",
+          "contentHash": "bf11346aa5e3eedd85e278815fd7c04da1d1f314b3acdf97c54a11b350ce62de",
+          "startLine": 3,
+          "endLine": 3
+        }
+      ],
+      "taskCards": [
+        "Q04"
+      ]
+    },
+    {
+      "caseId": "BINDING-01",
+      "groupId": "binding",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "JDT_CAPABILITY",
+      "task": "choose((Integer)null)静态选择哪个重载？",
+      "expectedBehavior": "选择Integer；不能仅按arity把Number当同一目标。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/BindingDemo.java",
+          "contentHash": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+          "startLine": 14,
+          "endLine": 14
+        },
+        {
+          "path": "src/main/java/example/BindingDemo.java",
+          "contentHash": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+          "startLine": 15,
+          "endLine": 15
+        }
+      ],
+      "taskCards": [
+        "Q08"
+      ]
+    },
+    {
+      "caseId": "BINDING-02",
+      "groupId": "binding",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "JDT_CAPABILITY",
+      "task": "dispatch中的handle定义与运行时实现是什么关系？",
+      "expectedBehavior": "定义是Handler契约；运行时由对象决定；不宣称静态分析保证唯一ConsoleHandler。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/BindingDemo.java",
+          "contentHash": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+          "startLine": 3,
+          "endLine": 3
+        },
+        {
+          "path": "src/main/java/example/BindingDemo.java",
+          "contentHash": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+          "startLine": 8,
+          "endLine": 8
+        }
+      ],
+      "taskCards": [
+        "Q05",
+        "Q08"
+      ]
+    },
+    {
+      "caseId": "BINDING-03",
+      "groupId": "binding",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "数组声明和varargs签名能否正确定位？",
+      "expectedBehavior": "String values[]与String...均保留其签名意义，不重复维数；非新缺陷指控。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/BindingDemo.java",
+          "contentHash": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+          "startLine": 16,
+          "endLine": 16
+        },
+        {
+          "path": "src/main/java/example/BindingDemo.java",
+          "contentHash": "d4171f942aa693fe4c19a406197a4c2a85044c084c725c9fa632755359535178",
+          "startLine": 17,
+          "endLine": 17
+        }
+      ],
+      "taskCards": [
+        "Q03",
+        "Q08"
+      ]
+    },
+    {
+      "caseId": "RESOURCES-01",
+      "groupId": "resources",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "OrderMapper.findOrder对应哪条SQL？",
+      "expectedBehavior": "Java方法和XML statement各自path/hash/range；不得把XML行号绑定到Java文件。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/OrderMapper.java",
+          "contentHash": "d440aa186f7e0a627d4098dcb7328390e7cd2608d6fa9887ac7174e68092a974",
+          "startLine": 3,
+          "endLine": 3
+        },
+        {
+          "path": "src/main/resources/mappers/OrderMapper.xml",
+          "contentHash": "95be8efef682e75f4d6699ccc086e9551fe0b363fa36db1e7f3c7a2ff12753f7",
+          "startLine": 7,
+          "endLine": 9
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q05"
+      ]
+    },
+    {
+      "caseId": "RESOURCES-02",
+      "groupId": "resources",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "customerName在数据库映射到什么列？",
+      "expectedBehavior": "返回customer_name映射所在行；不只返回mapper文件头。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/resources/mappers/OrderMapper.xml",
+          "contentHash": "95be8efef682e75f4d6699ccc086e9551fe0b363fa36db1e7f3c7a2ff12753f7",
+          "startLine": 5,
+          "endLine": 5
+        },
+        {
+          "path": "src/main/java/example/OrderRow.java",
+          "contentHash": "c97ac643a27005383bb420317a6d08a668b20c798bd4c5c127d009f49218b0cc",
+          "startLine": 4,
+          "endLine": 4
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q07"
+      ]
+    },
+    {
+      "caseId": "RESOURCES-03",
+      "groupId": "resources",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "MUTATION_REQUIRED",
+      "task": "读取后XML发生修改，再沿用旧hash。",
+      "expectedBehavior": "SOURCE_CHANGED/STALE，不接受旧坐标作为新内容证据；执行时对隔离副本mutation。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/resources/mappers/OrderMapper.xml",
+          "contentHash": "95be8efef682e75f4d6699ccc086e9551fe0b363fa36db1e7f3c7a2ff12753f7",
+          "startLine": 5,
+          "endLine": 5
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q11"
+      ]
+    },
+    {
+      "caseId": "UNICODE-01",
+      "groupId": "unicode",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "定位同一行emoji之后的标题方法。",
+      "expectedBehavior": "column按UTF-16计算，source bytes按UTF-8，二者不混用。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/UnicodeService.java",
+          "contentHash": "36ecd11c6fbad20d895b0e383a498225d6092fe003b65de0a492593756a3ae7d",
+          "startLine": 3,
+          "endLine": 3
+        }
+      ],
+      "taskCards": [
+        "Q03",
+        "Q04"
+      ],
+      "expectedSelection": {
+        "name": "标题",
+        "line": 3,
+        "columnUtf16": 59
+      }
+    },
+    {
+      "caseId": "UNICODE-02",
+      "groupId": "unicode",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "读取UnicodeService的CRLF源码。",
+      "expectedBehavior": "text保留CRLF字节；标签hash不因normalize换行改变。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/UnicodeService.java",
+          "contentHash": "36ecd11c6fbad20d895b0e383a498225d6092fe003b65de0a492593756a3ae7d",
+          "startLine": 5,
+          "endLine": 5
+        }
+      ],
+      "taskCards": [
+        "Q04"
+      ]
+    },
+    {
+      "caseId": "UNICODE-03",
+      "groupId": "unicode",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "按中文已取消订单说明搜索方法。",
+      "expectedBehavior": "使用已有注释表示；无隐藏LLM/embedding，返回可行动locator。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/UnicodeService.java",
+          "contentHash": "36ecd11c6fbad20d895b0e383a498225d6092fe003b65de0a492593756a3ae7d",
+          "startLine": 4,
+          "endLine": 4
+        },
+        {
+          "path": "src/main/java/example/UnicodeService.java",
+          "contentHash": "36ecd11c6fbad20d895b0e383a498225d6092fe003b65de0a492593756a3ae7d",
+          "startLine": 5,
+          "endLine": 5
+        }
+      ],
+      "taskCards": [
+        "Q06"
+      ]
+    },
+    {
+      "caseId": "FRAMEWORKS-01",
+      "groupId": "frameworks",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "/orders/cancelled的处理入口在哪里？",
+      "expectedBehavior": "根据明确GetMapping字面量关联cancelledOrders，不只返回类头。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/OrderController.java",
+          "contentHash": "ae39a68290d21a4ae7421db4952274d149445feb6bf594f086cc2c151988719d",
+          "startLine": 5,
+          "endLine": 6
+        }
+      ],
+      "taskCards": [
+        "Q04",
+        "Q06"
+      ]
+    },
+    {
+      "caseId": "FRAMEWORKS-02",
+      "groupId": "frameworks",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "PaymentRoute在当前部署一定使用哪个实现？",
+      "expectedBehavior": "没有部署profile证据，列候选与条件，不给唯一运行时绑定。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/RegionalPayment.java",
+          "contentHash": "e6999b361b6ae206d9c1dab4e147b19af18ca15bf5f280dd07d8c060117f4229",
+          "startLine": 3,
+          "endLine": 3
+        },
+        {
+          "path": "src/main/java/example/GlobalPayment.java",
+          "contentHash": "2f50f2852f0f918b664b72d125d3f8f2cabd341700934b293374aff567c43def",
+          "startLine": 3,
+          "endLine": 3
+        }
+      ],
+      "taskCards": [
+        "Q05",
+        "Q08"
+      ]
+    },
+    {
+      "caseId": "FRAMEWORKS-03",
+      "groupId": "frameworks",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "只读取OrderController的单文件大纲。",
+      "expectedBehavior": "静态outline不启动Spring/JDT/Gradle；注解stub不作为运行态证据。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/OrderController.java",
+          "contentHash": "ae39a68290d21a4ae7421db4952274d149445feb6bf594f086cc2c151988719d",
+          "startLine": 6,
+          "endLine": 6
+        },
+        {
+          "path": "src/main/java/example/OrderController.java",
+          "contentHash": "ae39a68290d21a4ae7421db4952274d149445feb6bf594f086cc2c151988719d",
+          "startLine": 8,
+          "endLine": 8
+        }
+      ],
+      "taskCards": [
+        "Q03"
+      ]
+    },
+    {
+      "caseId": "GUARDS-01",
+      "groupId": "guards",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "返回BoundaryService源码设置值。",
+      "expectedBehavior": "密码式敏感值按现有策略省略/redacted；redacted不计原源码覆盖。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/BoundaryService.java",
+          "contentHash": "8568a4a978f0ef7e95d137e77c290e990f4a067476c9fc213f83223ddf934d4c",
+          "startLine": 3,
+          "endLine": 3
+        }
+      ],
+      "taskCards": [
+        "Q01",
+        "Q04"
+      ]
+    },
+    {
+      "caseId": "GUARDS-02",
+      "groupId": "guards",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "读取超大单行payload。",
+      "expectedBehavior": "一行超过16000字节时完整拒绝/省略并标SOURCE_BUDGET，不截断UTF8/JSON伪源码。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/BoundaryService.java",
+          "contentHash": "8568a4a978f0ef7e95d137e77c290e990f4a067476c9fc213f83223ddf934d4c",
+          "startLine": 8,
+          "endLine": 8
+        }
+      ],
+      "taskCards": [
+        "Q04"
+      ]
+    },
+    {
+      "caseId": "GUARDS-03",
+      "groupId": "guards",
+      "status": "EXPOSED_MECHANISM_REGRESSION",
+      "mode": "STATIC_MECHANISM",
+      "task": "dynamicType会加载哪个具体类？",
+      "expectedBehavior": "从参数反射加载，未知运行值不推导唯一target；不以没找到引用断言不存在。",
+      "requiredEvidence": [
+        {
+          "path": "src/main/java/example/BoundaryService.java",
+          "contentHash": "8568a4a978f0ef7e95d137e77c290e990f4a067476c9fc213f83223ddf934d4c",
+          "startLine": 6,
+          "endLine": 6
+        }
+      ],
+      "taskCards": [
+        "Q05",
+        "Q08"
+      ]
+    }
+  ]
+}

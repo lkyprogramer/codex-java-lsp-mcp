@@ -1,0 +1,9 @@
+{
+  "status": "REQUEST_BODY_VERIFIED",
+  "verifiedUnits": 1,
+  "sourceBytes": 147,
+  "sourceLines": 4,
+  "networkDelivery": "NOT_CHECKED",
+  "modelUse": "NOT_CHECKED",
+  "taskSuccess": "NOT_CHECKED"
+}

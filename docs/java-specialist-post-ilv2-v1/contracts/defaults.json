@@ -1,0 +1,65 @@
+{
+  "schema": "post-ilv2/defaults/v1",
+  "date": "2026-11-05",
+  "baselineSha": "b1475cddac01ab6ce589a1d465578d5ab7772533",
+  "productConstraints": {
+    "platform": "macOS-arm64-APFS",
+    "publicToolCount": 5,
+    "embedding": "DISABLED_BY_SCOPE",
+    "newDefaultRuntimeDependencies": 0
+  },
+  "outline": {
+    "defaultLimit": 8,
+    "maxLimit": 20,
+    "maxWireBytes": 4096
+  },
+  "evidence": {
+    "maxUnits": 8,
+    "maxLines": 80,
+    "maxBytes": 16000,
+    "maxFileBytes": 2097152
+  },
+  "relations": {
+    "defaultHops": 1,
+    "maxTargets": 8,
+    "secondHop": "CONDITIONAL_SHARED_BUDGET"
+  },
+  "readPlan": {
+    "minimal": {
+      "maxFiles": 4,
+      "maxReadBytes": 6144
+    },
+    "balanced": {
+      "maxFiles": 6,
+      "maxReadBytes": 14336
+    },
+    "precision": {
+      "maxFiles": 8,
+      "maxReadBytes": 20480
+    },
+    "recall": {
+      "maxFiles": 12,
+      "maxReadBytes": 32768
+    }
+  },
+  "observedCurrentJdtDefaults": {
+    "importStartMs": 120000,
+    "separateIndexMs": 600000,
+    "classification": "CODE_NOT_LIVE_VERIFIED"
+  },
+  "comparison": {
+    "pilotTaskGroups": 12,
+    "arms": 2,
+    "repeats": 3,
+    "embeddingArms": 0,
+    "newTaskGroupsSuggested": 36,
+    "devSuggested": 24,
+    "lockedSuggested": 12
+  },
+  "performance": {
+    "retainedG12Rule": "candidateP95 <= max(1.1 * baselineP95, baselineP95 + 10ms)",
+    "newOutlineWarmP95ScreenMs": 100,
+    "screenIsProposal": true
+  },
+  "deployAuthorized": false
+}

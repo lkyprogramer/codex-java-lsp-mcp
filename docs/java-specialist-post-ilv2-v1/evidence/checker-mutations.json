@@ -1,0 +1,16 @@
+[
+  {
+    "mutation": "missing_source_hash_guard",
+    "exitCode": 1,
+    "killed": true,
+    "classification": "CHECKER_MUTATION_NOT_PRODUCT",
+    "summary": "FAILED (failures=1)"
+  },
+  {
+    "mutation": "missing_final_text_guard",
+    "exitCode": 1,
+    "killed": true,
+    "classification": "CHECKER_MUTATION_NOT_PRODUCT",
+    "summary": "FAILED (failures=2)"
+  }
+]

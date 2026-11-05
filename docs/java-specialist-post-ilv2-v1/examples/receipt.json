@@ -1,0 +1,19 @@
+{
+  "schema": "post-ilv2/evidence-receipt/v1",
+  "workspaceId": "fixture-not-production",
+  "contentManifestId": "fixture-view-v1",
+  "requestBodySha256": "f38d5df77784f09ff3c8ec63d841c6a85b1382af9b8640cb663523d84d0888a1",
+  "units": [
+    {
+      "id": "fixture-unit-1",
+      "toolCallId": "fixture-call-1",
+      "messageIndex": 0,
+      "textPointer": "/units/0/text",
+      "relativePath": "src/main/java/example/OrderService.java",
+      "contentHash": "c60e9b553cf7b053caeb165c8358127a30c484957d58c8ba694db81fa4a1bdf8",
+      "startLine": 5,
+      "endLine": 8,
+      "previewKind": "source"
+    }
+  ]
+}

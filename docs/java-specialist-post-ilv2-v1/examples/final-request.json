@@ -1,0 +1,9 @@
+{
+  "messages": [
+    {
+      "role": "tool",
+      "tool_call_id": "fixture-call-1",
+      "content": "{\"units\": [{\"text\": \"    public boolean cancel(long orderId, boolean shipped) {\\n        if (shipped) return false;\\n        stock.release(orderId);\\n        return true;\\n\"}]}"
+    }
+  ]
+}
