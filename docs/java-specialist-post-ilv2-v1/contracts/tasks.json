@@ -34,8 +34,7 @@
       "phase": "P1",
       "title": "增加按需单文件outline",
       "dependsOn": [
-        "Q01",
-        "Q02"
+        "Q00"
       ],
       "conditional": false,
       "path": "tasks/Q03.md"
@@ -45,6 +44,7 @@
       "phase": "P1",
       "title": "扩展现有evidence到Java声明",
       "dependsOn": [
+        "Q01",
         "Q03"
       ],
       "conditional": false,
@@ -55,6 +55,7 @@
       "phase": "P2",
       "title": "有界目标关系与源码证明",
       "dependsOn": [
+        "Q02",
         "Q04"
       ],
       "conditional": true,
@@ -65,6 +66,7 @@
       "phase": "P2",
       "title": "只修有证据的静态发现缺口",
       "dependsOn": [
+        "Q02",
         "Q04"
       ],
       "conditional": true,
@@ -75,6 +77,7 @@
       "phase": "P2",
       "title": "在现有ReadUnit中提高证据边际价值",
       "dependsOn": [
+        "Q02",
         "Q04"
       ],
       "conditional": true,
@@ -85,6 +88,7 @@
       "phase": "P2",
       "title": "按需Java绑定保真，不重写编译器",
       "dependsOn": [
+        "Q02",
         "Q04"
       ],
       "conditional": true,
@@ -106,6 +110,8 @@
       "phase": "P3",
       "title": "一次可信的真实Agent配对",
       "dependsOn": [
+        "Q01",
+        "Q02",
         "Q04"
       ],
       "conditional": false,

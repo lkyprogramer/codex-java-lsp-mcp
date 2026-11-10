@@ -28,9 +28,9 @@ flowchart LR
 
 ## 4.2 Outline：只回答“这个文件里还有哪些可检查对象”
 
-拟增加`java_symbol operation=outline`，输入一个授权范围内的Java相对路径；复用queryFiles读取单文件事实。返回类/构造器/方法的名称、签名、selection、行范围、stability、symbolId或已有snapshot handle，不返回方法体。
+拟增加`java_symbol operation=outline`，输入一个授权范围内的Java相对路径；复用queryFiles读取单文件事实。返回类/构造器/方法/字段的名称、签名、selection、行范围、stability、symbolId或已有snapshot handle，不返回方法体。字段纳入是因为“字段/接口影响”是三条主工作流之一（[15](15-java-workflow-priorities.md)），DTO/实体文件里字段就是主要结构。
 
-默认8条、最多20条，源码顺序确定；可提供`nearLine`使包含该行的声明优先，其余按源码顺序。不在服务内用自然语言判断“最重要”方法。输出UTF-8序列化预算4096 bytes，按完整条目裁减，附omittedSymbols；不靠切JSON字符串。
+默认8条、最多20条；可提供`nearLine`：包含该行的声明优先，其余按与该行的距离选取，选中后按源码顺序输出（规则见05§5.2）。不能退化为“包含者+文件开头若干条”，否则大文件尾部的邻近重载会被挤掉。不在服务内用自然语言判断“最重要”方法。输出UTF-8序列化预算4096 bytes，按完整条目裁减，附omittedSymbols；不靠切JSON字符串。
 
 未给nearLine且文件有100个方法时，不能伪装完整大纲。下一步可由Agent按已返回的范围、原生read或明确nearLine继续；不提前造分页session存储。
 
