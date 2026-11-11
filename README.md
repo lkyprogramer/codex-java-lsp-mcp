@@ -199,7 +199,7 @@ hook 行为：
 
 实验操作 `java_symbol(operation=evidence, file, line, column)` 按已定位的 Java 类型或方法读取关联 XML 源码，不启动 JDT。类型路径使用现有 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源；每次最多 8 个片段、80 行、16000 源码字节。`complete` 只说明该 XML 元素范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
 
-静态查询仍默认使用一个共享只读 worker。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
+生产 daemon 的静态查询由最多 2 个共享只读 worker 承担（`MAX_QUERY_WORKERS`，所有仓库共用），等待队列上限 32，满时请求返回 `INDEX_PARTIAL`；HTTP daemon 无选择器的 `java_status` 在 `index.queryCounters` 里给出启动以来的 `queueFull` 与因 deadline/取消被杀的查询数。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 1|2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
 
 推荐默认调用（直接调用目标工具；名称有歧义时从返回的候选里取 `symbolId` 再调用）：
 
@@ -208,7 +208,7 @@ hook 行为：
 {"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
 ```
 
-只要 JDT 时再 `java_status({start:true})`。daemon 刚重启后的第一次 `java_status` 会冷建 `index.sqlite`（大仓可能 1–3 分钟 `BUILDING`）；库已在则只读打开。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
+只要 JDT 时再 `java_status({start:true})`。静态索引是 owner 管理的不可变 snapshot：仓库首次被请求时由 builder 子进程全量构建（大仓可能 1–3 分钟 `BUILDING`），之后按 FSEvents 增量发布新 snapshot；daemon 重启后直接复用已发布的 snapshot。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
 
 排查 runtime、watcher roots、JDK candidates、raw LSP URI/range 或完整 diagnostics 时显式打开诊断字段：
 
@@ -266,8 +266,8 @@ hook 行为：
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |
 | `JAVA_LSP_MAX_ACTIVE_REPOS` | 限制同时活跃的 JDT LS repo 数。 |
 | `JAVA_LSP_IDLE_TTL_MS` | repo 空闲后自动停止 JDT LS 的时间。 |
-| `JAVA_LSP_RUNTIME_ENTRY_TTL_MS` | JDT 已停止后，空闲 runtime context 在内存中的保留时间；默认 `3600000`。 |
-| `JAVA_LSP_MAX_RUNTIME_ENTRIES` | Node 进程最多保留的 repo runtime context 数；默认 `16`，超限时按 LRU 驱逐不活跃 entry。 |
+| `JAVA_LSP_MAX_RUNTIME_ENTRIES` | Node 进程最多保留的 repo runtime context 数；默认 `16`。新建 entry 超限时按 LRU 退役一个空闲（无进行中请求）、非 pin 的 entry；pin 与使用中的 entry 不退役，所以总数可暂时超过上限，等有 entry 空闲时再收敛。 |
+| `JAVA_LSP_MAX_DELTA_LINEAGE` | 连续 delta 的血缘上限，默认 `256`；自身基底已累计这么多次 delta 时，下一次构建改为全量（`fullReason=lineage-limit`），限制 delta 与全量结果漂移的累积。`0` 关闭。 |
 | `JAVA_LSP_OWNERSHIP_BASE` | 覆盖 canonical-root 跨进程 ownership 目录；主要用于隔离 canary/测试，生产默认位于用户 cache。 |
 | `JAVA_LSP_CACHE_JANITOR_INTERVAL_MS` | cache janitor 周期；默认 `21600000`（6 小时），设为 `0` 关闭周期执行。L0 格式回收在 TTL=0 时仍会跑。 |
 | `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS` | 非 pin 目录按 `lastRequestAt` 过期删除的天数；默认 `2`。`0` 关闭 TTL 删除，仍做死路径 / L0 / L2。`projects.json` 里 `lspEnabled` 的 root 永不因 TTL 删除。 |
@@ -289,7 +289,7 @@ hook 行为：
 
 `streamable_http` 模式拒绝 `JDTLS_DATA_DIR` / `JDTLS_LOG_DIR` 单例目录覆盖；stdio 兼容模式仅把它们视为 base，并强制追加 canonical repoHash。
 
-生产 cache 不要 `rm -rf ~/Library/Caches/codex-java-lsp`，也不要手删 `index.sqlite-wal`（由写连接 close / 只读 idle 后 `wal_checkpoint(TRUNCATE)`，上限 64 MiB）。一次性收割（默认 dry-run）：
+生产 cache 不要 `rm -rf` cache base，也不要手删其中的 snapshot、job 或 WAL 文件：snapshot 由 owner 的 GC 按绑定和租约回收。janitor 只处理按 hash 命名或带 `repoRoot` meta 的仓库目录，拒绝把 `/`、`$HOME` 及其祖先、`~/Library`、`~/Library/Caches` 当作 cache base。一次性收割（默认 dry-run）：
 
 ```bash
 npm run cache:harvest

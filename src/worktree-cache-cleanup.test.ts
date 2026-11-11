@@ -12,7 +12,7 @@ import {
   processStartIdentityForPid,
   type RepoOwnershipLease
 } from "./repo-ownership-lease.js";
-import { cleanupStaleWorktreeCaches, touchRepoCache } from "./worktree-cache-cleanup.js";
+import { cleanupStaleWorktreeCaches, touchRepoCache, unsafeCacheBase } from "./worktree-cache-cleanup.js";
 import { repoCacheRoot } from "./repo-layout.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
 
@@ -699,12 +699,12 @@ test("mtime and updatedAt cannot keep an unpinned cache whose lastRequestAt is m
   }
 });
 
-test("no-meta directories are removed after the grace window and skipped before it", async () => {
+test("no-meta repo-hash directories are removed after the grace window and skipped before it", async () => {
   const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-nometa-"));
   const now = Date.parse("2026-06-21T00:00:00.000Z");
   try {
-    const fresh = path.join(cacheBase, "fresh-empty");
-    const stale = path.join(cacheBase, "stale-empty");
+    const fresh = path.join(cacheBase, "0123456789ab");
+    const stale = path.join(cacheBase, "abcdef012345");
     await mkdir(fresh, { recursive: true });
     await mkdir(stale, { recursive: true });
     await writeFile(path.join(stale, "source-index.meta.json"), "{}\n");
@@ -717,6 +717,36 @@ test("no-meta directories are removed after the grace window and skipped before 
   } finally {
     await rm(cacheBase, { recursive: true, force: true });
   }
+});
+
+test("a directory that is neither a repo hash nor carries repo-meta is reported and never touched, however old", async () => {
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-foreign-"));
+  const now = Date.parse("2026-06-21T00:00:00.000Z");
+  try {
+    // What a cache base shared with other data holds: a user's directory, with a file whose name the L0 sweep reclaims.
+    const foreign = path.join(cacheBase, "Projects");
+    await mkdir(foreign, { recursive: true });
+    await writeFile(path.join(foreign, "source-index.notes"), "mine\n");
+    const old = new Date(now - 30 * 86400000);
+    await utimes(foreign, old, old);
+    const result = cleanupStaleWorktreeCaches({ cacheBase, now, noMetaGraceMs: 3600000, ttlDays: 1 });
+    assert.equal(existsSync(path.join(foreign, "source-index.notes")), true, "not even the L0 retired-file sweep touches it");
+    assert.deepEqual(result.unrecognizedDirs, [foreign]);
+    assert.equal(result.removed, 0);
+    assert.equal(result.scanned, 0);
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
+test("the janitor refuses a cache base that is the home directory, an ancestor of it or a shared Library directory", () => {
+  const home = "/Users/someone";
+  assert.match(unsafeCacheBase("/", home) ?? "", /root/);
+  assert.match(unsafeCacheBase(home, home) ?? "", /home/);
+  assert.match(unsafeCacheBase("/Users", home) ?? "", /home/);
+  assert.match(unsafeCacheBase(`${home}/Library/Caches`, home) ?? "", /shared/);
+  assert.equal(unsafeCacheBase(`${home}/Library/Caches/codex-java-lsp-ilv2`, home), undefined);
+  assert.equal(unsafeCacheBase("/Users/someone-else", home), undefined);
 });
 
 test("L2 evicts oldest unpinned dirs over the directory cap and never evicts pins", async () => {

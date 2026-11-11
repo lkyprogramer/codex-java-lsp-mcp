@@ -7,11 +7,13 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync
 } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
 import { killOwnedProcessTree, listProcesses } from "./jdt-process-tree.js";
@@ -80,6 +82,14 @@ export type WorktreeCacheCleanupResult = {
   removedDirs: string[];
   reclaimedFiles?: number;
   reclaimedLeases?: number;
+  /**
+   * Directories under the cache base the janitor does not recognize as repo caches (no repo-meta.json
+   * and not named like a repo hash): reported, never deleted, so a cache base shared with other data
+   * cannot lose it.
+   */
+  unrecognizedDirs?: string[];
+  /** Set when the cache base is a directory the janitor must never sweep (/, $HOME or an ancestor, ~/Library, ~/Library/Caches): nothing was touched. */
+  refusedBase?: string;
 };
 
 export type WorktreeCacheCleanupFailure = {
@@ -250,6 +260,16 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
 
   result.reclaimedLeases = reclaimDeadRuntimeLeases(leaseBase, isAlive, dryRun);
 
+  // JAVA_LSP_CACHE_BASE accepts ~ and any absolute path. A base that is a shared directory would put
+  // unrelated data in the sweep below; refuse the repo-cache sweep outright rather than rely on the
+  // per-entry checks (dead leases above live only under leases/ and are still reclaimed).
+  const refusal = unsafeCacheBase(base);
+  if (refusal) {
+    result.refusedBase = refusal;
+    console.error(`[codex-java-lsp] cache janitor refused cache base ${base}: ${refusal}`);
+    return result;
+  }
+
   const l1Removes: RemovalTarget[] = [];
   const unpinnedKeep: RemovalTarget[] = [];
 
@@ -265,9 +285,16 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
     ) {
       continue;
     }
-    result.scanned += 1;
     const cacheRoot = path.join(base, entry.name);
     const metaBeforeL0 = readRepoCacheMeta(cacheRoot);
+    // Allow-list, not deny-list: only a directory this product wrote (repo-meta.json) or one named as
+    // repoCacheRoot names them (repoHash) is a repo cache. Anything else, including a top-level
+    // directory a later version adds, is reported and left alone.
+    if (!REPO_CACHE_DIR_NAME.test(entry.name) && typeof metaBeforeL0?.repoRoot !== "string") {
+      (result.unrecognizedDirs ??= []).push(cacheRoot);
+      continue;
+    }
+    result.scanned += 1;
     const noMetaAgeMs = metaBeforeL0 ? undefined : directoryAgeMs(cacheRoot, now);
     result.reclaimedFiles = (result.reclaimedFiles ?? 0) + reclaimRetiredIndexFiles(cacheRoot, dryRun);
 
@@ -342,6 +369,25 @@ export function reclaimRetiredIndexFiles(cacheRoot: string, dryRun = false): num
   return removed;
 }
 
+/** repoCacheRoot's directory name: repoHash (path-utils.ts), the first 12 hex digits of a SHA-1. */
+const REPO_CACHE_DIR_NAME = /^[0-9a-f]{12}$/;
+
+/** Why `base` must never be swept, or undefined when it may be. */
+export function unsafeCacheBase(base: string, home = homedir()): string | undefined {
+  // Through symlinks and firmlinks, and case-folded: APFS is case-insensitive by default.
+  const canonical = (value: string) => {
+    let resolved = path.resolve(value);
+    try { resolved = realpathSync.native(resolved); } catch { /* not there (yet): its spelling decides */ }
+    return resolved.toLowerCase();
+  };
+  const resolved = canonical(base);
+  const homeDir = canonical(home);
+  if (resolved === path.parse(resolved).root) return "it is a filesystem root";
+  if (resolved === homeDir || homeDir.startsWith(`${resolved}${path.sep}`)) return "it is the home directory or one of its ancestors";
+  if (resolved === path.join(homeDir, "library") || resolved === path.join(homeDir, "library", "caches")) return "it is a shared system directory";
+  return undefined;
+}
+
 function isRetiredIndexFileName(name: string, _filePath: string): boolean {
   if (name.startsWith("source-index.") || (RETIRED_INDEX_FILES as readonly string[]).includes(name)) {
     return true;
@@ -390,6 +436,11 @@ function removeTarget(
   dryRun: boolean
 ): void {
   if (!target.repoRoot) {
+    // Scanned without repo-meta; a runtime may have adopted the directory since (writing its meta).
+    if (readRepoCacheMeta(target.cacheRoot)) {
+      result.skipped += 1;
+      return;
+    }
     if (!dryRun) {
       try {
         (options.removeCacheRoot ?? removeCacheRoot)(target.cacheRoot);

@@ -300,7 +300,8 @@ function daemonStatus(application: JavaLspApplication, index: Awaited<ReturnType
         rounds: workspace.rounds, roundInFlight: workspace.roundInFlight })),
       builders: index.scheduler.builders,
       queued: index.scheduler.queued,
-      queryWorkers: index.pool.workers
+      queryWorkers: index.pool.workers,
+      queryCounters: index.poolCounters
     })
   };
 }

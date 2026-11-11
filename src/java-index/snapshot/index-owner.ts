@@ -6,7 +6,7 @@
 //      they prepare for at most min(1000 ms, remaining) and then hold one snapshot. MAC-09: the
 //      owner's GC runs one sweep at open (recovery of a dead incarnation) and then every cycle.
 import type { ChildProcess } from "node:child_process";
-import { statfs } from "node:fs/promises";
+import { stat, statfs } from "node:fs/promises";
 import path from "node:path";
 import { builderJobFor, startBuildProcess, type BuilderHeartbeat } from "../../index-builder/build-process.js";
 import { BuildScheduler, DELTA_CLOSURE_LIMIT, type BuildAttempt, type BuildGrant, type BuildHint, type BuildSelection } from "../../index-builder/build-scheduler.js";
@@ -102,6 +102,8 @@ export type IndexOwnerOptions = {
   startStopGraceMs?: number;
   /** One GC cycle (default GC_CYCLE_MS); unreferenced objects converge within two cycles. */
   gcCycleMs?: number;
+  /** SnapshotStoreOptions.renumberedGraceMs (default RENUMBERED_GRACE_MS): pinned workspaces start and seed-bind in it. */
+  renumberedGraceMs?: number;
   /**
    * false: no GC cycle, neither at open nor periodic. Without the owner lock nothing proves that the
    * store's other jobs and unbound snapshots belong to a dead incarnation rather than to a live
@@ -144,6 +146,24 @@ export const ROUND_RETRY_MAX_MS = 5 * 60 * 1000;
 export const MIN_FREE_BYTES = 512 * 1024 * 1024;
 /** The initial GC cycle (contract §2.7). */
 export const GC_CYCLE_MS = 30_000;
+/**
+ * Deltas a workspace's lineage takes before its next build is a full one (JAVA_LSP_MAX_DELTA_LINEAGE,
+ * 0 disables). Conservative: there is no full-versus-delta comparison data yet to tune it.
+ */
+export const DEFAULT_MAX_DELTA_LINEAGE = 256;
+function maxDeltaLineage(): number {
+  const raw = process.env.JAVA_LSP_MAX_DELTA_LINEAGE?.trim() ?? "";
+  return /^\d{1,9}$/.test(raw) ? Number(raw) : DEFAULT_MAX_DELTA_LINEAGE;
+}
+/**
+ * After open, how long a binding whose root only changed device number survives the GC: long enough
+ * for pinned workspaces to start (one at a time) and seed-bind their old snapshot under the new
+ * workspaceId. A pin whose start falls after it (earlier pins needing real builds, each prewarm waits up
+ * to 5 min) rebuilds in full, as before. Such a binding converges in this window plus one cycle, an
+ * exception to the two-cycle bound (deletion safety is unchanged: tryReclaim still decides). Volume
+ * UUIDs in the workspace identity would remove the need (deferred).
+ */
+export const RENUMBERED_GRACE_MS = 10 * 60_000;
 export const WORKTREE_IDLE_MS = 48 * 60 * 60 * 1000;
 const WORKTREE_GC_BATCH = 8;
 type IdleObservation = { idleSince: number; observedAt?: number; lastAccessAt?: number; dirty: boolean };
@@ -179,6 +199,9 @@ async function freeBytes(directory: string): Promise<number | undefined> {
     return Number(info.bavail) * Number(info.bsize);
   } catch { return undefined; }
 }
+
+/** Query errors only a damaged database file explains (SQLITE_CORRUPT, SQLITE_NOTADB and their messages). */
+const SQLITE_DAMAGE = /SQLITE_CORRUPT|SQLITE_NOTADB|database disk image is malformed|file is not a database/i;
 
 function queryError(completion: Exclude<QueryCompletion<unknown>, { status: "ok" }>, op: string): JavaIntelligenceError {
   if (completion.status === "deadline") return new JavaIntelligenceError("DEADLINE_EXCEEDED", `Deadline exceeded during ${op}`);
@@ -234,7 +257,8 @@ export class IndexOwner {
   }
 
   static async open(options: IndexOwnerOptions): Promise<IndexOwner> {
-    const { store } = await SnapshotStore.open(options.cacheRoot, { assertOwner: options.assertOwner, faultAt: options.faultAt });
+    const { store } = await SnapshotStore.open(options.cacheRoot, { assertOwner: options.assertOwner, faultAt: options.faultAt,
+      renumberedGraceMs: options.renumberedGraceMs ?? RENUMBERED_GRACE_MS });
     options.restored?.();
     const owner = new IndexOwner(store, options);
     // Recovery: what a dead incarnation left (jobs, unbound snapshots, tmp) goes in the first cycle.
@@ -420,7 +444,13 @@ export class IndexOwner {
         return lease;
       }
     }) as never) as QueryCompletion<QueryOps[K]["result"]>;
-    if (completion.status !== "ok") throw queryError(completion, request.op);
+    if (completion.status !== "ok") {
+      // A verified snapshot that reads as damaged is checked again rather than served errors until the next edit.
+      if (completion.status === "error" && SQLITE_DAMAGE.test(completion.error ?? "") && this.store.doubtVerified(snapshotId)) {
+        this.verifier.enqueue(snapshotId);
+      }
+      throw queryError(completion, request.op);
+    }
     return completion.value;
   }
 
@@ -451,7 +481,7 @@ export class IndexOwner {
   async seedFor(workspaceId: string, verification: TrackerVerification): Promise<SeedBase | undefined> {
     const buildKey = verification.round.buildKey;
     let best: (SeedBase & { size: number }) | undefined;
-    for (const snapshotId of this.store.seedCandidates(workspaceId, buildKey).slice(0, MAX_SEED_CANDIDATES)) {
+    for (const snapshotId of this.store.seedCandidates(workspaceId, buildKey, verification.round.root).slice(0, MAX_SEED_CANDIDATES)) {
       let lease: SnapshotLease | undefined;
       try { lease = this.store.acquire(snapshotId, "candidate-scan"); } catch { continue; } // being reclaimed: not a base
       try {
@@ -482,12 +512,21 @@ export class IndexOwner {
   }
 
   /**
-   * Fails when the cache volume is below its free-space floor even after every retained seed went.
+   * Fails when the cache volume is below its free-space floor, or below `expectedBytes` (the build's
+   * estimated peak) when that is larger, even after every retained seed went.
    * An unreadable volume is not judged: the build goes ahead as before.
    */
-  async ensureDiskHeadroom(): Promise<void> {
-    const floor = this.options.minFreeBytes ?? MIN_FREE_BYTES;
-    if (floor <= 0) return;
+  /** Whether the cache volume has `bytes` free (and the floor) now, releasing nothing; unknown counts as yes. */
+  async hasDiskHeadroom(bytes: number): Promise<boolean> {
+    const configured = this.options.minFreeBytes ?? MIN_FREE_BYTES;
+    if (configured <= 0) return true;
+    return (await freeBytes(this.store.cacheRoot) ?? Infinity) >= Math.max(configured, bytes);
+  }
+
+  async ensureDiskHeadroom(expectedBytes = 0): Promise<void> {
+    const configured = this.options.minFreeBytes ?? MIN_FREE_BYTES;
+    if (configured <= 0) return;
+    const floor = Math.max(configured, expectedBytes);
     if ((await freeBytes(this.store.cacheRoot) ?? Infinity) >= floor) return;
     for (const snapshotId of this.store.releaseRetained()) this.superseded.add(snapshotId);
     await this.reclaim();
@@ -551,7 +590,7 @@ export class IndexOwner {
   }
 
   status() {
-    return { workspaces: this.list().map(workspace => workspace.status()), scheduler: this.scheduler.status(), pool: this.pool.status(),
+    return { workspaces: this.list().map(workspace => workspace.status()), scheduler: this.scheduler.status(), pool: this.pool.status(), poolCounters: this.pool.counters(),
       verifier: this.verifier.status(), superseded: this.superseded.size, gcCycleMs: this.options.gcCycleMs ?? GC_CYCLE_MS,
       ...(this.options.worktreeIdle ? { worktreeIdle: { mode: this.options.worktreeIdle.mode, lastSweep: [...this.idleResults] } } : {}) };
   }
@@ -572,6 +611,9 @@ export class IndexOwner {
 }
 
 /** `buildKey`: what the round captured; the builder refuses to spend a build on other inputs. */
+/** The bound snapshot as a round reads it: its census, status and recorded build inputs. */
+type BaseView = { snapshotId: string; entries: Map<string, ContentEntry>; status: SnapshotIndexStatus; inputs: QueryOps["buildInputs"]["result"] };
+
 type PreparedJob = { job: BuildJob; baseId?: string; buildKey: string; buildInputsMoved?: boolean };
 
 export class WorkspaceIndex {
@@ -582,7 +624,9 @@ export class WorkspaceIndex {
   private hashTimer?: NodeJS.Timeout;
   private stopped = false;
   private prepared?: PreparedJob;
-  private base?: { snapshotId: string; entries: Map<string, ContentEntry>; status: SnapshotIndexStatus };
+  private base?: BaseView;
+  /** The census of the snapshot this workspace last published, when it equals the verified one (F11). */
+  private publishedEntries?: { snapshotId: string; entries: ReadonlyMap<string, ContentEntry> };
   private readonly listeners = new Set<(event: PublishEvent) => void>();
   private readonly settled = new Set<() => void>();
   private lastError?: string;
@@ -659,8 +703,9 @@ export class WorkspaceIndex {
     // A save just before this request may still sit in FSEvents' latency window: flushed first, so a
     // FRESH label is never frozen over a change the stream already holds. Bounded by the same cap.
     if (this.tracker.status() === "FRESH" && !this.round) await this.flushSignals(cap, signal);
-    // Only the hints known at entry: one that lands while this request waits never extends its wait,
-    // and a round that owes no known hint (the periodic full hash) is not waited for.
+    // Only the hints known at entry: one that lands while this request waits never extends its wait.
+    // A due periodic full hash is owed like a resume (requireDueFullHash advances the seq), so a request
+    // arriving while it is owed waits for it like any hint, within the same cap.
     const epoch = this.tracker.trackerEpoch;
     const known = this.tracker.currentSeq;
     const owedAtEntry = this.tracker.status() === "STALE";
@@ -862,7 +907,7 @@ export class WorkspaceIndex {
       // The builder re-checks the same record and escalates if it no longer holds.
       let inputsRebuilt = false;
       if (keyChanged && !seed && baseId && !this.fullNext && files <= DELTA_CLOSURE_LIMIT) {
-        const recorded = await this.owner.query(baseId, { op: "buildInputs", args: {} }, DeadlineBudget.fromTimeout(INTERNAL_QUERY_MS));
+        const recorded = own!.inputs;
         inputsRebuilt = !recorded.schemaCompatible || recorded.layoutFingerprint !== round.layoutFingerprint
           || recorded.extractorVersion !== computeExtractorVersion();
       }
@@ -870,8 +915,16 @@ export class WorkspaceIndex {
       // workspace's own: the closure holds at least the changed files); build inputs the base's facts depend
       // on changed (above); or the previous delta ran out its job deadline (a misjudged small job goes to the
       // full queue, never back into a delta slot).
+      // A long delta lineage on the own base is rebuilt in full: no runtime check proves a delta equals a
+      // full build (docs/review-2026-11-11-architecture.md F2), so drift is bounded by this many deltas.
+      // A seed's depth is not read (seeds are rare; the next round on the own base counts it).
+      // The base's size: the disk estimate below (F12). A lineage full is optional: it waits for room
+      // rather than refusing every round (a delta clones the base and needs only its size).
+      const baseBytes = baseId ? await stat(this.owner.store.snapshotPath(baseId)).then(info => info.size, () => 0) : 0;
+      const lineageCapped = !seed && Boolean(own) && maxDeltaLineage() > 0 && own!.inputs.deltaDepth >= maxDeltaLineage()
+        && await this.owner.hasDiskHeadroom(2 * baseBytes);
       const fullReason: FullBuildReason | undefined = this.fullNext ?? (!baseId ? "no-base"
-        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : inputsRebuilt ? "build-key-changed" : undefined);
+        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : inputsRebuilt ? "build-key-changed" : lineageCapped ? "lineage-limit" : undefined);
       const chosen: BuildHint = fullReason ? { workspaceId: this.workspaceId, kind: "full", generation }
         : (seed || round.mode === "paths") && pathsOnly
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }
@@ -880,7 +933,9 @@ export class WorkspaceIndex {
       const plannedMode = chosen.kind === "full" ? "full" : chosen.rescan ? "rescan" : "delta";
       detail.kind = plannedMode;
       // Before anything is spent or forgotten: a refused build keeps fullNext owed for its retry.
-      await this.owner.ensureDiskHeadroom();
+      // A full build holds its uncommitted pages in the WAL (one job transaction): about twice the base's
+      // size at peak; a delta clones the base. The base's size is the estimate (F12); unknown means the floor.
+      await this.owner.ensureDiskHeadroom(chosen.kind === "full" ? 2 * baseBytes : baseBytes);
       if (chosen.kind === "full") this.fullNext = undefined;
       const cloned = chosen.kind === "full" ? undefined : baseId;
       // The own base under the previous buildKey (a seed is already under this round's key).
@@ -918,6 +973,9 @@ export class WorkspaceIndex {
           seenThrough = workBefore > round.workMark ? round.workMark : this.tracker.workMark;
         } else this.tracker.complete(round, binding);
         this.base = undefined;
+        // The census the builder published is the one this round verified (same content identity):
+        // the next round's base takes it from here instead of reading every row back through the pool.
+        this.publishedEntries = detail.censusDiverged ? undefined : { snapshotId: binding.snapshotId, entries: verification.entries };
         Object.assign(detail, { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
         this.finish("published", mode, started, undefined, detail, seenThrough);
         this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
@@ -966,14 +1024,17 @@ export class WorkspaceIndex {
   }
 
   /** The bound snapshot's captured content and status, read once per snapshot through the pool. */
-  private async baseOf(snapshotId: string): Promise<{ entries: Map<string, ContentEntry>; status: SnapshotIndexStatus }> {
+  private async baseOf(snapshotId: string): Promise<BaseView> {
     if (this.base?.snapshotId === snapshotId) return this.base;
     const budget = DeadlineBudget.fromTimeout(INTERNAL_QUERY_MS);
-    const [rows, status] = await Promise.all([
-      this.owner.query(snapshotId, { op: "contentEntries", args: {} }, budget),
-      this.owner.query(snapshotId, { op: "status", args: {} }, budget)
+    const published = this.publishedEntries?.snapshotId === snapshotId ? this.publishedEntries.entries : undefined;
+    const [entries, status, inputs] = await Promise.all([
+      published ? Promise.resolve(new Map(published))
+        : this.owner.query(snapshotId, { op: "contentEntries", args: {} }, budget).then(rows => new Map(rows.map(row => [row.path, row]))),
+      this.owner.query(snapshotId, { op: "status", args: {} }, budget),
+      this.owner.query(snapshotId, { op: "buildInputs", args: {} }, budget)
     ]);
-    this.base = { snapshotId, entries: new Map(rows.map(row => [row.path, row])), status };
+    this.base = { snapshotId, entries, status, inputs };
     return this.base;
   }
 

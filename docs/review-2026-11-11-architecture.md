@@ -282,3 +282,57 @@ owner 是单线程，服务所有仓库的请求，默认请求 deadline 只有 
 - **原生代码**：`native/macos/` 下只读了 `ilv2-mac.c` 的 clone 部分，`fsevents.h` 和 `owner-lock.h` 没有读。
 - **安装与发布**：`install-runtime.sh`（40 KB）、签名、launchd 模板、`scripts/` 下的门禁脚本都没有评审。
 - **测试**：没有运行任何测试，也没有评估测试覆盖的充分性。
+
+## 9. 处置记录（分支 `fix/architecture-review`）
+
+本轮只改代码，**没有编译，也没有运行任何测试**。下表中的"已修"均指代码已改、未验证。重大项（F1、F2、F3 中的 `assertOwnerLock`、F6、第 5 节）各自经过一次独立 review，其余项修完后统一 review 一次。
+
+| 项 | 处置 | 变更位置 / 理由 |
+|---|---|---|
+| F1 | 已修 | `worktree-cache-cleanup.ts`：<br>• 新增 `unsafeCacheBase`：cache base 解析为真实路径后，若是 `/`、`$HOME` 或其祖先、`~/Library`、`~/Library/Caches`，拒绝清理并记日志。<br>• 只处理目录名为 12 位 hex 或 meta 中带 `repoRoot` 的目录，其余归入 `unrecognizedDirs`，不扫描也不删除。<br>• 无 `repoRoot` 的目录在删除前重读一次 meta。 |
+| F2 | 部分修复 | • 新增 meta 键 `deltaDepth`：cold build 写 0，每次 delta 在本次事务内写入 base+1。<br>• 自身 base 的深度达到 `JAVA_LSP_MAX_DELTA_LINEAGE`（默认 256）时，改走全量，`fullReason=lineage-limit`。<br>• 新增 `scripts/check-facts-revision.mjs` 作为手动合入门禁：相对 merge-base，提取/构建代码有改动但 facts 版本没动时失败；可用 `--ack` 放行。<br>• **未做**：后台 full-vs-delta 对照构建。它需要和 F5 的 verifier 调度一起设计，成本较高。 |
+| F3 `findExecutable` | 已修 | 按名字做进程级缓存（只缓存找到的路径），`spawnSync` 加 10 s 超时，超时单独记日志；保留 login shell，因为 launchd 下的 PATH 不含用户 profile。 |
+| F3 `assertOwnerLock` | 已修 | `owner-lock.ts`：<br>• 新增 `assertOwnerLockHeld`：若 fd 4 的 dev/ino/nlink 与 `.owner.lock` 路径都和上次 native 校验一致，就跳过 native 调用。<br>• commit 点仍走完整校验。 |
+| F4 | 只加测量 | • query pool 新增 `counters()`，统计 `queueFull` 和 `runKills`，通过 HTTP 无选择器的 `java_status` 的 `index.queryCounters` 暴露。<br>• 协作退出窗口、内部读取独立配额、请求层准入，等有数据后再决定。 |
+| F5 | 只记录 + 澄清 | • 周期 full hash 到期时，`requireDueFullHash` 会推进 seq，因此到期期间到达的请求**会**在 1 s 上限内等待。已把 `index-owner.ts` 中"不被等待"的注释改为与代码一致。<br>• 按需 hash、全局读并发上限、verifier 改为按血缘深度触发，都需要先测量。round 事件里已经带有 mode 和耗时，可以直接统计。 |
+| F6 鉴权 | 不做 | daemon 只监听 loopback，浏览器侧已有 Host/Origin 校验。单用户 Mac 上，能连 loopback 的本地进程本来就以同一用户身份运行，可以直接读源码和 cache，token 挡不住它。直连 URL 注册的 `streamable_http` 客户端也带不上每次启动都会变的 token。曾实现为可选开关，经确认后撤掉。多用户共享机器时再考虑（需要持久化 token）。 |
+| F6 entry 上限 | 已修 | • `JAVA_LSP_MAX_RUNTIME_ENTRIES`（默认 16）：新建 entry 后若超出上限，按 LRU 退役一个空闲且未 pin 的 entry。<br>• 选中的 victim 同步打标，防止并发 create 重复选同一个；某个 entry 转为空闲时会再检查一次。 |
+| F6 workspace 数 | 只记录 | 没有给 owner 的 workspace 单独设上限。推断（未核对）：entry 退役时会停止它的 workspace tracker，因此 workspace 数受 entry 上限间接约束；需在 Mac 上确认。 |
+| F7 | 已修 | • subtree 前缀先去掉被覆盖的子前缀，再按祖先路径查集合，复杂度从 O(文件 × 前缀) 降为 O(文件 × 路径深度)。<br>• 一轮的 subtree 数超过 256 时直接走 full-stat。 |
+| F8 | 只记录 | 是否删除图谱取决于 post-ILV2 计划是否使用它。建议先在 Mac 上测量图谱在构建时间和文件体积中的占比。 |
+| F9 | 已修 | 查询返回 SQLite 损坏类错误时，`doubtVerified` 撤销内存中的 VERIFIED 结论并重新排队校验；如果复查结果是 FAILED，走既有的隔离流程。同一 snapshot 每个进程只撤销一次，避免检测不到的损坏导致反复整文件校验。 |
+| F10 | 已修 | 关停全程共用一个绝对截止时间，application drain 和 JDT 关闭使用剩余时间；强制分支的 `forceClose` 保持原来的 `min(1000, grace)`，不从剩余时间里取。 |
+| F11 | 已修 | publish 成功且 census 未分歧时，下一轮的 base 直接复用本轮的 `verification.entries`，不再通过查询池重读整份 census。 |
+| F12 | 已修（估算） | • 开构建前的磁盘下限改为 `max(MIN_FREE_BYTES, 基底快照大小 × (full ? 2 : 1))`；构建期间不做周期检查。<br>• 因 `lineage-limit` 触发的全量是可选的：空间不足 2× 时本轮继续走 delta，不会每轮被拒。 |
+| F13 文档 | 已修 | 更新 README：<br>• 查询 worker 数（最多 2 个）；<br>• 删除未实现的 `JAVA_LSP_RUNTIME_ENTRY_TTL_MS`；<br>• 补充 `JAVA_LSP_MAX_DELTA_LINEAGE`；<br>• 去掉 ILV2 之前的 `index.sqlite` 和 WAL 描述。<br>`src/tools/README.md` 删除了不存在的 `java-context.ts`。 |
+| F13 死代码 / 旧层 | 只记录 | 清理前需要确认 canary 与生产 daemon 并存时还需要哪些跨进程租约，单独排期。 |
+| F14 | 只记录 | 置信度低，需要先用测试复现。跨进程 JDT 租约是硬上限，最坏情况是启动等待。 |
+| 第 5 节 `st_dev` | 已修（缓解） | • owner 打开后 10 分钟内（`RENUMBERED_GRACE_MS`），若某个 binding 的根目录 ino 不变、只有 dev 变了，GC 保留它（`root-renumbered`）。<br>• 同根的旧快照在 seed 候选中排在最前，新 workspaceId 可以零差异绑定。<br>• 这是对"两个 GC 周期收敛"的有界例外，不影响删除的安全判定。<br>• 排在窗口之后才启动的 pin 仍然全量重建。根治仍需要卷 UUID。 |
+
+**review 后仍未处理的已知问题**：
+- **F1**：
+  - 与 hash 同名的外部目录仍会被当作仓库目录。
+  - `reapAbandonedWorkspaceJdtls` 没有 allow-list。
+  - cache base 被拒绝时只记日志，不会导致启动失败。
+- **F2**：
+  - seed delta 不检查血缘深度（seed 很少见；下一轮回到自身 base 时会计入）。
+  - 门禁脚本按目录粗粒度匹配，会有误报，用 `--ack` 处理。本分支自身需要 `--ack "deltaDepth is meta, not fact rows"`。
+- **F3**：快路径察觉不到别处的 `LOCK_UN`（依赖不当行为），也没有测试。
+- **F9**：撤销结论到复查完成之间，`failed()` 会顺着血缘查到父节点；若父节点恰好被判 FAILED，该 snapshot 在这段时间内也被当作 failed（不再作为 seed/base）。窗口短，结果偏保守。
+- **F12**：没有 base 的首次全量构建仍只检查 512 MiB 下限；必须做的全量（no-base、input-limit 等）空间不足时仍按退避重试并保持 STALE，这是原有语义。
+- **批量 review 已修**：
+  - overflow 退役不再连锁多退：已选中的 victim 不计入存活数，`shutdownAll` 期间不触发。
+  - seed 候选顺序的注释已修正。
+
+**建议在 Mac 上运行**：
+1. 先执行 `npm run build:isolated`。
+2. 测试：
+   - `src/worktree-cache-cleanup.test.ts`
+   - `src/http-server.test.ts`
+   - `src/stdio-owner-proxy.test.ts`
+   - `src/repo-runtime-manager.test.ts`
+   - `src/java-index/snapshot/*.test.ts`（含新增的 renumbered 用例）
+   - `src/index-builder/*incremental*.test.ts`
+   - `src/java-index/snapshot/query-pool.test.ts`
+   - `scripts/owner-daemon.test.mjs`
+3. 门禁脚本：`node scripts/check-facts-revision.mjs`。

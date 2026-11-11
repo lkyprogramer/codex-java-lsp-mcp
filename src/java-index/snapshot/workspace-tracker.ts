@@ -374,8 +374,9 @@ export class WorkspaceTracker {
     this.layout = layout;
     this.layoutKey = layoutKey;
     this.fingerprint = fingerprint;
+    // Many directory events (a branch switch) walk every root once instead of each subtree against the census.
     const mode: RoundMode = owedFullHash || fingerprintMoved || !this.view || dispatchedAt - this.lastFullHashAt >= this.fullHashIntervalMs ? "full-hash"
-      : owedFullStat || layoutMoved ? "full-stat" : "paths";
+      : owedFullStat || layoutMoved || subtrees.size > SUBTREE_PATHS_LIMIT ? "full-stat" : "paths";
     const round: TrackerRound = { epoch, cut, workspaceGeneration: this.generation, root: { ...this.root }, layout, buildKey: currentBuildKey(fingerprint), layoutFingerprint,
       bindingVersion: input.bindingVersion, captureId: `c-${randomUUID().replaceAll("-", "")}`, mode, dispatchedAt, pending, subtrees, workMark };
     this.inFlight = round;
@@ -426,8 +427,18 @@ export class WorkspaceTracker {
     const root = this.root.canonicalRoot;
     const entries = round.mode === "paths" ? new Map(this.view!) : new Map<string, ContentEntry>();
     const counts = { hashed: 0, statted: 0 };
-    const suspect = (relative: string) => round.mode === "full-hash" || round.pending.has(relative)
-      || [...round.subtrees.keys()].some(prefix => relative === prefix || relative.startsWith(`${prefix}/`));
+    // Outermost subtree prefixes only (a prefix under another one adds nothing), computed once per verify.
+    const prefixes = outermostPrefixes(round.subtrees.keys());
+    // By ancestor lookup, O(path depth): a full-stat round can carry thousands of subtree hints.
+    const prefixSet = new Set(prefixes);
+    const underPrefix = (relative: string) => {
+      if (prefixSet.size === 0) return false;
+      for (let end = relative.length; end > 0; end = relative.lastIndexOf("/", end - 1)) {
+        if (prefixSet.has(relative.slice(0, end))) return true;
+      }
+      return false;
+    };
+    const suspect = (relative: string) => round.mode === "full-hash" || round.pending.has(relative) || underPrefix(relative);
     // A hinted path did not come from readdir. On a case-insensitive volume lstat("UserDAO.java")
     // still succeeds after a rename to UserDao.java, which would keep a ghost member (a duplicate
     // declaration) until the next full hash; each component must exist under exactly that name.
@@ -483,8 +494,8 @@ export class WorkspaceTracker {
         const actualKind = actual === relative ? kind : memberKind(actual, round.layout);
         if (actualKind) await read(actual, actualKind, actual !== relative);
       });
-      for (const prefix of round.subtrees.keys()) {
-        for (const existing of [...entries.keys()]) if (existing === prefix || existing.startsWith(`${prefix}/`)) gone(existing);
+      if (prefixes.length > 0) for (const existing of [...entries.keys()]) if (underPrefix(existing)) gone(existing);
+      for (const prefix of prefixes) {
         // A directory renamed by case only: the old spelling still opens, its members are not there.
         const walked = await spelled(prefix);
         if (walked === undefined) continue;
@@ -589,6 +600,21 @@ function isMissing(error: unknown): boolean {
  * the same entry (APFS is normalization-insensitive, and a signal may spell a name in either form);
  * case is never folded.
  */
+/** Above this many subtree hints a round walks every root (full-stat) rather than each subtree. */
+const SUBTREE_PATHS_LIMIT = 256;
+
+/** The prefixes no other one covers, sorted: `a` covers `a/b`. */
+function outermostPrefixes(keys: Iterable<string>): string[] {
+  const kept: string[] = [];
+  // Sorted as `prefix/` so a directory precedes its descendants (`a/` < `a/b/`; `a-b/` sorts before both).
+  for (const prefix of [...keys].sort((left, right) => (`${left}/` < `${right}/` ? -1 : `${left}/` > `${right}/` ? 1 : 0))) {
+    const last = kept[kept.length - 1];
+    if (last !== undefined && (prefix === last || prefix.startsWith(`${last}/`))) continue;
+    kept.push(prefix);
+  }
+  return kept;
+}
+
 type Listing = { names: Set<string>; nfc?: Map<string, string> } | "missing" | "unlisted";
 
 function listingOf(root: string, parent: string, listings: Map<string, Promise<Listing>>): Promise<Listing> {

@@ -1,4 +1,4 @@
-import { computeExtractorVersion, computeInputFingerprints, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../java-index/build-fingerprint.js";
+import { computeExtractorVersion, computeInputFingerprints, DELTA_DEPTH_META, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../java-index/build-fingerprint.js";
 import { sqlStage, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { captureSource, type SourceCapture } from "../java-index/source-capture.js";
 import { captureCensus, finishCaptureCensus, type CaptureCensusEntry } from "./capture-census.js";
@@ -313,6 +313,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     // What a later job needs to take a build-file-only change as a delta on this snapshot (incremental.ts).
     writeMeta(db,LAYOUT_FINGERPRINT_META,layoutFingerprint);
     writeMeta(db,EXTRACTOR_VERSION_META,computeExtractorVersion());
+    writeMeta(db,DELTA_DEPTH_META,"0");
     return counts;
   });
 

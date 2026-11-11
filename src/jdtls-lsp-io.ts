@@ -750,9 +750,25 @@ export abstract class JdtlsLspClient {
   }
 }
 
+/** One login-shell lookup per name per process (only a found path is kept: a later install is still seen). */
+const executableCache = new Map<string, string>();
+/** A login profile that hangs (nvm, sdkman init) must not freeze the owner's event loop: the lookup gives up. */
+const FIND_EXECUTABLE_TIMEOUT_MS = 10_000;
+
+/**
+ * The login shell is deliberate: under launchd the daemon's PATH lacks the user's profile additions.
+ * The lookup is synchronous on the owner thread, so it is cached and time-bounded.
+ */
 export function findExecutable(name: string): string {
-  const result = spawnSync("sh", ["-lc", `command -v ${shellQuote(name)}`], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : "";
+  const cached = executableCache.get(name);
+  if (cached) return cached;
+  const result = spawnSync("sh", ["-lc", `command -v ${shellQuote(name)}`], { encoding: "utf8", timeout: FIND_EXECUTABLE_TIMEOUT_MS });
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    console.error(`[codex-java-lsp] login-shell lookup of ${name} timed out after ${FIND_EXECUTABLE_TIMEOUT_MS} ms (slow shell profile?)`);
+  }
+  const found = result.status === 0 ? result.stdout.trim() : "";
+  if (found) executableCache.set(name, found);
+  return found;
 }
 
 export function watchedFileChange(change: RepoChange): { uri: string; type: number } | undefined {
