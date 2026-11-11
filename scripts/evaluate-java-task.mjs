@@ -15,12 +15,13 @@
 //      coverage proxy, never the task outcome.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   runLiveAgentTask,
-  openImpactSession
+  openImpactSession,
+  summarizeSchedule
 } from "./run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "./openai-compatible-chat.mjs";
 import { buildToolSet, createAttemptWorkspace, nativeToolNames, validateArguments } from "./eval-native-tools.mjs";
@@ -30,12 +31,22 @@ import { evaluateRepair } from "./eval-repair-adapter.mjs";
 import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
 export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
-/** R03: the native tool surface shared by BOTH arms; the only arm
- * difference is java_symbol on the product arm. */
+/**
+ * 06 §6.4 arms on one server build. control has only the native tools; product follows
+ * --product-profile; b0/b1/b2 pin the plan's profiles (B0 query, B1 + outline, B2 + evidence) so a
+ * B0-vs-B2 pairing runs inside one frozen schedule with the same native tools and budgets.
+ */
+export const ARM_PROFILES = Object.freeze({ control: null, product: undefined, b0: "broad", b1: "outline", b2: "outline-evidence" });
+
+/** The product profile an arm exposes, null for native-only; unknown arms are refused. */
+export function armProfile(arm, productProfile = "broad") {
+  if (!Object.hasOwn(ARM_PROFILES, arm)) throw new Error(`unknown arm: ${arm}`);
+  return arm === "product" ? productProfile : ARM_PROFILES[arm];
+}
+
+/** R03: the native tool surface shared by EVERY arm; arms differ only in the product tools. */
 export function nativeNames(arm) {
-  if (arm && !["product", "control"].includes(arm)) {
-    throw new Error(`unknown arm: ${arm}`);
-  }
+  if (arm) armProfile(arm);
   return nativeToolNames();
 }
 
@@ -89,9 +100,30 @@ export const EVAL_JAVA_EVIDENCE_TOOL = {
   }
 };
 
+/** post-ILV2 Q03 outline as a model-facing tool (product: java_symbol operation=outline). */
+export const EVAL_JAVA_OUTLINE_TOOL = {
+  type: "function",
+  function: {
+    name: "java_outline",
+    description: "List the declarations (types, constructors, methods, fields) of one indexed Java file with 1-based line ranges and symbolIds; with nearLine, the declarations containing or nearest that line. Returns no source text: signatures are rebuilt from index facts and are not source evidence, so read the lines you need.",
+    parameters: {
+      type: "object", additionalProperties: false,
+      properties: { file: { type: "string", minLength: 1 }, nearLine: { type: "integer", minimum: 1 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
+      required: ["file"]
+    }
+  }
+};
+
+export const PRODUCT_PROFILES = Object.freeze(["broad", "evidence", "exact-evidence", "outline", "outline-evidence"]);
+
 export function productTools(productProfile = "broad") {
-  if (!["broad", "evidence", "exact-evidence"].includes(productProfile)) throw new Error(`unknown productProfile: ${productProfile}`);
-  if (productProfile !== "exact-evidence") return productProfile === "broad" ? [EVAL_JAVA_SYMBOL_TOOL] : [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_EVIDENCE_TOOL];
+  if (!PRODUCT_PROFILES.includes(productProfile)) throw new Error(`unknown productProfile: ${productProfile}`);
+  if (productProfile !== "exact-evidence") return {
+    broad: [EVAL_JAVA_SYMBOL_TOOL],
+    evidence: [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_EVIDENCE_TOOL],
+    outline: [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_OUTLINE_TOOL],
+    "outline-evidence": [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_OUTLINE_TOOL, EVAL_JAVA_EVIDENCE_TOOL]
+  }[productProfile];
   const { terms: _terms, ...properties } = EVAL_JAVA_SYMBOL_TOOL.function.parameters.properties;
   return [{ type: "function", function: { ...EVAL_JAVA_SYMBOL_TOOL.function,
     description: "Locate Java type or method declarations by exact symbol name, FQN, or owner#method. Returns 1-based declaration anchors. Search is exact only; use native rg and read for text discovery. Source previews are opt-in and consume the shared source budget.",
@@ -537,6 +569,7 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     taskOutcome: run.taskOutcome ?? "UNMEASURED",
     taskSuccess: run.taskSuccess === true ? true : (run.taskSuccess === false ? false : null),
     answerStatus: run.answerStatus ?? null,
+    ...(run.armProfile !== undefined ? { armProfile: run.armProfile } : {}),
     ...(run.attemptState ? { attemptState: run.attemptState } : {}),
     ...(run.repairJudge ? { repairJudge: run.repairJudge } : {}),
     ...(run.candidateReceiptValidation ? { candidateReceiptValidation: run.candidateReceiptValidation } : {}),
@@ -574,8 +607,13 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   const universe = Array.isArray(planned) && planned.length > 0 ? planned : [...byKey.values()];
   const missing = [];
   const packs = [];
+  const slotRuns = [];
+  const fromPlan = universe === planned;
   for (const row of universe) {
-    const run = byKey.get(keyOf(row));
+    // Without a plan the universe is the delivered rows themselves; keyOf's defaults ("" arm, repeat 1)
+    // must not fold a row without arm/repeat onto another row.
+    const run = fromPlan ? byKey.get(keyOf(row)) : row;
+    slotRuns.push(run ?? null);
     if (run) {
       packs.push(packRow(run));
     } else {
@@ -594,6 +632,30 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   }
   const measured = packs.filter(pack => pack.taskSuccess === true || pack.taskSuccess === false);
   const successes = packs.filter(pack => pack.taskSuccess === true).length;
+  // post-ILV2 Q10: the slot summary over the same rows as `packs`. A not-run, blocked or unjudged
+  // slot makes the end-to-end rate null instead of counting as a failure (pack.taskSuccessRate and
+  // byArm keep their historical successes/scheduled reading); usage is summed only when every
+  // attempted slot measured it, reported in the packs' usage field names without raw provider blobs.
+  const slots = packs.map((pack, index) => {
+    const run = slotRuns[index];
+    // Replayed rows from before attemptState existed still carry a judged outcome.
+    const attemptState = run?.attemptState ?? (run && typeof run.taskSuccess === "boolean" ? "COMPLETED" : undefined);
+    const state = !attemptState || attemptState === "MISSING_RESULT" ? "NOT_RUN"
+      : attemptState === "BLOCKED_SETUP" ? "BLOCKED_ENV"
+        : run.timedOut ? "TIMED_OUT"
+          : attemptState === "COMPLETED" ? "COMPLETED" : "FAILED";
+    const passed = state === "COMPLETED" ? (run.taskSuccess === true ? true : run.taskSuccess === false ? false : null)
+      : state === "NOT_RUN" || state === "BLOCKED_ENV" ? null : false;
+    return { slotId: JSON.stringify([pack.taskId, pack.arm ?? null, pack.repeat ?? null]), arm: pack.arm ?? "", state, passed, usage: run?.usage ?? null };
+  });
+  const summarize = list => {
+    const summary = summarizeSchedule(list);
+    if (!summary.providerUsage) return summary;
+    const { rawUsage: _raw, rawUsageHash: _hash, ...usage } = usageOrNull(summary.providerUsage) ?? {};
+    return { ...summary, providerUsage: usage };
+  };
+  const schedule = { ...summarize(slots),
+    byArm: Object.fromEntries([...new Set(slots.map(slot => slot.arm))].map(arm => [arm, summarize(slots.filter(slot => slot.arm === arm))])) };
   return {
     schemaVersion: EVAL_PACK_SCHEMA_VERSION,
     evalProtocol: EVAL_PROTOCOL_VERSION,
@@ -612,6 +674,7 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     // End-to-end rate: successes / scheduled. Never successes / measured. A pack that measured
     // nothing (no backend, dry run) has no rate at all: 0 would read as a measured failure.
     taskSuccessRate: status === "MEASURED" && packs.length > 0 ? successes / packs.length : null,
+    schedule,
     conditionalAccuracy: measured.length > 0 ? successes / measured.length : null,
     measuredAttempts: measured.length
   };
@@ -683,7 +746,8 @@ export async function runLiveEvalRun({
   productProfile = "broad",
   publicAnswerContract = null
 }) {
-  const productDeclarations = productTools(productProfile);
+  productTools(productProfile);
+  for (const arm of arms) armProfile(arm, productProfile);
   if (publicAnswerContract) for (const task of tasks.filter(task => task.kind === "qa")) {
     const fields = publicAnswerContract.tasks.get(task.id);
     if (!fields) throw new TypeError(`public answer contract missing task: ${task.id}`);
@@ -713,7 +777,11 @@ export async function runLiveEvalRun({
         const eventsBefore = recorder.events().length;
         const attemptStarted = Date.now();
         const contractIdentity = publicAnswerContract ? { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256, applied: task.kind === "qa" } : null;
-        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind, productProfile, publicAnswerContract: contractIdentity };
+        const profile = armProfile(arm, productProfile);
+        const productDeclarations = profile ? productTools(profile) : [];
+        const productArm = productDeclarations.length > 0;
+        // productProfile stays the run flag (as before for product/control); armProfile is what this arm exposed.
+        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind, productProfile, armProfile: profile, publicAnswerContract: contractIdentity };
         if (!fixtureRoot || !existsSync(fixtureRoot)) {
           runs.push({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
           continue;
@@ -723,6 +791,7 @@ export async function runLiveEvalRun({
         let sessionGeneration = 0;
         const sessions = [];
         let partial = false;
+        let agentStarted = false;
         const cacheFor = generation => path.join(outputDir, "mcp-cache", createHash("sha256").update(attemptKey).digest("hex").slice(0, 16), `w${generation}`);
         const openSession = async () => {
           const opened = await openSessionImpl({ repoRoot: candidateRoot, serverJs, cacheRoot: cacheFor(sessionGeneration), env });
@@ -731,9 +800,9 @@ export async function runLiveEvalRun({
         };
         try {
           candidateRoot = createAttemptWorkspace(fixtureRoot, attemptKey, outputDir);
-          const toolSet = buildToolSet(arm === "product" ? "product" : "control", task.kind === "repair" ? "repair" : "qa", { candidateRoot });
+          const toolSet = buildToolSet(productArm ? "product" : "control", task.kind === "repair" ? "repair" : "qa", { candidateRoot });
           // The control arm never needs (or pays for) a discovery session.
-          if (arm === "product") session = await openSession();
+          if (productArm) session = await openSession();
           const contract = task.output_contract?.answer_keys
             ? Object.entries(task.output_contract.answer_keys).map(([key, type]) => `${key}: ${type}`).join(", ")
             : "";
@@ -767,11 +836,14 @@ export async function runLiveEvalRun({
               sourceSpent.bytes += Buffer.byteLength(slice.text, "utf8");
             }
             const result = JSON.parse(wire.content);
-            appendFileSync(toolLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile }, callSeq,
+            appendFileSync(toolLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile }, callSeq,
               callId, toolName: name, args, rawHash: createHash("sha256").update(JSON.stringify(raw)).digest("hex"),
               rawResult: raw, modelResult: result, sourceSlices: wire.slices ?? [] })}\n`, "utf8");
             return result;
           };
+          // From here on a failure is a runtime failure; before it (workspace, product session) the
+          // attempt never reached the model and is a setup block, not a failed task.
+          agentStarted = true;
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
@@ -784,7 +856,7 @@ export async function runLiveEvalRun({
             systemPrompt: EVAL_SYSTEM_PROMPT,
             submission: { answerKeys: task.kind === "repair" ? { patchApplied: "boolean", summary: "string" } : task.output_contract?.answer_keys,
               ...(task.kind === "qa" && publicAnswerContract ? { fields: publicAnswerContract.tasks.get(task.id), contract: { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256 } } : {}) },
-            tools: arm === "product" ? [...productDeclarations, ...toolSet.tools] : toolSet.tools,
+            tools: productArm ? [...productDeclarations, ...toolSet.tools] : toolSet.tools,
             chat: chatImpl,
             chatRequestConfig: effectiveChatRequestConfig,
             maxRounds,
@@ -792,7 +864,7 @@ export async function runLiveEvalRun({
             ...(task.kind === "qa" && task.budget ? { sourceBudget: task.budget } : {}),
             onChat: request => {
               appendFileSync(payloadLog, `${JSON.stringify({
-                attempt: { taskId: task.id, arm, repeat, productProfile },
+                attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile },
                 requestIndex: request.requestIndex,
                 payloadHash: request.payloadHash,
                 productProfile,
@@ -807,17 +879,19 @@ export async function runLiveEvalRun({
               }
             },
             onCompletion: completion => {
-              appendFileSync(completionLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile }, ...completion })}\n`, "utf8");
+              appendFileSync(completionLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile }, ...completion })}\n`, "utf8");
             },
             invoke: async (name, args) => {
               callSeq += 1;
               const callId = `eval:${task.id}:${arm}:${repeat}:${callSeq}`;
-              if (name === "java_symbol" || name === "java_evidence") {
-                const declaration = arm === "product" && productDeclarations.find(tool => tool.function.name === name);
+              if (name === "java_symbol" || name === "java_evidence" || name === "java_outline") {
+                const declaration = productArm && productDeclarations.find(tool => tool.function.name === name);
                 if (!declaration) return modelResult(name, args, { error: `tool ${name} is not provided in this session` }, callId);
                 const invalid = validateProductArguments(declaration, args);
                 if (invalid) return modelResult(name, args, { error: invalid, errorClass: "CONTRACT" }, callId);
                 if (!session) return modelResult(name, args, { error: "product session unavailable after a write; results would be stale", errorClass: "PARTIAL" }, callId);
+                // Outline carries declarations and ranges, never source text: it spends no source budget.
+                if (name === "java_outline") return modelResult(name, args, await session.outline(args), callId);
                 if (name === "java_evidence") {
                   const remaining = task.kind === "qa" && task.budget ? {
                     lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
@@ -828,7 +902,7 @@ export async function runLiveEvalRun({
                   return modelResult(name, args, await session.evidence(args), callId);
                 }
                 const result = await session.symbol({ ...args,
-                  ...(productProfile === "exact-evidence" ? { searchMode: "exact" } : {}),
+                  ...(profile === "exact-evidence" ? { searchMode: "exact" } : {}),
                   ...(!Object.hasOwn(args, "preview") ? { preview: "none" } : {}) });
                 return modelResult(name, args, result, callId);
               }
@@ -837,7 +911,7 @@ export async function runLiveEvalRun({
                 bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
               } : null;
               const result = await invokeWithSourceBudget(toolSet, name, args, remaining);
-              if (result?.written === true && arm === "product") {
+              if (result?.written === true && productArm) {
                 // The candidate changed: the next java_symbol query must see
                 // it, so the session is re-opened on a fresh index.
                 const old = session;
@@ -902,7 +976,7 @@ export async function runLiveEvalRun({
         } catch (error) {
           runs.push({
             ...base,
-            attemptState: "FAILED_RUNTIME",
+            attemptState: agentStarted ? "FAILED_RUNTIME" : "BLOCKED_SETUP",
             taskOutcome: "UNMEASURED",
             taskSuccess: null,
             answerStatus: "ATTEMPT_SETUP_OR_RUNTIME_ERROR",
@@ -1039,7 +1113,8 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
       arm,
       datasetHash: hashes.dataset,
       runProfile: { ...runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats, model }),
-        eval_protocol: EVAL_PROTOCOL_VERSION, product_profile: productProfile },
+        // The profile this arm actually exposed (b0/b1/b2 pin theirs); product/control keep the run flag as before.
+        eval_protocol: EVAL_PROTOCOL_VERSION, product_profile: ["b0", "b1", "b2"].includes(arm) ? armProfile(arm) : productProfile },
       model
     });
     const packPath = path.join(scoreDir, `${arm}-results.json`);
@@ -1079,6 +1154,34 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
   };
 }
 
+/**
+ * post-ILV2 Q10 dry-run identity: every scheduled task, arm, corpus, the named dataset/split and the
+ * product server must resolve before anything is frozen or sent. With --require-identity a problem
+ * fails closed (exit 2); without it the check is still recorded in the pack identity.
+ */
+export function checkRunIdentity({ tasks, allTaskIds, filter = [], arms, productProfile, dataset, repoRoots = {}, kitRoot, serverJs }) {
+  const problems = [];
+  if (tasks.length === 0) problems.push("NO_TASKS");
+  for (const id of filter) if (!allTaskIds.has(id)) problems.push(`UNKNOWN_FILTER_TASK:${id}`);
+  if (arms.length === 0) problems.push("NO_ARMS");
+  if (new Set(arms).size !== arms.length) problems.push("DUPLICATE_ARM");
+  let productArm = false;
+  for (const arm of arms) {
+    try { productArm ||= Boolean(armProfile(arm, productProfile)); } catch { problems.push(`UNKNOWN_ARM:${arm}`); }
+  }
+  if (!dataset?.datasetId || !dataset?.split) problems.push("DATASET_UNNAMED");
+  for (const task of tasks) {
+    if (typeof task.corpus !== "string" || task.corpus === "") { problems.push(`TASK_WITHOUT_CORPUS:${task.id}`); continue; }
+    const root = repoRoots[task.corpus] ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", task.corpus) : undefined);
+    let isDirectory = false;
+    try { isDirectory = root !== undefined && statSync(root).isDirectory(); } catch { isDirectory = false; }
+    if (!isDirectory) problems.push(`CORPUS_UNRESOLVED:${task.corpus}`);
+  }
+  if (productArm && !existsSync(serverJs)) problems.push("PRODUCT_SERVER_MISSING");
+  const unique = [...new Set(problems)];
+  return { status: unique.length === 0 ? "VERIFIED" : "FAILED", problems: unique };
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const flag = (name) => {
     const index = argv.indexOf(name);
@@ -1096,9 +1199,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const productProfile = flag("--product-profile") ?? "broad";
   productTools(productProfile);
   const dryRun = argv.includes("--dry-run");
+  const requireIdentity = argv.includes("--require-identity");
   const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--product-profile broad|evidence|exact-evidence] [--dry-run]");
+    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--arms product,control|b0,b2|...] [--product-profile broad|evidence|exact-evidence|outline|outline-evidence] [--dry-run] [--require-identity]");
     return 2;
   }
   const datasetHash = goldFile
@@ -1119,15 +1223,28 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
   const allTasks = loadTaskFile(tasksFile);
   const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
+  const repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
+    .filter(Boolean)
+    .map(pair => {
+      const index = pair.indexOf("=");
+      return index > 0 ? [pair.slice(0, index), pair.slice(index + 1)] : [pair, pair];
+    }));
+  const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
+  const identityCheck = checkRunIdentity({ tasks, allTaskIds: new Set(allTasks.map(task => task.id)), filter, arms, productProfile, dataset, repoRoots, kitRoot, serverJs });
+  if (requireIdentity && identityCheck.status !== "VERIFIED") {
+    // Fail closed before a schedule is frozen or any request is sent.
+    console.error(`run identity is incomplete: ${identityCheck.problems.join(", ")}`);
+    return 2;
+  }
   // The full schedule is frozen before anything runs; every row stays in the
   // denominator whatever happens to it.
   const planned = buildPlannedAttempts(tasks, arms, repeats);
   mkdirSync(output, { recursive: true });
   const scheduleText = planned.map(row => JSON.stringify(row)).join("\n") + (planned.length ? "\n" : "");
   writeFileSync(path.join(output, "schedule.jsonl"), scheduleText, "utf8");
-  const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
   const identity = { datasetId: dataset?.datasetId ?? null, datasetDigest: dataset?.datasetDigest ?? null, split: dataset?.split ?? null, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
-    filter, seed, arms, repeats, productProfile, driver: { serverJs: path.resolve(serverJs), serverJsSha256: existsSync(serverJs) ? createHash("sha256").update(readFileSync(serverJs)).digest("hex") : null } };
+    filter, seed, arms, armProfiles: Object.fromEntries(arms.map(arm => [arm, Object.hasOwn(ARM_PROFILES, arm) ? armProfile(arm, productProfile) : "UNKNOWN"])),
+    repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256: existsSync(serverJs) ? createHash("sha256").update(readFileSync(serverJs)).digest("hex") : null } };
   const backend = detectBackend(env);
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
@@ -1149,12 +1266,6 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     // A dry run did what it was asked (froze the schedule); a missing backend measured nothing.
     return dryRun ? 0 : 2;
   }
-  const repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
-    .filter(Boolean)
-    .map(pair => {
-      const index = pair.indexOf("=");
-      return index > 0 ? [pair.slice(0, index), pair.slice(index + 1)] : [pair, pair];
-    }));
   if (!goldFile) {
     console.error("live run requires --gold <gold.jsonl> (frozen evaluator-side labels)");
     return 2;

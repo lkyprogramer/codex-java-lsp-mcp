@@ -1174,6 +1174,11 @@ export function impactSessionFromClient({ repoRoot, client }) {
     async evidence(args) {
       return callNamed("java_symbol", { repoRoot, operation: "evidence", file: args.file, line: args.line, column: args.column });
     },
+    // post-ILV2 Q03/Q10: the eval's java_outline tool is java_symbol operation=outline on the product.
+    async outline(args) {
+      return callNamed("java_symbol", { repoRoot, operation: "outline", file: args.file,
+        ...(args.nearLine !== undefined ? { nearLine: args.nearLine } : {}), ...(args.limit !== undefined ? { limit: args.limit } : {}) });
+    },
     async impact(args) {
       return callNamed("java_impact", {
         repoRoot,

@@ -14,7 +14,7 @@
   },
   "checks": [
     {
-      "name": "node --test scripts/run-agent-trace-live.test.mjs scripts/run-agent-trace-matrix.test.mjs scripts/eval-pilot-compare.test.mjs scripts/live-model-profiles.test.mjs",
+      "name": "node --test scripts/run-agent-trace-live.test.mjs scripts/run-agent-trace-matrix.test.mjs scripts/eval-pilot-compare.test.mjs scripts/live-model-profiles.test.mjs scripts/evaluate-java-task-arms.test.mjs scripts/evaluate-java-task.test.mjs scripts/eval-tool-wire.test.mjs",
       "state": "NOT_RUN",
       "reason": "user directed no compile/test/verification this round (decisions.md D0)"
     }
@@ -43,15 +43,26 @@
     "G0 not met (Q01 controls and Q02 ledger not run): only the no-cost control is delivered, no LIVE slot",
     "scripts/ilv2-quality-pilot.mjs not created: no thin orchestration was needed for the no-cost control",
     "per-slot round mode/fullReason and index.queryCounters deltas not wired (needs the LIVE runner)",
-    "audit: run-agent-trace-live.mjs EXTEND (summarizeSchedule added; its MCP session already wraps java_symbol query/evidence, but the model-facing tools are only java_impact/java_context; outline + native read arms NOT_DONE); run-agent-trace-matrix.mjs REUSE for the external-call gate (--authorize-external, BLOCKED_EXTERNAL) but its plan is the V4 holdout old/jin schedule, not 12 groups x 2 arms x 3 repeats seed 20261105; openai-compatible-chat.mjs / live-model-profiles.mjs REUSE (Q01 onSerializedBody); eval-pilot-compare.mjs REUSE",
-    "NOT_DONE: dry-run identity validation of task/dataset/split/corpus/tool (fail closed); no-cost but needs the frozen Q02 schedule",
-    "summarizeSchedule is not yet called by any runner (tests only)",
-    "sourceHead records the plan baseline 665d66e, as for Q00-Q04; code sits on this branch"
+    "audit: evaluate-java-task.mjs runLiveEvalRun EXTEND as the two-arm runner (it already drives run-agent-trace-live runLiveAgentTask with the same native tools on every arm (list/rg/read; repair adds write/replace/test), a per-attempt candidate workspace, the frozen schedule and the oracle/QA scorers): arms b0/b1/b2 map to product profiles broad / outline / outline-evidence on one server build, java_outline is a model-facing tool backed by java_symbol operation=outline (impactSessionFromClient.outline), outline spends no source budget and is never credited as received source; run-agent-trace-live.mjs EXTEND (summarizeSchedule + session outline); run-agent-trace-matrix.mjs not used for the pairing (its plan is the V4 old/jin schedule); openai-compatible-chat.mjs / live-model-profiles.mjs REUSE; eval-pilot-compare.mjs REUSE",
+    "dry-run identity: checkRunIdentity + --require-identity fail closed (exit 2, before a schedule is frozen) on unknown filter ids, unknown/duplicate arms, an unnamed dataset/split, unresolved corpora, tasks without corpus and a missing product server; without the flag the check is recorded in pack.identity.identityCheck. The 12 x 2 x 3 schedule itself still needs the frozen Q02 selection",
+    "summarizeSchedule is called by assemblePack (pack.schedule, overall and byArm; usage in the pack rows' field names, raw provider usage dropped). Two readings now coexist: pack.taskSuccessRate / byArm count missing slots as failures (historical), pack.schedule makes the rate null while any slot is not run, blocked or unjudged; reports must name which one they quote",
+    "sourceHead records the plan baseline 665d66e, as for Q00-Q04; code sits on this branch",
+    "B2 vs B1/B0 on one server build isolates offering outline / Java evidence v2 as tools; it does not compare evidence v2 against the pre-Q04 server (that would need two server builds per arm, not supported by runLiveEvalRun)",
+    "receipts are still built post hoc (receiptUnitsFromEvents) rather than inside the LIVE loop",
+    "a failure before runLiveAgentTask starts (attempt workspace, product session) is now attemptState BLOCKED_SETUP (was FAILED_RUNTIME), so an environment block is not counted as a failed task",
+    "frozen-kit per-arm packs record product_profile = the arm's own profile for b0/b1/b2 (product/control unchanged); top-level pack.productProfile stays the run flag, the per-arm truth is identity.armProfiles and row armProfile",
+    "outline spends no source budget but gives B1/B2 extra structure (rebuilt signatures, ranges) for free: a deliberate D9 choice in tension with 06 §6.4 'same budget', to be disclosed with any result",
+    "checkRunIdentity checks that the server file exists, not its hash or tool schema (the hash is recorded in identity.driver), and does not require --gold for live runs",
+    "the frozen Python kit scorer has not been checked with arm names other than product/control"
   ],
   "rawEvidence": [],
   "implementation": "CODE_WRITTEN",
   "changes": [
     "scripts/run-agent-trace-live.mjs: SLOT_STATES, summarizeSchedule",
-    "scripts/run-agent-trace-live.test.mjs: card RED + boundaries"
+    "scripts/run-agent-trace-live.test.mjs: card RED + boundaries",
+    "scripts/evaluate-java-task.mjs: ARM_PROFILES/armProfile, EVAL_JAVA_OUTLINE_TOOL, outline/outline-evidence profiles, checkRunIdentity + --require-identity, pack.schedule via summarizeSchedule, armProfile on rows",
+    "scripts/eval-tool-wire.mjs: java_outline serializer (no slices)",
+    "scripts/run-agent-trace-live.mjs: impactSessionFromClient.outline",
+    "scripts/evaluate-java-task-arms.test.mjs (new)"
   ]
 }

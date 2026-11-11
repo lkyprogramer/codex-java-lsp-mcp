@@ -75,10 +75,10 @@ G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费�
   - 分母是全部 slot，出错、超时也留在分母里。
   - 有未运行的 slot（missing）或未判定的 slot（unjudged）时，成功率为 null，不当作失败。
   - 只有每个 attempted slot 的 usage 都是 MEASURED 才求和，否则为 null，不填 0；另外用 `usageCoverage` 给出实际看到的覆盖。
-  - 目前还没有任何 runner 调用它。
-- dry-run 身份校验（task/dataset/split/corpus/工具，缺项即拒绝）不花钱，但依赖 Q02 冻结的 schedule，本轮未做（NOT_DONE）。
+  - 补缺轮起由 `assemblePack` 调用（`pack.schedule`）。
+- dry-run 身份校验（补缺轮已写，NOT_RUN）：`checkRunIdentity` 加 `--require-identity`，在冻结 schedule 之前对未知任务、未知或重复的臂、未命名的 dataset/split、找不到的 corpus、缺少的产品 server 一律拒绝（exit 2）；不加该参数时只把结果记进 `pack.identity.identityCheck`。12×2×3 的具体 schedule 仍要等 Q02 冻结任务。
 - 外部调用门控复用 `run-agent-trace-matrix.mjs` 现有的 `--authorize-external` 和 BLOCKED_EXTERNAL，不新建 `ilv2-quality-pilot.mjs`。
-- live runner 的 MCP session 已经封装了 java_symbol 的 query 和 evidence，但暴露给模型的工具只有 java_impact/java_context。把 java_symbol query/outline/evidence 和原生 read 接成两臂留到 LIVE 之前做（NOT_DONE）。收益记 UNMEASURED。
+- 两臂 runner（补缺轮已写，NOT_RUN）：不新建 runner，扩展 `evaluate-java-task.mjs` 的 `runLiveEvalRun`（底层就是 `runLiveAgentTask`，每臂原生工具相同：list/rg/read，repair 另有 write/replace/test；每次尝试独立候选副本，同一冻结 schedule）。臂 `b0/b1/b2` 对应同一 server 上的 profile `broad` / `outline` / `outline-evidence`；模型看到的 `java_outline` 映射到 `java_symbol operation=outline`，不消耗源码预算，也不计为已收到源码。`summarizeSchedule` 已接进 `assemblePack`（`pack.schedule` 及 byArm）。进入模型之前（候选副本、product session）的失败记为 BLOCKED_SETUP，不算任务失败。`pack.schedule` 的成功率在有未运行/阻塞/未判定 slot 时为 null，而沿用的 `pack.taskSuccessRate`/`byArm` 把缺失算失败，引用时须说明口径。outline 不占源码预算却提供额外结构信息，与 06 §6.4"同预算"有张力，报告结果时须披露。局限：同一 server 上只能比较"是否提供 outline / evidence 工具"，不能比较 evidence v2 与 Q04 之前的 server；Python 冻结 scorer 未核对 product/control 以外的臂名；receipt 仍是事后生成。收益记 UNMEASURED。
 
 ## D10 资格与收口（P4）
 

@@ -312,6 +312,12 @@ export function serializeModelToolResult(toolName, raw, options = {}) {
       case "java_evidence":
         result = serializeEvidence(domain, maxBytes);
         break;
+      case "java_outline":
+        // Declarations and ranges only: nothing in an outline is credited as received source.
+        result = domain?.schemaVersion === "java-outline/v1" && Array.isArray(domain.entries)
+          ? { payload: domain, slices: [], truncated: false }
+          : { payload: { error: "UNSUPPORTED_TOOL_RESULT", errorClass: "PROTOCOL", tool: "java_outline", detail: "missing outline entries" }, slices: [], truncated: false };
+        break;
       case "write_file":
       case "replace_file":
         result = {

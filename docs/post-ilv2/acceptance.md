@@ -17,7 +17,7 @@
 | outline（Q03） | `outline.test`（选择规则、parseState、源码改动、增量发布后 generation、越界、wire 收缩、deadline）；`symbol-static.test`（FRESH view 下的 wire、STALE/NOT_READY 持有视图、FRESH 下不完整覆盖、limit 与参数组合拒绝、源码改动、无 JDT）；`output-shape.test`（公开 wire 信封与 4096 B）；`mcp-server-factory.test`（五工具、schema，未直接测 outline） |
 | evidence v2（Q04） | `evidence-unit.test`、`evidence-source-reader.test`、`anchor-windows.test`、`sql-read-ranges.test`、`symbol-static.test`、`scripts/eval-evidence-e2e.test.mjs`、`eval-tool-wire.test.mjs`、`evaluate-java-task.test.mjs` |
 | 共享读取器 | 同上，加 symlink、2 MiB 上限、deadline 用例 |
-| 评测脚本（Q01/Q02/Q10） | `ilv2-mac-delivery-receipt.test`（含假模型全链）、`eval-repair-adapter.test`、`openai-compatible-chat.test`、`ilv2-mac-repair-oracle.test`、`ilv2-mac-eval-chain.test`、`ilv2-quality-attribution.test`、`run-agent-trace-live.test` |
+| 评测脚本（Q01/Q02/Q10） | `ilv2-mac-delivery-receipt.test`（含假模型全链）、`eval-repair-adapter.test`、`openai-compatible-chat.test`、`ilv2-mac-repair-oracle.test`、`ilv2-mac-eval-chain.test`、`ilv2-quality-attribution.test`、`run-agent-trace-live.test`、`evaluate-java-task-arms.test` |
 | 其他引用 `javaSymbol` 的测试 | `jdtls-session.test`、`mac-platform/gradle-domain.test`（`npm test` 会覆盖，定向清单也列上） |
 
 Q11 卡要求的 outline 补充用例已写（NOT_RUN）：STALE/NOT_READY 持有视图与 FRESH 下不完整覆盖（`symbol-static.test`）、请求前/查询中/读源码前三处 deadline（`outline.test`）、共享读取器 deadline（`evidence-source-reader.test`）、60 方法长泛型文件的公开 wire 信封与 4096 B 上限（`output-shape.test`）。仍未覆盖：`detail=diagnostic` 的附加计时/省略原因（实现也未做，handler 忽略 detail）、SNAPSHOT 条目经 contentManifestId 铸造 evidenceHandle 的 outline 路径、field 条目的公开 wire。
@@ -37,7 +37,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
   dist/jdtls-session.test.js dist/mac-platform/gradle-domain.test.js
 sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test \
   scripts/ilv2-mac-delivery-receipt.test.mjs scripts/eval-repair-adapter.test.mjs scripts/openai-compatible-chat.test.mjs scripts/ilv2-mac-repair-oracle.test.mjs \
-  scripts/ilv2-mac-eval-chain.test.mjs scripts/ilv2-quality-attribution.test.mjs scripts/run-agent-trace-live.test.mjs \
+  scripts/ilv2-mac-eval-chain.test.mjs scripts/ilv2-quality-attribution.test.mjs scripts/run-agent-trace-live.test.mjs scripts/evaluate-java-task-arms.test.mjs \
   scripts/eval-evidence-e2e.test.mjs scripts/eval-tool-wire.test.mjs scripts/evaluate-java-task.test.mjs
 npm test && npm run gate:pr && npm run measure:tool-schema
 ```
