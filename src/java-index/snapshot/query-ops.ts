@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { readIndexCounts, readMeta, readSourceRootCounts } from "../../index-builder/progress.js";
-import { EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../build-fingerprint.js";
+import { DELTA_DEPTH_META, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../build-fingerprint.js";
 import { schemaVersionsMatch } from "../sql/schema.js";
 import type { DetailedEntitySearchResult, EntityHit, EntitySearchMode, EntitySearchScope } from "../entity-search.js";
 import type { EvidenceSourcesResult } from "../java-index-client-api.js";
@@ -88,7 +88,7 @@ export type QueryOps = {
   /** The snapshot's captured content (path, kind, hash): the tracker's verification base. */
   contentEntries: { args: Record<string, never>; result: ContentEntry[] };
   /** The inputs a full build recorded (absent before they were recorded): whether a build-file-only change can be a delta on it. */
-  buildInputs: { args: Record<string, never>; result: { layoutFingerprint?: string; extractorVersion?: string; schemaCompatible: boolean } };
+  buildInputs: { args: Record<string, never>; result: { layoutFingerprint?: string; extractorVersion?: string; schemaCompatible: boolean; deltaDepth: number } };
 };
 export type QueryOpName = keyof QueryOps;
 export type QueryRequest<K extends QueryOpName = QueryOpName> = { op: K; args: QueryOps[K]["args"] };
@@ -282,6 +282,6 @@ const OPS: Impl = {
     const extractorVersion = readMeta(conn.db, EXTRACTOR_VERSION_META);
     // The schema, identity and facts versions a delta base needs (compatibleDeltaBase): not in extractorVersion.
     return { ...(layoutFingerprint ? { layoutFingerprint } : {}), ...(extractorVersion ? { extractorVersion } : {}),
-      schemaCompatible: schemaVersionsMatch(conn.db) };
+      schemaCompatible: schemaVersionsMatch(conn.db), deltaDepth: Number(readMeta(conn.db, DELTA_DEPTH_META)) || 0 };
   }
 };

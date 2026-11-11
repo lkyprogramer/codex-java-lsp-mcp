@@ -122,5 +122,10 @@ const LAYOUT_FINGERPRINT_VERSION = "static-index-layout/v1";
 
 /** The meta key a build records the layout fingerprint under; absent in databases built before it existed. */
 export const LAYOUT_FINGERPRINT_META = "layoutFingerprint";
+/**
+ * Deltas applied since the last full build of this database: a full writes 0, each delta its base's + 1
+ * (absent in databases built before it existed; a delta on one counts from 0). The owner bounds it.
+ */
+export const DELTA_DEPTH_META = "deltaDepth";
 /** The meta key a full build records computeExtractorVersion() under (a delta keeps its base's). */
 export const EXTRACTOR_VERSION_META = "extractorVersion";

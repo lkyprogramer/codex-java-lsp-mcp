@@ -228,8 +228,12 @@ export class JavaLspHttpServer {
       return;
     }
 
+    // One absolute deadline for the whole shutdown: the application's drain and JDT close get what the
+    // request drain left, so the signal handler's forced exit (grace + 1 s) does not cut them short.
+    const startedAt = performance.now();
+    const remaining = () => Math.max(1, Math.floor(deadlineMs - (performance.now() - startedAt)));
     await this.withdrawEndpoint?.().catch(error => this.reportError("[codex-java-lsp] owner endpoint withdrawal failed", error));
-    const drain = this.lifecycle.drain(deadlineMs);
+    const drain = this.lifecycle.drain(remaining());
     const serverClosed = closeServer(server);
     server.closeIdleConnections?.();
     let forced = false;
@@ -245,9 +249,10 @@ export class JavaLspHttpServer {
     let applicationFailure: unknown;
     try {
       if (forced) {
+        // Not what is left (about nothing here): the forced exit timer (grace + 1 s) leaves room for this.
         await this.application.forceClose(Math.min(1000, deadlineMs));
       } else {
-        await this.application.shutdown(deadlineMs);
+        await this.application.shutdown(remaining());
       }
     } catch (error) {
       applicationFailure = error;

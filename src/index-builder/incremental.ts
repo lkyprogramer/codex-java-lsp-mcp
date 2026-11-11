@@ -1,4 +1,4 @@
-import { computeExtractorVersion, computeInputFingerprints, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../java-index/build-fingerprint.js";
+import { computeExtractorVersion, computeInputFingerprints, DELTA_DEPTH_META, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../java-index/build-fingerprint.js";
 import { currentBuildKey } from "../java-index/sql/snapshot-manifest.js";
 import { sqlStage, compatibleDeltaBase, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { runSqlColdBuild } from "./cold-build.js";
@@ -1217,6 +1217,8 @@ async function applyBuilderJobStages(options: {
       if (options.escalation === "report") return { ...statusResult(options.db, id, false, reason), escalation: reason };
       return await full(reason);
     }
+    // Inside the job's transaction: a rolled-back delta keeps its base's depth.
+    writeMeta(options.db, DELTA_DEPTH_META, String((Number(readMeta(options.db, DELTA_DEPTH_META)) || 0) + 1));
     return { ...statusResult(options.db, id, true), census: finishCaptureCensus(options.db, beforeCapture), censusComplete: true, stages };
   } catch (err) {
     if(options.db.isTransaction || err instanceof ReportedEscalation) throw err;

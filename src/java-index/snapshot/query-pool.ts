@@ -100,6 +100,8 @@ export class QueryPool<T> {
   /** Callers holding a free slot (no worker yet) while their lease is acquired. */
   private readonly reserved = new Set<Pending<T>>();
   private nextRun = 1;
+  /** Since start (F4: how often overload and deadline kills actually happen). */
+  private readonly totals = { queueFull: 0, runKills: 0 };
   private stopped = false;
   private pumping = false;
   private stopPromise?: Promise<void>;
@@ -115,7 +117,7 @@ export class QueryPool<T> {
     if (this.stopped) return Promise.resolve({ status: "stopped" });
     if (task.signal?.aborted) return Promise.resolve({ status: "cancelled" });
     if (task.budget.expired()) return Promise.resolve({ status: "deadline" });
-    if (this.queue.length >= this.queueMax) return Promise.resolve({ status: "queue_full" });
+    if (this.queue.length >= this.queueMax) { this.totals.queueFull += 1; return Promise.resolve({ status: "queue_full" }); }
     return new Promise(resolve => {
       let reaped!: () => void;
       const done = new Promise<void>(finish => { reaped = finish; });
@@ -136,6 +138,11 @@ export class QueryPool<T> {
   /** Ask idle workers to close connections `retain` no longer allows (e.g. after a publish). */
   trim(): void {
     for (const worker of this.workers) if (!worker.task && worker.runId === undefined) this.trimWorker(worker);
+  }
+
+  /** Counts since start: submissions refused with queue_full, and running queries killed by a deadline or cancel. */
+  counters(): { queueFull: number; runKills: number } {
+    return { ...this.totals };
   }
 
   status() {
@@ -358,7 +365,7 @@ export class QueryPool<T> {
     const worker = pending.worker;
     if (!worker) return;
     // A lease still being acquired is released when it arrives (leased()); a running native step is killed.
-    if (worker.runId !== undefined) this.kill(worker);
+    if (worker.runId !== undefined) { this.totals.runKills += 1; this.kill(worker); }
   }
 
   /** The reservation ends without a run: release the task lease and return the worker to idle. */

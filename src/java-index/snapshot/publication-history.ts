@@ -6,7 +6,7 @@ export const PUBLICATION_HISTORY_LIMIT = 128;
 
 export type FullBuildReason = "no-base" | "input-limit" | "build-key-changed" | "delta-deadline"
   | "verification-failed" | "closure-limit" | "resolution-did-not-settle"
-  | "incompatible-base" | "builder-inputs-changed" | "other-escalation";
+  | "incompatible-base" | "builder-inputs-changed" | "lineage-limit" | "other-escalation";
 
 export function builderFullReason(reason: string): FullBuildReason {
   if (/^delta escalated to full: dependency closure /.test(reason)) return "closure-limit";

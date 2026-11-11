@@ -75,7 +75,7 @@ type ExpiredBinding = { binding: WorkspaceBinding; stillEligible: () => boolean 
  * `tracked`: a running tracker serves the binding's root; `root-live` / `root-unconfirmed`: the root still is, or may be, that workspace;
  * `retained`: an unbound snapshot this incarnation keeps as a seed base (retainSeed).
  */
-export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "tracked" | "root-live" | "root-unconfirmed" | "retained";
+export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "tracked" | "root-live" | "root-unconfirmed" | "root-renumbered" | "retained";
 export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: ReclaimReason };
 
 /** One GC cycle: what was deleted, and how many store objects each refusal kept. */
@@ -103,6 +103,14 @@ export type SnapshotStoreOptions = {
   assertOwner?: () => void;
   /** Test seam: called at each publish boundary; may throw or kill the process. */
   faultAt?: FaultHook;
+  /**
+   * For this long after open, a binding whose root still opens at its path with its recorded inode,
+   * only on another device number, is kept rather than reclaimed as gone. The device number of a
+   * volume can change across a restart; the workspace then gets a new workspaceId, and its first
+   * round seed-binds this binding's snapshot by hash (seedCandidates) instead of rebuilding in full.
+   * A replaced checkout (another inode) or a missing root is reclaimed as before. Default 0.
+   */
+  renumberedGraceMs?: number;
 };
 
 export class SnapshotStore {
@@ -119,6 +127,8 @@ export class SnapshotStore {
   private readonly jobs = new Map<string, BuildJob>();
   /** Verdicts by snapshotId (verified/); absent: not verified yet. */
   private readonly verdicts = new Map<string, VerificationRecord>();
+  /** Snapshots whose VERIFIED verdict a query error already put in doubt (doubtVerified). */
+  private readonly doubted = new Set<string>();
   /**
    * Lineage of this incarnation: the base each delta snapshot ("s-…") or open job ("job:<id>") was
    * cloned from. An unverified node fails with its base. A forgotten node's children are relinked
@@ -135,8 +145,12 @@ export class SnapshotStore {
   private readonly retained = new Map<string, { workspaceId: string; buildKey: string }>();
   private queue: Promise<unknown> = Promise.resolve();
 
+  /** performance.now() until which a renumbered root's binding is kept (SnapshotStoreOptions.renumberedGraceMs). */
+  private readonly renumberedUntil: number;
+
   private constructor(readonly cacheRoot: string, private readonly options: SnapshotStoreOptions) {
     this.layout = mac1Layout(cacheRoot);
+    this.renumberedUntil = performance.now() + (options.renumberedGraceMs ?? 0);
   }
 
   /** Open the store and recover: tmp bindings are dropped, every binding is verified against its manifest. */
@@ -223,18 +237,23 @@ export class SnapshotStore {
    * Distinct snapshots that other workspaces bind under `buildKey`: the sealed bases a workspace without
    * a binding of its own may seed from. Content is judged by hash against its own capture, never assumed.
    */
-  seedCandidates(workspaceId: string, buildKey: string): string[] {
+  seedCandidates(workspaceId: string, buildKey: string, root?: Pick<RootIdentity, "canonicalRoot" | "ino">): string[] {
     const own = this.bindings.get(workspaceId)?.snapshotId;
     // Retained seeds first, newest first (the snapshot a workspace left on a branch switch), then siblings.
     const retained = [...this.retained].reverse()
       .filter(([id, entry]) => id !== own && entry.buildKey === buildKey && !this.failed(id) && !this.reclaiming.has(id))
       .map(([id]) => id);
     const ids = new Set<string>();
+    // After the retained seeds, the same checkout under an earlier workspaceId (its volume renumbered:
+    // renumberedGraceMs): its snapshot is the likeliest zero-diff seed, and the scan is bounded (MAX_SEED_CANDIDATES).
+    const own2 = root ? [...this.bindings].filter(([id, binding]) => id !== workspaceId && binding.buildKey === buildKey
+      && !this.failed(binding.snapshotId) && binding.root.canonicalRoot === root.canonicalRoot && binding.root.ino === root.ino)
+      .map(([, binding]) => binding.snapshotId) : [];
     // Verified or not: a FAILED verdict quarantines every binding on the snapshot and fails what was cloned from it.
     for (const [id, binding] of this.bindings) if (id !== workspaceId && binding.buildKey === buildKey && !this.failed(binding.snapshotId)) ids.add(binding.snapshotId);
     // The scan is bounded: prefer larger time-prefixed IDs so old siblings cannot permanently
     // exclude later bases. This is a locality heuristic; content hashes still decide reuse.
-    return [...new Set([...retained, ...[...ids].sort().reverse()])];
+    return [...new Set([...retained, ...own2, ...[...ids].sort().reverse()])];
   }
 
   /**
@@ -275,6 +294,20 @@ export class SnapshotStore {
   /** The snapshot's background verdict, if any. */
   verification(snapshotId: string): VerificationRecord | undefined {
     return this.verdicts.get(snapshotId);
+  }
+
+  /**
+   * A served snapshot failed a read in a way only damage explains (SQLite corruption): its VERIFIED
+   * verdict no longer stands, so the verifier checks it again (and a FAILED result quarantines it).
+   * The verdict file stays until that check overwrites it. Returns whether a verdict was dropped.
+   */
+  doubtVerified(snapshotId: string): boolean {
+    // Once per snapshot per process: damage the file check cannot see (or a misread error) must not
+    // turn every failing query into another whole-file verification.
+    if (this.doubted.has(snapshotId) || this.verdicts.get(snapshotId)?.result !== "VERIFIED") return false;
+    this.doubted.add(snapshotId);
+    this.verdicts.delete(snapshotId);
+    return true;
   }
 
   isVerified(snapshotId: string): boolean {
@@ -686,6 +719,10 @@ export class SnapshotStore {
     } else if (binding) {
       const state = await rootState(binding.root);
       if (state !== "gone") return { reclaimed: false, reason: state === "live" ? "root-live" : "root-unconfirmed" };
+      // A quarantined binding is never a seed candidate: keeping it would only delay its reclaim.
+      if (this.bindings.has(workspaceId) && performance.now() < this.renumberedUntil && await renumbered(binding.root)) {
+        return { reclaimed: false, reason: "root-renumbered" };
+      }
     } else if (existsSync(path.join(dir, BINDING_FILE))) {
       // A binding file recovery could not read names no root to judge: kept, never guessed.
       return { reclaimed: false, reason: "root-unconfirmed" };
@@ -746,6 +783,14 @@ async function rootState(root: RootIdentity): Promise<"live" | "gone" | "unconfi
     try { return (await stat(dir, { bigint: true })).dev === BigInt(root.dev) ? "gone" : "unconfirmed"; }
     catch (error) { if (!isMissing(error) || dir === path.dirname(dir)) return "unconfirmed"; }
   }
+}
+
+/** The root opens at its path as the same inode on another device number: a renumbered volume, not a replaced checkout. */
+async function renumbered(root: RootIdentity): Promise<boolean> {
+  try {
+    const info = await stat(root.canonicalRoot, { bigint: true });
+    return info.isDirectory() && info.ino === BigInt(root.ino) && info.dev !== BigInt(root.dev);
+  } catch { return false; }
 }
 
 async function removeTree(dir: string): Promise<void> {

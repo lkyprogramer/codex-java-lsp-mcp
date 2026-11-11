@@ -680,6 +680,42 @@ test("an unlinked live workspace stops serving before directory sync, but its sn
   assert.deepEqual(report.snapshots, [binding.snapshotId]);
 });
 
+test("within renumberedGraceMs a binding whose root only changed device number is kept and first among seeds; a replaced root is not", async () => {
+  const parent = await realpath(await mkdtemp(path.join(fixture.base, "renumbered-")));
+  const identity = async (dir: string): Promise<RootIdentity> => { const info = await stat(dir); return { canonicalRoot: dir, dev: info.dev, ino: info.ino, volume: String(info.dev) }; };
+  await mkdir(path.join(parent, "repo"));
+  await mkdir(path.join(parent, "other"));
+  const real = await identity(path.join(parent, "repo"));
+  const other = await identity(path.join(parent, "other"));
+  // The same directory recorded under a device number the volume no longer has (a restart renumbered it).
+  const renumbered: RootIdentity = { ...real, dev: real.dev + 1, volume: String(real.dev + 1) };
+  // The same path with another inode as well: a replaced checkout, not a renumbered volume.
+  const replaced: RootIdentity = { ...real, dev: real.dev + 1, ino: real.ino + 1, volume: String(real.dev + 1) };
+  for (const [graceMs, expected] of [[60_000, "root-renumbered"], [0, undefined]] as const) {
+    const { store } = await openStore(await cacheRoot(), { renumberedGraceMs: graceMs });
+    const bindAt = async (workspaceId: string, rootIdentity: RootIdentity, captureId: string) => {
+      store.track(workspaceId, { root: rootIdentity, workspaceGeneration: 1, trackerEpoch: EPOCH });
+      const binding = await store.publish(plan(fixture.a, { workspaceId, root: rootIdentity, captureId }), await jobFrom(store, fixture.a, captureId, workspaceId));
+      store.untrack(workspaceId);
+      return binding;
+    };
+    const sibling = await bindAt("ws-sibling-0001", other, "cap-sibl-0001");
+    const old = await bindAt("ws-renumbered1", renumbered, "cap-renu-0001");
+    const gone = await bindAt("ws-replaced-01", replaced, "cap-repl-0001");
+    if (expected) {
+      // The workspace reopened under its new id (the real device number) seeds from its own old snapshot first.
+      assert.equal(store.seedCandidates("ws-reopened-001", fixture.a.buildKey, real)[0], old.snapshotId);
+      assert.notEqual(sibling.snapshotId, old.snapshotId);
+      assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-renumbered1" }), { reclaimed: false, reason: expected });
+    } else {
+      assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-renumbered1" }), { reclaimed: true }, "no grace: gone as before");
+    }
+    assert.deepEqual(await store.tryReclaim({ workspaceId: "ws-replaced-01" }), { reclaimed: true }, "another inode is a replaced checkout");
+    assert.equal(store.binding("ws-replaced-01"), undefined);
+    void gone;
+  }
+});
+
 test("a shared snapshot lease preserves live and gone workspace bindings across sweeps until release", async t => {
   const root = await cacheRoot();
   const { store } = await openStore(root);

@@ -81,6 +81,8 @@ const PREWARM_POLL_MS = 250;
 const CACHE_TOUCH_INTERVAL_MS = 60_000;
 /** Held views pin their own runtime; beyond those only the newest snapshots keep router caches. */
 const RETAINED_SNAPSHOT_RUNTIMES = 2;
+/** RuntimeManagerOptions.maxRuntimeEntries default (README: JAVA_LSP_MAX_RUNTIME_ENTRIES). */
+const DEFAULT_MAX_RUNTIME_ENTRIES = 16;
 
 export type ManagedToolContext = ToolContext & {
   repoHash: string;
@@ -159,6 +161,12 @@ type RuntimeManagerOptions = {
   freemem?: () => number;
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
+  /**
+   * Live runtime entries (each with a tracker, an FSEvents helper and its census in memory) kept at
+   * most; above it the least recently used idle, unpinned entry retires (JAVA_LSP_MAX_RUNTIME_ENTRIES).
+   * Pinned and in-use entries are never retired for it, so the count can exceed it while they are.
+   */
+  maxRuntimeEntries: number;
   transportMode: RepoOwnerTransport;
   /** Pin roots keep their index runtime after JDT idle-stop. */
   isProtectedRepo?: (repoRoot: string) => boolean;
@@ -228,6 +236,7 @@ export class RepoRuntimeManager {
       ),
       requestTimeoutMs: 120000,
       maxRetainedStoppedRepos: 2,
+      maxRuntimeEntries: positiveInteger(process.env.JAVA_LSP_MAX_RUNTIME_ENTRIES, DEFAULT_MAX_RUNTIME_ENTRIES),
       transportMode: "stdio",
       ...options
     };
@@ -709,6 +718,7 @@ export class RepoRuntimeManager {
   }
 
   async shutdownAll(options: { releaseOwnership?: boolean; terminal?: boolean } = {}): Promise<void> {
+    this.shuttingDown = true;
     this.stopPressureWatch();
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
@@ -831,7 +841,26 @@ export class RepoRuntimeManager {
       }
     });
     this.runtimes.set(resolved.repoRoot, entry);
+    this.retireOverflow(entry);
     return entry;
+  }
+
+  /** Above maxRuntimeEntries live entries: retire the least recently used idle, unpinned one (never `created`). */
+  private retireOverflow(created: RuntimeEntry): void {
+    if (this.shuttingDown) return;
+    // A victim already chosen counts as gone: its retirement awaits JDT stop before `retiring` is set.
+    const live = [...this.runtimes.values()].filter(entry => entry.stoppedAt === undefined && !entry.retiring && !this.overflowRetiring.has(entry)).length;
+    if (live <= this.options.maxRuntimeEntries) return;
+    const victim = [...this.runtimes.values()]
+      .filter(entry => entry !== created && entry.refCount === 0 && entry.stoppedAt === undefined && !entry.retiring
+        && !this.overflowRetiring.has(entry) && !this.options.isProtectedRepo?.(entry.context.repoRoot))
+      .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
+    if (!victim) return;
+    // Marked synchronously: retireIdleEntry awaits before shutdown() sets `retiring`, and a concurrent
+    // create must pick another victim rather than the same one.
+    this.overflowRetiring.add(victim);
+    this.clearIdleTimers(victim);
+    void this.retireIdleEntry(victim).finally(() => this.overflowRetiring.delete(victim));
   }
 
   private refreshResource(entry: RuntimeEntry): void {
@@ -981,6 +1010,8 @@ export class RepoRuntimeManager {
   private scheduleIdleShutdown(entry: RuntimeEntry): void {
     this.clearIdleTimers(entry);
     if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
+    // An overflow left while every entry was in use is settled when one goes idle.
+    this.retireOverflow(entry);
     if (this.options.idleTtlMs > 0) {
       entry.idleTimer = setTimeout(() => {
         if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
@@ -989,6 +1020,11 @@ export class RepoRuntimeManager {
       entry.idleTimer.unref?.();
     }
   }
+
+  /** Set by shutdownAll: no overflow retirement races the shutdown's own stops. */
+  private shuttingDown = false;
+  /** Entries retireOverflow already chose, until their retirement settles. */
+  private readonly overflowRetiring = new Set<RuntimeEntry>();
 
   private async retireIdleEntry(entry: RuntimeEntry): Promise<void> {
     try {
