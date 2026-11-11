@@ -82,8 +82,26 @@ G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费�
 
 ## D10 资格与收口（P4）
 
-- Q11：[acceptance.md](acceptance.md) 按实际 diff 列出受影响的门，以及要在 Mac 上跑的命令。engineeringEligibility 为 NOT_ASSESSED，benefit 为 UNMEASURED，deployAuthorized 为 false。
+- Q11：[acceptance.md](acceptance.md) 按实际 diff 列出受影响的门，以及要在 Mac 上跑的命令。首次交付时 engineeringEligibility 为 NOT_ASSESSED；`b96a9c1` 在 Mac 上跑完全部门后登记为 ENGINEERING_ELIGIBLE（构建为 `71e5ce8` 加未提交 diff，见 Q11.json）。benefit 仍为 UNMEASURED，deployAuthorized 为 false。
 - Q12：[decision-log.md](decision-log.md) 列出各方向结论。生产代码净增 +415 行（git numstat）。公共工具仍是 5 个，没有 embedding，没有新 daemon。
+
+## D11 MAC-10 LIVE 适配与评测协议 v1.7（Q10，2026-11-11）
+
+协议版本：`b96a9c1` 把 `EVAL_PROTOCOL_VERSION` 从 v1.5 直接改到 v1.7，并重写了各臂共用的系统提示词和 `java_evidence` 工具描述。git 历史里没有 v1.6，提示词改写的依据也没有记录。[evaluation-protocol-v1.7.json](../next-stage/evaluation-protocol-v1.7.json) 按 v1.5 加增量的方式登记，并写明 provenance 为 NOT RECORDED。凡是用旧协议跑过的题都视为已暴露；v1.7 结果不与 v1.5 及更早结果比较。
+
+MAC-10 LIVE 适配（新文件 `scripts/eval-mac10-live.mjs`，`evaluate-java-task.mjs` 接入）：
+
+- 入口：`--dataset` 加 `--inputs` 时启用。必须显式给 `--source-budget none|LINES:BYTES`。repair 题的 JDK 只取 `ILV2_TOOLCHAINS`，不提供覆盖参数，javaHome 下所有冻结文件逐个核对 hash，漂移即拒绝。以下情况都 exit 2：与 `--repo-roots`、`--kit-root`、`--public-answer-contract` 同时出现；非 MAC-10 行带 `--inputs` 或 `--source-budget`；MAC-10 LIVE 没有 `--inputs`。dry-run 保持原行为。
+- 语料：输入 checkout 必须停在冻结 head，并且没有未跟踪、被忽略或已修改的文件，否则拒绝。原因是 `materializeCorpus` 复制的是工作区，构建产物（修复后或隐藏测试的 .class）会泄漏给 agent。语料用检索 runner 的 `materializeCorpus` 生成：冻结树、repair 前态覆盖、删除隐藏测试，并校验 overlay、hidden 和 evidence 的 hash。绝不直接用原始仓库。
+- 答案合同：取自数据集自己的 answer-contract 部分，hash 由 manifest 固定。`string-set` 对外是字符串数组，按集合评分：排序后比较，有重复即失败。
+- QA 成功：答案正确，且每一行 required evidence 都必须在实际发出的请求里收到，并且来自策展人核验时的那个文件版本（`file_sha256` 等于 `fileContentHash`）。同时有预算时不超预算。每行另记 `answerCorrect` 和 `requiredEvidenceCovered`（06 §6.5）。
+- repair 成功：只允许改 oracle 的那一个文件，其他改动在运行 oracle 之前就判为 `REJECTED_DISALLOWED_EDIT`。oracle 文件变成 symlink 或目录时判为 `REJECTED_NOT_REGULAR_FILE`。之后用 MAC-10 oracle（冻结 JDK 的 javac/java，加完成回执）判定。judge 自身出现任何异常都记为 `JUDGE_ERROR`，该 slot 不计分，不算 agent 失败。oracle 测试源码不进入候选副本。
+- 冷启动：MAC-10 适配运行中，每个 product session 在使用前等待 `java_status` 报告 FRESH，默认上限 900 s；包括 repair 写入后重开的 session，这次等待发生在那次工具调用之内。用时记入 `indexReadyMs`，也计入 `elapsedMs`，比较延迟时要扣除。首次就绪失败记为 BLOCKED_SETUP。原因是 `b96a9c1` 之后 outline 在冷视图下会立即返回 NOT_READY，不等待的话 B1/B2 测到的是冷启动而不是工具本身。kit 运行默认不等待（0，保持 v1.5 的计时口径），可用 `--index-ready-timeout-ms` 打开。control 臂没有 product session，不等待。
+- 选题：`--pilot N --pilot-seed S` 按 (corpus, category) 分层，用 seed 哈希排序、轮转取题，全程不读 gold，规则和选中的 id 写入 identity。06 §6.6 的 12 题 pilot 用它冻结，不再等 Q02 选题。
+- 待用户决定（LIVE 前必须定）：`--source-budget` 取值；用哪个 split（mac10-v3 的 dev 和已看过的 holdout 都只是历史回归集，见 06 §6.1）；pilot seed；模型与费用授权。
+- 局限：语料按冻结树物化，同一 corpus 的所有 repair 前态都会叠加在每道题的语料里（与检索 runner 相同）；QA 的 evidence 不会落在被覆盖的文件上（数据集转换时已校验）。原生 `test` 工具对 Gradle 多模块等构建只报告不支持，各臂相同。每次尝试都完整复制一次语料，大仓会占用磁盘和时间。
+
+验证：新增 `scripts/eval-mac10-live.test.mjs`（6 项：fixture 数据集、可移植复制、假 JDK 清单、oracle 桩、假模型；覆盖 JDK 漂移、输入不干净、judge 异常、kit 行误带 MAC-10 参数）。另有 Mac 专用的 `eval-mac10-live-chain.test.mjs`，含 b2 臂 repair 用例：写入前后两次就绪等待，并断言候选里只改了 oracle 文件。独立 review 没有 P1；4 个 P2 均已修复：JDK 未 fail-closed、product 臂 repair 无覆盖、物化可能带入构建产物、judge 异常被算成 agent 失败。P3 中的 symlink、就绪默认值、文档措辞、合同 rules 未传、测试缺口也已修复。在 Linux 开发机上，它与 evaluate-java-task、evaluate-java-task-arms、eval-frozen-adapter、run-agent-trace-live、ilv2-mac-delivery-receipt、eval-evidence-e2e 这几个脚本套件一起运行通过（没有构建 dist，eval-evidence-e2e 跳过 1 项）。Mac 上未运行；真实 APFS 物化和 javac oracle 只在 Mac 上覆盖。
 
 ## 阶段进度
 
@@ -93,6 +111,7 @@ G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费�
 | P1 | Q03、Q04 | 已 review、已修复、已提交（代码未运行） |
 | P2 | Q05–Q09 | NOT_TRIGGERED，无代码 |
 | P3 | Q10 | 已 review、已修复、已提交（代码未运行） |
-| P4 | Q11、Q12 | Q11 BLOCKED_ENV（acceptance.md），Q12 决策日志（decision-log.md）；已 review、已修复、已提交 |
+| P4 | Q11、Q12 | Q11 已在 Mac 上验收为 ENGINEERING_ELIGIBLE（`b96a9c1`），Q12 决策日志（decision-log.md） |
+| P3+ | Q10 MAC-10 LIVE 适配（D11） | 代码已写，Linux 上定向脚本测试通过，Mac 未运行 |
 
-待用户决定：Q10 的 LIVE 授权；在 Mac 上按 acceptance.md 运行受影响的门。
+待用户决定：在 Mac 上按 acceptance.md 重跑脚本套件和 MAC-10 前置检查；Q02 ledger；Q10 LIVE 的预算、split、seed 和费用授权。

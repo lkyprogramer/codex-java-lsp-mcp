@@ -42,8 +42,29 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test \
   scripts/ilv2-mac-delivery-receipt.test.mjs scripts/eval-repair-adapter.test.mjs scripts/openai-compatible-chat.test.mjs scripts/ilv2-mac-repair-oracle.test.mjs \
   scripts/ilv2-mac-eval-chain.test.mjs scripts/ilv2-quality-attribution.test.mjs scripts/run-agent-trace-live.test.mjs scripts/evaluate-java-task-arms.test.mjs \
-  scripts/eval-evidence-e2e.test.mjs scripts/eval-tool-wire.test.mjs scripts/evaluate-java-task.test.mjs scripts/runtime-artifacts.test.mjs
+  scripts/eval-evidence-e2e.test.mjs scripts/eval-tool-wire.test.mjs scripts/evaluate-java-task.test.mjs scripts/runtime-artifacts.test.mjs \
+  scripts/eval-mac10-live.test.mjs scripts/eval-frozen-adapter.test.mjs
 npm test && npm run gate:pr && npm run measure:tool-schema
 ```
 
 上述命令全部通过、独立 review 没有未处置的 P1/P2 之后，才能把 engineeringEligibility 改为 ENGINEERING_ELIGIBLE。G14 地板限制照旧披露；skip 白名单和原有 FAIL 保留。
+
+## Q10 MAC-10 LIVE 前置（D11，NOT_RUN）
+
+`b96a9c1` 之后的提交只改了 `scripts/` 和文档，`src/` 没动，server 构建身份不变。下面几步全部不调用模型，按顺序在同一 Tier-1 候选（`--reuse`）上执行，环境按上节设置。另需 `ILV2_TOOLCHAINS`（冻结 JDK，适配器会逐个核对 javaHome 下文件的 hash），以及与数据集冻结时一致的 `ILV2_MAC10_DATASET` 和 `ILV2_MAC10_INPUTS`。`ILV2_MAC10_INPUTS` 里每个输入 checkout 必须停在冻结 head，且 `git status --porcelain --ignored --untracked-files=all` 为空；否则适配器拒绝运行。如果冻结输入里有构建目录，需要先另做一份干净的 checkout，并在新的 inputs 记录里指向它（head 和 manifest 不变）。
+
+1. 脚本套件：上节第二条命令（已加入 `eval-mac10-live.test.mjs` 和 `eval-frozen-adapter.test.mjs`）。
+2. 冻结数据集上的模型无关全链：`node --test scripts/eval-mac10-live-chain.test.mjs scripts/ilv2-mac-eval-chain.test.mjs`。用的是真实 APFS 物化、`dist/server.js`、FRESH 就绪等待和 javac oracle。每个 pinned dev 题都要满足：QA 走 b2 路径（outline 加读取，用 gold 脚本化提交），必须 taskSuccess；repair 在 control 臂写入冻结修复后必须 `VALIDATED_SUCCESS`，不改动则必须 `TEST_FAILED`；在 b2 臂写入修复后也必须 `VALIDATED_SUCCESS`，候选里只改了 oracle 文件，并发生两次就绪等待。最后这一项用来确认 product session 不会往候选里写文件，否则 product 臂的 repair 会被系统性判为越权。汇总写入 `$ILV2_EVIDENCE_ROOT/mac10-live-chain.json`。
+3. oracle 稳定性：`node scripts/ilv2-mac-repair-oracle.mjs check --dataset "$ILV2_MAC10_DATASET" --inputs "$ILV2_MAC10_INPUTS" --split all --repeats 3 --java-home <toolchains.json 的 javaHome> --out "$ILV2_RUN_ROOT/oracle-check"`，exit 0 且 status=PASS。
+4. LIVE 矩阵的严格 dry-run（冻结 schedule，不发请求）：
+
+```bash
+node scripts/evaluate-java-task.mjs --dataset "$ILV2_MAC10_DATASET" \
+  --tasks <dataset>/tasks-dev.jsonl --gold <dataset>/private/gold-dev.jsonl --inputs "$ILV2_MAC10_INPUTS" \
+  --source-budget <none|LINES:BYTES> --pilot 12 --pilot-seed <seed> --arms b0,b2 --repeats 3 \
+  --require-identity --server-js dist/server.js --dry-run --output "$ILV2_RUN_ROOT/q10-dry"
+```
+
+   期望 exit 0，`results-pack.json` 中：`identity.identityCheck.status=VERIFIED`、`denominator=72`、`identity.pilot.taskIds` 12 个、`identity.mac10.corpora` 与冻结输入一致；有 repair 题时还要求 `identity.mac10.java` 非空且 `frozenFiles` 大于 0。`identity.indexReadyTimeoutMs=900000`。缺 `--source-budget`、同时给 `--repo-roots`/`--kit-root`、pilot 超出题数时 exit 2，且不写 schedule。
+
+以上四步通过后，Q10 LIVE 的工程前置才算满足。真正发出 LIVE 请求（去掉 `--dry-run` 并配置 `OPENAI_*`）属于产生费用的操作，需要用户单独授权，并先确定预算、split 和 seed。

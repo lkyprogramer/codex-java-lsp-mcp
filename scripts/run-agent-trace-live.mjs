@@ -1179,6 +1179,20 @@ export function impactSessionFromClient({ repoRoot, client }) {
       return callNamed("java_symbol", { repoRoot, operation: "outline", file: args.file,
         ...(args.nearLine !== undefined ? { nearLine: args.nearLine } : {}), ...(args.limit !== undefined ? { limit: args.limit } : {}) });
     },
+    // Q10: start the repository and poll java_status until its index view is FRESH (as the MAC-10 retrieval
+    // driver does), so a measured attempt never starts on a cold index. Returns the wait in ms.
+    async waitIndexFresh({ timeoutMs = 900_000, pollMs = 1000 } = {}) {
+      const started = performance.now();
+      const first = await callNamed("java_status", { repoRoot, start: true });
+      if (first?.error) throw new Error(`java_status failed: ${String(first.error).slice(0, 300)}`);
+      for (;;) {
+        const status = await callNamed("java_status", { repoRoot });
+        if (status?.error) throw new Error(`java_status failed: ${String(status.error).slice(0, 300)}`);
+        if (status?.indexView?.state === "FRESH") return Math.round(performance.now() - started);
+        if (performance.now() - started >= timeoutMs) throw new Error(`product index not FRESH within ${timeoutMs} ms (state ${status?.indexView?.state ?? "unknown"})`);
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+      }
+    },
     async impact(args) {
       return callNamed("java_impact", {
         repoRoot,

@@ -9,7 +9,7 @@
 | 单文件 outline | Q03 | INCONCLUSIVE | 合同已实现，收益未测（Q10 没有 LIVE） | 用户；`outline.test`、`symbol-static.test` |
 | Java 声明 evidence v2 | Q04 | INCONCLUSIVE | 合同已实现。Q10 里 B2 对 B1 的检验没跑；若该检验结论为 NO_GAIN，按卡片删除 Java evidence 路径，只保留正确性修复 | 用户；`evidence-unit.test`、`evidence-source-reader.test`、`eval-evidence-e2e.test` |
 | 定向关系 / 发现缺口 / 证据边际 / 绑定保真 / 等待与 I/O | Q05–Q09 | NOT_TRIGGERED | 没有 ledger 或计时证据，没有写代码 | — |
-| 真实 Agent 配对 | Q10 | INCONCLUSIVE | 只交付无费用部分：`summarizeSchedule` 接进 results pack、B0/B1/B2 臂与 `java_outline` 接进现有两臂 runner、`--require-identity` 身份校验；没有 LIVE slot，benefit 为 UNMEASURED | 用户；`run-agent-trace-live.test`、`evaluate-java-task-arms.test` |
+| 真实 Agent 配对 | Q10 | INCONCLUSIVE | 只交付无费用部分：`summarizeSchedule` 接进 results pack、B0/B1/B2 臂与 `java_outline` 接进现有两臂 runner、`--require-identity` 身份校验、MAC-10 LIVE 适配与确定性 pilot 选题（D11）；没有 LIVE slot，benefit 为 UNMEASURED | 用户；`run-agent-trace-live.test`、`evaluate-java-task-arms.test`、`eval-mac10-live.test`、`eval-mac10-live-chain.test`（Mac） |
 
 ## 规模与形态（按代码检查得出，未运行 measure 脚本）
 

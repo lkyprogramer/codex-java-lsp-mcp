@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // input: An explicit task file (--tasks), its gold (--gold), the optional MAC-10 dataset manifest
-//         (--dataset) both must belong to (native MAC-10 rows are dry-run only),
+//         (--dataset) both must belong to (native MAC-10 rows run LIVE through
+//         eval-mac10-live.mjs only with --inputs and --source-budget),
 //         a model backend (OpenAI-compatible API or codex CLI), and the local
 //         product MCP server for java_symbol. No backend credentials means the
 //         run reports BLOCKED_AUTH and nothing is measured.
@@ -29,7 +30,8 @@ import { serializeModelToolResult, splitSourceLines } from "./eval-tool-wire.mjs
 import { buildFrozenResultsPack, runProfileFrom } from "./eval-frozen-adapter.mjs";
 import { evaluateRepair } from "./eval-repair-adapter.mjs";
 import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
-import { TASK_SCHEMA as MAC10_TASK_SCHEMA, verifyDataset } from "./ilv2-mac-eval-dataset.mjs";
+import { verifyDataset } from "./ilv2-mac-eval-dataset.mjs";
+import { isMac10TaskRow, parseSourceBudget, prepareMac10Live, selectPilot } from "./eval-mac10-live.mjs";
 export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
 /**
@@ -234,12 +236,18 @@ export function strictEqualDeep(a, b) {
  * The answer alone is NOT an answer: scoreRunOutcome additionally gates on
  * the frozen required_evidence lines having been received.
  */
-export function scoreQaAnswer(goldAnswer, rawAnswer) {
+export function scoreQaAnswer(goldAnswer, rawAnswer, { setKeys = [] } = {}) {
   const parsed = parseStrictAnswer(rawAnswer);
   if (!parsed.ok) {
     return { status: "INVALID_ANSWER", correct: false, reason: parsed.reason, ...(parsed.duplicates ? { duplicates: parsed.duplicates } : {}) };
   }
-  const value = parsed.value;
+  const value = { ...parsed.value };
+  // MAC-10 string-set slots are order-free: a unique string array is compared sorted (gold is stored sorted).
+  // A duplicate or non-string element is left as submitted and so cannot equal the gold set.
+  for (const key of setKeys) {
+    const items = value[key];
+    if (Array.isArray(items) && items.every(item => typeof item === "string") && new Set(items).size === items.length) value[key] = [...items].sort();
+  }
   if (!goldAnswer || typeof goldAnswer !== "object" || Array.isArray(goldAnswer)) {
     return { status: "NO_GOLD", correct: false };
   }
@@ -259,6 +267,20 @@ export function scoreQaAnswer(goldAnswer, rawAnswer) {
  * output, possibly larger than what the model saw) are never credited. */
 export function receivedSourceEvents(events) {
   return (Array.isArray(events) ? events : []).filter(event => event?.type === "SOURCE_RECEIVED");
+}
+
+/** Required evidence that names the hash of the file it was verified on (MAC-10 gold `file_sha256`) is
+ * credited only from source received from that exact file version; other paths are unaffected. */
+export function hashBoundEvents(requiredEvidence, events) {
+  const expected = new Map();
+  for (const item of Array.isArray(requiredEvidence) ? requiredEvidence : []) {
+    if (typeof item?.file_sha256 === "string") expected.set(String(item.path ?? "").replaceAll("\\", "/"), item.file_sha256);
+  }
+  if (expected.size === 0) return Array.isArray(events) ? events : [];
+  return (Array.isArray(events) ? events : []).filter(event => {
+    const file = String(event?.path ?? "").replaceAll("\\", "/");
+    return !expected.has(file) || event?.fileContentHash === expected.get(file);
+  });
 }
 
 /** Line-set coverage of frozen required_evidence by received source.
@@ -749,7 +771,10 @@ export async function runLiveEvalRun({
   repairJudge = evaluateRepair,
   openSessionImpl = openImpactSession,
   productProfile = "broad",
-  publicAnswerContract = null
+  publicAnswerContract = null,
+  // When set, every product session waits until its index view is FRESH before the agent (or the next
+  // query after a write) uses it, so B1/B2 measure the tools, not a cold start. Ready time is recorded per row.
+  indexReadyTimeoutMs = null
 }) {
   productTools(productProfile);
   for (const arm of arms) armProfile(arm, productProfile);
@@ -795,12 +820,17 @@ export async function runLiveEvalRun({
         let session = null;
         let sessionGeneration = 0;
         const sessions = [];
+        const indexReadyMs = [];
         let partial = false;
         let agentStarted = false;
         const cacheFor = generation => path.join(outputDir, "mcp-cache", createHash("sha256").update(attemptKey).digest("hex").slice(0, 16), `w${generation}`);
         const openSession = async () => {
           const opened = await openSessionImpl({ repoRoot: candidateRoot, serverJs, cacheRoot: cacheFor(sessionGeneration), env });
           sessions.push(opened);
+          if (indexReadyTimeoutMs) {
+            if (typeof opened.waitIndexFresh !== "function") throw new Error("product session cannot report index readiness");
+            indexReadyMs.push(await opened.waitIndexFresh({ timeoutMs: indexReadyTimeoutMs }));
+          }
           return opened;
         };
         try {
@@ -934,7 +964,8 @@ export async function runLiveEvalRun({
             }
           });
           let repairVerdict = null;
-          if (task.kind === "repair" && kitRoot) {
+          // A frozen kit judge needs its kit; an injected judge (MAC-10 oracle) carries its own fixtures.
+          if (task.kind === "repair" && (kitRoot || repairJudge !== evaluateRepair)) {
             repairVerdict = await repairJudge({
               kitRoot,
               taskId: task.id,
@@ -954,6 +985,8 @@ export async function runLiveEvalRun({
             taskSuccess: scored.taskSuccess,
             answerStatus: scored.answerStatus,
             ...(scored.missingEvidence ? { missingEvidence: scored.missingEvidence } : {}),
+            ...(Object.hasOwn(scored, "answerCorrect") ? { answerCorrect: scored.answerCorrect, requiredEvidenceCovered: scored.requiredEvidenceCovered } : {}),
+            ...(indexReadyMs.length ? { indexReadyMs: [...indexReadyMs] } : {}),
             stopReason: run.stopReason,
             primaryStopReason: run.primaryStopReason,
             finalAnswerMode: run.finalAnswerMode,
@@ -1042,23 +1075,28 @@ export function scoreRunOutcome({ task, goldRow, run, repairVerdict }) {
     if (goldRow?.answer === undefined || goldRow?.answer === null) {
       return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_GOLD" };
     }
-    const score = scoreQaAnswer(goldRow.answer, run.finalContent);
-    if (!score.correct) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: score.status };
-    }
+    const setKeys = Object.entries(task.answerSlots ?? {}).filter(([, type]) => type === "string-set").map(([key]) => key);
+    const score = scoreQaAnswer(goldRow.answer, run.finalContent, { setKeys });
     const required = Array.isArray(goldRow.required_evidence) ? goldRow.required_evidence : [];
-    if (required.length === 0) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "NO_REQUIRED_EVIDENCE" };
+    // Path coverage and task success stay separate facts (06 §6.5); taskSuccess still needs both.
+    const coverage = required.length > 0 ? receivedLineCoverage(required, hashBoundEvents(required, run.sourceReceived ?? [])) : null;
+    const facets = { answerCorrect: score.correct, requiredEvidenceCovered: coverage ? coverage.missing.length === 0 : null };
+    if (!score.correct) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: score.status, ...facets };
     }
-    const coverage = receivedLineCoverage(required, run.sourceReceived ?? []);
+    if (!coverage) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "NO_REQUIRED_EVIDENCE", ...facets };
+    }
     if (coverage.missing.length > 0) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "MISSING_REQUIRED_EVIDENCE", missingEvidence: coverage.missing };
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "MISSING_REQUIRED_EVIDENCE", missingEvidence: coverage.missing, ...facets };
     }
+    // The over-budget check counts all received source, including source from other file versions.
+    const all = receivedLineCoverage(required, run.sourceReceived ?? []);
     const budget = task.budget;
-    if (budget && (coverage.receivedLines > budget.max_lines || coverage.receivedBytes > budget.max_bytes)) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "RECEIVED_OVER_BUDGET" };
+    if (budget && (all.receivedLines > budget.max_lines || all.receivedBytes > budget.max_bytes)) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "RECEIVED_OVER_BUDGET", ...facets };
     }
-    return { taskOutcome: "MEASURED", taskSuccess: true, answerStatus: score.status };
+    return { taskOutcome: "MEASURED", taskSuccess: true, answerStatus: score.status, ...facets };
   }
   return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: task.kind };
 }
@@ -1199,7 +1237,7 @@ export function checkRunIdentity({ tasks, allTaskIds, filter = [], arms, product
   return { status: unique.length === 0 ? "VERIFIED" : "FAILED", problems: unique, serverJsSha256 };
 }
 
-export async function main(argv = process.argv.slice(2), env = process.env) {
+export async function main(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const flag = (name) => {
     const index = argv.indexOf(name);
     return index >= 0 ? argv[index + 1] : undefined;
@@ -1212,14 +1250,20 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const seed = Number(flag("--seed") ?? 1984);
   const maxRounds = Math.max(1, Number(flag("--max-rounds") ?? 16));
   const kitRoot = flag("--kit-root");
-  const publicAnswerContract = flag("--public-answer-contract") ? loadPublicAnswerContract(flag("--public-answer-contract")) : null;
+  let publicAnswerContract = flag("--public-answer-contract") ? loadPublicAnswerContract(flag("--public-answer-contract")) : null;
   const productProfile = flag("--product-profile") ?? "broad";
   productTools(productProfile);
   const dryRun = argv.includes("--dry-run");
   const requireIdentity = argv.includes("--require-identity");
   const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--arms product,control|b0,b2|...] [--product-profile broad|evidence|exact-evidence|outline|outline-evidence] [--dry-run] [--require-identity]");
+    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json> [--inputs <frozen inputs.json> --source-budget none|LINES:BYTES (repair: ILV2_TOOLCHAINS)]] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--pilot N --pilot-seed S] [--repo-roots <corpus=path,..>] --output <dir> [--repeats N] [--seed N] [--max-rounds N] [--index-ready-timeout-ms N] [--server-js dist/server.js] [--arms product,control|b0,b2|...] [--product-profile broad|evidence|exact-evidence|outline|outline-evidence] [--dry-run] [--require-identity]");
+    return 2;
+  }
+  // Default: wait for a FRESH index (900 s) only on MAC-10 adapter runs; kit runs keep their v1.5 timing unless asked.
+  let indexReadyTimeoutMs = argv.includes("--index-ready-timeout-ms") ? Number(flag("--index-ready-timeout-ms")) : null;
+  if (indexReadyTimeoutMs !== null && (!Number.isSafeInteger(indexReadyTimeoutMs) || indexReadyTimeoutMs < 0)) {
+    console.error("--index-ready-timeout-ms must be a non-negative safe integer (0 disables the readiness wait)");
     return 2;
   }
   if (!Number.isSafeInteger(repeats) || repeats < 1) {
@@ -1247,13 +1291,53 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     dataset = { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest, split };
   }
   const allTasks = loadTaskFile(tasksFile);
-  const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
-  const repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
+  let tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
+  let pilot = null;
+  if (argv.includes("--pilot")) {
+    try { ({ tasks, identity: pilot } = selectPilot(tasks, { count: Number(flag("--pilot")), seed: flag("--pilot-seed") })); }
+    catch (error) {
+      console.error(error.message);
+      return 2;
+    }
+  }
+  let repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
     .filter(Boolean)
     .map(pair => {
       const index = pair.indexOf("=");
       return index > 0 ? [pair.slice(0, index), pair.slice(index + 1)] : [pair, pair];
     }));
+  const mac10 = allTasks.some(isMac10TaskRow);
+  if (mac10 && (!allTasks.every(isMac10TaskRow) || !dataset)) {
+    console.error("MAC-10 task rows need --dataset, and cannot be mixed with other task rows");
+    return 2;
+  }
+  if (!mac10 && (flag("--inputs") || flag("--source-budget"))) {
+    console.error("--inputs and --source-budget apply to MAC-10 task rows only");
+    return 2;
+  }
+  // MAC-10 LIVE adapter: corpora, answer contract, gold and repair judge all come from the verified dataset.
+  let adapter = null;
+  if (mac10 && flag("--inputs")) {
+    if (flag("--repo-roots") || kitRoot || publicAnswerContract) {
+      console.error("the MAC-10 adapter materializes its own corpora and contract: --repo-roots, --kit-root and --public-answer-contract are refused");
+      return 2;
+    }
+    try {
+      const sourceBudget = parseSourceBudget(flag("--source-budget"));
+      // The oracle's JDK is the frozen toolchain only (hash-checked); there is no override flag.
+      adapter = await prepareMac10Live({ datasetFile: path.resolve(flag("--dataset")), tasksFile, goldFile, inputsFile: path.resolve(flag("--inputs")),
+        outputDir: output, taskIds: tasks.map(task => task.id), toolchainsFile: env.ILV2_TOOLCHAINS ?? null, sourceBudget,
+        ...(deps.materialize ? { materialize: deps.materialize } : {}), ...(deps.checkInput ? { checkInput: deps.checkInput } : {}),
+        ...(deps.javaIdentityOf ? { javaIdentityOf: deps.javaIdentityOf } : {}), ...(deps.evaluateOracle ? { evaluate: deps.evaluateOracle } : {}) });
+    } catch (error) {
+      console.error(`MAC-10 adapter: ${error.message}`);
+      return 2;
+    }
+    tasks = adapter.tasks;
+    repoRoots = adapter.repoRoots;
+    indexReadyTimeoutMs ??= 900_000;
+    publicAnswerContract = adapter.publicAnswerContract;
+  }
   const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
   const { serverJsSha256, ...identityCheck } = checkRunIdentity({ tasks, allTaskIds: new Set(allTasks.map(task => task.id)), filter, arms, productProfile, dataset, repoRoots, kitRoot, serverJs });
   if (requireIdentity && identityCheck.status !== "VERIFIED") {
@@ -1261,9 +1345,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     console.error(`run identity is incomplete: ${identityCheck.problems.join(", ")}`);
     return 2;
   }
+  indexReadyTimeoutMs ??= 0;
   const backend = detectBackend(env);
-  if (!dryRun && backend && tasks.some(task => task.schema === MAC10_TASK_SCHEMA)) {
-    console.error("native MAC-10 task and gold rows need a live evaluation adapter; use --dry-run for schedule validation");
+  if (!dryRun && backend && mac10 && !adapter) {
+    console.error("native MAC-10 rows need the live adapter: pass --inputs <frozen inputs.json> and --source-budget (and ILV2_TOOLCHAINS for repair); use --dry-run for schedule validation only");
     return 2;
   }
   // The full schedule is frozen before anything runs; every row stays in the
@@ -1274,7 +1359,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   writeFileSync(path.join(output, "schedule.jsonl"), scheduleText, "utf8");
   const identity = { datasetId: dataset?.datasetId ?? null, datasetDigest: dataset?.datasetDigest ?? null, split: dataset?.split ?? null, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
     filter, seed, arms, armProfiles: Object.fromEntries(arms.map(arm => [arm, Object.hasOwn(ARM_PROFILES, arm) ? armProfile(arm, productProfile) : "UNKNOWN"])),
-    repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256 } };
+    repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256 },
+    evalProtocol: EVAL_PROTOCOL_VERSION, indexReadyTimeoutMs, pilot, mac10: adapter ? adapter.identity : null };
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
     const pack = assemblePack({
@@ -1301,7 +1387,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
   const live = await runLiveEvalRun({
     tasks,
-    gold: loadGoldFile(goldFile),
+    gold: adapter ? adapter.gold : loadGoldFile(goldFile),
     arms,
     repeats,
     repoRoots,
@@ -1312,11 +1398,15 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     maxRounds,
     productProfile,
     publicAnswerContract,
-    serverJs
+    serverJs,
+    indexReadyTimeoutMs: indexReadyTimeoutMs || null,
+    ...(adapter ? { repairJudge: adapter.repairJudge } : {})
   });
-  const scorer = kitRoot
-    ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null, productProfile })
-    : { kind: "preliminary-js", reason: "--kit-root not given: QA uses the preliminary JS scorer and repair is UNMEASURED" };
+  const scorer = adapter
+    ? { kind: "mac10-adapter", adapter: adapter.identity.adapter, ...adapter.identity.scoring }
+    : kitRoot
+      ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null, productProfile })
+      : { kind: "preliminary-js", reason: "--kit-root not given: QA uses the preliminary JS scorer and repair is UNMEASURED" };
   const pack = assemblePack({
     status: "MEASURED",
     productProfile,
