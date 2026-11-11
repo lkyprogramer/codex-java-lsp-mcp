@@ -18,6 +18,14 @@ import { recordSnapshotPublication, type PublicationDetails } from "./publicatio
 import { assertId, DB_FILE, mac1Layout, MANIFEST_FILE, newSnapshotId, readSealedManifest, readVerification, sealJobDatabase, syncDir, verificationEntries,
   verificationFile, verifyDatabaseFile, writeVerification, type FaultHook, type Mac1Layout, type SealTimings, type VerificationRecord } from "./seal.js";
 
+/**
+ * Retained seed bases in all, one per workspace: the snapshot it left on its last switch beyond the
+ * delta closure limit (a branch checkout). A full build costs minutes; a retained seed costs one
+ * snapshot of disk until it is displaced, the owner restarts, or the cache volume runs low
+ * (IndexOwner.ensureDiskHeadroom releases them).
+ */
+export const MAX_RETAINED_SEEDS = 4;
+
 export type LeasePurpose = "request" | "query-worker" | "candidate-scan" | "base" | "publish" | "verify";
 export type SnapshotLease = { readonly snapshotId: string; readonly purpose: LeasePurpose; readonly dbPath: string; release(): void };
 
@@ -63,8 +71,11 @@ export type BuildJob = {
 
 export type ReclaimTarget = { snapshotId: string } | { jobId: string } | { workspaceId: string };
 type ExpiredBinding = { binding: WorkspaceBinding; stillEligible: () => boolean };
-/** `tracked`: a running tracker serves the binding's root; `root-live` / `root-unconfirmed`: the root still is, or may be, that workspace. */
-export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "tracked" | "root-live" | "root-unconfirmed";
+/**
+ * `tracked`: a running tracker serves the binding's root; `root-live` / `root-unconfirmed`: the root still is, or may be, that workspace;
+ * `retained`: an unbound snapshot this incarnation keeps as a seed base (retainSeed).
+ */
+export type ReclaimReason = "bound" | "leased" | "in-flight" | "missing" | "tracked" | "root-live" | "root-unconfirmed" | "retained";
 export type ReclaimResult = { reclaimed: true } | { reclaimed: false; reason: ReclaimReason };
 
 /** One GC cycle: what was deleted, and how many store objects each refusal kept. */
@@ -116,6 +127,12 @@ export class SnapshotStore {
   private readonly bases = new Map<string, string>();
   /** Nodes a failure already reached (set eagerly, so relinking can never lose them). */
   private readonly tainted = new Set<string>();
+  /**
+   * Superseded snapshots kept as seed bases, oldest first: at most one per workspace and
+   * MAX_RETAINED_SEEDS in all. Memory only: after a restart they are ordinary unbound
+   * snapshots and the first sweep reclaims them.
+   */
+  private readonly retained = new Map<string, { workspaceId: string; buildKey: string }>();
   private queue: Promise<unknown> = Promise.resolve();
 
   private constructor(readonly cacheRoot: string, private readonly options: SnapshotStoreOptions) {
@@ -207,12 +224,47 @@ export class SnapshotStore {
    * a binding of its own may seed from. Content is judged by hash against its own capture, never assumed.
    */
   seedCandidates(workspaceId: string, buildKey: string): string[] {
+    const own = this.bindings.get(workspaceId)?.snapshotId;
+    // Retained seeds first, newest first (the snapshot a workspace left on a branch switch), then siblings.
+    const retained = [...this.retained].reverse()
+      .filter(([id, entry]) => id !== own && entry.buildKey === buildKey && !this.failed(id) && !this.reclaiming.has(id))
+      .map(([id]) => id);
     const ids = new Set<string>();
     // Verified or not: a FAILED verdict quarantines every binding on the snapshot and fails what was cloned from it.
     for (const [id, binding] of this.bindings) if (id !== workspaceId && binding.buildKey === buildKey && !this.failed(binding.snapshotId)) ids.add(binding.snapshotId);
     // The scan is bounded: prefer larger time-prefixed IDs so old siblings cannot permanently
     // exclude later bases. This is a locality heuristic; content hashes still decide reuse.
-    return [...ids].sort().reverse();
+    return [...new Set([...retained, ...[...ids].sort().reverse()])];
+  }
+
+  /**
+   * Keep a superseded snapshot as `workspaceId`'s seed base instead of deleting it, so switching back
+   * to what it holds can bind or delta from it rather than rebuild in full. A failed (or failing-
+   * lineage) snapshot is never retained. Returns the retained snapshots it displaced: the caller
+   * reclaims them (the sweep would too).
+   */
+  retainSeed(snapshotId: string, workspaceId: string, buildKey: string): string[] {
+    assertId("snapshotId", snapshotId);
+    if (this.failed(snapshotId) || this.reclaiming.has(snapshotId)) return [];
+    const evicted: string[] = [];
+    for (const [id, entry] of [...this.retained]) {
+      if (id === snapshotId || entry.workspaceId === workspaceId) this.retained.delete(id);
+      if (id !== snapshotId && entry.workspaceId === workspaceId) evicted.push(id);
+    }
+    this.retained.set(snapshotId, { workspaceId, buildKey });
+    while (this.retained.size > MAX_RETAINED_SEEDS) {
+      const oldest = this.retained.keys().next().value!;
+      this.retained.delete(oldest);
+      evicted.push(oldest);
+    }
+    return evicted;
+  }
+
+  /** Drop every retained seed (disk pressure); the returned snapshots are reclaimable once unleased. */
+  releaseRetained(): string[] {
+    const ids = [...this.retained.keys()];
+    this.retained.clear();
+    return ids;
   }
 
   /** The bindingVersion a plan dispatched now must carry: the served binding's, else a quarantined one's, else 0. */
@@ -538,6 +590,11 @@ export class SnapshotStore {
       if (!existsSync(dir)) return { reclaimed: false, reason: "missing" };
       if ([...this.bindings.values()].some(binding => binding.snapshotId === snapshotId) || [...this.quarantined.values()].some(entry => entry.snapshotId === snapshotId)
         || [...this.pendingUnlinks.values()].includes(snapshotId)) return { reclaimed: false, reason: "bound" };
+      if (this.retained.has(snapshotId)) {
+        // A seed that has since failed verification is not kept for reuse.
+        if (!this.failed(snapshotId)) return { reclaimed: false, reason: "retained" };
+        this.retained.delete(snapshotId);
+      }
       if (this.leaseCount(snapshotId) > 0) return { reclaimed: false, reason: "leased" };
       if ([...this.jobs.values()].some(job => job.state !== "FINISHED" && job.snapshotId === snapshotId)) return { reclaimed: false, reason: "in-flight" };
       this.options.assertOwner?.();

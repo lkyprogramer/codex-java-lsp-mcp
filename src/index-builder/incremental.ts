@@ -1,4 +1,4 @@
-import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
+import { computeExtractorVersion, computeInputFingerprints, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../java-index/build-fingerprint.js";
 import { currentBuildKey } from "../java-index/sql/snapshot-manifest.js";
 import { sqlStage, compatibleDeltaBase, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { runSqlColdBuild } from "./cold-build.js";
@@ -44,7 +44,13 @@ import { COVERAGE_GAP, coverageRoots, readIndexCounts, readMeta, refreshIndexCou
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "full";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[];
   /** The buildKey the dispatching round captured: inputs read differently at start mean its publish would be refused. */
-  buildKey?: string };
+  buildKey?: string;
+  /**
+   * The base was published under another buildKey (a build file changed). The job may still be a
+   * delta when everything facts depend on is unchanged: the layout fingerprint and the extractor
+   * version the base recorded. Otherwise it escalates to a full, as any input change did before.
+   */
+  buildInputsMoved?: boolean };
 export type BuilderJobResult = { id: number; ok: boolean; indexedGeneration: number; files: number; census?: CaptureCensusEntry[]; censusComplete?: boolean; stages?: PipelineMetrics; error?: string;
   /** escalation "report": this delta needs a full; nothing was published. */
   escalation?: string;
@@ -1167,12 +1173,21 @@ async function applyBuilderJobStages(options: {
   try {
     repoRoot = await realpath(repoRoot);
     const layout=probeLayout(repoRoot);
-    const fingerprint=await computeBuildFingerprint(repoRoot,layout);
+    const { buildFingerprint: fingerprint, layoutFingerprint } = await computeInputFingerprints(repoRoot, layout);
     // Build inputs changed after the round captured them (a checkout still writing): the publish
     // would refuse this build, so it is not spent. The round keeps its hints and retries.
     if (options.job.buildKey !== undefined && currentBuildKey(fingerprint) !== options.job.buildKey) return statusResult(options.db, id, false, "buildKey changed before build");
     const baseCompatible=compatibleDeltaBase(options.db);
-    const inputsMatch=readMeta(options.db,"buildFingerprint")===fingerprint;
+    let inputsMatch=readMeta(options.db,"buildFingerprint")===fingerprint;
+    if (options.job.buildInputsMoved && options.job.kind !== "full") {
+      // Not a fingerprint comparison alone: an extractor change keeps the fingerprint and still moves the
+      // buildKey, and only the base's own record proves which extractor wrote its facts.
+      inputsMatch = baseCompatible
+        && readMeta(options.db, LAYOUT_FINGERPRINT_META) === layoutFingerprint
+        && readMeta(options.db, EXTRACTOR_VERSION_META) === computeExtractorVersion();
+      // The base's facts stand; only the inputs it records move, so the sealed manifest carries the new buildKey.
+      if (inputsMatch) writeMeta(options.db, "buildFingerprint", fingerprint);
+    }
     const full = async (reason: string): Promise<BuilderJobResult> => {
       const result = await runSqlColdBuild({repoRoot,db:options.db,generation,onStage:options.onStage,...(options.parallelism ? {parallelism:options.parallelism} : {})});
       return {...statusResult(options.db,id,true),census:result.census,censusComplete:true,stages:{...result.stages,reason}};

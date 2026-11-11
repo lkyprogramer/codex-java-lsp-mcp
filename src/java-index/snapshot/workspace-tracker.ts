@@ -8,7 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
 import { lstat, readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { BUILD_MARKER_RELATIVE_PATHS, computeBuildFingerprint } from "../build-fingerprint.js";
+import { BUILD_MARKER_RELATIVE_PATHS, computeInputFingerprints } from "../build-fingerprint.js";
 import { IGNORED_DIRECTORY_NAMES, javaSourceRoot, resourceMemberRoot } from "../manifest.js";
 import { hashSourceWithin } from "../source-capture.js";
 import { probeLayoutOffThread, type LayoutContext } from "../../layout-probe.js";
@@ -86,6 +86,8 @@ export type TrackerRound = {
   readonly root: RootIdentity;
   readonly layout: LayoutContext;
   readonly buildKey: string;
+  /** The buildKey's inputs without build file bytes (build-fingerprint.ts): what a build-file-only change keeps. */
+  readonly layoutFingerprint: string;
   readonly bindingVersion: number;
   readonly captureId: string;
   readonly mode: RoundMode;
@@ -93,6 +95,8 @@ export type TrackerRound = {
   readonly dispatchedAt: number;
   readonly pending: ReadonlyMap<string, number>;
   readonly subtrees: ReadonlyMap<string, number>;
+  /** The tracker's workMark at the cut: work owed later is not this round's. */
+  readonly workMark: number;
 };
 
 export type TrackerVerification = {
@@ -153,6 +157,11 @@ export class WorkspaceTracker {
   private readonly now: () => number;
   private readonly fullHashIntervalMs: number;
   private readonly signalled = { ignored: 0, wrapped: 0 };
+  /** Counts every time work became owed (a signal that owes something, resume, due full hash, new epoch); never reset. */
+  private work = 0;
+  /** The fence in flight, and the one queued behind it for callers that arrived after it was sent. */
+  private flushing?: Promise<void>;
+  private nextFlush?: Promise<void>;
 
   private constructor(readonly root: RootIdentity, private readonly options: WorkspaceTrackerOptions) {
     this.workspaceId = workspaceIdFor(root);
@@ -184,6 +193,7 @@ export class WorkspaceTracker {
     this.streamLost = undefined;
     // A new epoch never trusts the stat cache: every file is hashed again.
     this.fullHashThrough = this.bump();
+    this.work += 1;
     void source.closed.catch(error => { if (this.source === source) this.streamLost = error instanceof Error ? error : new Error(String(error)); });
   }
 
@@ -206,6 +216,29 @@ export class WorkspaceTracker {
 
   get trackerEpoch(): string { return this.epoch; }
   get currentSeq(): number { return this.seq; }
+  /**
+   * Grows whenever new work becomes owed, across stream restarts (unlike seqs). A signal that owes
+   * nothing (a write under target/, an ignored file) leaves it alone, so a caller backing off a
+   * failing round can tell the two apart.
+   */
+  get workMark(): number { return this.work; }
+
+  /**
+   * Deliver every signal the native stream still holds (FSEvents coalesces for its latency window)
+   * before the caller reads status(). Concurrent callers share one fence; a caller arriving while one
+   * is in flight waits for the next, so the fence always starts after its own entry.
+   */
+  flush(timeoutMs = FLUSH_FENCE_TIMEOUT_MS): Promise<void> {
+    if (!this.flushing) {
+      const flushed: Promise<void> = this.source.fence(timeoutMs).finally(() => { if (this.flushing === flushed) this.flushing = undefined; });
+      this.flushing = flushed;
+      return flushed;
+    }
+    return this.nextFlush ??= this.flushing.catch(() => undefined).then(() => {
+      this.nextFlush = undefined;
+      return this.flush(timeoutMs);
+    });
+  }
 
   status(): TrackerStatus {
     if (this.invalid) return "INVALID_ROOT";
@@ -233,6 +266,7 @@ export class WorkspaceTracker {
   requireDueFullHash(): boolean {
     if (this.invalid || this.fullHashThrough || this.now() < this.fullHashDueAt()) return false;
     this.fullHashThrough = this.bump();
+    this.work += 1;
     return true;
   }
 
@@ -243,6 +277,7 @@ export class WorkspaceTracker {
 
   /** A resume-from-sleep hint: content may have changed without events (§2.4). */
   resume(): number {
+    this.work += 1;
     return this.fullHashThrough = this.bump();
   }
 
@@ -255,6 +290,15 @@ export class WorkspaceTracker {
 
   /** Every signal, with or without a path, takes the next local seq. eventId is never consulted. */
   onNativeSignal(flags: number, file: string): number {
+    const seq = this.signal(flags, file);
+    const relative = this.relativeOf(file);
+    // Only this signal's own path can carry its seq: no scan over every pending path.
+    if (this.fullHashThrough === seq || this.fullStatThrough === seq || this.envThrough === seq
+      || (relative !== undefined && (this.pending.get(relative) === seq || this.subtrees.get(relative) === seq))) this.work += 1;
+    return seq;
+  }
+
+  private signal(flags: number, file: string): number {
     const seq = this.bump();
     const F = FSEVENT_FLAGS;
     if (flags & (F.UserDropped | F.KernelDropped | F.RootChanged | F.Mount | F.Unmount)) this.fullHashThrough = seq;
@@ -304,6 +348,7 @@ export class WorkspaceTracker {
     // Frozen right after the fence, before any await: a signal during the reads below takes a higher seq.
     const epoch = this.epoch;
     const cut = this.seq;
+    const workMark = this.work;
     const pending = new Map(this.pending);
     const subtrees = new Map(this.subtrees);
     const owedFullHash = this.fullHashThrough > 0;
@@ -313,7 +358,7 @@ export class WorkspaceTracker {
     // Off this thread: the walk is synchronous fs, and the owner serves requests while rounds run.
     const layout = await probeLayoutOffThread(this.root.canonicalRoot);
     const layoutKey = JSON.stringify([layout.sourceRoots, layout.resourceRoots, layout.layout]);
-    const fingerprint = await computeBuildFingerprint(this.root.canonicalRoot, layout);
+    const { buildFingerprint: fingerprint, layoutFingerprint } = await computeInputFingerprints(this.root.canonicalRoot, layout);
     if (this.epoch !== epoch) throw new Error("event stream restarted during dispatch");
     // A layout this round reads differently from the last one is walked in full by this round itself.
     const layoutMoved = Boolean(this.layout) && layoutKey !== this.layoutKey;
@@ -331,8 +376,8 @@ export class WorkspaceTracker {
     this.fingerprint = fingerprint;
     const mode: RoundMode = owedFullHash || fingerprintMoved || !this.view || dispatchedAt - this.lastFullHashAt >= this.fullHashIntervalMs ? "full-hash"
       : owedFullStat || layoutMoved ? "full-stat" : "paths";
-    const round: TrackerRound = { epoch, cut, workspaceGeneration: this.generation, root: { ...this.root }, layout, buildKey: currentBuildKey(fingerprint),
-      bindingVersion: input.bindingVersion, captureId: `c-${randomUUID().replaceAll("-", "")}`, mode, dispatchedAt, pending, subtrees };
+    const round: TrackerRound = { epoch, cut, workspaceGeneration: this.generation, root: { ...this.root }, layout, buildKey: currentBuildKey(fingerprint), layoutFingerprint,
+      bindingVersion: input.bindingVersion, captureId: `c-${randomUUID().replaceAll("-", "")}`, mode, dispatchedAt, pending, subtrees, workMark };
     this.inFlight = round;
     return round;
   }
@@ -383,18 +428,42 @@ export class WorkspaceTracker {
     const counts = { hashed: 0, statted: 0 };
     const suspect = (relative: string) => round.mode === "full-hash" || round.pending.has(relative)
       || [...round.subtrees.keys()].some(prefix => relative === prefix || relative.startsWith(`${prefix}/`));
-    const read = async (relative: string, kind: ContentEntry["kind"]) => {
+    // A hinted path did not come from readdir. On a case-insensitive volume lstat("UserDAO.java")
+    // still succeeds after a rename to UserDao.java, which would keep a ghost member (a duplicate
+    // declaration) until the next full hash; each component must exist under exactly that name.
+    const listings = new Map<string, Promise<Listing>>();
+    // A hinted spelling that is not on disk but still opens: the member exists under another spelling
+    // (a case-only rename reported only under its old name, or a save reported under the spelling it
+    // was opened with). The listings name it, and this round reads it there; a spelling they cannot
+    // name uniquely is left to a full walk owed after this round.
+    let respelled = false;
+    const opens = (relative: string) => lstat(path.join(root, relative)).then(() => true, () => false);
+    /** The spelling a full walk would record for a hinted path (readdir's), or undefined when nothing opens under it. */
+    const spelled = async (relative: string): Promise<string | undefined> => {
+      const exact = await exactlyNamed(root, relative, listings);
+      if (exact !== undefined) return exact;
+      if (!await opens(relative)) return undefined;
+      // Listed before a safe-save renamed the name back: list again before folding case, so a
+      // case-sensitive volume (where an opening path is always exactly named) never folds.
+      listings.clear();
+      const actual = await exactlyNamed(root, relative, listings) ?? await diskSpelling(root, relative, listings);
+      if (actual === undefined) respelled = true;
+      return actual;
+    };
+    const gone = (relative: string) => { entries.delete(relative); this.cache.delete(relative); };
+    // `respelt`: a hint reached this path under another spelling, so it is as suspect as the hint was.
+    const read = async (relative: string, kind: ContentEntry["kind"], respelt = false) => {
       const absolute = path.join(root, relative);
       let before;
-      try { before = await lstat(absolute, { bigint: true }); } catch (error) { if (isMissing(error)) { entries.delete(relative); return; } throw error; }
-      if (!before.isFile()) { entries.delete(relative); return; }
+      try { before = await lstat(absolute, { bigint: true }); } catch (error) { if (isMissing(error)) { gone(relative); return; } throw error; }
+      if (!before.isFile()) { gone(relative); return; }
       counts.statted += 1;
       const key = statKey(before);
       const cached = this.cache.get(relative);
       let hash: string;
-      if (!suspect(relative) && cached && cached.key === key) hash = cached.hash;
+      if (!respelt && !suspect(relative) && cached && cached.key === key) hash = cached.hash;
       else {
-        try { hash = await hashSourceWithin(root, absolute); } catch (error) { if (isMissing(error)) { entries.delete(relative); return; } throw error; }
+        try { hash = await hashSourceWithin(root, absolute); } catch (error) { if (isMissing(error)) { gone(relative); return; } throw error; }
         counts.hashed += 1;
         const after = await lstat(absolute, { bigint: true }).catch(() => undefined);
         // Cached only when the read was stable; a racing write has its own, later event.
@@ -407,14 +476,30 @@ export class WorkspaceTracker {
     if (round.mode === "paths") {
       await eachLimited([...round.pending.keys()], VERIFY_READS, async relative => {
         const kind = memberKind(relative, round.layout);
-        if (kind) await read(relative, kind); else entries.delete(relative);
+        if (!kind) { gone(relative); return; }
+        const actual = await spelled(relative);
+        if (actual !== relative) gone(relative);
+        if (actual === undefined) return;
+        const actualKind = actual === relative ? kind : memberKind(actual, round.layout);
+        if (actualKind) await read(actual, actualKind, actual !== relative);
       });
       for (const prefix of round.subtrees.keys()) {
-        for (const existing of [...entries.keys()]) if (existing === prefix || existing.startsWith(`${prefix}/`)) entries.delete(existing);
-        await eachLimited(await walkMembers(root, prefix, round.layout), VERIFY_READS, found => read(found.path, found.kind));
+        for (const existing of [...entries.keys()]) if (existing === prefix || existing.startsWith(`${prefix}/`)) gone(existing);
+        // A directory renamed by case only: the old spelling still opens, its members are not there.
+        const walked = await spelled(prefix);
+        if (walked === undefined) continue;
+        if (walked !== prefix) for (const existing of [...entries.keys()]) if (existing === walked || existing.startsWith(`${walked}/`)) gone(existing);
+        await eachLimited(await walkMembers(root, walked, round.layout), VERIFY_READS, found => read(found.path, found.kind, walked !== prefix));
       }
     } else {
       await eachLimited(await walkMembers(root, "", round.layout), VERIFY_READS, found => read(found.path, found.kind));
+      // A full walk saw every member: stat keys of paths that are gone are dropped, so the cache never outgrows the census.
+      for (const cached of [...this.cache.keys()]) if (!entries.has(cached)) this.cache.delete(cached);
+    }
+    // Owed after this round's cut, so its completion cannot clear it: the next round walks every root.
+    if (respelled && this.epoch === round.epoch) {
+      this.fullStatThrough = this.bump();
+      this.work += 1;
     }
     const content = contentManifestIdOf(entries.values());
     if (this.epoch === round.epoch && this.inFlight === round) {
@@ -470,6 +555,13 @@ function statKey(info: { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bi
   return `${info.size}:${info.mtimeNs}:${info.ctimeNs}:${info.ino}:${info.dev}`;
 }
 
+/**
+ * A request's fence (flush) may wait this long. A fence that times out fails the native stream, so the
+ * request path never uses a shorter limit than dispatch (5 s): a helper that is merely slow under load
+ * is not killed by a request, and one that is stuck is still caught by the next dispatch's fence.
+ */
+const FLUSH_FENCE_TIMEOUT_MS = 30_000;
+
 /** Reads one verify round keeps in flight: a new worktree hashes its whole census, latency-bound one file at a time. */
 const VERIFY_READS = 16;
 
@@ -489,6 +581,73 @@ async function eachLimited<T>(items: readonly T[], limit: number, work: (item: T
 function isMissing(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
   return code === "ENOENT" || code === "ENOTDIR";
+}
+
+/**
+ * Whether every component of `relative` is a directory entry under exactly that spelling. Listings
+ * are shared through `listings` for one verification. Names equal after NFC normalization count as
+ * the same entry (APFS is normalization-insensitive, and a signal may spell a name in either form);
+ * case is never folded.
+ */
+type Listing = { names: Set<string>; nfc?: Map<string, string> } | "missing" | "unlisted";
+
+function listingOf(root: string, parent: string, listings: Map<string, Promise<Listing>>): Promise<Listing> {
+  let listing = listings.get(parent);
+  if (!listing) {
+    // A directory that can be searched but not listed (mode --x) proves nothing: lstat decides, as before.
+    listing = readdir(path.join(root, parent)).then((names): Listing => ({ names: new Set(names) }),
+      (error: unknown): Listing => isMissing(error) ? "missing" : "unlisted");
+    listings.set(parent, listing);
+  }
+  return listing;
+}
+
+/**
+ * The spelling readdir gives a path that opens under another one (a case-insensitive volume): each
+ * component matched exactly, or by its only case-insensitive match in its parent's listing. Undefined
+ * when a component has no unique match (or a parent cannot be listed): a full walk decides instead.
+ * The result is the spelling a full walk records, readdir's own.
+ */
+async function diskSpelling(root: string, relative: string, listings: Map<string, Promise<Listing>>): Promise<string | undefined> {
+  const fold = (name: string) => name.normalize("NFC").toLowerCase();
+  let parent = "";
+  for (const part of relative.split("/")) {
+    const found = await listingOf(root, parent, listings);
+    if (found === "missing" || found === "unlisted") return undefined;
+    let actual: string | undefined = found.names.has(part) ? part : undefined;
+    if (actual === undefined) {
+      const folded = fold(part);
+      const matches = [...found.names].filter(name => fold(name) === folded);
+      if (matches.length !== 1) return undefined;
+      actual = matches[0];
+    }
+    parent = parent ? `${parent}/${actual}` : actual!;
+  }
+  return parent;
+}
+
+/**
+ * The hinted path with each component as its parent's listing spells it (readdir's, so a full walk
+ * records the same key), matched exactly or by NFC equivalence; case is never folded. Undefined when
+ * a component is not listed. A directory that cannot be listed (mode --x) proves nothing: the rest of
+ * the hinted spelling stands and lstat decides, as before.
+ */
+async function exactlyNamed(root: string, relative: string, listings: Map<string, Promise<Listing>>): Promise<string | undefined> {
+  const parts = relative.split("/");
+  const spelled: string[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
+    const found = await listingOf(root, spelled.join("/"), listings);
+    if (found === "missing") return undefined;
+    if (found === "unlisted") return [...spelled, ...parts.slice(index)].join("/");
+    if (found.names.has(part)) { spelled.push(part); continue; }
+    // Built once per directory, only when some spelling missed.
+    found.nfc ??= new Map([...found.names].map(name => [name.normalize("NFC"), name]));
+    const actual = found.nfc.get(part.normalize("NFC"));
+    if (actual === undefined) return undefined;
+    spelled.push(actual);
+  }
+  return spelled.join("/");
 }
 
 /** The index census membership of a relative path, by the same rules discovery uses. */

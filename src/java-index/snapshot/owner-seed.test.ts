@@ -359,7 +359,7 @@ test("a snapshot bound by a seeded twin survives its first workspace's next publ
   assert.ok(existsSync(path.join(ctx.owner.store.layout.snapshots, first.binding.snapshotId, "index.sqlite")), "the twin's bound snapshot is kept");
 });
 
-test("a bound workspace whose build inputs changed gets an explicit full on an empty job, never a rescan delta", async t => {
+test("a bound workspace whose build-file bytes changed (same layout) gets a new buildKey from a rescan delta on its own base", async t => {
   const dir = await base(t);
   const main = await repo(dir, "main");
   const ctx = await openOwner(t, path.join(dir, "cache"));
@@ -369,10 +369,39 @@ test("a bound workspace whose build inputs changed gets an explicit full on an e
   ctx.sources.emit(main, "pom.xml");
   await until(() => ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId !== first.binding.snapshotId
     && first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "main republishes");
+  const jobs = ctx.jobsFor(main);
+  assert.deepEqual(jobs.map(job => job.kind), ["full", "reconcile"], "a dependency or comment edit is not a full rebuild");
+  assert.equal(jobs[1]!.buildInputsMoved, true, "the builder is told its base was published under another buildKey");
+  const round = rounds(ctx, first.workspace.workspaceId).at(-1)!;
+  assert.deepEqual([round.outcome, round.kind], ["published", "rescan"]);
+  assert.ok(round.timings?.cloneMs !== undefined, "the own base was cloned");
+  // The buildKey still moves: JDT and the router learn of the build change from this publish (buildKeyChanged).
+  assert.notEqual(ctx.owner.store.binding(first.workspace.workspaceId)!.buildKey, first.binding.buildKey);
+  const published = (await publications(ctx.owner)).at(-1)!;
+  assert.deepEqual([published.fullReason, published.comparisonBaseSnapshotId, published.cloneBaseSnapshotId],
+    [undefined, first.binding.snapshotId, first.binding.snapshotId]);
+});
+
+test("a bound workspace whose build inputs moved its layout gets an explicit full on an empty job, never a rescan delta", async t => {
+  const dir = await base(t);
+  const main = await repo(dir, "main");
+  const ctx = await openOwner(t, path.join(dir, "cache"));
+  const first = await bound(ctx, main);
+  // A new active source root changes the layout fingerprint the base recorded: its facts (source roots,
+  // modules) no longer describe the workspace, so the owner decides the full before cloning anything.
+  const testRel = "src/test/java/demospring/OrderServiceTest.java";
+  await mkdir(path.join(main, path.dirname(testRel)), { recursive: true });
+  await writeFile(path.join(main, testRel), "package demospring;\n\nclass OrderServiceTest {}\n");
+  const pom = path.join(main, "pom.xml");
+  await writeFile(pom, (await readFile(pom, "utf8")).replace("</project>", "  <!-- changed build input -->\n</project>"));
+  ctx.sources.emit(main, testRel);
+  ctx.sources.emit(main, "pom.xml");
+  await until(() => ctx.owner.store.binding(first.workspace.workspaceId)!.snapshotId !== first.binding.snapshotId
+    && first.workspace.trackerStatus() === "FRESH" && !first.workspace.status().roundInFlight, "main republishes");
   assert.deepEqual(ctx.jobsFor(main).map(job => job.kind), ["full", "full"]);
+  assert.ok(ctx.jobsFor(main).every(job => !job.buildInputsMoved));
   const round = rounds(ctx, first.workspace.workspaceId).at(-1)!;
   assert.deepEqual([round.outcome, round.kind, round.timings?.cloneMs], ["published", "full", undefined], "no base clone for an explicit full");
-  assert.notEqual(ctx.owner.store.binding(first.workspace.workspaceId)!.buildKey, first.binding.buildKey);
   const published = (await publications(ctx.owner)).at(-1)!;
   assert.deepEqual([published.fullReason, published.comparisonBaseSnapshotId, published.cloneBaseSnapshotId],
     ["build-key-changed", first.binding.snapshotId, undefined]);
@@ -549,7 +578,9 @@ test("a builder that reads a later build key is refused without clearing hints, 
   assert.notEqual(final.buildKey, first.binding.buildKey);
   assert.equal(final.workspaceGeneration, first.binding.workspaceGeneration + 1);
   assert.equal(first.workspace.tracker.diagnostics().pending, 0);
-  assert.equal(rounds(ctx, first.workspace.workspaceId).at(-1)!.kind, "full");
+  // The stable key's retry: the pom edit (a comment) keeps the layout the base recorded, so a rescan delta on it.
+  assert.equal(rounds(ctx, first.workspace.workspaceId).at(-1)!.kind, "rescan");
+  assert.equal(ctx.jobsFor(main).at(-1)!.buildInputsMoved, true);
   assert.ok(children.length >= 3);
   assert.ok(children.every(child => child.exitCode === 0), "the refused and successful real builders were reaped");
 });
