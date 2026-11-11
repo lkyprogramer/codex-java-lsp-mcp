@@ -1,7 +1,7 @@
 # Java Specialist：ILV2 之后的证据质量与 Agent 效果计划
 
-**版本：POST-ILV2/1.1 · 2026-11-10**（1.0于2026-11-05发布；修订内容见文末“1.1修订记录”）  
-**源码基线：** `codex/index-lifecycle-v2 @ b1475cddac01ab6ce589a1d465578d5ab7772533`  
+**版本：POST-ILV2/1.2 · 2026-11-11**（1.0于2026-11-05发布；修订内容见文末“1.1修订记录”“1.2修订记录”）  
+**源码基线：** 1.0/1.1研究基线 `codex/index-lifecycle-v2 @ b1475cddac01ab6ce589a1d465578d5ab7772533`；1.2起执行基线为 `main @ 665d66e1e0695368bf2f5f1d843583b59bdd1e09`（含两轮底座review修复；用户报告已在本机Mac完成构建与测试验证）  
 **性质：** 调研、增量设计、AI执行计划与机制验收附件；不是已实施的产品补丁。
 
 ## 方向已经确定
@@ -60,3 +60,17 @@ python tools/check_fixtures.py --output /tmp/post-ilv2-fixture-report.json
 | 验证命令改为存在的测试文件 | `dist/tools/symbol.test.js`、`dist/discovery/query.test.js`不存在；Q07路径缺`src/agent-router/`前缀 | Q03、Q04、Q06、Q07 |
 
 1.1未改动：方向与非目标、预算数值、评测分母与门禁、原创fixture与evaluator标签、附件检查器。
+
+## 1.2修订记录（2026-11-11）
+
+`cc5db6b`之后main合入了两轮底座review修复：[2026-11-10索引生命周期review](../index-lifecycle-v2/review-2026-11-10-index-lifecycle.md)（`4b84cf6`、`ae78f7b`）、[2026-11-11架构review](../review-2026-11-11-architecture.md)（`2e13277`），以及`0524695`（runtime退役期间阻塞请求）。改动集中在owner/tracker/snapshot store/GC/builder/janitor/runtime manager；`queryFiles`、callers/callees边表查询、evidence、`anchor-windows`、`java_symbol`/`java_impact` handler与JDT时间合同未变。**方向、任务拆分与DAG不变**，只更新基线与测量口径。
+
+| 修订 | 原问题 | 位置 |
+|---|---|---|
+| 执行基线改为`main@665d66e`，列出`cc5db6b..665d66e`的提交与受影响模块 | Q00原写“HEAD若仍是`cc5db6b`不需重审函数清单”，已不成立（AGENTS第1条） | [Q00](tasks/Q00.md)、[01](docs/01-branch-audit.md)、[14](docs/14-delivery-verification.md) |
+| 01的A表登记两轮review已处理的范围，不再重提；注明本计划不读`kg_*` | 计划执行者可能把已修项当新机会；架构review F8（图谱去留）以本计划是否使用为前提 | [01](docs/01-branch-audit.md) |
+| outline/evidence对`parseState≠COMPLETE`的文件不得呈现为完整 | 第一波F1后，提取异常的文件也记为FAILED行（声明全空）；直接投影`queryFiles`会得到“0条且完整”的outline | [Q03](tasks/Q03.md)、[Q04](tasks/Q04.md) |
+| 测量记录新增round mode/fullReason、seed命中、`index.queryCounters`；G12 seed数字不作新基线 | 新增血缘上限全量、pom-only rescan delta、保留seed、200ms fence/1s prepare等待、失败退避，会进入延迟与构建样本 | [07](docs/07-mac-performance.md)、[Q09](tasks/Q09.md)、[Q10](tasks/Q10.md) |
+| Q11受影响门加入两轮底座改动的模块 | 原清单只覆盖本计划新增代码 | [Q11](tasks/Q11.md) |
+
+1.2未改动：方向与非目标、预算数值、评测分母与门禁、`contracts/`、原创fixture与evaluator标签、附件检查器与测试、`evidence/`与[13](docs/13-sources.md)中固定到`b1475cd`的来源引用。

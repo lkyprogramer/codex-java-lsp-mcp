@@ -45,6 +45,19 @@ G12/G13/G14/G17数字全部来自仓库报告，正文注明其阶段/快照限�
 | 产品构建/测试 | 未运行 | 本次只修订计划，不改产品代码 |
 | `evidence/receipt-checker-{green,red}.log` | 从清单移除 | 1.0清单登记了这两份原始日志，但仓库`.gitignore`的`*.log`规则使它们从未入库，1.0在仓库内运行`verify_bundle.py`必然报MISSING。其结果（28/28通过；RED stub 24/28失败、退出1）仍保存在`evidence/local-validation.json`，原始日志已不可得 |
 
+## 1.2修订验证（2026-11-11）
+
+修订内容见[README](../README.md)“1.2修订记录”。只改了文档与任务卡；`contracts/`、fixtures、evaluator、tools、tests、evidence未动。
+
+| 项目 | 结果 | 说明 |
+|---|---|---|
+| 修订依据的源码事实 | 对`main@665d66e`只读核对 | `git diff cc5db6b 665d66e -- src scripts`的文件清单；`index-owner.ts`常量（200ms fence、1s prepare、1s–5min退避、lineage 256）；`mcp-server-factory.ts`的`queryCounters`；`java-index-file-parse.ts`的FAILED行；`evidence-sources.ts`的`ANCHOR_PARSE_INCOMPLETE`；`facts-store.ts`的callers/callees走边表 |
+| 两轮底座修复的Mac验证 | 用户报告已通过 | 用户在本机Mac完成构建与测试（2026-11-11）；本包未收录原始日志 |
+| `verify_bundle.py` | 重新封存`SHA256SUMS`后运行，PASS | 84个文件、13个任务，无错误 |
+| `python -m unittest discover -s tests` | 运行，28/28通过 | 检查器自测，与修订内容无直接关系 |
+| `check_fixtures.py` | 未运行 | fixtures未改动，沿用1.0结果 |
+| 产品构建/测试 | 未运行 | 本次只修订计划；另修正了产品README资源策略列表中残留的未实现变量 |
+
 ## 完整性
 
 `SHA256SUMS`覆盖包内所有交付文件（不含清单自身和运行时__pycache__）。验证脚本同时拒绝未登记文件，检查任务依赖顺序、Markdown fence与本地链接。对合法编辑后的套件，应新版本重新封存，不能用更新hash来掩盖fixture/gold漂移。

@@ -18,6 +18,7 @@
 | 资源回收 | 新linked-worktree静态闲置回收48小时；默认关闭，observe/enforce | 不视为默认已启用，不碰源文件或JDT/Gradle缓存 |
 | 生命周期 | JDT导入/搜索索引屏障、共享启动/调用方deadline分离、私有Gradle域 | 性能测量必须区分首次依赖准备、首次索引和复用 |
 | 索引查询 | scope SQL前置、writer统计、有限posting、source hash检查等上一轮修复已落地 | 不重发旧R05–R09作为“当前未修复” |
+| 底座review（1.2补充） | 2026-11-10索引生命周期review F1–F10（`4b84cf6`、`ae78f7b`）与2026-11-11架构review F1–F14（`2e13277`）已在main处理或记录处置；`0524695`修正runtime退役期间的请求阻塞 | 不再把这些项作为本计划的新机会；处置与遗留见两份review文档（[架构review第9节](../../review-2026-11-11-architecture.md)） |
 
 [S01–S04][S11–S19][S22]
 
@@ -80,6 +81,17 @@ Nov3报告描述索引屏障包含在原120秒共享启动内；HEAD的`startTra
 ## F. 评测可信性仍需一个窄门，而非再造评测平台
 
 MAC10公开说明：private mac10-v3有50题，真实数据不在本仓；native单词搜索基线很弱；纯症状题的anchor-identifier planner会产生零查询；live接线属于MAC15；策展AI见过holdout；repair oracle当时用固定stdout marker。当前`ilv2-mac-repair-oracle.mjs`仍用exit0+ORACLE PASS。Q01应在付费实验前验证最终消息边界、repair正常返回和证据hash；不是假定上一轮b9c3cc3消息丢失bug还存在。[S09][S20]
+
+## G. 1.2补充：两轮底座review之后的变化（main@665d66e）
+
+只读核对`git diff cc5db6b 665d66e -- src scripts`（28个文件）。与本计划相关的事实：
+
+- **读取链路未变**：`request-view.ts`的`queryFiles`、`facts-store.ts`的callers/callees（`CALLS`/`METHOD_REFERENCE`等边表）、`evidence-sources.ts`、`anchor-windows.ts`、`src/tools/`的handler与JDT session时间合同都不在差异内。`query-ops.ts`只新增`buildInputs`。
+- **本计划不是`kg_*`的读者**：04已禁止outline调用`queryContextGraph()`，Q05的关系走边表。架构review F8（图谱只写不读）的处置不受本计划阻塞。
+- **解析失败的新来源**：`java-index-file-parse.ts`在提取/解析抛错时写一条`parseState:"FAILED"`、声明为空的文件行（原先整个job失败）。`parseState`与coverage的`failedFiles`早已存在，新路径只是让这种文件更常见。对Q03/Q04的影响见各卡。
+- **会进入测量的新行为**：同一base连续delta达`DEFAULT_MAX_DELTA_LINEAGE=256`后改全量（`fullReason=lineage-limit`，`JAVA_LSP_MAX_DELTA_LINEAGE`可调）；build文件-only变更在可证明时走rescan delta；切换分支保留旧快照作seed；请求等待FSEvents fence至多`REQUEST_FENCE_WAIT_MS=200`ms，prepare至多`PREPARE_CAP_MS=1000`ms（周期full hash到期时也会等）；round失败按`ROUND_RETRY_MS=1s`至`ROUND_RETRY_MAX_MS=5min`退避；publish后不再重读census；构建前磁盘下限按基底快照大小估算。HTTP无选择器`java_status`新增`index.queryCounters`（`queueFull`、`runKills`）。
+- **资源边界**：runtime entry默认上限16（`JAVA_LSP_MAX_RUNTIME_ENTRIES`），超限退役LRU的空闲非pin entry；退役期间新请求等待退役完成（`0524695`）。Q10若并行使用多个worktree需记录。
+- **验证状态**：两轮修复提交时未编译/未测试；用户报告合入main前已在本机Mac完成构建与测试验证（2026-11-11）。本包未收录对应原始日志，Q00引用时注明来源为用户报告。
 
 ## 总判定
 

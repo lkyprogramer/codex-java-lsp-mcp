@@ -25,6 +25,8 @@ HEAD默认导入启动120000ms，导入后新建索引budget600000ms（由`07c6c
 
 先用同一候选、同一仓库比较C1/C2，每个至少3次，只作诊断，不把3次当可靠p95。确有收益后再预注册足量样本（沿现有G12/G14有效样本规则），AB/BA交错。固定电源、睡眠状态、温度与load窗口；有效慢样本不删，host污染按事先规则单列。记录client wall、shared startup、import、index barrier、queue、first definition/references、cache hit、RSS和磁盘。
 
+**1.2：底座行为变化进入样本。** `cc5db6b`之后的修复改变了构建与等待分布（见[01§G](01-branch-audit.md)）。每个样本除上述字段外记录：该时段round的mode与`fullReason`（含`lineage-limit`、`build-key-changed`）、是否seed绑定/seed delta、请求是否等待fence或prepare、round是否处于失败退避，以及HTTP `java_status`的`index.queryCounters`前后差值。G12的seed发布数字测于修复前，只作历史参照，不作新基线；需要比较时在`665d66e`或之后的同一候选上重测。
+
 已有G12 D1-a口径保留：query paired p95≤max(1.1×baseline,baseline+10ms)。新outline初始目标warm p95≤100ms仅为筛选目标，Q00冻结后才执行；不达标先归因。现有K29/截止/公平性硬门不因新功能便利而取消。
 
 ## 可做的窄优化
