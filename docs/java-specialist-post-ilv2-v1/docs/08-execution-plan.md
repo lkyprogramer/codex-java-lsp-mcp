@@ -28,16 +28,22 @@ Java-only；五个tool名；默认无embedding；不改owner拓扑；不写目�
 flowchart TD
   Q00 --> Q01
   Q00 --> Q02
+  Q00 --> Q03
   Q01 --> G0[P0测量门]
   Q02 --> G0
-  G0 --> Q03
+  Q01 --> Q04
   Q03 --> Q04
   Q04 --> G1[P1最小能力门]
+  Q02 --> Q05
+  Q02 --> Q06
+  Q02 --> Q07
+  Q02 --> Q08
   G1 --> Q05
   G1 --> Q06
   G1 --> Q07
   G1 --> Q08
   G1 --> Q09
+  G0 --> Q10
   G1 --> Q10
   Q05 -.被触发才纳入候选.-> Q10
   Q06 -.被触发才纳入候选.-> Q10
@@ -50,13 +56,13 @@ flowchart TD
 
 | Phase | 任务 | 阶段产物 | 阶段门 |
 |---|---|---|---|
-| P0 | Q00–Q02 | 身份清单、测量控制、失败ledger | G0：不混版本/分母/证据，labels不泄漏 |
+| P0 | Q00–Q02 | 身份清单、测量控制、失败ledger | G0：不混版本/分母/证据，labels不泄漏；只门控Q10的LIVE运行 |
 | P1 | Q03–Q04 | outline + Java evidence最小增量 | G1：工具不启动JDT；正确身份/范围；硬预算；source真实到达 |
 | P2 | 按触发选择Q05–Q09 | 仅一到两个高ROI增量；不触发卡留记录 | G2：每增量关闭一类真实失败，无正确性退化 |
 | P3 | Q10 | 配对效果与原始usage/失败 | G3：利益证据可判断，不达门可NO_GAIN或INCONCLUSIVE |
 | P4 | Q11–Q12 | 受影响工程回归、删减、候选交接 | G4：工程资格与效果/部署授权分开 |
 
-Phase串行。Q01/Q02可并行但评测schema由Q01唯一owner；Q03/Q04都接symbol.ts，合入必须串行。P2中Q05/Q07共享选择路径，不同时独立调参；Q08/Q09涉及JDT，先只做各自只读诊断，再单独合入。每张卡仅定向测试，每phase再独立review和相关整测。
+Phase编号表示交付分组，依赖以DAG和`contracts/tasks.json`为准。Q00之后，Q01、Q02与Q03三条线可并行：outline是`queryFiles`上的纯投影，不消费receipt或归因结果，不必等G0；G0只门控Q10的付费LIVE（与[09](09-acceptance.md)“仍可做纯函数/fixture实现”一致）。Q04需要Q01的最终消息receipt做全链测试，所以依赖Q01与Q03。Q05–Q08的触发证据来自Q02的失败ledger。Q01/Q02的评测schema由Q01唯一owner；Q03/Q04都接symbol.ts，合入必须串行。P2中Q05/Q07共享选择路径，不同时独立调参；Q08/Q09涉及JDT，先只做各自只读诊断，再单独合入。每张卡仅定向测试，每phase再独立review和相关整测。
 
 ## 任务大小与退出
 

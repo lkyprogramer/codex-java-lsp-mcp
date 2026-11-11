@@ -3,7 +3,7 @@
 | 证据/需求 | 分类 | 执行任务 | 最小验收 |
 |---|---|---|---|
 | 用户已上线 vs status NOT_READY | 待对齐，不判用户错误 | Q00 | source/installed/measured三身份与未知项 |
-| JDT报告120s vs 当前独立600s | CODE/REPORT差异 | Q00、条件Q09 | 阶段预算与caller deadline有明确合同 |
+| JDT报告120s vs 当前独立600s | CODE/REPORT差异，来源已定位为`07c6ccf` | Q00（含README改正）、条件Q09 | 阶段预算与caller deadline有明确合同；README与源码一致 |
 | G12 seed巨大收益 | REPO_REPORT，保留成果 | Q11 | 不重写owner；受影响回归 |
 | G13低recall/evidence未改善 | REPO_REPORT | Q02、Q03、Q04 | 文件/声明/范围/最终消息分层 |
 | MAC16未建立绑定缺陷 | REPO_REPORT | Q08条件门 | 未触发不重写resolver |

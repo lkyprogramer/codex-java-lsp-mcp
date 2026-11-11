@@ -17,7 +17,7 @@ Q09只在日常记录显示同一仓库重复等待，或新outline/evidence的s
 
 ## 当前时间合同
 
-HEAD默认导入启动120000ms，导入后新建索引budget600000ms；调用方deadline独立。Q00先确认安装版本实际设置，Q09不可悄悄改回120秒总预算或通过延长上限宣称加速。`java.project.getAll`作为屏障依赖当前冻结JDT行为，不是任意未来版本都成立的LSP规范保证。
+HEAD默认导入启动120000ms，导入后新建索引budget600000ms（由`07c6ccf`于2026-11-04引入，晚于11月3日120秒验收）；调用方deadline独立。Q00先确认安装版本实际设置，Q09不可悄悄改回120秒总预算或通过延长上限宣称加速。`java.project.getAll`作为屏障依赖当前冻结JDT行为，不是任意未来版本都成立的LSP规范保证。
 
 回归测试必须覆盖：索引超过import剩余预算但未超index budget的当前行为；caller超时后长caller继续；stop后的晚结果不READY；index超时回收与backoff；READY后新build/classpath变更不被旧结果误标完整。
 
