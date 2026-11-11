@@ -1,0 +1,70 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q03",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node --test dist/discovery/outline.test.js dist/tools/symbol-static.test.js dist/tools/output-shape.test.js",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    },
+    {
+      "name": "offline symbolId/signature byte distribution on a real >=60-method file (default 8 within 4096 B?)",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    },
+    {
+      "name": "MCP five-tool list and JDT_BIN refusal control",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "byte distribution not measured: default kept at 8 / 4096 B per frozen contract; fitOutlineWire omits signatures then far entries when over budget",
+    "field entries use the declaration start as selection: the facts carry no field name range (no schema change)",
+    "signatures are rebuilt from structured facts (name + parameter type text; fields type + name; types kind + name), not source text",
+    "detail=diagnostic adds nothing yet for outline (no timing/omission diagnostics)",
+    "reason names reuse existing codes (ANCHOR_PARSE_INCOMPLETE, ANCHOR_STALE, ANCHOR_UNRESOLVED, INDEX_COVERAGE_INCOMPLETE, SOURCE_BUDGET); 05 not edited (sealed package)",
+    "generation reported is status.indexedGeneration (file rows keep the generation they were last written in); regression case added"
+  ],
+  "rawEvidence": [],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "src/discovery/outline.ts/.test.ts (new)",
+    "src/discovery/evidence-source-reader.ts (shared bounded reader, extracted from evidence-unit)",
+    "src/tools/symbol.ts: operation=outline, nearLine, symbolNeedsJdt=false, public identity mapping, wire fit",
+    "src/mcp-server-factory.ts: description",
+    "src/tools/symbol-static.test.ts: outline wire test",
+    "README.md"
+  ]
+}

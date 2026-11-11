@@ -219,16 +219,60 @@ test("explicit evidence uses the static index and does not start JDT", async () 
     const result = await javaSymbol(context, args({ operation: "evidence",
       file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21
     }), { budget: DeadlineBudget.fromTimeout(15000) }) as Record<string, unknown>;
-    assert.equal(result.schemaVersion, "java-evidence-unit/v1");
+    assert.equal(result.schemaVersion, "java-evidence-unit/v2");
     assert.equal(result.generation, 1);
     assert.equal(result.scopeState, "READY");
-    assert.deepEqual(result.units, [], "a type without XML relations has no resource source units");
+    const units = result.units as Array<Record<string, unknown>>;
+    assert.deepEqual(units.filter(unit => unit.role === "resource"), [], "a type without XML relations has no resource source units");
+    // Line 4 col 21 is OrderService: its declaration head is delivered, hash-bound, as source fact.
+    assert.deepEqual(units.map(unit => [unit.path, unit.role, unit.startLine, unit.endLine, unit.text, unit.proof]),
+      [["src/main/java/com/acme/OrderService.java", "signature", 4, 4, "public class OrderService {\n", "SOURCE_FACT"]]);
+    assert.equal(JSON.stringify(result).includes("declarationKey"), false);
     assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
     await assert.rejects(javaSymbol(context, args({ operation: "evidence" })), /requires file\/line\/column/);
     await assert.rejects(javaSymbol(context, args({ operation: "evidence", backend: "jdt",
       file: "src/main/java/com/acme/OrderService.java", line: 4, column: 21
     })), /static index/);
     assert.equal(probe.startCalls, 0);
+  } finally { await fixture.cleanup(); }
+});
+
+test("Q03: outline lists bounded declarations by public identity without JDT", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    context.indexView = { state: "FRESH", workspaceId: "workspace-outline", snapshotId: "snapshot-outline", bindingVersion: 1 };
+    const file = "src/main/java/com/acme/OrderService.java";
+    const request = { budget: DeadlineBudget.fromTimeout(15000) };
+    const out = await javaSymbol(context, args({ operation: "outline", file, nearLine: 10, limit: 2 }), request) as Record<string, unknown>;
+    const wire = JSON.stringify(out);
+    assert.equal(out.schemaVersion, "java-outline/v1");
+    assert.equal(out.scopeState, "READY");
+    assert.ok(Buffer.byteLength(wire, "utf8") <= 4096);
+    const entries = out.entries as Array<Record<string, unknown>>;
+    // Line 10 sits in refundOrder (9-11) inside OrderService (4-12); both contain it, source order restored.
+    assert.deepEqual(entries.map(entry => entry.name), ["OrderService", "refundOrder"]);
+    assert.deepEqual(entries.map(entry => entry.containsNearLine), [true, true]);
+    assert.equal(out.omittedSymbols, 1);
+    assert.equal(entries[1]!.signature, "refundOrder(long)");
+    assert.ok(entries.every(entry => typeof entry.symbolId === "string" && String(entry.symbolId).startsWith("jsym:mac1:workspace-outline:")));
+    assert.equal(wire.includes("declarationKey"), false);
+    assert.equal(/"(?:type:v2|method:v3|field):/.test(wire), false, "no raw declaration key on the wire");
+    assert.deepEqual(out.indexView, context.indexView);
+    for (const bad of [{ query: "OrderService" }, { symbolId: entries[1]!.symbolId }, { backend: "jdt" }, { line: 10 }, { limit: 21 }, { limit: 0 }]) {
+      await assert.rejects(javaSymbol(context, args({ operation: "outline", file, ...bad }), request), /operation=outline|limit 1\.\.20|positive/);
+    }
+    await assert.rejects(javaSymbol(context, args({ operation: "outline" }), request), /requires file/);
+    await assert.rejects(javaSymbol(context, args({ operation: "query", query: "OrderService", nearLine: 3 }), request), /nearLine belongs to operation=outline/);
+    // Edited bytes are not described by the indexed lines.
+    await writeFile(path.join(fixture.repoRoot, file), ORDER_SERVICE.replace("updateOrder", "updateOrderLater"), "utf8");
+    const stale = await javaSymbol(context, args({ operation: "outline", file }), request) as Record<string, unknown>;
+    assert.notEqual(stale.scopeState, "READY");
+    assert.deepEqual(stale.entries, []);
+    assert.equal(symbolNeedsJdt(args({ operation: "outline", file })), false);
+    assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
   } finally { await fixture.cleanup(); }
 });
 

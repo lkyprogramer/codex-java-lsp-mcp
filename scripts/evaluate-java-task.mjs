@@ -336,7 +336,8 @@ export function extractSourceEvents({ callId, toolName, result }) {
   } else {
     return events;
   }
-  if (toolName === "java_evidence" && payload?.schemaVersion === "java-evidence-unit/v1") {
+  // v2 (post-ILV2 Q04) keeps the v1 unit fields and adds Java declaration units.
+  if (toolName === "java_evidence" && (payload?.schemaVersion === "java-evidence-unit/v1" || payload?.schemaVersion === "java-evidence-unit/v2")) {
     for (const unit of payload.units ?? []) {
       if (typeof unit.text !== "string" || !unit.text || typeof unit.path !== "string"
         || !Number.isInteger(unit.startLine) || unit.startLine < 1 || !Number.isInteger(unit.endLine)

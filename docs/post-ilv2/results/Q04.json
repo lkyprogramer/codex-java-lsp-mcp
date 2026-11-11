@@ -1,0 +1,73 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q04",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node --test dist/discovery/evidence-unit.test.js dist/discovery/evidence-source-reader.test.js dist/discovery/anchor-windows.test.js dist/java-index/sql/sql-read-ranges.test.js dist/tools/symbol-static.test.js dist/tools/output-shape.test.js",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    },
+    {
+      "name": "node --test scripts/eval-evidence-e2e.test.mjs (full MCP serialization + Q01 receipt chain)",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    },
+    {
+      "name": "BODY_PARTIAL / SOURCE_BUDGET / omittedAnchors ratios on navigation/ranges fixtures and the Q02 dev set",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "budget ratios not measured (needs Mac + private dev set); 8/80/16000 unchanged",
+    "only SOURCE_FACT; no STATIC_CANDIDATE or JDT_BOUND",
+    "one anchor line (the requested line) per method; omittedAnchors is not on the wire, BODY_PARTIAL + omitted entry report the partial body",
+    "evaluators (eval-tool-wire, evaluate-java-task) read both v1 and v2 so recorded traces still replay",
+    "reader now checks the hash before UTF-8 decoding: a non-UTF-8 file reports SOURCE_NOT_UTF8 (was SOURCE_UNAVAILABLE) or SOURCE_STALE",
+    "Java units are charged first but capped at half the budget (40 lines / 8000 bytes); XML keeps at least the other half, and 7-8 XML links can now hit UNIT_CAP",
+    "Java facts come from a second queryFiles call, not the queryEvidenceSources read snapshot; bound by bundle hash == anchor hash plus the final generation and anchor-byte rechecks (decisions D7)",
+    "constructor/field symbolIds from outline resolve to ANCHOR_UNRESOLVED in evidence (anchors are TYPE/METHOD only)"
+  ],
+  "rawEvidence": [],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "src/discovery/evidence-unit.ts: v2 schema, Java declaration fragments, selectEvidenceWindows over anchorWindows()",
+    "src/discovery/evidence-source-reader.ts: 05 §5.4 object signature with expectedHash, bytes/contentHash, SOURCE_NOT_UTF8",
+    "src/java-index/java-index-client-api.ts: relation \"java-declaration\"",
+    "src/discovery/evidence-unit.test.ts, evidence-source-reader.test.ts",
+    "src/tools/symbol-static.test.ts, scripts/eval-evidence-e2e.test.mjs: v2 expectations",
+    "scripts/eval-tool-wire.mjs, scripts/evaluate-java-task.mjs: accept v2",
+    "src/mcp-server-factory.ts, README.md"
+  ]
+}

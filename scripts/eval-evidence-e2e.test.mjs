@@ -56,17 +56,19 @@ test("PAYMENTS-02 real MCP type evidence -> exact XML dispatch -> unchanged froz
     const wire = requests.flatMap(request => request.messages.filter(message => message.role === "tool" && message.tool_call_id === "get-xml"));
     assert.ok(wire.length > 0);
     const evidence = JSON.parse(wire[0].content);
-    assert.equal(evidence.schemaVersion, "java-evidence-unit/v1");
+    assert.equal(evidence.schemaVersion, "java-evidence-unit/v2");
     assert.equal(evidence.scopeState, "READY");
-    assert.equal(evidence.supportedScope, "indexed-mybatis-xml-fqn-links");
+    assert.equal(evidence.supportedScope, "java-declaration-and-indexed-resource-links");
+    // v2 delivers the anchor's own declaration as a Java unit next to the XML link.
+    assert.ok(evidence.units.some(unit => unit.path === receipt && unit.relation === "java-declaration" && unit.proof === "SOURCE_FACT"));
     assert.equal(evidence.anchor.relativePath, receipt);
     const unit = evidence.units.find(unit => unit.path === xml);
-    assert.equal(unit.relation, "result-map-type"); assert.equal(unit.complete, true);
+    assert.equal(unit.relation, "result-map-type"); assert.equal(unit.role, "resource"); assert.equal(unit.complete, true);
     assert.equal(unit.startLine, 2); assert.equal(unit.endLine, 4);
     const xmlBytes = readFileSync(path.join(fixture, xml));
     const exact = xmlBytes.toString("utf8").split(/(?<=\n)/).slice(1, 4).join("");
     assert.equal(unit.text, exact); assert.equal(unit.contentHash, hash(xmlBytes));
-    const received = run.sourceReceived.filter(event => event.type === "SOURCE_RECEIVED" && event.toolName === "java_evidence");
+    const received = run.sourceReceived.filter(event => event.type === "SOURCE_RECEIVED" && event.toolName === "java_evidence" && event.path === xml);
     assert.equal(received.length, 1); assert.equal(received[0].text, exact);
     assert.equal(received[0].fileContentHash, hash(xmlBytes));
     assert.equal(received[0].contentHash, hash(exact));

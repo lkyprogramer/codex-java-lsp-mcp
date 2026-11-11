@@ -8,6 +8,8 @@ import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
 import { DISCOVERY_DEFAULT_LIMIT, DISCOVERY_MAX_LIMIT, runStaticDiscovery, type DiscoveryResult } from "../discovery/query.js";
 import { runEvidenceUnit, type EvidenceUnitResult } from "../discovery/evidence-unit.js";
+import { OUTLINE_DEFAULT_LIMIT, OUTLINE_MAX_LIMIT, OUTLINE_WIRE_MAX_BYTES, fitOutlineWire, requireOutlineLimit, requireOutlineNearLine, runOutline,
+  type OutlineInternalResult, type PublicOutlineEntry } from "../discovery/outline.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
@@ -28,12 +30,14 @@ export const STATIC_QUERY_LIMIT_DESCRIPTION =
 export const symbolSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
-  operation: z.enum(["query", "position", "references", "evidence"]).optional(),
+  operation: z.enum(["query", "position", "references", "evidence", "outline"]).optional(),
   query: z.string().min(1).max(512).optional(),
   symbolId: z.string().min(1).max(4096).optional()
     .describe("Instead of file/line/column for evidence/references/position: a declaration.symbolId from an earlier java_symbol query."),
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
+  nearLine: z.number().int().positive().optional()
+    .describe(`operation=outline: prefer declarations containing or nearest this 1-based line (limit 1..${OUTLINE_MAX_LIMIT}, default ${OUTLINE_DEFAULT_LIMIT}).`),
   column: z.number().int().positive().optional(),
   limit: z.number().int().positive().max(SYMBOL_LIMIT_MAX).optional(),
   semanticTimeoutMs: z.number().int().positive().max(10000).default(3000),
@@ -61,7 +65,7 @@ type SymbolRequest = Pick<RequestContext, "budget"> & Partial<Pick<RequestContex
  *  never be admitted by one layer and rejected by the other. */
 export function symbolNeedsJdt(args: Pick<SymbolArgs, "operation" | "query" | "backend">): boolean {
   const operation = args.operation ?? (args.query ? "query" : "position");
-  if (operation === "evidence") return false;
+  if (operation === "evidence" || operation === "outline") return false;
   const backend = args.backend ?? (operation === "query" ? "static" : "jdt");
   return operation !== "query" || backend === "jdt";
 }
@@ -72,6 +76,10 @@ export async function javaSymbol(
   request?: SymbolRequest
 ): Promise<unknown> {
   const operation = args.operation ?? (args.query ? "query" : "position");
+  if (operation === "outline") return javaSymbolOutline(context, args, request);
+  if (args.nearLine !== undefined) {
+    throw new JavaIntelligenceError("INVALID_INPUT", "nearLine belongs to operation=outline only.");
+  }
   if (args.symbolId !== undefined) {
     if (operation === "query" || args.file !== undefined || args.line !== undefined || args.column !== undefined) {
       throw new JavaIntelligenceError("INVALID_INPUT",
@@ -188,9 +196,10 @@ export async function javaSymbol(
  * gets no handle: its symbolId plus evidenceRange.contentHash already pin it, and a handle would
  * repeat the view, path and hash in every candidate (MAC-13 dev eval: +46% payload).
  */
-async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult>(result: T, context: ToolContext, request?: SymbolRequest): Promise<T> {
+async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult | OutlineInternalResult>(result: T, context: ToolContext, request?: SymbolRequest): Promise<T> {
   const view = context.indexView;
-  const keys = "units" in result ? (result.anchor ? [result.anchor.declarationId] : []) : result.candidates.map(candidate => candidate.declaration.id);
+  const keys = "entries" in result ? result.entries.map(entry => entry.declarationKey)
+    : "units" in result ? (result.anchor ? [result.anchor.declarationId] : []) : result.candidates.map(candidate => candidate.declaration.id);
   const snapshotKeys = [...new Set(keys.filter(key => declarationStability(key) !== "STABLE"))];
   const minted = new Map<string, DeclarationIdentity>();
   if (snapshotKeys.length > 0 && view?.workspaceId && view.contentManifestId && context.javaIndexClient?.declarationIdentities) {
@@ -205,6 +214,10 @@ async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult
     if (stability !== "STABLE" || !view?.workspaceId) return { stability };
     try { return { stability, symbolId: formatSymbolId(view.workspaceId, key) }; } catch { return { stability }; }
   };
+  if ("entries" in result) {
+    // Same single identity mapping; the declaration key never reaches the wire.
+    return { ...result, entries: result.entries.map(({ declarationKey, ...entry }) => ({ ...entry, ...identity(declarationKey) })) } as unknown as T;
+  }
   if ("units" in result) {
     if (!result.anchor) return result;
     const { declarationId, ...anchor } = result.anchor;
@@ -221,15 +234,17 @@ async function withPublicIdentity<T extends DiscoveryResult | EvidenceUnitResult
 }
 
 /** Snapshot coverage describes its build; freshness belongs to this request's held view. */
-function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, context: ToolContext, request?: SymbolRequest): unknown {
+function staticResultForView(result: DiscoveryResult | EvidenceUnitResult | OutlineInternalResult, context: ToolContext, request?: SymbolRequest): unknown {
   const view = context.indexView;
   const labels = view ? { indexView: view } : {};
   if ((!view || view.state === "FRESH") && request?.negativeLookupAllowed !== false) return { ...result, ...labels };
   // No verified binding of this workspace: say so instead of a partial answer.
   const scopeState = view?.state === "NOT_READY" ? "NOT_READY" : "PARTIAL";
-  if ("units" in result) {
+  if ("units" in result || "entries" in result) {
     const reason = view && view.state !== "FRESH" ? `INDEX_VIEW_${view.state}` : "INDEX_COVERAGE_INCOMPLETE";
-    return { ...result, ...labels, scopeState, reasons: [...new Set([...result.reasons, reason])] };
+    // An outline already NOT_READY (file not in the snapshot yet) stays NOT_READY.
+    const state = "entries" in result && result.scopeState === "NOT_READY" ? "NOT_READY" : scopeState;
+    return { ...result, ...labels, scopeState: state, reasons: [...new Set([...result.reasons, reason])] };
   }
   // Positive locators remain useful after their source hash check. A miss or an
   // empty vocabulary cannot establish absence while the workspace is changing.
@@ -238,6 +253,40 @@ function staticResultForView(result: DiscoveryResult | EvidenceUnitResult, conte
   const { exact, emptyReason: _emptyReason, ...rest } = result;
   const stopReason = result.stopReason ?? (view?.state === "STALE" ? "source_changed" : "index_partial");
   return { ...rest, ...labels, scopeState, stopReason, ...(exact && exact !== "miss" ? { exact } : {}) };
+}
+
+/**
+ * operation=outline (post-ILV2 Q03): bounded declarations of one indexed file, static only.
+ * Accepts file, nearLine, limit and detail; anything that names another route is refused.
+ */
+async function javaSymbolOutline(context: ToolContext, args: SymbolArgs, request?: SymbolRequest): Promise<unknown> {
+  const foreign: string[] = (["query", "terms", "symbolId", "line", "column", "searchMode", "preview", "module", "layer", "sourceSet"] as const)
+    .filter(key => args[key] !== undefined);
+  if (args.backend === "jdt") foreign.push("backend=jdt");
+  if (foreign.length > 0) {
+    throw new JavaIntelligenceError("INVALID_INPUT",
+      `operation=outline takes file with optional nearLine/limit/detail; it does not combine with ${foreign.join(", ")}. Example: {"operation":"outline","file":"src/main/java/demo/OrderService.java","nearLine":120}`);
+  }
+  if (!args.file) throw new JavaIntelligenceError("INVALID_INPUT", "java_symbol operation=outline requires file.");
+  const limit = requireOutlineLimit(args.limit);
+  requireOutlineNearLine(args.nearLine);
+  const client = context.javaIndexClient;
+  if (!client) throw new Error("java_symbol operation=outline requires the on-disk Java index.");
+  await waitStaticIndexReady(client, request?.budget);
+  const outline = await runOutline(client, {
+    repoRoot: context.repoRoot,
+    file: args.file,
+    limit,
+    ...(args.nearLine !== undefined ? { nearLine: args.nearLine } : {}),
+    ...(request?.budget ? { budget: request.budget } : {})
+  });
+  const response = staticResultForView(await withPublicIdentity(outline, context, request), context, request) as {
+    entries: PublicOutlineEntry[]; omittedSymbols: number; reasons: string[]; scopeState: string };
+  const fitted = fitOutlineWire(response, args.nearLine);
+  if (!fitted) {
+    throw new JavaIntelligenceError("INVALID_INPUT", `operation=outline cannot fit even an entry-less response into ${OUTLINE_WIRE_MAX_BYTES} bytes for this file.`);
+  }
+  return fitted;
 }
 
 function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {
