@@ -197,9 +197,11 @@ hook 行为：
 
 方法声明键现为 `method:v3:<owner>#signature`（`identityVersion=3`、`factsRevision=6`），外层 `jsym:mac1` 不变，type/field ID 保留。旧 method key（含 mac1 包裹）返回 `REJECTED` 并提示重新定位；mac1 包裹的旧键为 `reason=MALFORMED`，不自动绑定到新方法。请重新执行 `java_symbol(operation=query)` 获取当前 `symbolId`；旧库和缓存按现有版本机制重建。
 
-`java_symbol(operation=outline, file, nearLine?, limit?)` 从静态索引投影单个文件的类型、构造器、方法和字段（`java-outline/v1`），不启动 JDT。默认 8 条、最多 20 条，超出直接拒绝。给了 nearLine 时，先取包含该行的声明，其余按距离选，输出恢复源码顺序。每条带 `symbolId`、行范围和紧凑签名，整个响应不超过 4096 字节，放不下时先省略签名、再省略整条，并标 `SOURCE_BUDGET`。文件解析不完整、源码已变或不在快照中时为 `PARTIAL`，不会显示成"没有声明"。
+推荐用法分三步，都不要求先调 `java_status`：先用 `operation=query` 找到声明；再用 `operation=outline` 看同一文件的结构，或用 `operation=evidence` 取这个声明可核对的源码；只有需要精确 references、hover 或 implementation 时，才走 JDT（position/references）。
 
-`java_symbol(operation=evidence, file, line, column | symbolId)`（`java-evidence-unit/v2`）对已定位的 Java 类型或方法，先给声明本身的源码：方法放得下就整段给，放不下就给签名头加请求行附近的窗口，并标 `BODY_PARTIAL`；类型只给声明头。之后再给已有的 MyBatis XML 关联：类型路径用 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源。不启动 JDT，所有片段都是 `proof=SOURCE_FACT`，即源码读取属实，但不代表调用目标已精确绑定。每次最多 8 个片段、80 行、16000 源码字节；Java 片段先计费，但最多占一半（40 行 / 8000 字节），余下留给 XML。`complete` 只说明该片段范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
+`java_symbol(operation=outline, file, nearLine?, limit?)` 从静态索引投影单个文件的类型、构造器、方法和字段（`java-outline/v1`），不启动 JDT。默认 8 条、最多 20 条，超出直接拒绝。给了 nearLine 时，先取包含该行的声明，其余按距离选，输出恢复源码顺序。每条带 `symbolId`、行范围和紧凑签名，整个响应不超过 4096 字节，放不下时先省略签名、再省略整条，并标 `SOURCE_BUDGET`。文件解析不完整或源码已变时为 `PARTIAL`；不在快照中时为 `PARTIAL`（索引未就绪时为 `NOT_READY`），不会显示成"没有声明"。
+
+`java_symbol(operation=evidence, file, line, column | symbolId)`（`java-evidence-unit/v2`）对已定位的 Java 类型或方法，先给声明本身的源码：方法放得下就整段给，放不下就给签名头加请求行附近的窗口，并标 `BODY_PARTIAL`；类型只给声明头。之后再给已有的 MyBatis XML 关联：类型路径用 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源。不启动 JDT，所有片段都是 `proof=SOURCE_FACT`，即源码读取属实，但不代表调用目标已精确绑定。每次最多 8 个片段、80 行、16000 源码字节；Java 片段先计费：整段方法最多 40 行 / 8000 字节；放不下时窗口按剩余行数选，字节和签名头只受全局上限约束。`complete` 只说明该片段范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
 
 生产 daemon 的静态查询由最多 2 个共享只读 worker 承担（`MAX_QUERY_WORKERS`，所有仓库共用），等待队列上限 32，满时请求返回 `INDEX_PARTIAL`；HTTP daemon 无选择器的 `java_status` 在 `index.queryCounters` 里给出启动以来的 `queueFull` 与因 deadline/取消被杀的查询数。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 1|2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
 

@@ -1,0 +1,63 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q11",
+  "status": "BLOCKED_ENV",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node scripts/check-facts-revision.mjs",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test this round (D0); Mac gates and private raw are also not in this environment (BLOCKED_ENV)"
+    },
+    {
+      "name": "targeted node --test list in docs/post-ilv2/acceptance.md",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test this round (D0); Mac gates and private raw are also not in this environment (BLOCKED_ENV)"
+    },
+    {
+      "name": "npm test && npm run gate:pr && npm run measure:tool-schema",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test this round (D0); Mac gates and private raw are also not in this environment (BLOCKED_ENV)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "BLOCKED_ENV: Mac gates and private raw are not in this environment; Linux fixtures are not a substitute",
+    "engineeringEligibility stays NOT_ASSESSED until the listed gates pass on one build and review has no open P1/P2",
+    "no decision function added: the three fields are recorded in acceptance.md and this result",
+    "NOT_DONE tests: outline under STALE/held view, outline deadline, outline public wire in output-shape.test"
+  ],
+  "rawEvidence": [],
+  "implementation": "NO_CODE",
+  "changes": [
+    "docs/post-ilv2/acceptance.md"
+  ]
+}

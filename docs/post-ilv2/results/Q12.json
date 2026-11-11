@@ -1,0 +1,66 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q12",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "npm run measure:production-ts && npm run measure:tool-schema && git diff --stat",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "LOC from git numstat (+492/-77, net +415 non-test src), not the measure script",
+    "README historical sections not trimmed (NOT_DONE)",
+    "no experiments retired: none were added this round"
+  ],
+  "rawEvidence": [],
+  "implementation": "NO_CODE",
+  "changes": [
+    "docs/post-ilv2/decision-log.md",
+    "README.md: three-step usage"
+  ],
+  "summary": {
+    "defaultRetrievalImplementations": 1,
+    "defaultEmbeddingDependencies": 0,
+    "newLongRunningDaemons": 0,
+    "publicToolNames": [
+      "java_status",
+      "java_impact",
+      "java_symbol",
+      "java_diagnostics",
+      "java_runtime"
+    ],
+    "source": "code inspection, not run"
+  }
+}

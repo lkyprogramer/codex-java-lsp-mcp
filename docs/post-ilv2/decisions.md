@@ -56,7 +56,7 @@
 - `java-evidence-unit/v2`，scope 为 `java-declaration-and-indexed-resource-links`，不做双返回。Java 声明片段先计费，XML 关联在剩余预算内交付。
 - 方法放得下就整段给（role=anchor）；放不下就给签名头（role=signature）加请求行附近的窗口，并标 `BODY_PARTIAL`。类型只给声明头。所有片段都是 `proof=SOURCE_FACT`。
 - 评测脚本同时读 v1 和 v2，保证旧 trace 能回放。产品只输出 v2。
-- Java 片段最多占一半预算（40 行 / 8000 字节），余下留给 XML。与 v1 相比，XML 最多少 40 行；SQL 端仍按 8 个 source 封顶，所以 XML 链接达到 7–8 个时可能新出 `UNIT_CAP`。
+- 整段交付的方法最多 40 行 / 8000 字节（全局预算的一半）。签名头加窗口的分支里，窗口只按剩余行数选，字节和签名头本身只受全局 80 行 / 16000 字节约束，所以 Java 在极端情况下仍可能占掉一半以上。与 v1 相比，XML 最多少 40 行；SQL 端仍按 8 个 source 封顶，所以 XML 链接达到 7–8 个时可能新出 `UNIT_CAP`。
 - 偏离：Java 事实来自 anchor 解析之后的另一次 `queryFiles`，不在 `queryEvidenceSources` 的同一个 read snapshot 里。靠 bundle hash 等于 anchor hash、末尾的 generation 复核和 anchor 字节复核来兜底。
 - 新 reason：`SOURCE_NOT_UTF8`（共享读取器先比 hash 再严格解码）、`BODY_PARTIAL`（大方法只给签名头加窗口）。05 已封存，名称登记在这里。
 - 局限：构造器和字段的 symbolId 传给 evidence 时，`queryEvidenceSources` 只接受 TYPE/METHOD 锚点，结果是 `ANCHOR_UNRESOLVED`。用 symbolId 定位大方法时，请求行落在签名头里，只会得到签名加 `BODY_PARTIAL`；要看正文，需要传 file/line。
@@ -80,6 +80,11 @@ G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费�
 - 外部调用门控复用 `run-agent-trace-matrix.mjs` 现有的 `--authorize-external` 和 BLOCKED_EXTERNAL，不新建 `ilv2-quality-pilot.mjs`。
 - live runner 的 MCP session 已经封装了 java_symbol 的 query 和 evidence，但暴露给模型的工具只有 java_impact/java_context。把 java_symbol query/outline/evidence 和原生 read 接成两臂留到 LIVE 之前做（NOT_DONE）。收益记 UNMEASURED。
 
+## D10 资格与收口（P4）
+
+- Q11：[acceptance.md](acceptance.md) 按实际 diff 列出受影响的门，以及要在 Mac 上跑的命令。engineeringEligibility 为 NOT_ASSESSED，benefit 为 UNMEASURED，deployAuthorized 为 false。
+- Q12：[decision-log.md](decision-log.md) 列出各方向结论。生产代码净增 +415 行（git numstat）。公共工具仍是 5 个，没有 embedding，没有新 daemon。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -88,4 +93,6 @@ G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费�
 | P1 | Q03、Q04 | 已 review、已修复、已提交（代码未运行） |
 | P2 | Q05–Q09 | NOT_TRIGGERED，无代码 |
 | P3 | Q10 | 已 review、已修复、已提交（代码未运行） |
-| P4 | Q11、Q12 | 未开始 |
+| P4 | Q11、Q12 | Q11 BLOCKED_ENV（acceptance.md），Q12 决策日志（decision-log.md）；已 review、已修复、已提交 |
+
+待用户决定：D2 的 ILV2 账本收口；Q10 的 LIVE 授权；在 Mac 上按 acceptance.md 运行受影响的门。
