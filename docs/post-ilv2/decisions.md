@@ -18,7 +18,7 @@
 - 部署：USER_REPORTED_DEPLOYED / NOT_INDEPENDENTLY_VERIFIED；没有读取安装回执，`installedDigest=null`。
 - JDT 时间合同：导入 120 s（`JDTLS_START_TIMEOUT_MS`）+ 导入后索引屏障 600 s（`JDTLS_INDEX_TIMEOUT_MS`，`07c6ccf`），均为源码默认值；安装环境是否覆盖未知。产品 README 的两处 120 秒描述已改正，历史验收原文保留并加注。
 
-## D2 ILV2 状态账本收口（Q00，**待用户确认**）
+## D2 ILV2 状态账本收口（Q00，用户 2026-11-11 已确认）
 
 `docs/index-lifecycle-v2/mac/status.json` 仍为 `planStatus=IN_PROGRESS`、`candidateStatus=NOT_READY`，G17 历史 FAIL，G18/G19 PLAN。提议：
 
@@ -26,7 +26,7 @@
 - “是否已上线”以用户报告为准（USER_REPORTED），不由账本判断；
 - G18/G19 不在 post-ILV2 路线中继续，如需重开由用户单独决定。
 
-这是用户的决定，本轮只记录提议，未修改 status.json。
+用户已同意上述三点。账本按原样冻结，`status.json` 不做任何修改。
 
 ## D3 冻结项（Q00）
 
@@ -95,4 +95,4 @@ G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费�
 | P3 | Q10 | 已 review、已修复、已提交（代码未运行） |
 | P4 | Q11、Q12 | Q11 BLOCKED_ENV（acceptance.md），Q12 决策日志（decision-log.md）；已 review、已修复、已提交 |
 
-待用户决定：D2 的 ILV2 账本收口；Q10 的 LIVE 授权；在 Mac 上按 acceptance.md 运行受影响的门。
+待用户决定：Q10 的 LIVE 授权；在 Mac 上按 acceptance.md 运行受影响的门。
