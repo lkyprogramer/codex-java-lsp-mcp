@@ -706,9 +706,9 @@ export class WorkspaceIndex {
         // A failed fence is the stream's own failure: the next dispatch restarts it; this request just answers.
         this.tracker.flush().catch(() => undefined),
         new Promise<void>(resolve => {
-          wake = resolve;
-          timer = setTimeout(resolve, Math.min(cap.remainingMs(), REQUEST_FENCE_WAIT_MS));
-          signal?.addEventListener("abort", resolve, { once: true });
+          wake = () => resolve();
+          timer = setTimeout(wake, Math.min(cap.remainingMs(), REQUEST_FENCE_WAIT_MS));
+          signal?.addEventListener("abort", wake, { once: true });
         })
       ]);
     } finally {
