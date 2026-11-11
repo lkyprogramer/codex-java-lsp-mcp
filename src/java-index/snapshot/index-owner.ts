@@ -6,6 +6,7 @@
 //      they prepare for at most min(1000 ms, remaining) and then hold one snapshot. MAC-09: the
 //      owner's GC runs one sweep at open (recovery of a dead incarnation) and then every cycle.
 import type { ChildProcess } from "node:child_process";
+import { statfs } from "node:fs/promises";
 import path from "node:path";
 import { builderJobFor, startBuildProcess, type BuilderHeartbeat } from "../../index-builder/build-process.js";
 import { BuildScheduler, DELTA_CLOSURE_LIMIT, type BuildAttempt, type BuildGrant, type BuildHint, type BuildSelection } from "../../index-builder/build-scheduler.js";
@@ -13,6 +14,7 @@ import type { BuilderJob } from "../../index-builder/incremental.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import { isLinkedWorktreeRoot } from "../../worktree-identity.js";
+import { computeExtractorVersion } from "../build-fingerprint.js";
 import type { ContentEntry } from "../sql/snapshot-manifest.js";
 import type { WorkspaceBinding } from "./binding.js";
 import { builderFullReason, type FullBuildReason } from "./publication-history.js";
@@ -111,6 +113,8 @@ export type IndexOwnerOptions = {
   fullHashIntervalMs?: number;
   /** Quiet time before a published snapshot's background verification (default VERIFY_DELAY_MS). */
   verifyDelayMs?: number;
+  /** No build starts while the cache volume has less free space than this (default MIN_FREE_BYTES; 0 disables). */
+  minFreeBytes?: number;
   worktreeIdle?: {
     mode: "observe" | "enforce";
     /** A fresh, exact-path decision. Unknown config must return false. */
@@ -127,7 +131,17 @@ export const STALL_DIAGNOSIS_MS = 30_000;
 /** Freshness prepare never waits longer than this (contract §2.6). */
 export const PREPARE_CAP_MS = 1_000;
 const ROUND_DELAY_MS = 25;
-const ROUND_RETRY_MS = 1_000;
+/** The first retry after a failed round; each further failure without new owed work doubles it. */
+export const ROUND_RETRY_MS = 1_000;
+/** The retry backoff never grows past this: a persistent failure costs one round per five minutes. */
+export const ROUND_RETRY_MAX_MS = 5 * 60 * 1000;
+/**
+ * Below this much free space on the cache volume no job is created: a full build or a clone could
+ * fill the disk the user works on. Retained seed snapshots are released first. statfs's f_bavail does
+ * not count APFS purgeable space, so the floor is kept low: it stops a build on a nearly full volume,
+ * it is not a capacity estimate.
+ */
+export const MIN_FREE_BYTES = 512 * 1024 * 1024;
 /** The initial GC cycle (contract §2.7). */
 export const GC_CYCLE_MS = 30_000;
 export const WORKTREE_IDLE_MS = 48 * 60 * 60 * 1000;
@@ -149,12 +163,22 @@ export function idleWorktreeBatch<T>(candidates: readonly T[], cursor: number): 
 const START_STOP_GRACE_MS = 6_000;
 /** Internal reads (the verification base) are bounded too. */
 const INTERNAL_QUERY_MS = 60_000;
+/** A request waits this long for an FSEvents fence before freezing its label (flushSignals). */
+const REQUEST_FENCE_WAIT_MS = 200;
 /** A workspace without a compatible binding judges at most this many sibling snapshots. */
 export const MAX_SEED_CANDIDATES = 16;
 
 type SnapshotContent = { entries: Map<string, ContentEntry>; status: SnapshotIndexStatus };
 /** A leased sibling snapshot used as a candidate base; the caller releases the lease. */
 type SeedBase = SnapshotContent & { snapshotId: string; lease: SnapshotLease };
+
+/** Bytes an unprivileged writer may still use on the volume holding `directory`; undefined if unknown. */
+async function freeBytes(directory: string): Promise<number | undefined> {
+  try {
+    const info = await statfs(directory);
+    return Number(info.bavail) * Number(info.bsize);
+  } catch { return undefined; }
+}
 
 function queryError(completion: Exclude<QueryCompletion<unknown>, { status: "ok" }>, op: string): JavaIntelligenceError {
   if (completion.status === "deadline") return new JavaIntelligenceError("DEADLINE_EXCEEDED", `Deadline exceeded during ${op}`);
@@ -445,18 +469,38 @@ export class IndexOwner {
     return best;
   }
 
-  /** A superseded snapshot is deleted once nothing binds or leases it: now if it can be, else by the sweep. */
-  supersede(snapshotId: string): void {
+  /**
+   * A superseded snapshot is deleted once nothing binds or leases it: now if it can be, else by the sweep.
+   * With `retainFor` (the workspace left it on a checkout-sized switch) it is first kept as that
+   * workspace's retained seed; the retained seed it displaces is deleted instead.
+   */
+  supersede(snapshotId: string, retainFor?: { workspaceId: string; buildKey: string }): void {
+    if (retainFor) for (const evicted of this.store.retainSeed(snapshotId, retainFor.workspaceId, retainFor.buildKey)) this.superseded.add(evicted);
     this.superseded.add(snapshotId);
     this.pool.trim();
     void this.reclaim();
+  }
+
+  /**
+   * Fails when the cache volume is below its free-space floor even after every retained seed went.
+   * An unreadable volume is not judged: the build goes ahead as before.
+   */
+  async ensureDiskHeadroom(): Promise<void> {
+    const floor = this.options.minFreeBytes ?? MIN_FREE_BYTES;
+    if (floor <= 0) return;
+    if ((await freeBytes(this.store.cacheRoot) ?? Infinity) >= floor) return;
+    for (const snapshotId of this.store.releaseRetained()) this.superseded.add(snapshotId);
+    await this.reclaim();
+    const free = await freeBytes(this.store.cacheRoot) ?? Infinity;
+    if (free < floor) throw new Error(`insufficient disk space: ${free} bytes free on the index cache volume, ${floor} required`);
   }
 
   /** Fast path for superseded snapshots (a lease just went); the periodic sweep covers every other object. */
   async reclaim(): Promise<void> {
     for (const snapshotId of [...this.superseded]) {
       const result = await this.store.tryReclaim({ snapshotId }).catch(() => ({ reclaimed: false as const, reason: "leased" as const }));
-      if (result.reclaimed || result.reason === "missing" || result.reason === "bound") {
+      // A retained seed leaves this set; if it is displaced later, supersede() or the sweep takes it.
+      if (result.reclaimed || result.reason === "missing" || result.reason === "bound" || result.reason === "retained") {
         this.superseded.delete(snapshotId);
         if (result.reclaimed) this.options.onEvent?.({ type: "reclaimed", snapshotId });
       }
@@ -528,7 +572,7 @@ export class IndexOwner {
 }
 
 /** `buildKey`: what the round captured; the builder refuses to spend a build on other inputs. */
-type PreparedJob = { job: BuildJob; baseId?: string; buildKey: string };
+type PreparedJob = { job: BuildJob; baseId?: string; buildKey: string; buildInputsMoved?: boolean };
 
 export class WorkspaceIndex {
   readonly workspaceId: string;
@@ -546,6 +590,12 @@ export class WorkspaceIndex {
   private fullNext?: "delta-deadline" | "verification-failed";
   private rounds = 0;
   private lastRound?: { outcome: string; at: number; elapsedMs: number };
+  /** Consecutive rounds that failed or published a census the tracker did not verify; 0 after a clean round. */
+  private setbacks = 0;
+  /** The tracker's workMark the current setback already saw: only work owed after it cuts a backoff short. */
+  private setbackWorkMark = 0;
+  /** When the armed round timer fires (performance.now()). */
+  private timerDueAt = 0;
 
   private constructor(private readonly owner: IndexOwner, readonly canonicalRoot: string, readonly tracker: WorkspaceTracker) {
     this.workspaceId = tracker.workspaceId;
@@ -560,7 +610,7 @@ export class WorkspaceIndex {
     const tracker = await WorkspaceTracker.start({
       canonicalRoot,
       // A signal is only a hint: it schedules the next round.
-      source: (onSignal, onResume) => source((flags, file) => { onSignal(flags, file); index?.kick(); }, () => { onResume(); index?.kick(); }),
+      source: (onSignal, onResume) => source((flags, file) => { onSignal(flags, file); index?.signalled(); }, () => { onResume(); index?.signalled(); }),
       onInvalidRoot: () => { if (index) owner.store.track(index.workspaceId, tracker.trackedState()); },
       // A new tracker (idle reopen, daemon restart) continues its binding's generation: the store refuses any plan below
       // it, so starting at 1 after a build-input change would reject every round of this workspace for good.
@@ -594,7 +644,8 @@ export class WorkspaceIndex {
     return { workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, tracker: this.tracker.status(), view: this.viewState(binding),
       snapshotId: binding?.snapshotId, bindingVersion: binding?.bindingVersion, coveredThroughSeq: binding?.coveredThroughSeq,
       ...(binding ? { verified: this.owner.store.isVerified(binding.snapshotId) } : {}),
-      roundInFlight: Boolean(this.round), rounds: this.rounds, lastRound: this.lastRound, ...(this.lastError ? { lastError: this.lastError } : {}) };
+      roundInFlight: Boolean(this.round), rounds: this.rounds, lastRound: this.lastRound, ...(this.lastError ? { lastError: this.lastError } : {}),
+      ...(this.setbacks ? { setbacks: this.setbacks, retryInMs: this.timer ? Math.max(0, Math.round(this.timerDueAt - performance.now())) : undefined } : {}) };
   }
 
   /**
@@ -605,6 +656,9 @@ export class WorkspaceIndex {
     const started = performance.now();
     // Half the remaining time at most: a short request still answers from its binding (STALE) instead of timing out in prepare.
     const cap = budget.forStage(Math.max(1, Math.min(PREPARE_CAP_MS, Math.floor(budget.remainingMs() / 2))));
+    // A save just before this request may still sit in FSEvents' latency window: flushed first, so a
+    // FRESH label is never frozen over a change the stream already holds. Bounded by the same cap.
+    if (this.tracker.status() === "FRESH" && !this.round) await this.flushSignals(cap, signal);
     // Only the hints known at entry: one that lands while this request waits never extends its wait,
     // and a round that owes no known hint (the periodic full hash) is not waited for.
     const epoch = this.tracker.trackerEpoch;
@@ -612,6 +666,9 @@ export class WorkspaceIndex {
     const owedAtEntry = this.tracker.status() === "STALE";
     const owed = () => this.tracker.status() === "STALE" && !this.tracker.confirmedThrough(epoch, known);
     const outcome = owedAtEntry ? await this.waitFor(owed, cap, signal) : "none";
+    // The round that covered the entry hints fenced at its dispatch; a save after that fence and before
+    // this request may still be in the latency window. A signal it delivers makes the view STALE.
+    if (outcome === "covered" && this.tracker.status() === "FRESH" && !this.round) await this.flushSignals(cap, signal);
     this.owner.options.onEvent?.({ type: "prepare", workspaceId: this.workspaceId, waitedMs: performance.now() - started, outcome });
   }
 
@@ -622,8 +679,8 @@ export class WorkspaceIndex {
       if (!owed()) return "covered";
       if (cap.expired()) return "capped";
       if (!this.round) {
-        // A failed round's retry backoff stands: answer from the binding instead of forcing or awaiting the retry.
-        if (this.lastError && this.timer) return "backoff";
+        // A failed or diverging round's retry backoff stands: answer from the binding instead of forcing or awaiting the retry.
+        if (this.retryDelay() !== undefined && this.timer) return "backoff";
         this.kick(0);
       }
       await new Promise<void>(resolve => {
@@ -633,6 +690,55 @@ export class WorkspaceIndex {
         signal?.addEventListener("abort", done, { once: true });
       });
     }
+  }
+
+  /**
+   * At most REQUEST_FENCE_WAIT_MS of the request's cap: a healthy fence returns in milliseconds, and one
+   * that does not (a helper slow under load, or stuck) keeps running in the background, shared by later
+   * requests, while this one answers with the label it has, as it did before fences existed.
+   */
+  private async flushSignals(cap: DeadlineBudget, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted || cap.expired()) return;
+    let timer: NodeJS.Timeout | undefined;
+    let wake: (() => void) | undefined;
+    try {
+      await Promise.race([
+        // A failed fence is the stream's own failure: the next dispatch restarts it; this request just answers.
+        this.tracker.flush().catch(() => undefined),
+        new Promise<void>(resolve => {
+          wake = () => resolve();
+          timer = setTimeout(wake, Math.min(cap.remainingMs(), REQUEST_FENCE_WAIT_MS));
+          signal?.addEventListener("abort", wake, { once: true });
+        })
+      ]);
+    } finally {
+      clearTimeout(timer);
+      if (wake) signal?.removeEventListener("abort", wake);
+    }
+  }
+
+  /**
+   * The delay before the next round while a setback stands, undefined when none does. A failure backs
+   * off exponentially (ROUND_RETRY_MS doubling up to ROUND_RETRY_MAX_MS); a first census divergence
+   * reconciles at once and only a repeated one backs off. Work owed since the setback (an edit that
+   * may be the fix) retries after ROUND_RETRY_MS at most.
+   */
+  private retryDelay(): number | undefined {
+    const failures = this.lastError ? this.setbacks : this.setbacks - 1;
+    if (failures <= 0) return undefined;
+    const backoff = Math.min(ROUND_RETRY_MAX_MS, ROUND_RETRY_MS * 2 ** Math.min(failures - 1, 20));
+    return this.tracker.workMark > this.setbackWorkMark ? Math.min(backoff, ROUND_RETRY_MS) : backoff;
+  }
+
+  /**
+   * A native signal or wake. Without a setback it schedules a round as before; during one only newly
+   * owed work may cut the backoff short, and never to less than ROUND_RETRY_MS, so writes the index
+   * does not track (target/, IDE files) cannot drive a failing workspace into a retry loop.
+   */
+  signalled(): void {
+    if (this.retryDelay() === undefined) { this.kick(); return; }
+    if (this.tracker.workMark <= this.setbackWorkMark) return;
+    this.kick(Math.max(ROUND_RETRY_MS, this.owner.options.roundDelayMs ?? ROUND_DELAY_MS));
   }
 
   /** The periodic full hash: owed when due, so the next round hashes every file and the view is STALE meanwhile. */
@@ -652,13 +758,15 @@ export class WorkspaceIndex {
     this.hashTimer.unref?.();
   }
 
-  /** Schedule a round soon; rounds never overlap. */
+  /** Schedule a round soon; rounds never overlap. The earliest due time wins over a timer already armed. */
   kick(delayMs = this.owner.options.roundDelayMs ?? ROUND_DELAY_MS): void {
     if (this.stopped || this.round) return;
+    const dueAt = performance.now() + delayMs;
     if (this.timer) {
-      if (delayMs > 0) return;
+      if (dueAt >= this.timerDueAt) return;
       clearTimeout(this.timer);
     }
+    this.timerDueAt = dueAt;
     this.timer = setTimeout(() => {
       this.timer = undefined;
       if (this.stopped || this.round || !this.tracker.hasWork()) return;
@@ -667,8 +775,7 @@ export class WorkspaceIndex {
         for (const done of [...this.settled]) done();
         if (this.stopped) return;
         this.armFullHash();
-        if (this.lastError) this.kick(ROUND_RETRY_MS);
-        else if (this.tracker.hasWork()) this.kick();
+        if (this.lastError || this.tracker.hasWork()) this.kick(this.retryDelay());
       });
     }, delayMs);
     this.timer.unref?.();
@@ -705,9 +812,23 @@ export class WorkspaceIndex {
       const againstOwn = await timed("verifyMs", () => this.tracker.verify(round, own && { entries: own.entries, buildKey: bound!.buildKey }));
       const keyChanged = Boolean(bound) && bound!.buildKey !== round.buildKey;
       let verification = againstOwn;
-      if (!bound || keyChanged) {
+      const ownDiff = againstOwn.changed.length + againstOwn.deleted.length;
+      // A difference the own base cannot take as a delta (a branch switch) may be small against a
+      // sibling's or a retained snapshot: judged by hash like any seed, used only if it is smaller.
+      const tooFar = Boolean(bound) && !keyChanged && !this.fullNext && ownDiff > DELTA_CLOSURE_LIMIT;
+      // A switch of that size (a checkout, whose branches often differ in build files too): the snapshot
+      // left behind is retained as a seed under its own buildKey, so switching back binds or deltas from
+      // it. An ordinary edit's superseded snapshot is deleted as before.
+      const switched = Boolean(bound) && ownDiff > DELTA_CLOSURE_LIMIT;
+      if (!bound || keyChanged || tooFar) {
         seed = await timed("seedMs", () => this.owner.seedFor(this.workspaceId, verification));
-        if (seed) verification = rebase(verification, { entries: seed.entries, buildKey: round.buildKey });
+        if (seed) {
+          const judged = rebase(verification, { entries: seed.entries, buildKey: round.buildKey });
+          if (tooFar && judged.changed.length + judged.deleted.length >= ownDiff) {
+            seed.lease.release();
+            seed = undefined;
+          } else verification = judged;
+        }
       }
       Object.assign(detail, { changed: verification.changed.length, deleted: verification.deleted.length, hashed: verification.hashed,
         statted: verification.statted, ...(seed ? { seedFrom: seed.snapshotId } : {}) });
@@ -726,7 +847,7 @@ export class WorkspaceIndex {
           this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
             ...(bound ? { previousSnapshotId: bound.snapshotId } : {}), indexedGeneration: seed.status.indexedGeneration,
             changed: bound ? againstOwn.changed : [], deleted: bound ? againstOwn.deleted : [], buildKeyChanged: keyChanged });
-          if (bound) this.owner.supersede(bound.snapshotId);
+          if (bound) this.owner.supersede(bound.snapshotId, switched ? { workspaceId: this.workspaceId, buildKey: bound.buildKey } : undefined);
         }
         return;
       }
@@ -735,11 +856,22 @@ export class WorkspaceIndex {
       const pathsOnly = [...verification.changed, ...verification.deleted].every(file => file.endsWith(".java") || file.endsWith(".xml"));
       const generation = Math.max(own?.status.indexedGeneration ?? 0, seed?.status.indexedGeneration ?? 0) + 1;
       const files = verification.changed.length + verification.deleted.length;
+      // Changed build inputs on the own base (a seed is already under this round's key): a rescan delta
+      // marked buildInputsMoved when the base recorded this round's layout and this extractor (a pom
+      // dependency bump, a comment), decided here so a full is not first cloned, warmed and escalated.
+      // The builder re-checks the same record and escalates if it no longer holds.
+      let inputsRebuilt = false;
+      if (keyChanged && !seed && baseId && !this.fullNext && files <= DELTA_CLOSURE_LIMIT) {
+        const recorded = await this.owner.query(baseId, { op: "buildInputs", args: {} }, DeadlineBudget.fromTimeout(INTERNAL_QUERY_MS));
+        inputsRebuilt = !recorded.schemaCompatible || recorded.layoutFingerprint !== round.layoutFingerprint
+          || recorded.extractorVersion !== computeExtractorVersion();
+      }
       // An explicit full on an empty job: no base; a difference above the delta closure limit (a seed's or the
-      // workspace's own: the closure holds at least the changed files); changed build inputs; or the previous
-      // delta ran out its job deadline (a misjudged small job goes to the full queue, never back into a delta slot).
+      // workspace's own: the closure holds at least the changed files); build inputs the base's facts depend
+      // on changed (above); or the previous delta ran out its job deadline (a misjudged small job goes to the
+      // full queue, never back into a delta slot).
       const fullReason: FullBuildReason | undefined = this.fullNext ?? (!baseId ? "no-base"
-        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : keyChanged && !seed ? "build-key-changed" : undefined);
+        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : inputsRebuilt ? "build-key-changed" : undefined);
       const chosen: BuildHint = fullReason ? { workspaceId: this.workspaceId, kind: "full", generation }
         : (seed || round.mode === "paths") && pathsOnly
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }
@@ -747,8 +879,12 @@ export class WorkspaceIndex {
       hint = chosen;
       const plannedMode = chosen.kind === "full" ? "full" : chosen.rescan ? "rescan" : "delta";
       detail.kind = plannedMode;
+      // Before anything is spent or forgotten: a refused build keeps fullNext owed for its retry.
+      await this.owner.ensureDiskHeadroom();
       if (chosen.kind === "full") this.fullNext = undefined;
       const cloned = chosen.kind === "full" ? undefined : baseId;
+      // The own base under the previous buildKey (a seed is already under this round's key).
+      const buildInputsMoved = keyChanged && Boolean(cloned) && !seed;
       const job = await store.createJob({ workspaceId: this.workspaceId, captureId: round.captureId });
       try {
         if (cloned && !seed) {
@@ -757,7 +893,7 @@ export class WorkspaceIndex {
         } else if (cloned) await timed("cloneMs", () => store.cloneBase(seed!.lease, job));
         seed?.lease.release();
         seed = undefined;
-        this.prepared = { job, baseId: cloned, buildKey: round.buildKey };
+        this.prepared = { job, baseId: cloned, buildKey: round.buildKey, ...(buildInputsMoved ? { buildInputsMoved: true } : {}) };
         const completion = await timed("buildMs", () => this.owner.scheduler.submit(chosen));
         const built = completion.result?.contentManifestId;
         if (!completion.ok || !built) throw new Error(completion.error ?? "builder reported no content identity");
@@ -770,20 +906,27 @@ export class WorkspaceIndex {
         })).finally(() => {
           if (job.sealTimings) timings.seal = job.sealTimings;
         });
+        let seenThrough: number | undefined;
         if (detail.censusDiverged) {
           // The self-consistent builder capture is usable, but it did not verify this round's
           // census. Keep its hints and watermark owed, including changes with no native signal.
+          // Work owed before this round settled is seen; the full hash owed here is not new work, so
+          // a census that keeps diverging backs off (retryDelay) instead of rehashing in a loop.
+          const workBefore = this.tracker.workMark;
           this.tracker.abandon(round);
           this.tracker.resume();
+          seenThrough = workBefore > round.workMark ? round.workMark : this.tracker.workMark;
         } else this.tracker.complete(round, binding);
         this.base = undefined;
         Object.assign(detail, { snapshotId: binding.snapshotId, bindingVersion: binding.bindingVersion, boundAt: Date.now() });
-        this.finish("published", mode, started, undefined, detail);
+        this.finish("published", mode, started, undefined, detail, seenThrough);
         this.announce({ workspaceId: this.workspaceId, canonicalRoot: this.canonicalRoot, snapshotId: binding.snapshotId,
           ...(bound ? { previousSnapshotId: bound.snapshotId } : {}), indexedGeneration: completion.result?.indexedGeneration ?? generation,
           changed: bound ? againstOwn.changed : verification.changed, deleted: bound ? againstOwn.deleted : verification.deleted,
           buildKeyChanged: keyChanged });
-        if (bound && bound.snapshotId !== binding.snapshotId) this.owner.supersede(bound.snapshotId);
+        if (bound && bound.snapshotId !== binding.snapshotId) {
+          this.owner.supersede(bound.snapshotId, switched ? { workspaceId: this.workspaceId, buildKey: bound.buildKey } : undefined);
+        }
       } finally {
         this.prepared = undefined;
         if (job.state !== "FINISHED") store.finishJob(job);
@@ -794,7 +937,7 @@ export class WorkspaceIndex {
       if (hint?.kind === "delta" && error instanceof Error && /deadline exceeded/.test(error.message)) this.fullNext = "delta-deadline";
       this.tracker.abandon(round);
       store.track(this.workspaceId, this.tracker.trackedState());
-      this.finish("failed", mode, started, error, detail);
+      this.finish("failed", mode, started, error, detail, round.workMark);
     } finally {
       seed?.lease.release();
     }
@@ -807,11 +950,17 @@ export class WorkspaceIndex {
     this.owner.published(event);
   }
 
-  private finish(outcome: "noop" | "published" | "failed", mode: string, started: number, error?: unknown, detail: RoundDetail = {}): void {
+  /** `seenThrough`: the tracker workMark this round already accounted for (a setback is cut short only by work owed after it). */
+  private finish(outcome: "noop" | "published" | "failed", mode: string, started: number, error?: unknown, detail: RoundDetail = {},
+    seenThrough = this.tracker.workMark): void {
     const elapsedMs = performance.now() - started;
     this.rounds += 1;
     this.lastRound = { outcome, at: Date.now(), elapsedMs };
     this.lastError = error === undefined ? undefined : error instanceof Error ? error.message : String(error);
+    if (outcome === "failed" || detail.censusDiverged) {
+      this.setbacks += 1;
+      this.setbackWorkMark = seenThrough;
+    } else this.setbacks = 0;
     this.owner.options.onEvent?.({ type: "round", workspaceId: this.workspaceId, mode, outcome, elapsedMs, ...detail,
       ...(this.lastError ? { error: this.lastError } : {}) });
   }
@@ -841,7 +990,8 @@ export class WorkspaceIndex {
         let movedAt = performance.now();
         let reported = false;
         const onEvent = this.owner.options.onEvent;
-        const attempt = this.owner.startBuild({ repoRoot: this.canonicalRoot, dbPath: prepared.job.dbPath, job: { ...builderJobFor(hint, hint.kind), buildKey: prepared.buildKey }, grant,
+        const attempt = this.owner.startBuild({ repoRoot: this.canonicalRoot, dbPath: prepared.job.dbPath, job: { ...builderJobFor(hint, hint.kind), buildKey: prepared.buildKey,
+          ...(prepared.buildInputsMoved ? { buildInputsMoved: true } : {}) }, grant,
           onHeartbeat: beat => {
             const now = performance.now();
             if (beat.work !== work) { work = beat.work; movedAt = now; reported = false; }

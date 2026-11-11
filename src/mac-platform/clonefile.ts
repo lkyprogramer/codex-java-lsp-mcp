@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, open, readFile, realpath } from "node:fs/promises";
+import { lstat, open, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MAC_NATIVE_PROTOCOL } from "./native-protocol.js";
@@ -20,7 +20,36 @@ export type MacNativeIdentity = {
 };
 const sha256 = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
+/**
+ * A verified identity per native directory, keyed by the stat of every file the check read. The full
+ * check reads the Node executable (~100 MB) and the helper and starts a capability process; every
+ * delta's clone used to pay it. A replaced or rewritten file changes ino/size/mtime/ctime (ctime is
+ * not settable by a writer), so a hit proves the bytes the full check hashed are still the ones there.
+ */
+const verifiedIdentities = new Map<string, { key: string; identity: MacNativeIdentity }>();
+
+async function identityStatKey(directory: string): Promise<string | undefined> {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8")) as Partial<MacNativeIdentity>;
+    if (typeof manifest.binary !== "string") return undefined;
+    const files = [path.join(directory, "manifest.json"), path.join(directory, manifest.binary), process.execPath];
+    const stats = await Promise.all(files.map(file => stat(file, { bigint: true })));
+    return stats.map((info, index) => `${files[index]}:${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`).join("|");
+  } catch { return undefined; }
+}
+
 export async function readMacNativeIdentity(directory = nativeDirectory): Promise<MacNativeIdentity> {
+  const key = await identityStatKey(directory);
+  const cached = verifiedIdentities.get(directory);
+  if (key !== undefined && cached?.key === key) return cached.identity;
+  const identity = await verifyMacNativeIdentity(directory);
+  // Cached only when the files did not move during the check: a write racing it is checked again next time.
+  if (key !== undefined && await identityStatKey(directory) === key) verifiedIdentities.set(directory, { key, identity });
+  else verifiedIdentities.delete(directory);
+  return identity;
+}
+
+async function verifyMacNativeIdentity(directory: string): Promise<MacNativeIdentity> {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8")) as MacNativeIdentity;
   if (manifest.schema !== "ilv2-mac-native-build/v1" || manifest.protocol !== MAC_NATIVE_PROTOCOL || manifest.arch !== process.arch || manifest.binary !== "ilv2-mac") throw new Error("native identity mismatch");
   if (manifest.runtime.execPath !== process.execPath || manifest.runtime.nodeSha256 !== sha256(await readFile(process.execPath)) ||

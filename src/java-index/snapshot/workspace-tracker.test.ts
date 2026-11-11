@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { chmod, cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -24,6 +24,7 @@ const mapperRel = "src/main/resources/mapper/OrderMapper.xml";
 const MEMBERS = 29; // 27 Java files and 2 MyBatis XML files in the fixture.
 const F = FSEVENT_FLAGS;
 const FILE_MODIFIED = 0x1000 | F.ItemIsFile;
+const FILE_RENAMED = 0x800 | F.ItemIsFile;
 const DIR_RENAMED = 0x800 | F.ItemIsDir;
 
 type FakeStream = { epoch: string; emit(flags: number, relative: string): void; fences: number; stopped: boolean; lose(error: Error): void };
@@ -217,14 +218,29 @@ test("same-stat-changes-are-hashed", async () => {
     ctx.source.emit(FILE_MODIFIED, mapperRel);
     assert.equal((await cycle(ctx, { noop: true })).status, "FRESH");
     await sameStatEdit(mapper, "OrderMapper", "OrderMappes", pinned);
-    await mkdir(path.join(ctx.repo, "docs", "sql"), { recursive: true }); // A new resource root: the layout moved.
+    await mkdir(path.join(ctx.repo, "docs", "sql"), { recursive: true }); // An empty resource root moves the layout only.
     ctx.source.emit(F.ItemIsDir | 0x100, "docs/sql");
     const third = await cycle(ctx, { noop: false });
     assert.equal(third.round.mode, "full-stat");
     assert.deepEqual(third.verification.changed, [mapperRel]);
     assert.equal(third.verification.hashed, 1, "unchanged files were not re-hashed");
-    assert.equal(third.round.workspaceGeneration, first.round.workspaceGeneration + 1, "a new resource root is a new input boundary");
+    assert.equal(third.round.buildKey, first.round.buildKey, "an empty resource root keeps the build key");
+    assert.equal(third.round.layoutFingerprint, first.round.layoutFingerprint, "an empty resource root keeps the indexed inputs");
+    assert.equal(third.round.workspaceGeneration, first.round.workspaceGeneration, "an empty resource root keeps the input generation");
     assert.equal(third.status, "FRESH");
+
+    // The first XML activates the resource root and moves the indexed input boundary.
+    const addedMapper = "docs/sql/ExtraMapper.xml";
+    await writeFile(path.join(ctx.repo, addedMapper), '<mapper namespace="demospring.ExtraMapper"><select id="find">select 1</select></mapper>\n');
+    ctx.source.emit(FILE_MODIFIED, addedMapper);
+    const fourth = await cycle(ctx, { noop: false });
+    assert.equal(fourth.round.mode, "full-hash");
+    assert.notEqual(fourth.round.buildKey, third.round.buildKey);
+    assert.notEqual(fourth.round.layoutFingerprint, third.round.layoutFingerprint);
+    assert.equal(fourth.round.workspaceGeneration, third.round.workspaceGeneration + 1, "an active resource root is a new input boundary");
+    assert.deepEqual(fourth.verification.changed, [addedMapper]);
+    assert.equal(fourth.verification.hashed, MEMBERS + 1);
+    assert.equal(fourth.status, "FRESH");
   } finally { await teardown(ctx); }
 });
 
@@ -256,6 +272,66 @@ test("touch-edit-revert-startup-noop", async () => {
     assert.notEqual(startup.binding.trackerEpoch, reverted.binding.trackerEpoch);
     assert.equal(ctx.built, 1, "touch, edit-revert and startup built nothing");
     assert.equal((await readdir(ctx.store.layout.snapshots)).length, 1);
+  } finally { await teardown(ctx); }
+});
+
+test("a case-only file rename replaces the old census entry on an old-name hint", async t => {
+  const ctx = await setup();
+  try {
+    const actual = serviceRel.replace("OrderService.java", "Orderservice.java");
+    if (!existsSync(path.join(ctx.repo, actual))) return t.skip("requires case-insensitive path lookup");
+    await cycle(ctx);
+    await rename(path.join(ctx.repo, serviceRel), path.join(ctx.repo, actual));
+    ctx.source.emit(FILE_RENAMED, serviceRel);
+
+    const { round, verification, status } = await cycle(ctx, { noop: false });
+    assert.equal(round.mode, "paths");
+    assert.deepEqual(verification.changed, [actual]);
+    assert.deepEqual(verification.deleted, [serviceRel]);
+    assert.equal(status, "FRESH");
+  } finally { await teardown(ctx); }
+});
+
+test("a case-only directory rename replaces the old subtree on an old-name hint", async t => {
+  const ctx = await setup();
+  try {
+    const old = path.dirname(serviceRel);
+    const actual = old.replace("demospring", "DemoSpring");
+    if (!existsSync(path.join(ctx.repo, actual))) return t.skip("requires case-insensitive path lookup");
+    const first = await cycle(ctx);
+    const members = [...first.verification.entries.keys()].filter(file => file.startsWith(`${old}/`)).sort();
+    assert.ok(members.length > 1);
+    await rename(path.join(ctx.repo, old), path.join(ctx.repo, actual));
+    ctx.source.emit(DIR_RENAMED, old);
+
+    const { round, verification, status } = await cycle(ctx, { noop: false });
+    assert.equal(round.mode, "paths");
+    assert.deepEqual(verification.changed, members.map(file => `${actual}${file.slice(old.length)}`));
+    assert.deepEqual(verification.deleted, members);
+    assert.equal(status, "FRESH");
+  } finally { await teardown(ctx); }
+});
+
+test("a hint with no unique disk spelling leaves a full-stat walk owed after its cut", async t => {
+  const actual = path.join(path.dirname(serviceRel), "ſample.java");
+  const hint = path.join(path.dirname(serviceRel), "Sample.java");
+  const ctx = await setup({}, async repo => { await writeFile(path.join(repo, actual), extraJava); });
+  try {
+    // APFS matches long s with S, but JavaScript's lowercase mapping does not.
+    if (!existsSync(path.join(ctx.repo, hint))) return t.skip("requires APFS long-s equivalence");
+    await cycle(ctx);
+    await writeFile(path.join(ctx.repo, actual), `${extraJava}// edit\n`);
+    ctx.source.emit(FILE_MODIFIED, hint);
+
+    const paths = await cycle(ctx, { noop: true });
+    assert.equal(paths.round.mode, "paths");
+    assert.equal(paths.status, "STALE");
+    assert.ok(ctx.tracker.diagnostics().fullStatThrough > paths.round.cut);
+
+    const full = await cycle(ctx, { noop: false });
+    assert.equal(full.round.mode, "full-stat");
+    assert.deepEqual(full.verification.changed, [actual]);
+    assert.equal(full.status, "FRESH");
   } finally { await teardown(ctx); }
 });
 

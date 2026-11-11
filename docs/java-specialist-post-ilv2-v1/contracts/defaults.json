@@ -11,7 +11,15 @@
   "outline": {
     "defaultLimit": 8,
     "maxLimit": 20,
-    "maxWireBytes": 4096
+    "maxWireBytes": 4096,
+    "kinds": [
+      "type",
+      "constructor",
+      "method",
+      "field"
+    ],
+    "nearLineSelection": "CONTAINING_THEN_DISTANCE_THEN_SOURCE_ORDER",
+    "outputOrder": "SOURCE_ORDER"
   },
   "evidence": {
     "maxUnits": 8,
@@ -45,7 +53,8 @@
   "observedCurrentJdtDefaults": {
     "importStartMs": 120000,
     "separateIndexMs": 600000,
-    "classification": "CODE_NOT_LIVE_VERIFIED"
+    "classification": "CODE_NOT_LIVE_VERIFIED",
+    "separateIndexIntroducedBy": "07c6ccf"
   },
   "comparison": {
     "pilotTaskGroups": 12,
@@ -61,5 +70,7 @@
     "newOutlineWarmP95ScreenMs": 100,
     "screenIsProposal": true
   },
-  "deployAuthorized": false
+  "deployAuthorized": false,
+  "revision": "1.1",
+  "revisionDate": "2026-11-10"
 }

@@ -323,6 +323,8 @@ export type JavaFileBundle = {
   edges: StaticEdge[];
   /** Stat observed when this bundle was parsed; workspace-local and never written to the facts database. */
   observed?: FileStat;
+  /** Why parsing/extraction threw on captured bytes (the file row is FAILED); diagnostics only, never written to the facts database. */
+  parseFailure?: string;
 };
 
 export type AnchorFacts = {

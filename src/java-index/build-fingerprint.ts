@@ -97,3 +97,30 @@ export async function computeBuildFingerprint(repoRoot: string, layout: LayoutCo
   const entries = await computeBuildFingerprintEntries(repoRoot, layout);
   return createHash("sha256").update(entries.join("\n")).digest("hex");
 }
+
+/**
+ * The part of computeBuildFingerprint tree-sitter facts depend on: the layout probe's result (active
+ * source roots with their module/source set, resource roots, symlinked roots, layout kind and
+ * profile), without build file bytes. The extractor never reads build files, the layout probe reads
+ * only marker presence and the root pom's <module> list (which the layout kind reflects), and
+ * inter-module dependencies are not modelled (name-resolver). The buildKey keeps the full
+ * fingerprint, so a build-file edit still moves it and reaches JDT and the router as a build change;
+ * this one only lets the builder take that edit as a delta on its base instead of a full rebuild.
+ */
+export async function computeInputFingerprints(repoRoot: string, layout: LayoutContext): Promise<{ buildFingerprint: string; layoutFingerprint: string }> {
+  // One walk for both: the entries read every module's build files and probe every root for sources.
+  const entries = await computeBuildFingerprintEntries(repoRoot, layout);
+  const layoutEntries = entries.filter(entry => !entry.startsWith("build:"));
+  return {
+    buildFingerprint: createHash("sha256").update(entries.join("\n")).digest("hex"),
+    layoutFingerprint: createHash("sha256").update([LAYOUT_FINGERPRINT_VERSION, ...layoutEntries].join("\n")).digest("hex")
+  };
+}
+
+/** Changing what the layout fingerprint covers changes this tag, so an old meta value never matches a new one. */
+const LAYOUT_FINGERPRINT_VERSION = "static-index-layout/v1";
+
+/** The meta key a build records the layout fingerprint under; absent in databases built before it existed. */
+export const LAYOUT_FINGERPRINT_META = "layoutFingerprint";
+/** The meta key a full build records computeExtractorVersion() under (a delta keeps its base's). */
+export const EXTRACTOR_VERSION_META = "extractorVersion";

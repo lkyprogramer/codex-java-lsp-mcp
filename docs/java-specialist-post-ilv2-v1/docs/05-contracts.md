@@ -10,7 +10,7 @@
 {"operation":"outline","repoRoot":"/authorized/worktree","file":"src/main/java/example/OrderService.java","limit":8}
 ```
 
-`outline`只接受file、可选nearLine/limit/detail以及root/alias；query/terms/symbolId/backend=jdt与outline组合拒绝。file使用现有containment与owner解析。limit 1..20，默认8；超出拒绝不silent clamp。nearLine为正的一基行号。sourceSet/module是query过滤器，不对单文件outline偷偷上溯切仓。
+`outline`只接受file、可选nearLine/limit/detail以及root/alias；query/terms/symbolId/backend=jdt与outline组合拒绝。file使用现有containment与owner解析。limit 1..20，默认8；超出拒绝不silent clamp（公共schema的`limit`上限仍是共享的`SYMBOL_LIMIT_MAX`，outline上限由handler以INVALID_INPUT执行）。nearLine为正的一基行号。`detail`沿用现有`summary|diagnostic`枚举，不为outline新增取值；diagnostic只附加计时与省略原因，仍不输出declarationKey。sourceSet/module是query过滤器，不对单文件outline偷偷上溯切仓。
 
 `symbolNeedsJdt()`对outline和evidence恒false；注册层和handler使用同一判定。无LSP enablement时仍可静态使用；没有可服务索引则返回明确NOT_READY。
 
@@ -21,7 +21,7 @@
 ```ts
 export interface OutlineEntryInput {
   declarationKey: string;
-  kind: "type" | "method" | "constructor";
+  kind: "type" | "method" | "constructor" | "field";
   name: string;
   signature: string;
   startLine: number;
@@ -34,7 +34,14 @@ export function selectOutlineEntries(
 ): { entries: OutlineEntryInput[]; omittedSymbols: number };
 ```
 
-去重以declarationKey，不以名称；包含nearLine的最小跨度声明优先，然后源码顺序，最终稳定tie-break为declarationKey。超长签名不截成伪造源码：公开层省略signature并给`signatureOmitted=true`，名称/selection/identity保留；仍放不下时整条省略。选择器不读取文件、不执行SQL、不生成新ID。
+去重以declarationKey，不以名称。字段来自`JavaFileBundle.fields`，signature为声明类型+名称，不含初始化表达式。
+
+选择与输出分两步：
+
+1. **选择**：无nearLine时按源码顺序取前limit条。有nearLine时，先取包含nearLine的声明（内层优先，即跨度小者先），其余按距离升序：`distance = nearLine < startLine ? startLine - nearLine : nearLine - endLine`；同距离按源码顺序，最终tie-break为declarationKey。
+2. **输出**：选中的条目恢复源码顺序（startLine、selection.column、declarationKey），便于Agent对照文件结构；包含nearLine的条目带`containsNearLine=true`。
+
+不得在有nearLine时退化为“包含者+文件开头若干条”：大文件尾部nearLine的邻近声明必须优先于远处声明（见Q03 RED）。超长签名不截成伪造源码：公开层省略signature并给`signatureOmitted=true`，名称/selection/identity保留；仍放不下时整条省略。选择器不读取文件、不执行SQL、不生成新ID。
 
 ```ts
 export async function runOutline(

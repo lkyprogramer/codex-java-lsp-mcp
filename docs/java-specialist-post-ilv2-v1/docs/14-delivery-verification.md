@@ -32,6 +32,19 @@
 
 G12/G13/G14/G17数字全部来自仓库报告，正文注明其阶段/快照限制。不能将本包28个测试加到产品原测试数量中，也不能将24个机制case当24个独立业务任务。接口中的outline和evidence v2为拟新增合同，不是当前已支持的功能。
 
+## 1.1修订验证（2026-11-10）
+
+修订内容见[README](../README.md)“1.1修订记录”。只改了文档、任务卡和`contracts/`；fixtures、evaluator标签、tools、tests和evidence都没动，上表1.0的附件验证结论仍然只对应1.0的检查器与语料。
+
+| 项目 | 结果 | 说明 |
+|---|---|---|
+| 修订依据的源码事实 | 对`cc5db6b`只读核对 | `anchor-windows.ts`、`symbol-static.test.ts`/`output-shape.test.ts`、query相关测试、live runner脚本、`07c6ccf`引入600秒索引预算，均在仓库中确认存在 |
+| `verify_bundle.py` | 重新封存`SHA256SUMS`后运行 | 检查字节清单、新DAG顺序、链接与fence |
+| `python -m unittest discover -s tests` | 运行 | 检查器自测，与修订内容无直接关系 |
+| `check_fixtures.py` | 未运行 | 修订环境没有JDK；fixtures未改动，沿用1.0结果 |
+| 产品构建/测试 | 未运行 | 本次只修订计划，不改产品代码 |
+| `evidence/receipt-checker-{green,red}.log` | 从清单移除 | 1.0清单登记了这两份原始日志，但仓库`.gitignore`的`*.log`规则使它们从未入库，1.0在仓库内运行`verify_bundle.py`必然报MISSING。其结果（28/28通过；RED stub 24/28失败、退出1）仍保存在`evidence/local-validation.json`，原始日志已不可得 |
+
 ## 完整性
 
 `SHA256SUMS`覆盖包内所有交付文件（不含清单自身和运行时__pycache__）。验证脚本同时拒绝未登记文件，检查任务依赖顺序、Markdown fence与本地链接。对合法编辑后的套件，应新版本重新封存，不能用更新hash来掩盖fixture/gold漂移。

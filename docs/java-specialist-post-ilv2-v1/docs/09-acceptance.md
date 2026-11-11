@@ -18,7 +18,7 @@ Q00只读对齐，不自动重新安装。若生产比所审SHA更新，以安�
 - repair known-bad/known-good/early-exit-zero三个控制有效；测试和gold不进入Agent工作区。
 - 本次dataset、scope、budget、模型/工具链身份冻结；exposed holdout标注。
 
-缺一个，暂停付费效果实验，但仍可做纯函数/fixture实现。
+缺一个，暂停付费效果实验，但仍可做纯函数/fixture实现。G0只是Q10 LIVE的前置门，不门控Q03 outline；Q04依赖的是Q01产物（receipt），不是整个G0。
 
 ## G1：最小能力正确
 

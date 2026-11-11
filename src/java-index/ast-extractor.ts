@@ -121,27 +121,34 @@ export function extractFromParsedTree(input: ExtractJavaInput, tree: JavaSyntaxT
   return { file, types: context.types, fields: context.fields, methods: context.methods };
 }
 
-function visitCompilationUnit(node: JavaSyntaxNode, context: ExtractContext): void {
-  switch (node.type) {
-    case "package_declaration": {
-      const nameNode = node.namedChildren[0];
-      if (nameNode) context.packageName = textOf(nameNode, context.source);
-      return;
+/** Pre-order, children left to right, with an explicit stack: a malformed file's ERROR nesting is unbounded (see collectCallSites). */
+function visitCompilationUnit(root: JavaSyntaxNode, context: ExtractContext): void {
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    switch (node.type) {
+      case "package_declaration": {
+        const nameNode = node.namedChildren[0];
+        if (nameNode) context.packageName = textOf(nameNode, context.source);
+        continue;
+      }
+      case "import_declaration":
+        context.imports.push(buildImport(node, context.source));
+        continue;
+      case "class_declaration":
+      case "interface_declaration":
+      case "record_declaration":
+      case "enum_declaration":
+      case "annotation_type_declaration": {
+        const typeFacts = extractType(node, context, false);
+        context.topLevelTypeIds.push(typeFacts.typeId);
+        continue;
+      }
+      default: {
+        const children = node.namedChildren;
+        for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]!);
+      }
     }
-    case "import_declaration":
-      context.imports.push(buildImport(node, context.source));
-      return;
-    case "class_declaration":
-    case "interface_declaration":
-    case "record_declaration":
-    case "enum_declaration":
-    case "annotation_type_declaration": {
-      const typeFacts = extractType(node, context, false);
-      context.topLevelTypeIds.push(typeFacts.typeId);
-      return;
-    }
-    default:
-      for (const child of node.namedChildren) visitCompilationUnit(child, context);
   }
 }
 
@@ -247,12 +254,18 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
 // Stop at each declaration: extractType owns its nested members and methods.
 // Method and initializer blocks may contain real local declarations; these
 // retain position-based identities rather than inventing a package FQN.
-function visitLocalTypeDeclarations(node: JavaSyntaxNode, context: ExtractContext): void {
-  if (TYPE_DECL_TYPES.has(node.type)) {
-    extractType(node, context, true);
-    return;
+/** Pre-order, children left to right, with an explicit stack (see collectCallSites: a body's depth is unbounded). */
+function visitLocalTypeDeclarations(root: JavaSyntaxNode, context: ExtractContext): void {
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (TYPE_DECL_TYPES.has(node.type)) {
+      extractType(node, context, true);
+      continue;
+    }
+    const children = node.namedChildren;
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index]!);
   }
-  for (const child of node.namedChildren) visitLocalTypeDeclarations(child, context);
 }
 
 function typeKindOf(nodeType: string): JavaTypeKind {
@@ -559,15 +572,41 @@ function unknownTypeRef(range: SourceRange): JavaTypeRef {
   return baseRef("", "", [], 0, range);
 }
 
+/**
+ * Walks a method body with an explicit stack: an expression chain (a generated `a + b + ... + z` or
+ * builder chain) is as deep as it is long, and a recursive walk would overflow the call stack at a
+ * depth that depends on the thread's stack size, so the same file would index differently in a full
+ * build (main thread) and an off-thread delta. Tasks run in exactly the recursive walk's order
+ * (pre-order, children left to right; a declarator's scope entry before its initializer), so call
+ * sites and scope updates are unchanged.
+ */
 function collectCallSites(
-  node: JavaSyntaxNode,
+  root: JavaSyntaxNode,
   context: ExtractContext,
   scope: Scope,
   callSites: JavaCallSiteFact[],
   localTypes: JavaTypeRef[]
 ): void {
+  type Task = JavaSyntaxNode | (() => void);
+  const stack: Task[] = [root];
+  const then = (tasks: readonly Task[]) => { for (let index = tasks.length - 1; index >= 0; index -= 1) stack.push(tasks[index]!); };
+  while (stack.length > 0) {
+    const task = stack.pop()!;
+    if (typeof task === "function") { task(); continue; }
+    collectCallSitesAt(task, context, scope, callSites, localTypes, then);
+  }
+}
+
+function collectCallSitesAt(
+  node: JavaSyntaxNode,
+  context: ExtractContext,
+  scope: Scope,
+  callSites: JavaCallSiteFact[],
+  localTypes: JavaTypeRef[],
+  then: (tasks: ReadonlyArray<JavaSyntaxNode | (() => void)>) => void
+): void {
   // A local type's methods own their calls; do not attribute them to the
-  // containing method while recursively walking its body.
+  // containing method while walking its body.
   if (TYPE_DECL_TYPES.has(node.type)) return;
   switch (node.type) {
     case "local_variable_declaration": {
@@ -576,14 +615,16 @@ function collectCallSites(
       if (type && !localTypes.some(existing => existing.text === type.text)) {
         localTypes.push(type);
       }
+      const next: Array<JavaSyntaxNode | (() => void)> = [];
       for (const decl of node.namedChildren) {
         if (decl.type !== "variable_declarator") continue;
         const nameNode = decl.childForFieldName("name");
         const name = nameNode ? textOf(nameNode, context.source) : undefined;
-        if (name && type) scope.set(name, type);
+        if (name && type) next.push(() => { scope.set(name, type); });
         const valueNode = decl.childForFieldName("value");
-        if (valueNode) collectCallSites(valueNode, context, scope, callSites, localTypes);
+        if (valueNode) next.push(valueNode);
       }
+      then(next);
       return;
     }
     case "method_invocation": {
@@ -601,8 +642,7 @@ function collectCallSites(
         argumentTypeHints: argumentNodes.map(arg => argumentTypeHintOf(arg, scope, context)),
         range: rangeOf(node)
       });
-      if (objectNode) collectCallSites(objectNode, context, scope, callSites, localTypes);
-      for (const arg of argumentNodes) collectCallSites(arg, context, scope, callSites, localTypes);
+      then(objectNode ? [objectNode, ...argumentNodes] : argumentNodes);
       return;
     }
     case "object_creation_expression": {
@@ -616,7 +656,7 @@ function collectCallSites(
         argumentTypeHints: argumentNodes.map(arg => argumentTypeHintOf(arg, scope, context)),
         range: rangeOf(node)
       });
-      for (const arg of argumentNodes) collectCallSites(arg, context, scope, callSites, localTypes);
+      then(argumentNodes);
       return;
     }
     case "method_reference": {
@@ -636,7 +676,7 @@ function collectCallSites(
       return;
     }
     default:
-      for (const child of node.namedChildren) collectCallSites(child, context, scope, callSites, localTypes);
+      then(node.namedChildren);
   }
 }
 
@@ -691,13 +731,16 @@ function argumentTypeHintOf(node: JavaSyntaxNode, scope: Scope, context: Extract
   return unknownTypeRef(rangeOf(node));
 }
 
-function countErrorNodes(node: JavaSyntaxNode): number {
-  const count = node.type === "ERROR" || node.isMissing ? 1 : 0;
-  // A node without hasError has no ERROR or MISSING descendant (a MISSING node
-  // itself reports false), so most files skip the walk below the root.
-  if (!node.hasError) return count;
-  let total = count;
-  for (const child of node.children) total += countErrorNodes(child);
+function countErrorNodes(root: JavaSyntaxNode): number {
+  // Iterative for the same reason as collectCallSites. A node without hasError has no ERROR or MISSING
+  // descendant (a MISSING node itself reports false), so most files skip the walk below the root.
+  let total = 0;
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.type === "ERROR" || node.isMissing) total += 1;
+    if (node.hasError) for (const child of node.children) stack.push(child);
+  }
   return total;
 }
 

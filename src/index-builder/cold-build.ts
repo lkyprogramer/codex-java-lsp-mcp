@@ -1,4 +1,4 @@
-import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
+import { computeExtractorVersion, computeInputFingerprints, EXTRACTOR_VERSION_META, LAYOUT_FINGERPRINT_META } from "../java-index/build-fingerprint.js";
 import { sqlStage, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { captureSource, type SourceCapture } from "../java-index/source-capture.js";
 import { captureCensus, finishCaptureCensus, type CaptureCensusEntry } from "./capture-census.js";
@@ -119,7 +119,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   db.exec("PRAGMA cache_size=-16384");
   const resolvedRepoRoot = await realpath(options.repoRoot);
   const layout = probeLayout(resolvedRepoRoot);
-  const buildFingerprint=await computeBuildFingerprint(resolvedRepoRoot,layout);
+  const { buildFingerprint, layoutFingerprint } = await computeInputFingerprints(resolvedRepoRoot, layout);
   attachWorkspaceStat(db);
 
   const beforeCapture = captureCensus(db);
@@ -220,7 +220,8 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
           captures.delete(file.relativePath);
           cache.delete(bundle.file.relativePath);
           if (bundle.file.parseState === "FAILED") {
-            parseFailures.push({ relativePath: file.relativePath, message: `Java parse failed (${bundle.file.parseErrorCount} errors)` });
+            parseFailures.push({ relativePath: file.relativePath,
+              message: bundle.parseFailure ?? `Java parse failed (${bundle.file.parseErrorCount} errors)` });
           }
           return bundle;
         } catch (err) {
@@ -309,6 +310,9 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     const counts=publishIndexCoverage(db, generation, roots, discovered);
     writeMeta(db,"pipelineComplete","1");
     writeMeta(db,"buildFingerprint",buildFingerprint);
+    // What a later job needs to take a build-file-only change as a delta on this snapshot (incremental.ts).
+    writeMeta(db,LAYOUT_FINGERPRINT_META,layoutFingerprint);
+    writeMeta(db,EXTRACTOR_VERSION_META,computeExtractorVersion());
     return counts;
   });
 

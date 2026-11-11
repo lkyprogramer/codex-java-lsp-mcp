@@ -8,6 +8,7 @@ import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js
 import type { JavaFileBundle, JavaSourceSet } from "./index-types.js";
 import type { JavaParserBackend } from "./java-parser-backend.js";
 import { refreshParseTree, type ParseTreeCache } from "./builder/parse-cache.js";
+import { javaFileId } from "./stable-id.js";
 
 export type JavaSourceLayout = {
   absolutePath: string;
@@ -91,6 +92,48 @@ export async function parseJavaSourceFile(args: {
     if (!readablePath) throw new Error(`Java source resolves outside repo root: ${args.inputPath}`);
     capture = await captureSource(args.resolvedRepoRoot, absolutePath);
   }
+  const { bytes, contentHash } = capture;
+  try {
+    return parseCaptured(args, { absolutePath, relativePath, sourceRoot, module, sourceSet }, capture);
+  } catch (error) {
+    // The bytes were read: a parser/extractor failure on them (an extractor bug, a RangeError on a
+    // deeply nested generated file) is a property of this content, not an I/O fault. Full and delta
+    // builds both record it as a FAILED row under its content hash, so the census still matches the
+    // tracker's and a later job neither fails nor retries it until the content changes.
+    args.cache.delete(relativePath);
+    return {
+      file: {
+        fileId: javaFileId(relativePath),
+        relativePath,
+        sourceRoot,
+        module,
+        sourceSet,
+        packageName: "",
+        imports: [],
+        topLevelTypeIds: [],
+        allTypeIds: [],
+        contentHash,
+        size: bytes.length,
+        parseState: "FAILED",
+        parseErrorCount: 1,
+        generation: args.generation
+      },
+      types: [],
+      fields: [],
+      methods: [],
+      edges: [],
+      parseFailure: error instanceof Error ? error.message : String(error),
+      ...(capture.observed ? { observed: capture.observed } : {})
+    };
+  }
+}
+
+function parseCaptured(
+  args: { repoRoot: string; generation: number; backend: JavaParserBackend; cache: ParseTreeCache },
+  layout: JavaSourceLayout,
+  capture: SourceCapture
+): JavaFileBundle {
+  const { absolutePath, relativePath, sourceRoot, module, sourceSet } = layout;
   const { bytes, contentHash } = capture;
   const content = bytes.toString("utf8");
   const { tree } = refreshParseTree(args.cache, args.backend, relativePath, content);

@@ -16,6 +16,7 @@ import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { applyBuilderJob } from "../../index-builder/incremental.js";
 import { readMeta } from "../../index-builder/progress.js";
 import { currentBuildKey } from "../sql/snapshot-manifest.js";
+import { computeBuildFingerprint } from "../build-fingerprint.js";
 import { discoverJavaFiles } from "../manifest.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -308,6 +309,34 @@ test("a job whose round captured other build inputs is refused before any write"
     assert.equal(matching.ok, true, matching.error);
   } finally {
     close(incremental.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("a build-file-only change is a delta on its base only while the layout and extractor the base recorded still match", async () => {
+  const repo = await copyFixtures();
+  const built = await cold(repo, 1);
+  try {
+    const pom = path.join(repo, "pom.xml");
+    await writeFile(pom, (await readFile(pom, "utf8")).replace("</project>", "  <!-- dependency bump -->\n</project>"));
+    const fingerprint = await computeBuildFingerprint(repo, probeLayout(repo));
+    assert.notEqual(fingerprint, readMeta(built.db, "buildFingerprint"));
+    const buildKey = currentBuildKey(fingerprint);
+    // Unmarked, changed inputs escalate as before.
+    const plain = await applyBuilderJob({ repoRoot: repo, db: built.db, escalation: "report", job: { id: 1, kind: "reconcile", generation: 2, buildKey } });
+    assert.equal(plain.escalation, "build/resolver inputs changed");
+    const moved = await applyBuilderJob({ repoRoot: repo, db: built.db, escalation: "report",
+      job: { id: 2, kind: "reconcile", generation: 2, buildKey, buildInputsMoved: true } });
+    assert.equal(moved.ok, true, moved.error);
+    assert.equal(moved.escalation, undefined);
+    assert.equal(readMeta(built.db, "buildFingerprint"), fingerprint, "the snapshot records the inputs it now stands for");
+    // A tree-sitter upgrade moves the buildKey without moving the fingerprint: only the base's own record can tell.
+    withTransaction(built.db, () => { built.db.prepare("UPDATE meta SET value='other-extractor' WHERE key='extractorVersion'").run(); });
+    const stale = await applyBuilderJob({ repoRoot: repo, db: built.db, escalation: "report",
+      job: { id: 3, kind: "reconcile", generation: 3, buildKey, buildInputsMoved: true } });
+    assert.equal(stale.escalation, "build/resolver inputs changed");
+  } finally {
+    close(built.db);
     await rm(repo, { recursive: true, force: true });
   }
 });

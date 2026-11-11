@@ -31,20 +31,35 @@ export type SnapshotVerifierOptions = {
 export const VERIFY_DELAY_MS = 2_000;
 /** A check that ended without a verdict for another reason than an abort is retried this much later. */
 export const VERIFY_RETRY_MS = 30_000;
+/** An edit storm that never goes quiet still starts a check this long after the oldest unchecked publish. */
+export const VERIFY_MAX_WAIT_MS = 60_000;
+/**
+ * Superseded checks stopped in a row before the next one is let finish. Its verdict still counts:
+ * VERIFIED shortens the lineage of what was cloned from it, FAILED quarantines those clones.
+ */
+export const VERIFY_MAX_ABORTS = 3;
 
 export class SnapshotVerifier {
   private readonly pending = new Set<string>();
   private current?: { snapshotId: string; controller: AbortController; done: Promise<void> };
   private timer?: NodeJS.Timeout;
   private stopped = false;
+  /** When the oldest pending enqueue arrived (performance.now()); undefined while nothing waits. */
+  private waitingSince?: number;
+  /** Checks stopped as superseded since the last one that finished. */
+  private aborts = 0;
 
   constructor(private readonly store: SnapshotStore, private readonly options: SnapshotVerifierOptions = {}) {}
 
   /** Check `snapshotId` once it has been quiet; a check of a snapshot no longer served stops. */
   enqueue(snapshotId: string): void {
     if (this.stopped) return;
+    if (this.pending.size === 0) this.waitingSince = performance.now();
     this.pending.add(snapshotId);
-    if (this.current && !this.wanted(this.current.snapshotId)) this.current.controller.abort(new Error("superseded"));
+    if (this.current && !this.wanted(this.current.snapshotId) && this.aborts < VERIFY_MAX_ABORTS && !this.current.controller.signal.aborted) {
+      this.aborts += 1;
+      this.current.controller.abort(new Error("superseded"));
+    }
     this.arm();
   }
 
@@ -70,7 +85,10 @@ export class SnapshotVerifier {
   private arm(): void {
     if (this.stopped || this.current) return;
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => { this.timer = undefined; this.next(); }, this.options.delayMs ?? VERIFY_DELAY_MS);
+    // Quiet time restarts with every enqueue, but never past VERIFY_MAX_WAIT_MS after the oldest one.
+    const waited = this.waitingSince === undefined ? 0 : performance.now() - this.waitingSince;
+    const delay = Math.max(0, Math.min(this.options.delayMs ?? VERIFY_DELAY_MS, VERIFY_MAX_WAIT_MS - waited));
+    this.timer = setTimeout(() => { this.timer = undefined; this.next(); }, delay);
     this.timer.unref?.();
   }
 
@@ -78,6 +96,7 @@ export class SnapshotVerifier {
     if (this.stopped || this.current) return;
     for (const snapshotId of this.pending) {
       this.pending.delete(snapshotId);
+      if (this.pending.size === 0) this.waitingSince = undefined;
       if (!this.wanted(snapshotId)) {
         this.emit({ type: "verification", snapshotId, outcome: "skipped", elapsedMs: 0 });
         continue;
@@ -87,6 +106,7 @@ export class SnapshotVerifier {
       const done = this.store.verifySnapshot(snapshotId, { workers: this.options.workers ?? 1, signal: controller.signal })
         .then((result: VerifyResult) => {
           const elapsedMs = performance.now() - started;
+          this.aborts = 0;
           if (result.result === "VERIFIED") this.emit({ type: "verification", snapshotId, outcome: "verified", elapsedMs });
           else {
             this.emit({ type: "verification", snapshotId, outcome: "failed", elapsedMs, error: result.error, quarantined: result.quarantined });
@@ -97,7 +117,10 @@ export class SnapshotVerifier {
           const aborted = controller.signal.aborted;
           this.emit({ type: "verification", snapshotId, outcome: aborted ? "aborted" : "error",
             elapsedMs: performance.now() - started, error: error instanceof Error ? error.message : String(error) });
-          if (!aborted) setTimeout(() => this.enqueue(snapshotId), VERIFY_RETRY_MS).unref?.();
+          if (!aborted) {
+            this.aborts = 0;
+            setTimeout(() => this.enqueue(snapshotId), VERIFY_RETRY_MS).unref?.();
+          }
         })
         .finally(() => {
           this.current = undefined;
