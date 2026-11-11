@@ -1,0 +1,44 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q09",
+  "status": "NOT_TRIGGERED",
+  "trigger": {
+    "state": "NOT_TRIGGERED",
+    "evidence": [
+      "no measured repeated waits or source I/O on the Mac this round (Q00 baseline has no timing raw)"
+    ]
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "re-assess with measured per-request waits; no optimisation without a measured wait"
+  ],
+  "rawEvidence": [],
+  "implementation": "NO_CODE",
+  "changes": []
+}

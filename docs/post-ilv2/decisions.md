@@ -1,6 +1,6 @@
 # Post-ILV2 决策与进度
 
-当前状态的唯一入口（Q00 起）。计划见 [docs/java-specialist-post-ilv2-v1](../java-specialist-post-ilv2-v1/README.md)（1.2）；ILV2 历史账本保留在 `docs/index-lifecycle-v2/`，不再更新。
+当前状态的唯一入口（Q00 起）。各 result.json 的 `identity.sourceHead` 统一记计划基线 `665d66e`，代码本身在本分支上。计划见 [docs/java-specialist-post-ilv2-v1](../java-specialist-post-ilv2-v1/README.md)（1.2）；ILV2 历史账本保留在 `docs/index-lifecycle-v2/`，不再更新。
 
 ## D0 执行方式偏离（2026-11-11）
 
@@ -63,12 +63,29 @@
 - outline 的 generation 取 `status.indexedGeneration`，不取 file 行的 generation。增量发布不改写未变文件的行，取后者会把正常文件误判为 PARTIAL（review P1，已修，并补了回归用例）。
 - 内容放不进 4096 B 时（连空条目的信封都放不下），报现有的 `INVALID_INPUT` 结构化错误，不截断 JSON。
 
+## D8 条件卡（P2）
+
+Q05–Q08：没有 Q02 ledger，记 NOT_TRIGGERED。trigger.state 为 UNASSESSED，意思是没测，不是测出来为零。Q09：没有 Mac 上实测的重复等待，同样 NOT_TRIGGERED。都没有实现代码。上 Mac 跑出 ledger 和计时后再逐卡评估。
+
+## D9 真实 Agent 配对（Q10）
+
+G0 未满足（Q01 控制和 Q02 ledger 都没运行），本轮只交付无费用部分：
+
+- 在 `run-agent-trace-live.mjs` 里加了 `summarizeSchedule`：
+  - 分母是全部 slot，出错、超时也留在分母里。
+  - 有未运行的 slot（missing）或未判定的 slot（unjudged）时，成功率为 null，不当作失败。
+  - 只有每个 attempted slot 的 usage 都是 MEASURED 才求和，否则为 null，不填 0；另外用 `usageCoverage` 给出实际看到的覆盖。
+  - 目前还没有任何 runner 调用它。
+- dry-run 身份校验（task/dataset/split/corpus/工具，缺项即拒绝）不花钱，但依赖 Q02 冻结的 schedule，本轮未做（NOT_DONE）。
+- 外部调用门控复用 `run-agent-trace-matrix.mjs` 现有的 `--authorize-external` 和 BLOCKED_EXTERNAL，不新建 `ilv2-quality-pilot.mjs`。
+- live runner 的 MCP session 已经封装了 java_symbol 的 query 和 evidence，但暴露给模型的工具只有 java_impact/java_context。把 java_symbol query/outline/evidence 和原生 read 接成两臂留到 LIVE 之前做（NOT_DONE）。收益记 UNMEASURED。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
 |---|---|---|
 | P0 | Q00、Q01、Q02 | 已 review、已修复、已提交（代码未运行） |
 | P1 | Q03、Q04 | 已 review、已修复、已提交（代码未运行） |
-| P2 | Q05–Q09 | 未开始 |
-| P3 | Q10 | 未开始 |
+| P2 | Q05–Q09 | NOT_TRIGGERED，无代码 |
+| P3 | Q10 | 已 review、已修复、已提交（代码未运行） |
 | P4 | Q11、Q12 | 未开始 |

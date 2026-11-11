@@ -125,6 +125,45 @@ export function armPromptFingerprint(arm) {
   };
 }
 
+/** Slot execution states (05 §5.7); acceptance and benefit are judged elsewhere. */
+export const SLOT_STATES = Object.freeze(["COMPLETED", "FAILED", "TIMED_OUT", "NOT_RUN", "BLOCKED_ENV"]);
+
+/**
+ * post-ILV2 Q10: one summary over every scheduled slot. Errors, refusals and timeouts keep their slot,
+ * so the success rate is over the schedule, not over the runs that happened to finish. A slot that
+ * never ran (NOT_RUN/BLOCKED_ENV) or a completed one not yet judged (passed null) is missing data,
+ * not a failure: the rate is then null (05 §5.7). Provider usage is summed only when every attempted
+ * slot reported MEASURED usage; otherwise it is null, never 0, and usageCoverage says how much was seen.
+ */
+export function summarizeSchedule(slots) {
+  if (!Array.isArray(slots)) throw new Error("summarizeSchedule needs the full slot list");
+  const ids = new Set();
+  for (const slot of slots) {
+    if (!slot || typeof slot.slotId !== "string" || slot.slotId === "" || ids.has(slot.slotId)) throw new Error("every slot needs a unique slotId");
+    ids.add(slot.slotId);
+    if (!SLOT_STATES.includes(slot.state)) throw new Error(`${slot.slotId}: unknown slot state ${slot.state}`);
+    if (slot.passed !== true && slot.passed !== false && slot.passed !== null) throw new Error(`${slot.slotId}: passed must be true, false or null`);
+  }
+  const attempted = slots.filter(slot => slot.state !== "NOT_RUN" && slot.state !== "BLOCKED_ENV");
+  const completed = slots.filter(slot => slot.state === "COMPLETED");
+  const successful = completed.filter(slot => slot.passed === true).length;
+  const missing = slots.length - attempted.length;
+  const unjudged = completed.filter(slot => slot.passed === null).length;
+  const measuredSlots = attempted.filter(slot => slot.usage?.status === "MEASURED");
+  const measured = attempted.length > 0 && measuredSlots.length === attempted.length;
+  return {
+    scheduled: slots.length,
+    attempted: attempted.length,
+    completed: completed.length,
+    successful,
+    missing,
+    unjudged,
+    endToEndSuccessRate: slots.length === 0 || missing > 0 || unjudged > 0 ? null : successful / slots.length,
+    providerUsage: measured ? measuredSlots.map(slot => ({ ...slot.usage })).reduce(mergeUsage) : null,
+    usageCoverage: { measuredSlots: measuredSlots.length, attemptedSlots: attempted.length }
+  };
+}
+
 export function selectLiveTasks(tasks, { maxTasks = 3, onePerProject = true, offset = 0 } = {}) {
   const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
   if (!onePerProject) return tasks.slice(start, start + maxTasks);

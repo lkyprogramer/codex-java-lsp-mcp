@@ -1,0 +1,57 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q10",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node --test scripts/run-agent-trace-live.test.mjs scripts/run-agent-trace-matrix.test.mjs scripts/eval-pilot-compare.test.mjs scripts/live-model-profiles.test.mjs",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "G0 not met (Q01 controls and Q02 ledger not run): only the no-cost control is delivered, no LIVE slot",
+    "scripts/ilv2-quality-pilot.mjs not created: no thin orchestration was needed for the no-cost control",
+    "per-slot round mode/fullReason and index.queryCounters deltas not wired (needs the LIVE runner)",
+    "audit: run-agent-trace-live.mjs EXTEND (summarizeSchedule added; its MCP session already wraps java_symbol query/evidence, but the model-facing tools are only java_impact/java_context; outline + native read arms NOT_DONE); run-agent-trace-matrix.mjs REUSE for the external-call gate (--authorize-external, BLOCKED_EXTERNAL) but its plan is the V4 holdout old/jin schedule, not 12 groups x 2 arms x 3 repeats seed 20261105; openai-compatible-chat.mjs / live-model-profiles.mjs REUSE (Q01 onSerializedBody); eval-pilot-compare.mjs REUSE",
+    "NOT_DONE: dry-run identity validation of task/dataset/split/corpus/tool (fail closed); no-cost but needs the frozen Q02 schedule",
+    "summarizeSchedule is not yet called by any runner (tests only)",
+    "sourceHead records the plan baseline 665d66e, as for Q00-Q04; code sits on this branch"
+  ],
+  "rawEvidence": [],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "scripts/run-agent-trace-live.mjs: SLOT_STATES, summarizeSchedule",
+    "scripts/run-agent-trace-live.test.mjs: card RED + boundaries"
+  ]
+}

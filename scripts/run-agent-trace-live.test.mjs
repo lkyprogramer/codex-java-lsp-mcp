@@ -30,7 +30,8 @@ import {
   summarizeLiveTasks,
   coverageProxy,
   impactSessionFromClient,
-  runLiveAgentTask
+  runLiveAgentTask,
+  summarizeSchedule
 } from "./run-agent-trace-live.mjs";
 import { mergeUsage, openaiCompatibleChat, usageFromCompletion } from "./openai-compatible-chat.mjs";
 import { parseAgentTraceCli, runAgentTraceMatrix } from "./run-agent-trace-matrix.mjs";
@@ -1066,4 +1067,35 @@ test("evidence session mapping explicitly selects operation and isolated repo an
   } } });
   assert.deepEqual(await session.evidence({ file: "A.java", line: 4, column: 8, query: "ignored" }), raw);
   assert.deepEqual(captured, [{ name: "java_symbol", arguments: { repoRoot: "/isolated/fixture", operation: "evidence", file: "A.java", line: 4, column: 8 } }]);
+});
+
+test("Q10: the schedule summary keeps failed slots in the denominator and never invents usage", () => {
+  const summary = summarizeSchedule([
+    { slotId: "a", state: "COMPLETED", passed: true, usage: null },
+    { slotId: "b", state: "TIMED_OUT", passed: false, usage: null }
+  ]);
+  assert.equal(summary.scheduled, 2);
+  assert.equal(summary.successful, 1);
+  assert.equal(summary.endToEndSuccessRate, 0.5);
+  assert.equal(summary.providerUsage, null);
+  assert.equal(summary.missing, 0);
+  assert.deepEqual(summary.usageCoverage, { measuredSlots: 0, attemptedSlots: 2 });
+  const measured = { status: "MEASURED", promptTokens: 10, completionTokens: 2, totalTokens: 12 };
+  const both = summarizeSchedule([
+    { slotId: "a", state: "COMPLETED", passed: true, usage: measured },
+    { slotId: "b", state: "FAILED", passed: false, usage: measured },
+    { slotId: "c", state: "NOT_RUN", passed: null, usage: null }
+  ]);
+  assert.equal(both.attempted, 2);
+  assert.equal(both.completed, 1);
+  assert.equal(both.missing, 1);
+  // A slot that never ran is missing data, not a failure: no rate is claimed.
+  assert.equal(both.endToEndSuccessRate, null);
+  assert.equal(both.providerUsage.totalTokens, 24);
+  const unjudged = summarizeSchedule([{ slotId: "a", state: "COMPLETED", passed: null, usage: null }]);
+  assert.equal(unjudged.unjudged, 1);
+  assert.equal(unjudged.endToEndSuccessRate, null);
+  assert.throws(() => summarizeSchedule([{ slotId: "a", state: "DONE", passed: true }]), /unknown slot state/);
+  assert.throws(() => summarizeSchedule([{ slotId: "a", state: "NOT_RUN", passed: null }, { slotId: "a", state: "NOT_RUN", passed: null }]), /unique slotId/);
+  assert.equal(summarizeSchedule([]).endToEndSuccessRate, null);
 });

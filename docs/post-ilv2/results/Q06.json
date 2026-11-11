@@ -1,0 +1,44 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q06",
+  "status": "NOT_TRIGGERED",
+  "trigger": {
+    "state": "UNASSESSED",
+    "evidence": [
+      "trigger not assessable: no Q02 ledger (BLOCKED_ENV, docs/post-ilv2/attribution.md); NOT_DISCOVERED was not measured, not measured as zero"
+    ]
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "re-assess after the Mac ledger run; trigger needs >=2 task groups or one recorded critical deterministic defect"
+  ],
+  "rawEvidence": [],
+  "implementation": "NO_CODE",
+  "changes": []
+}
