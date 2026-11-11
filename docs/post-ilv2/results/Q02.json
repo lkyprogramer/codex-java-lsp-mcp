@@ -1,0 +1,53 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q02",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node --test scripts/ilv2-quality-attribution.test.mjs",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "private mac10-v3 dev data is not available here: no ledger rows, BLOCKED_ENV for the 20-group ledger (docs/post-ilv2/attribution.md)",
+    "scripts/ilv2-mac-retrieval-eval.mjs diagnostics unchanged: stage observations are produced by the evaluator run on the Mac"
+  ],
+  "rawEvidence": [],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "scripts/ilv2-quality-attribution.mjs/.test.mjs (new)",
+    "docs/post-ilv2/attribution.md"
+  ],
+  "ledger": "BLOCKED_ENV"
+}

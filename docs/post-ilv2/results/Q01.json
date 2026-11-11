@@ -1,0 +1,61 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q01",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node --test scripts/ilv2-mac-delivery-receipt.test.mjs scripts/ilv2-mac-repair-oracle.test.mjs",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "the completion receipt guards accidental passes; same-JVM candidate code can read the run id and write the file (not a sandbox)",
+    "scripts/eval-repair-adapter.mjs delegates to the external Python frozen judge (not in this repo); its completion rule is unchanged here",
+    "run-agent-trace-live does not yet call receiptForSerializedRequest; wiring belongs to Q10",
+    "oracles must signal success by a normal return of main; an oracle that calls System.exit(0) on success now judges TEST_FAILED (private mac10-v3 oracles not checked here)",
+    "NOT_DONE: evaluate-java-task strict QA adapter (reject false/string, extra keys, duplicate keys, unread source)",
+    "NOT_DONE: fake-model walk through java_symbol query/evidence, native read and write receipts",
+    "NOT_DONE: 06 §6.2 item 3, refusing edits to evaluator tests or non-allowed files",
+    "NOT_DONE: baseline.md (content kept in decisions.md and baseline.json)",
+    "reason codes differ from check_delivery.py in a few refusal orders (parse before hash, non-numeric array index, lone surrogates, CLI reads body as UTF-8 text); refuse/accept outcomes match"
+  ],
+  "rawEvidence": [],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "scripts/ilv2-mac-delivery-receipt.mjs/.test.mjs (new)",
+    "scripts/ilv2-mac-repair-oracle.mjs: OracleCompletionWrapper + judgeCompletion; PASS needs COMPLETE and the marker",
+    "scripts/ilv2-mac-repair-oracle.test.mjs: early-exit-zero, known-good, known-bad, judgeCompletion",
+    "scripts/openai-compatible-chat.mjs: onSerializedBody hook, body serialized once"
+  ]
+}

@@ -76,7 +76,9 @@ export async function openaiCompatibleChat({
   reasoningEffort,
   chatTemplateKwargs = DEFAULT_CHAT_TEMPLATE_KWARGS,
   timeoutMs = DEFAULT_CHAT_TIMEOUT_MS,
-  fetchImpl = globalThis.fetch
+  fetchImpl = globalThis.fetch,
+  // Receives the exact request body string that is sent (post-ILV2 Q01 delivery receipts bind to these bytes).
+  onSerializedBody
 }) {
   if (!baseUrl) throw new Error("OPENAI_BASE_URL is required");
   if (!apiKey) throw new Error("OPENAI_API_KEY is required");
@@ -91,6 +93,9 @@ export async function openaiCompatibleChat({
     // These are requested settings, not proof of provider thinking behavior.
     ...chatRequestConfigForAudit({ maxTokens, reasoningEffort, chatTemplateKwargs })
   };
+  // Serialized once: the receipt and the network see the same bytes.
+  const serialized = JSON.stringify(body);
+  onSerializedBody?.(serialized);
   // One absolute deadline covers connect, headers AND body decoding.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error(`openai-compatible request exceeded ${timeoutMs}ms`)), timeoutMs);
@@ -103,7 +108,7 @@ export async function openaiCompatibleChat({
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body),
+      body: serialized,
       signal: controller.signal
     });
     text = await response.text();
