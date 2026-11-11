@@ -4,7 +4,7 @@
 
 | 方向 | 卡 | 结论 | 依据 | 维护 owner / 验证任务 |
 |---|---|---|---|---|
-| 最终请求 receipt 与 oracle 完成判定 | Q01 | INCONCLUSIVE | 代码和测试已写，未运行；作为评测侧正确性修复保留 | 用户；`ilv2-mac-delivery-receipt.test`、`ilv2-mac-repair-oracle.test` |
+| 最终请求 receipt 与 oracle 完成判定 | Q01 | INCONCLUSIVE | 代码和测试已写，未运行；作为评测侧正确性修复保留 | 用户；`ilv2-mac-delivery-receipt.test`（含假模型全链）、`ilv2-mac-repair-oracle.test`、`eval-repair-adapter.test`、`evaluate-java-task.test` |
 | 失败归因 | Q02 | INCONCLUSIVE | 工具已写；私有数据缺失，ledger 为 BLOCKED_ENV | 用户；`ilv2-quality-attribution.test` + Mac ledger 运行 |
 | 单文件 outline | Q03 | INCONCLUSIVE | 合同已实现，收益未测（Q10 没有 LIVE） | 用户；`outline.test`、`symbol-static.test` |
 | Java 声明 evidence v2 | Q04 | INCONCLUSIVE | 合同已实现。Q10 里 B2 对 B1 的检验没跑；若该检验结论为 NO_GAIN，按卡片删除 Java evidence 路径，只保留正确性修复 | 用户；`evidence-unit.test`、`evidence-source-reader.test`、`eval-evidence-e2e.test` |

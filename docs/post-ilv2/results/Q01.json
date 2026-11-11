@@ -14,7 +14,7 @@
   },
   "checks": [
     {
-      "name": "node --test scripts/ilv2-mac-delivery-receipt.test.mjs scripts/ilv2-mac-repair-oracle.test.mjs",
+      "name": "node --test scripts/ilv2-mac-delivery-receipt.test.mjs scripts/ilv2-mac-repair-oracle.test.mjs scripts/eval-repair-adapter.test.mjs scripts/evaluate-java-task.test.mjs",
       "state": "NOT_RUN",
       "reason": "user directed no compile/test/verification this round (decisions.md D0)"
     }
@@ -42,13 +42,14 @@
   "limitations": [
     "the completion receipt guards accidental passes; same-JVM candidate code can read the run id and write the file (not a sandbox)",
     "scripts/eval-repair-adapter.mjs delegates to the external Python frozen judge (not in this repo); its completion rule is unchanged here",
-    "run-agent-trace-live does not yet call receiptForSerializedRequest; wiring belongs to Q10",
+    "the live runners still do not call receiptForSerializedRequest during a run; receipts are built post hoc from the captured body via receiptUnitsFromEvents (wiring into the LIVE path belongs to Q10)",
     "oracles must signal success by a normal return of main; an oracle that calls System.exit(0) on success now judges TEST_FAILED (private mac10-v3 oracles not checked here)",
-    "NOT_DONE: evaluate-java-task strict QA adapter (reject false/string, extra keys, duplicate keys, unread source)",
-    "NOT_DONE: fake-model walk through java_symbol query/evidence, native read and write receipts",
-    "NOT_DONE: 06 §6.2 item 3, refusing edits to evaluator tests or non-allowed files",
-    "NOT_DONE: baseline.md (content kept in decisions.md and baseline.json)",
-    "reason codes differ from check_delivery.py in a few refusal orders (parse before hash, non-numeric array index, lone surrogates, CLI reads body as UTF-8 text); refuse/accept outcomes match"
+    "strict QA: the existing scoreQaAnswer/scoreRunOutcome already are the thin adapter (no second comparator); controls for false vs \"false\", 2 vs \"2\", null, duplicate keys, extra keys, pre-parsed objects and one unread required line written in evaluate-java-task.test (NOT_RUN)",
+    "fake-model chain written (NOT_RUN): runLiveEvalRun product arm (evidence profile) through openaiCompatibleChat with a fake fetch; receiptUnitsFromEvents maps SOURCE_RECEIVED events onto the last serialized body (pointer only at the slice's own path and start line); java_symbol preview, java_evidence unit and native read are receipted and verified; paths-only final message, a pre-tool body and a post-write re-read are refused; the replace_file result (written, replacements) is asserted in the body and the read receipts before/after the write via candidateReceiptValidation rows",
+    "06 §6.2 item 3: existing eval-repair-adapter policy pinned by new scripts/eval-repair-adapter.test.mjs (NOT_RUN): evaluateRepair rejects an edited test file (REJECTED_DISALLOWED_EDIT) and a deleted allowed file (REJECTED_MISSING_ALLOWED_FILE) before any judge or toolchain runs; added files and symlinks are covered only at the diffCandidateTrees level (REJECTED_UNSAFE_PATH through evaluateRepair not tested); frozen oracle tests live in the kit outside the candidate tree",
+    "docs/post-ilv2/baseline.md added as a human summary of baseline.json",
+    "reason codes differ from check_delivery.py in a few refusal orders (parse before hash, non-numeric array index, lone surrogates, CLI reads body as UTF-8 text); refuse/accept outcomes match",
+    "receiptUnitsFromEvents: a SOURCE_RECEIVED event without fileContentHash is checked only by the byte comparison against the current file"
   ],
   "rawEvidence": [],
   "implementation": "CODE_WRITTEN",
@@ -56,6 +57,11 @@
     "scripts/ilv2-mac-delivery-receipt.mjs/.test.mjs (new)",
     "scripts/ilv2-mac-repair-oracle.mjs: OracleCompletionWrapper + judgeCompletion; PASS needs COMPLETE and the marker",
     "scripts/ilv2-mac-repair-oracle.test.mjs: early-exit-zero, known-good, known-bad, judgeCompletion",
-    "scripts/openai-compatible-chat.mjs: onSerializedBody hook, body serialized once"
+    "scripts/openai-compatible-chat.mjs: onSerializedBody hook, body serialized once",
+    "scripts/ilv2-mac-delivery-receipt.mjs: findTextPointer + receiptUnitsFromEvents (events -> receipt units)",
+    "scripts/ilv2-mac-delivery-receipt.test.mjs: full fake-model chain",
+    "scripts/evaluate-java-task.test.mjs: strict QA controls",
+    "scripts/eval-repair-adapter.test.mjs (new): disallowed edit controls",
+    "docs/post-ilv2/baseline.md (new)"
   ]
 }

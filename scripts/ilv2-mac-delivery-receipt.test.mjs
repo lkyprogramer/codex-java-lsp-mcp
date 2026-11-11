@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { openaiCompatibleChat } from "./openai-compatible-chat.mjs";
-import { ReceiptError, lineRangeBytes, receiptForSerializedRequest, strictParse, verifyReceipt } from "./ilv2-mac-delivery-receipt.mjs";
+import { ReceiptError, lineRangeBytes, findTextPointer, receiptForSerializedRequest, receiptUnitsFromEvents, strictParse, verifyReceipt } from "./ilv2-mac-delivery-receipt.mjs";
+import { runLiveEvalRun } from "./evaluate-java-task.mjs";
 
 const SOURCE = "package example;\r\n\r\npublic class OrderService {\n    // 订单 🚚\n    public void cancel(long id) {\n        ledger.release(id);\n    }\n}";
 const hash = text => createHash("sha256").update(text).digest("hex");
@@ -112,4 +113,84 @@ test("the budget of 8 units, 80 lines and 16000 bytes is enforced across units",
   ] });
   assert.equal(receipt.units.length, 1);
   assert.deepEqual(receipt.refused.map(item => item.reason), ["SOURCE_BYTE_BUDGET"]);
+});
+
+test("full fake-model chain: java_symbol, java_evidence and native read source is receipted from the last sent body; the write is checked separately", async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "receipt-chain-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const fixture = path.join(dir, "fixture");
+  await mkdir(path.join(fixture, "src"), { recursive: true });
+  await writeFile(path.join(fixture, "src/OrderService.java"), SOURCE);
+  const STOCK = "class Stock { int n = 1; }\n";
+  await writeFile(path.join(fixture, "src/Stock.java"), STOCK);
+  const file = "src/OrderService.java";
+  const discovery = { schemaVersion: "java-discovery/v1", scopeState: "READY", candidates: [{
+    declaration: { name: "OrderService", kind: "class", relativePath: file, line: 3, column: 14, contentHash: hash(SOURCE) },
+    evidenceRange: { relativePath: file, startLine: 3, endLine: 3, contentHash: hash(SOURCE) }, previewKind: "source", preview: range(3, 3) }] };
+  const evidence = { schemaVersion: "java-evidence-unit/v2", scopeState: "READY", reasons: [], units: [{
+    path: file, role: "anchor", startLine: 5, endLine: 7, text: range(5, 7), contentHash: hash(SOURCE), proof: "SOURCE_FACT", complete: true }] };
+  const call = (id, name, args) => ({ choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: "",
+    tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] } }], usage: { prompt_tokens: 10, completion_tokens: 2 } });
+  const script = [
+    call("c-symbol", "java_symbol", { query: "OrderService", preview: "head" }),
+    call("c-evidence", "java_evidence", { file, line: 5, column: 17 }),
+    call("c-read", "read", { path: file, startLine: 1, maxLines: 2 }),
+    call("c-read-stock", "read", { path: "src/Stock.java" }),
+    call("c-replace", "replace_file", { path: "src/Stock.java", before: "n = 1", after: "n = 2" }),
+    call("c-reread-stock", "read", { path: "src/Stock.java" }),
+    call("submit", "submit_answer", { patchApplied: true, summary: "Set n to 2." })
+  ];
+  const bodies = [];
+  const run = await runLiveEvalRun({ tasks: [{ id: "R", corpus: "c", kind: "repair", query: "Change initial n to 2." }],
+    arms: ["product"], productProfile: "evidence", repoRoots: { c: fixture }, outputDir: path.join(dir, "run"), kitRoot: dir,
+    openSessionImpl: async () => ({ symbol: async () => structuredClone(discovery), evidence: async () => structuredClone(evidence), close: async () => {} }),
+    repairJudge: async () => ({ state: "VALIDATED_SUCCESS", validatedSuccess: true }),
+    // The production send path with a fake network: the receipt binds to the bytes it serialized.
+    chat: request => openaiCompatibleChat({ baseUrl: "http://fake.invalid", apiKey: "k", model: "m", messages: request.messages, tools: request.tools,
+      maxTokens: request.maxTokens, onSerializedBody: serialized => { bodies.push(serialized); },
+      fetchImpl: async () => new Response(JSON.stringify(script[bodies.length - 1]), { status: 200 }) }) });
+  const row = run.runs[0];
+  assert.equal(bodies.length, script.length);
+  const body = bodies.at(-1);
+  const { units, refused } = await receiptUnitsFromEvents({ body, events: row.sourceReceived, workspaceRoot: fixture });
+  // The re-read after the write is not the fixture's bytes: refused here, never receipted under the old hash.
+  assert.deepEqual(refused.map(item => item.reason), ["SOURCE_HASH_MISMATCH"]);
+  assert.deepEqual(units.map(unit => unit.toolCallId), ["c-symbol", "c-evidence", "c-read", "c-read-stock"]);
+  const receipt = receiptForSerializedRequest({ body, ...VIEW, units });
+  assert.deepEqual(receipt.refused, []);
+  assert.equal(receipt.requestBodySha256, hash(body));
+  const verified = await verifyReceipt({ body, receipt, workspaceRoot: fixture, expectedView: VIEW });
+  assert.equal(verified.status, "REQUEST_BODY_VERIFIED");
+  assert.equal(verified.sourceLines, 1 + 3 + 2 + 1);
+  // The write happened in the attempt copy and its result reached the model; the fixture is untouched.
+  const written = JSON.parse(body).messages.find(message => message.tool_call_id === "c-replace");
+  assert.deepEqual([JSON.parse(written.content).written, JSON.parse(written.content).replacements], [true, 1]);
+  assert.equal(await readFile(path.join(fixture, "src/Stock.java"), "utf8"), STOCK);
+  // Reads keep their own before/after receipts; task success still comes only from the judge.
+  assert.equal(row.candidateReceiptValidation.status, "VALID");
+  const stockRows = row.candidateReceiptValidation.rows.filter(item => item.path === "src/Stock.java");
+  assert.deepEqual(stockRows.map(item => [item.callId, item.finalCandidateMatches]), [["c-read-stock", false], ["c-reread-stock", true]]);
+  assert.equal(row.sourceReceived.find(event => event.callId === "c-reread-stock").text, "class Stock { int n = 2; }\n");
+  assert.equal(row.taskSuccess, true);
+
+  // Source the host kept only as paths in the final message is not delivered, whatever the tool returned.
+  const parsed = JSON.parse(body);
+  const lost = JSON.stringify({ ...parsed, messages: parsed.messages.map(message => message.role === "tool"
+    ? { ...message, content: JSON.stringify({ path: file }) } : message) });
+  const fromLost = await receiptUnitsFromEvents({ body: lost, events: row.sourceReceived, workspaceRoot: fixture });
+  assert.deepEqual(receiptForSerializedRequest({ body: lost, ...VIEW, units: fromLost.units }).units, []);
+  assert.deepEqual([...new Set(receiptForSerializedRequest({ body: lost, ...VIEW, units }).refused.map(item => item.reason))], ["POINTER_MISSING"]);
+  // A request sent before any tool result cannot carry that source.
+  const early = await receiptUnitsFromEvents({ body: bodies[0], events: row.sourceReceived, workspaceRoot: fixture });
+  assert.deepEqual([...new Set(receiptForSerializedRequest({ body: bodies[0], ...VIEW, units: early.units }).refused.map(item => item.reason))], ["INVALID_MESSAGE_INDEX"]);
+});
+
+test("a pointer is taken only at the slice's own path and start line; equal text elsewhere does not stand in", () => {
+  const content = { units: [{ path: "B.java", startLine: 9, text: "    }\n" }, { path: "A.java", startLine: 7, text: "    }\n" }] };
+  assert.equal(findTextPointer(content, "    }\n", { relativePath: "A.java", startLine: 7 }), "/units/1/text");
+  assert.equal(findTextPointer(content, "    }\n", { relativePath: "A.java", startLine: 8 }), undefined);
+  const candidate = { candidates: [{ evidenceRange: { relativePath: "a/b~c.java", startLine: 3 }, preview: "x\n" }] };
+  assert.equal(findTextPointer(candidate, "x\n", { relativePath: "a/b~c.java", startLine: 3 }), "/candidates/0/preview");
+  assert.equal(findTextPointer({ "a/b": { "c~d": { path: "P", startLine: 1, text: "t" } } }, "t", { relativePath: "P", startLine: 1 }), "/a~1b/c~0d/text");
+  assert.equal(findTextPointer("t", "t", { relativePath: "P", startLine: 1 }), undefined, "the root is never a match");
 });

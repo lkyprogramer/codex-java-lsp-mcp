@@ -233,6 +233,80 @@ export async function verifyReceipt({ body, receipt, workspaceRoot, expectedView
     networkDelivery: "NOT_CHECKED", modelUse: "NOT_CHECKED", taskSuccess: "NOT_CHECKED" };
 }
 
+/**
+ * RFC 6901 pointer of the string equal to `text` whose own unit says it is `relativePath` from
+ * `startLine` (siblings path/relativePath + startLine, or a sibling evidenceRange as on a
+ * java_symbol candidate). Equal text at another location never stands in for this unit; the root
+ * value itself is never a match (deliveredText reads "" as the raw content string).
+ */
+export function findTextPointer(value, text, { relativePath, startLine }) {
+  const locatedAt = node => {
+    const where = node?.evidenceRange && typeof node.evidenceRange === "object" ? node.evidenceRange : node;
+    return (where?.relativePath ?? where?.path) === relativePath && where?.startLine === startLine;
+  };
+  const visit = (node, pointer) => {
+    if (!node || typeof node !== "object") return undefined;
+    for (const [key, child] of Array.isArray(node) ? node.map((child, index) => [String(index), child]) : Object.entries(node)) {
+      const at = `${pointer}/${key.replaceAll("~", "~0").replaceAll("/", "~1")}`;
+      if (typeof child === "string") {
+        if (child === text && !Array.isArray(node) && locatedAt(node)) return at;
+      } else {
+        const found = visit(child, at);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  return visit(value, "");
+}
+
+/**
+ * Receipt units from the live eval loop's SOURCE_RECEIVED events (Q01 full chain). The tool message
+ * is found by its tool_call_id in the final body (every message with that id is tried, since some
+ * providers reuse ids across rounds) and the pointer by the recorded slice text at the slice's own
+ * path and start line. The expected bytes always come from the workspace file, never from the event
+ * or the body, so a slice the body lost or altered is refused by receiptForSerializedRequest instead
+ * of being reconstructed here. A slice read from other bytes than the file now holds is refused here
+ * as SOURCE_HASH_MISMATCH (pass the root that still holds them, e.g. the pristine fixture); a slice
+ * without a recorded file hash is checked only by the byte comparison against the current file.
+ */
+export async function receiptUnitsFromEvents({ body, events, workspaceRoot }) {
+  const request = parseBody(body);
+  const units = [];
+  const refused = [];
+  const files = new Map();
+  let ordinal = 0;
+  for (const event of Array.isArray(events) ? events : []) {
+    if (event?.type !== "SOURCE_RECEIVED") continue;
+    const id = `u${++ordinal}`;
+    try {
+      require(typeof event.path === "string" && event.path !== "", "INVALID_PATH");
+      if (!files.has(event.path)) files.set(event.path, await readBoundedSource(workspaceRoot, event.path));
+      const bytes = files.get(event.path);
+      const contentHash = sha256(bytes);
+      require(event.fileContentHash === undefined || event.fileContentHash === contentHash, "SOURCE_HASH_MISMATCH");
+      require(Number.isInteger(event.startLine) && Number.isInteger(event.endLine) && event.startLine >= 1 && event.startLine <= event.endLine, "INVALID_RANGE");
+      let messageIndex = -1;
+      let textPointer;
+      request.messages.forEach((message, index) => {
+        if (textPointer !== undefined || message?.role !== "tool" || message.tool_call_id !== event.callId) return;
+        if (messageIndex < 0) messageIndex = index;
+        if (typeof message.content !== "string") return;
+        try {
+          const found = findTextPointer(strictParse(message.content), String(event.text), { relativePath: event.path, startLine: event.startLine });
+          if (found !== undefined) { messageIndex = index; textPointer = found; }
+        } catch (error) { if (!(error instanceof ReceiptError)) throw error; }
+      });
+      units.push({ id, toolCallId: event.callId, messageIndex, textPointer, relativePath: event.path, contentHash,
+        startLine: event.startLine, endLine: event.endLine, sourceText: lineRangeBytes(bytes, event.startLine, event.endLine).toString("utf8") });
+    } catch (error) {
+      if (!(error instanceof ReceiptError)) throw error;
+      refused.push({ id, reason: error.reason });
+    }
+  }
+  return { units, refused };
+}
+
 async function main(args) {
   const options = Object.fromEntries(args.flatMap((value, index) => value.startsWith("--") ? [[value.slice(2), args[index + 1]]] : []));
   requireValue(options.request && options.receipt && options.workspace && options.view,

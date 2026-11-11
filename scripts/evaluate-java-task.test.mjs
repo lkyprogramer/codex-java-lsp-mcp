@@ -723,3 +723,24 @@ test("all evaluation profiles enforce dispatch contracts, budget bypass and immu
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test("Q01 strict QA controls: no type coercion, duplicate keys and unread source are refused by the one scorer", () => {
+  // 06 §6.2 item 2: the existing scorer is the adapter; these controls pin it rather than adding a second comparator.
+  const gold = { nullable: false, count: 2, method: "accept" };
+  assert.equal(scoreQaAnswer(gold, JSON.stringify(gold)).status, "CORRECT");
+  for (const coerced of [{ ...gold, nullable: "false" }, { ...gold, count: "2" }, { ...gold, nullable: 0 }, { ...gold, method: null }]) {
+    assert.equal(scoreQaAnswer(gold, JSON.stringify(coerced)).status, "WRONG_ANSWER", JSON.stringify(coerced));
+  }
+  const duplicate = scoreQaAnswer(gold, '{"nullable":true,"nullable":false,"count":2,"method":"accept"}');
+  assert.equal(duplicate.status, "INVALID_ANSWER", "JSON.parse would keep the last value; the scorer must not");
+  assert.equal(duplicate.reason, "duplicate_keys");
+  assert.equal(scoreQaAnswer(gold, JSON.stringify({ ...gold, note: "" })).status, "EXTRA_KEYS");
+  assert.equal(scoreQaAnswer(gold, { ...gold }).status, "INVALID_ANSWER", "a pre-parsed object is not the raw model answer");
+  // A correct answer is still not a success without the frozen evidence having been received.
+  const unread = scoreRunOutcome({ task: { id: "T-Q", kind: "qa" },
+    goldRow: { answer: gold, required_evidence: [{ path: "A.java", start_line: 1, end_line: 2 }] },
+    run: { stopReason: "MODEL_STOP", finalContent: JSON.stringify(gold),
+      sourceReceived: [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 1, text: "class A {\n", origin: "explicit_read" }] } });
+  assert.equal(unread.taskSuccess, false);
+  assert.equal(unread.answerStatus, "MISSING_REQUIRED_EVIDENCE", "one unread required line fails the answer");
+});

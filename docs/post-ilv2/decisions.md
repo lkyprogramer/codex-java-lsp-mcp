@@ -39,7 +39,7 @@
 - `eval-repair-adapter.mjs` 调用仓库外的 Python 冻结判定器，本轮不改，局限记入 Q01 结果。
 - 前提：oracle 测试必须以 main 正常返回表示成功。若私有 mac10-v3 的 oracle 在成功时调用 `System.exit(0)`，新判定会把正确修复判为 TEST_FAILED。上 Mac 后先跑一次 `checkOracles`，known-good 不是 PASS 就停下来登记，不能放宽判定。
 - receipt 里的 oracleHash 取实际编译的测试源码的 sha256，不取冻结声明值；冻结值与源码是否一致仍由 `checkOracles` 判断。
-- Q01 卡中本轮**未做**的步骤：evaluate-java-task 的 strict QA 适配（拒绝 false/string、额外键、重复键、未读源码）；用假模型走一遍 query/evidence/read/write 回执；06 §6.2 第 3 条（编辑评测测试或非允许文件即拒绝）；baseline.md（内容并入本文件和 baseline.json）。
+- Q01 卡中首轮未做的步骤已在补缺轮写完（均 NOT_RUN）：strict QA 沿用现有 `scoreQaAnswer`/`scoreRunOutcome`，只补控制用例（false/"false"、2/"2"、null、重复键、额外键、缺一行必需证据）；假模型全链经 `runLiveEvalRun` → `openaiCompatibleChat`（假 fetch）→ `receiptUnitsFromEvents` 从最后发送的 body 生成并验证 receipt，含"只留路径"、发送早于工具结果、写后重读三类拒绝；06 §6.2 第 3 条由新增 `eval-repair-adapter.test` 固定现有 allowed_edits 策略；新增 [baseline.md](baseline.md)。
 
 ## D5 归因（Q02）
 
