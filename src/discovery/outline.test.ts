@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { JavaFileBundle, JavaIndexStatus } from "../java-index/index-types.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
+import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { symbolNeedsJdt } from "../tools/symbol.js";
 import { fitOutlineWire, runOutline, selectOutlineEntries, type PublicOutlineEntry } from "./outline.js";
 
@@ -134,4 +135,35 @@ test("the wire fit drops signatures, then far entries, and never an identity", (
   assert.equal(fitOutlineWire(response, 105, 64), undefined, "an envelope that cannot fit is reported, not truncated");
   const small = { ...response, entries: entries.slice(0, 2) };
   assert.equal(fitOutlineWire(small, undefined), small, "a response within budget is returned unchanged");
+});
+
+test("an exhausted or expiring deadline yields PARTIAL DEADLINE_EXCEEDED, never a short READY outline", async t => {
+  const repoRoot = await workspace(t);
+  const file = "src/main/java/demo/Broken.java";
+  const budgetAt = (ms: { left: number }) => ({ remainingMs: () => ms.left }) as unknown as DeadlineBudget;
+  let calls = 0;
+  const counting = fakeClient(bundleOf("COMPLETE"));
+  const spy = { ...counting, queryFiles: async (...a: Parameters<JavaIndexClientApi["queryFiles"]>) => { calls++; return counting.queryFiles(...a); } } as JavaIndexClientApi;
+  const before = await runOutline(spy, { repoRoot, file, budget: budgetAt({ left: 0 }) });
+  assert.equal(before.scopeState, "PARTIAL");
+  assert.deepEqual(before.reasons, ["DEADLINE_EXCEEDED"]);
+  assert.deepEqual(before.entries, []);
+  assert.equal(calls, 0, "an expired request does not touch the index");
+
+  // The deadline passes while the index is queried: the failure is the deadline, not the index.
+  const during = { left: 1000 };
+  const failing = { ...counting, queryFiles: async () => { during.left = 0; throw new Error("aborted"); } } as unknown as JavaIndexClientApi;
+  const queried = await runOutline(failing, { repoRoot, file, budget: budgetAt(during) });
+  assert.deepEqual([queried.scopeState, queried.reasons, queried.entries], ["PARTIAL", ["DEADLINE_EXCEEDED"], []]);
+  // With time left, an index failure is not disguised as a deadline.
+  await assert.rejects(runOutline(failing, { repoRoot, file, budget: budgetAt({ left: 1000 }) }), /aborted/);
+
+  // The deadline passes after the index answered: whichever check sees it first (the reader's or the one
+  // after verification), nothing is listed. The reader's own check is pinned in evidence-source-reader.test.
+  const reading = { left: 1000 };
+  const expiresAtStatus = { ...counting, status: async () => { reading.left = 0; return counting.status(); } } as unknown as JavaIndexClientApi;
+  const read = await runOutline(expiresAtStatus, { repoRoot, file, budget: budgetAt(reading) });
+  assert.equal(read.scopeState, "PARTIAL");
+  assert.ok(read.reasons.includes("DEADLINE_EXCEEDED"));
+  assert.deepEqual(read.entries, []);
 });

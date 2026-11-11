@@ -276,6 +276,37 @@ test("Q03: outline lists bounded declarations by public identity without JDT", a
   } finally { await fixture.cleanup(); }
 });
 
+test("Q03: outline under a held STALE or NOT_READY view is labelled by that view, never READY", async () => {
+  const fixture = await buildFixture();
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  try {
+    await openFixtureClient(fixture);
+    const context = makeContext(fixture.repoRoot, fixture.client, probe);
+    const file = "src/main/java/com/acme/OrderService.java";
+    const request = { budget: DeadlineBudget.fromTimeout(15000) };
+    const held = { state: "STALE" as const, workspaceId: "workspace-held", snapshotId: "snapshot-held", bindingVersion: 7, coveredThroughSeq: 7 };
+    context.indexView = held;
+    const stale = await javaSymbol(context, args({ operation: "outline", file }), request) as Record<string, unknown>;
+    assert.equal(stale.scopeState, "PARTIAL");
+    assert.ok((stale.reasons as string[]).includes("INDEX_VIEW_STALE"));
+    assert.deepEqual(stale.indexView, held);
+    // Bytes still match the held snapshot, so its declarations stay usable, labelled partial.
+    assert.deepEqual((stale.entries as Array<Record<string, unknown>>).map(entry => entry.name), ["OrderService", "updateOrder", "refundOrder"]);
+    assert.ok(Buffer.byteLength(JSON.stringify(stale), "utf8") <= 4096);
+    context.indexView = { ...held, state: "FRESH", bindingVersion: 8 };
+    const partialCoverage = await javaSymbol(context, args({ operation: "outline", file }), { ...request, negativeLookupAllowed: false }) as Record<string, unknown>;
+    assert.equal(partialCoverage.scopeState, "PARTIAL", "a FRESH view does not make incomplete coverage complete");
+    assert.ok((partialCoverage.reasons as string[]).includes("INDEX_COVERAGE_INCOMPLETE"));
+    context.indexView = { state: "NOT_READY" };
+    const cold = await javaSymbol(context, args({ operation: "outline", file }), request) as Record<string, unknown>;
+    assert.equal(cold.scopeState, "NOT_READY");
+    assert.ok((cold.reasons as string[]).includes("INDEX_VIEW_NOT_READY"));
+    assert.equal(JSON.stringify(cold).includes("symbolId"), false, "no workspace binding, no workspace-bound symbolId");
+    assert.deepEqual(stale.indexView, held, "later bindings cannot relabel an earlier outline");
+    assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
+  } finally { await fixture.cleanup(); }
+});
+
 test("K25: static query succeeds with JDT disabled and zero JDT interactions", async () => {
   const fixture = await buildFixture();
   await openFixtureClient(fixture);

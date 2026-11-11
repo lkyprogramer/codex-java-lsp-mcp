@@ -53,7 +53,7 @@
     "BLOCKED_ENV: Mac gates and private raw are not in this environment; Linux fixtures are not a substitute",
     "engineeringEligibility stays NOT_ASSESSED until the listed gates pass on one build and review has no open P1/P2",
     "no decision function added: the three fields are recorded in acceptance.md and this result",
-    "NOT_DONE tests: outline under STALE/held view, outline deadline, outline public wire in output-shape.test"
+    "tests written later, NOT_RUN: outline under STALE/NOT_READY held view and FRESH-but-incomplete coverage (symbol-static.test), outline deadline before query / during query / before source verification (outline.test), shared reader deadline (evidence-source-reader.test), outline public wire envelope and 4096 B cap on a 60-method generic file (output-shape.test)"
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",

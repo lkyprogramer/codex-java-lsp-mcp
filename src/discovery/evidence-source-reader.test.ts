@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { readVerifiedEvidenceFile } from "./evidence-source-reader.js";
 
 const hash = (content: string | Buffer) => createHash("sha256").update(content).digest("hex");
@@ -49,4 +50,10 @@ test("outside paths, symlinks out of the root, caps and invalid UTF-8 are refuse
   const invalid = Buffer.from([0x63, 0x6c, 0xff, 0x0a]);
   await writeFile(path.join(dir, "src/C.java"), invalid);
   assert.equal(await reason(readVerifiedEvidenceFile({ root: dir, relativePath: "src/C.java", expectedHash: hash(invalid) })), "SOURCE_NOT_UTF8");
+});
+
+test("an exhausted deadline stops the read with DEADLINE_EXCEEDED, not a partial text", async t => {
+  const dir = await root(t);
+  const budget = { remainingMs: () => 0 } as unknown as DeadlineBudget;
+  assert.equal(await reason(readVerifiedEvidenceFile({ root: dir, relativePath: "src/A.java", expectedHash: hash(SOURCE), budget })), "DEADLINE_EXCEEDED");
 });

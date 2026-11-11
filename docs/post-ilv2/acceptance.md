@@ -14,13 +14,13 @@
 
 | 改动 | 受影响的门 / 测试 |
 |---|---|
-| outline（Q03） | `outline.test`（选择规则、parseState、源码改动、增量发布后 generation、越界、wire 收缩）；`symbol-static.test`（FRESH view 下的 wire、limit 与参数组合拒绝、源码改动、无 JDT）；`mcp-server-factory.test`（五工具、schema，未直接测 outline） |
+| outline（Q03） | `outline.test`（选择规则、parseState、源码改动、增量发布后 generation、越界、wire 收缩、deadline）；`symbol-static.test`（FRESH view 下的 wire、STALE/NOT_READY 持有视图、FRESH 下不完整覆盖、limit 与参数组合拒绝、源码改动、无 JDT）；`output-shape.test`（公开 wire 信封与 4096 B）；`mcp-server-factory.test`（五工具、schema，未直接测 outline） |
 | evidence v2（Q04） | `evidence-unit.test`、`evidence-source-reader.test`、`anchor-windows.test`、`sql-read-ranges.test`、`symbol-static.test`、`scripts/eval-evidence-e2e.test.mjs`、`eval-tool-wire.test.mjs`、`evaluate-java-task.test.mjs` |
 | 共享读取器 | 同上，加 symlink、2 MiB 上限、deadline 用例 |
 | 评测脚本（Q01/Q02/Q10） | `ilv2-mac-delivery-receipt.test`、`openai-compatible-chat.test`、`ilv2-mac-repair-oracle.test`、`ilv2-mac-eval-chain.test`、`ilv2-quality-attribution.test`、`run-agent-trace-live.test` |
 | 其他引用 `javaSymbol` 的测试 | `jdtls-session.test`、`mac-platform/gradle-domain.test`（`npm test` 会覆盖，定向清单也列上） |
 
-测试缺口（NOT_DONE，Q11 卡要求覆盖但本轮没有写）：outline 在 STALE/held view 下的用例、outline 的 deadline 用例，以及 `output-shape.test` 里 outline 的公开 wire 断言。
+Q11 卡要求的 outline 补充用例已写（NOT_RUN）：STALE/NOT_READY 持有视图与 FRESH 下不完整覆盖（`symbol-static.test`）、请求前/查询中/读源码前三处 deadline（`outline.test`）、共享读取器 deadline（`evidence-source-reader.test`）、60 方法长泛型文件的公开 wire 信封与 4096 B 上限（`output-shape.test`）。仍未覆盖：`detail=diagnostic` 的附加计时/省略原因（实现也未做，handler 忽略 detail）、SNAPSHOT 条目经 contentManifestId 铸造 evidenceHandle 的 outline 路径、field 条目的公开 wire。
 
 并发 lease 方面：outline 和 evidence 走的都是现有的 `withContext` 请求视图与 `waitStaticIndexReady`，没有新增 lease 路径。这一点是读代码得出的推断，还要靠上表的测试在 Mac 上确认。
 
