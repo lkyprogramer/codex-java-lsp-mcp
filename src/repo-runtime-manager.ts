@@ -680,8 +680,15 @@ export class RepoRuntimeManager {
    */
   async shutdown(repoRoot: string): Promise<void> {
     const entry = this.runtimes.get(repoRoot);
-    if (!entry || entry.stoppedAt !== undefined) return;
-    return entry.retiring ??= Promise.resolve().then(() => this.shutdownEntry(entry)).finally(() => { entry.retiring = undefined; });
+    if (!entry) return;
+    while (entry.retiring) await entry.retiring;
+    if (entry.stoppedAt !== undefined) return;
+    return this.beginRetirement(entry, () => this.shutdownEntry(entry));
+  }
+
+  private beginRetirement(entry: RuntimeEntry, operation: () => Promise<void>): Promise<void> {
+    // Publish the retirement before the operation can yield. Acquisitions wait on this same promise.
+    return entry.retiring ??= Promise.resolve().then(operation).finally(() => { entry.retiring = undefined; });
   }
 
   private async shutdownEntry(entry: RuntimeEntry): Promise<void> {
@@ -848,19 +855,15 @@ export class RepoRuntimeManager {
   /** Above maxRuntimeEntries live entries: retire the least recently used idle, unpinned one (never `created`). */
   private retireOverflow(created: RuntimeEntry): void {
     if (this.shuttingDown) return;
-    // A victim already chosen counts as gone: its retirement awaits JDT stop before `retiring` is set.
-    const live = [...this.runtimes.values()].filter(entry => entry.stoppedAt === undefined && !entry.retiring && !this.overflowRetiring.has(entry)).length;
+    const live = [...this.runtimes.values()].filter(entry => entry.stoppedAt === undefined && !entry.retiring).length;
     if (live <= this.options.maxRuntimeEntries) return;
     const victim = [...this.runtimes.values()]
       .filter(entry => entry !== created && entry.refCount === 0 && entry.stoppedAt === undefined && !entry.retiring
-        && !this.overflowRetiring.has(entry) && !this.options.isProtectedRepo?.(entry.context.repoRoot))
+        && !this.options.isProtectedRepo?.(entry.context.repoRoot))
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
     if (!victim) return;
-    // Marked synchronously: retireIdleEntry awaits before shutdown() sets `retiring`, and a concurrent
-    // create must pick another victim rather than the same one.
-    this.overflowRetiring.add(victim);
     this.clearIdleTimers(victim);
-    void this.retireIdleEntry(victim).finally(() => this.overflowRetiring.delete(victim));
+    void this.retireIdleEntry(victim);
   }
 
   private refreshResource(entry: RuntimeEntry): void {
@@ -986,7 +989,7 @@ export class RepoRuntimeManager {
 
   private oldestIdleReservedEntry(exempt?: RuntimeEntry): RuntimeEntry | undefined {
     return this.reservedEntries()
-      .filter(entry => entry !== exempt && entry.refCount === 0)
+      .filter(entry => entry !== exempt && entry.refCount === 0 && !entry.retiring)
       .filter(entry => {
         const state = entry.context.session.status().state;
         return state === "READY" || state === "STARTING" || !this.sessionHasLiveChildren(entry);
@@ -996,7 +999,7 @@ export class RepoRuntimeManager {
 
   private oldestIdleEntry(exempt?: RuntimeEntry): RuntimeEntry | undefined {
     return [...this.runtimes.values()]
-      .filter(entry => entry !== exempt && entry.refCount === 0 && entry.stoppedAt === undefined)
+      .filter(entry => entry !== exempt && entry.refCount === 0 && entry.stoppedAt === undefined && !entry.retiring)
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
@@ -1023,21 +1026,20 @@ export class RepoRuntimeManager {
 
   /** Set by shutdownAll: no overflow retirement races the shutdown's own stops. */
   private shuttingDown = false;
-  /** Entries retireOverflow already chose, until their retirement settles. */
-  private readonly overflowRetiring = new Set<RuntimeEntry>();
 
-  private async retireIdleEntry(entry: RuntimeEntry): Promise<void> {
-    try {
-      await this.reapSession(entry);
-      if (entry.lspReservation !== "NONE") {
-        await this.stopEntry(entry);
+  private retireIdleEntry(entry: RuntimeEntry): Promise<void> {
+    return this.beginRetirement(entry, async () => {
+      try {
+        await this.reapSession(entry);
+        if (this.options.isProtectedRepo?.(entry.context.repoRoot)) {
+          if (entry.lspReservation !== "NONE") await this.stopEntry(entry);
+          return;
+        }
+        await this.shutdownEntry(entry);
+      } catch {
+        // Idle retirement must not throw into the timer.
       }
-      if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
-      if (this.options.isProtectedRepo?.(entry.context.repoRoot)) return;
-      await this.shutdown(entry.context.repoRoot);
-    } catch {
-      // Idle retirement must not throw into the timer.
-    }
+    });
   }
 
   private startPressureWatch(): void {

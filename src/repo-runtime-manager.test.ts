@@ -44,6 +44,41 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
   assert.equal(sessions.get("/repo-b")?.stops, 0);
 });
 
+test("requests wait for overflow retirement before acquiring a replacement runtime", async t => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = managerWith({ maxRuntimeEntries: 1 }, sessions);
+  const reap = deferred<void>();
+  t.after(async () => {
+    reap.resolve();
+    await manager.shutdownAll();
+  });
+
+  const selector = { repoRoot: "/repo-a" };
+  await manager.withContext(selector, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  const victim = sessions.get(selector.repoRoot)!;
+  victim.reapGate = reap;
+  await manager.withContext({ repoRoot: "/repo-b" }, async () => {});
+  await waitFor(() => victim.reaps === 1);
+
+  await assert.rejects(
+    manager.withContext(selector, async () => {}, {
+      requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 50 }
+    }),
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+      && /runtime\.retire/.test(error.message)
+  );
+  assert.equal(victim.stops, 0);
+
+  reap.resolve();
+  await manager.withContext(selector, async context => {
+    assert.notEqual(context.session, victim);
+    assert.equal(victim.stops, 1);
+  });
+});
+
 test("prewarmRepo opens a pinned runtime without starting JDT", async () => {
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), { index: false,
@@ -1073,6 +1108,7 @@ function fakeLeaseHandle(): LeaseHandle {
 function managerWith(
   options: Partial<{
     maxActiveRepos: number;
+    maxRuntimeEntries: number;
     idleTtlMs: number;
     requestTimeoutMs: number;
     maxRetainedStoppedRepos: number;
