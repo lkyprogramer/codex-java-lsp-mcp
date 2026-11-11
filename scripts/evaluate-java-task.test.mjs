@@ -41,11 +41,12 @@ import {
 } from "./evaluate-java-task.mjs";
 import { serializeModelToolResult } from "./eval-tool-wire.mjs";
 
-test("v1.5 anchor paths become file locators and both arms receive generic answer conventions", () => {
-  assert.equal(EVAL_PROTOCOL_VERSION, "eval-protocol/v1.5");
+test("anchor paths become file locators and both arms receive generic answer conventions", () => {
+  assert.equal(EVAL_PROTOCOL_VERSION, "eval-protocol/v1.7");
   assert.deepEqual(normalizeTaskAnchor({ path: "a/B.java", line: 7 }), { path: "a/B.java", file: "a/B.java", line: 7, column: 1 });
   assert.equal(normalizeTaskAnchor({ file: "a.java", path: "b.java", line: 2 }).file, "a.java");
   assert.match(EVAL_SYSTEM_PROMPT, /simple identifiers/);
+  assert.match(EVAL_SYSTEM_PROMPT, /shortest available route to exact source/);
   assert.match(EVAL_SYSTEM_PROMPT, /specific missing fact/);
   assert.match(EVAL_SYSTEM_PROMPT, /step by step/);
 });
@@ -334,6 +335,29 @@ test("--dataset: a MAC-10 split is scheduled under its dataset identity; tasks o
   assert.equal(pack.identity.goldSha256, createHash("sha256").update(readFileSync(goldFile)).digest("hex"));
   const scheduled = readFileSync(path.join(output, "schedule.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line).taskId);
   assert.deepEqual([...new Set(scheduled)].sort(), readFileSync(tasksFile, "utf8").trim().split("\n").map(line => JSON.parse(line).taskId).sort());
+  const directoryServer = path.join(dir, "out-directory-server");
+  assert.equal(await main([...args, "--require-identity", "--repo-roots", `fixture=${fixture.repoRoot}`,
+    "--server-js", fixture.repoRoot, "--output", directoryServer], {}), 2);
+  assert.equal(existsSync(directoryServer), false, "an invalid server must be rejected before the schedule is written");
+  const serverFile = path.join(dir, "server.js");
+  writeFileSync(serverFile, "// fixture server\n");
+  const strictArgs = ["--require-identity", "--repo-roots", `fixture=${fixture.repoRoot}`, "--server-js", serverFile];
+  const verified = path.join(dir, "out-verified");
+  assert.equal(await main([...args, ...strictArgs, "--output", verified], {}), 0, "MAC-10 corpusId resolves in strict dry-run");
+  const verifiedPack = JSON.parse(readFileSync(path.join(verified, "results-pack.json"), "utf8"));
+  assert.deepEqual(verifiedPack.identity.identityCheck, { status: "VERIFIED", problems: [] });
+  assert.equal(verifiedPack.identity.driver.serverJsSha256, createHash("sha256").update(readFileSync(serverFile)).digest("hex"));
+  const invalidRepeats = path.join(dir, "out-invalid-repeats");
+  for (const repeats of ["NaN", "Infinity", "1.5", "0"]) {
+    assert.equal(await main([...args.map((arg, i) => args[i - 1] === "--repeats" ? repeats : arg), ...strictArgs,
+      "--output", invalidRepeats], {}), 2);
+    assert.equal(existsSync(invalidRepeats), false);
+  }
+  const unsupportedLive = path.join(dir, "out-live");
+  assert.equal(await main([...args.filter(arg => arg !== "--dry-run"), ...strictArgs, "--output", unsupportedLive], {
+    OPENAI_API_KEY: "fixture", OPENAI_BASE_URL: "http://fake.invalid", OPENAI_MODEL: "fixture"
+  }), 2, "native MAC-10 rows require an adapter before live evaluation");
+  assert.equal(existsSync(unsupportedLive), false);
   // A task file that is not a part of the named dataset is refused before anything is scheduled.
   const foreign = path.join(dir, "foreign.jsonl");
   writeFileSync(foreign, readFileSync(tasksFile, "utf8").trim().split("\n").slice(1).join("\n") + "\n");

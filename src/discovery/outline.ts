@@ -122,7 +122,7 @@ export function outlineEntriesOf(bundle: JavaFileBundle): OutlineEntryInput[] {
 
 export async function runOutline(
   client: JavaIndexClientApi,
-  input: { repoRoot: string; file: string; limit?: number; nearLine?: number; budget?: DeadlineBudget }
+  input: { repoRoot: string; file: string; limit?: number; nearLine?: number; budget?: DeadlineBudget; indexNotReady?: boolean }
 ): Promise<OutlineInternalResult> {
   const limit = requireOutlineLimit(input.limit);
   requireOutlineNearLine(input.nearLine);
@@ -140,6 +140,11 @@ export async function runOutline(
   if (!containedIn(root, requested)) { partial("SOURCE_OUTSIDE_REPO"); return out; }
   const relative = path.relative(root, requested).split(path.sep).join("/");
   out.relativePath = relative;
+  if (input.indexNotReady) {
+    out.scopeState = "NOT_READY";
+    partial("INDEX_COVERAGE_INCOMPLETE");
+    return out;
+  }
   const options = input.budget ? { budget: input.budget } : undefined;
   // The index keys files by the client's own repo root, as symbol-target does.
   let bundle: JavaFileBundle | undefined;
@@ -191,13 +196,18 @@ export type PublicOutlineEntry = Omit<OutlineEntry, "declarationKey" | "signatur
   evidenceHandle?: string;
 };
 
+export type OutlineDiagnostic = {
+  elapsedMs: number;
+  omissions: { limitEntries: number; wireEntries: number; wireSignatures: number };
+};
+
 /**
  * Fit the complete public response into the wire budget (05 §5.2): first drop signatures (never
  * truncated into fake source), then whole entries, both starting from the entry least related to
  * nearLine (farthest; without nearLine the last in source order). Identity is never removed from a
  * kept entry. Returns undefined when even the entry-less envelope does not fit.
  */
-export function fitOutlineWire<T extends { entries: PublicOutlineEntry[]; omittedSymbols: number; reasons: string[]; scopeState: string }>(
+export function fitOutlineWire<T extends { entries: PublicOutlineEntry[]; omittedSymbols: number; reasons: string[]; scopeState: string; diagnostic?: OutlineDiagnostic }>(
   response: T,
   nearLine: number | undefined,
   maxBytes = OUTLINE_WIRE_MAX_BYTES
@@ -212,8 +222,14 @@ export function fitOutlineWire<T extends { entries: PublicOutlineEntry[]; omitte
     .sort((a, b) => priority(b.entry) - priority(a.entry) || b.index - a.index).map(item => item.index);
   const entries = response.entries.map(entry => ({ ...entry }));
   const reasons = response.reasons.includes("SOURCE_BUDGET") ? [...response.reasons] : [...response.reasons, "SOURCE_BUDGET"];
+  const diagnostic = response.diagnostic;
   const build = (kept: PublicOutlineEntry[], omitted: number): T => ({
-    ...response, entries: kept, omittedSymbols: omitted, reasons, scopeState: response.scopeState === "READY" ? "PARTIAL" : response.scopeState
+    ...response, entries: kept, omittedSymbols: omitted, reasons, scopeState: response.scopeState === "READY" ? "PARTIAL" : response.scopeState,
+    ...(diagnostic ? { diagnostic: { ...diagnostic, omissions: {
+      limitEntries: diagnostic.omissions.limitEntries,
+      wireEntries: omitted - response.omittedSymbols,
+      wireSignatures: kept.filter(entry => entry.signatureOmitted === true).length
+    } } } : {})
   }) as T;
   for (const index of shrinkOrder) {
     const entry = entries[index]!;

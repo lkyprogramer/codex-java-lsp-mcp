@@ -9,7 +9,7 @@ import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
 import { DISCOVERY_DEFAULT_LIMIT, DISCOVERY_MAX_LIMIT, runStaticDiscovery, type DiscoveryResult } from "../discovery/query.js";
 import { runEvidenceUnit, type EvidenceUnitResult } from "../discovery/evidence-unit.js";
 import { OUTLINE_DEFAULT_LIMIT, OUTLINE_MAX_LIMIT, OUTLINE_WIRE_MAX_BYTES, fitOutlineWire, requireOutlineLimit, requireOutlineNearLine, runOutline,
-  type OutlineInternalResult, type PublicOutlineEntry } from "../discovery/outline.js";
+  type OutlineDiagnostic, type OutlineInternalResult, type PublicOutlineEntry } from "../discovery/outline.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
@@ -272,16 +272,25 @@ async function javaSymbolOutline(context: ToolContext, args: SymbolArgs, request
   requireOutlineNearLine(args.nearLine);
   const client = context.javaIndexClient;
   if (!client) throw new Error("java_symbol operation=outline requires the on-disk Java index.");
-  await waitStaticIndexReady(client, request?.budget);
+  const started = isDiagnosticDetail(args.detail) ? performance.now() : undefined;
+  const indexNotReady = context.indexView?.state === "NOT_READY";
+  if (!indexNotReady) await waitStaticIndexReady(client, request?.budget);
   const outline = await runOutline(client, {
     repoRoot: context.repoRoot,
     file: args.file,
     limit,
+    indexNotReady,
     ...(args.nearLine !== undefined ? { nearLine: args.nearLine } : {}),
     ...(request?.budget ? { budget: request.budget } : {})
   });
   const response = staticResultForView(await withPublicIdentity(outline, context, request), context, request) as {
-    entries: PublicOutlineEntry[]; omittedSymbols: number; reasons: string[]; scopeState: string };
+    entries: PublicOutlineEntry[]; omittedSymbols: number; reasons: string[]; scopeState: string; diagnostic?: OutlineDiagnostic };
+  if (started !== undefined) {
+    response.diagnostic = {
+      elapsedMs: Math.round(performance.now() - started),
+      omissions: { limitEntries: outline.omittedSymbols, wireEntries: 0, wireSignatures: 0 }
+    };
+  }
   const fitted = fitOutlineWire(response, args.nearLine);
   if (!fitted) {
     throw new JavaIntelligenceError("INVALID_INPUT", `operation=outline cannot fit even an entry-less response into ${OUTLINE_WIRE_MAX_BYTES} bytes for this file.`);

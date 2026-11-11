@@ -56,7 +56,7 @@
 - `java-evidence-unit/v2`，scope 为 `java-declaration-and-indexed-resource-links`，不做双返回。Java 声明片段先计费，XML 关联在剩余预算内交付。
 - 方法放得下就整段给（role=anchor）；放不下就给签名头（role=signature）加请求行附近的窗口，并标 `BODY_PARTIAL`。类型只给声明头。所有片段都是 `proof=SOURCE_FACT`。
 - 评测脚本同时读 v1 和 v2，保证旧 trace 能回放。产品只输出 v2。
-- 整段交付的方法最多 40 行 / 8000 字节（全局预算的一半）。签名头加窗口的分支里，窗口只按剩余行数选，字节和签名头本身只受全局 80 行 / 16000 字节约束，所以 Java 在极端情况下仍可能占掉一半以上。与 v1 相比，XML 最多少 40 行；SQL 端仍按 8 个 source 封顶，所以 XML 链接达到 7–8 个时可能新出 `UNIT_CAP`。
+- 整段交付的方法最多 40 行 / 8000 字节（全局预算的一半）。签名头加窗口的分支按剩余行数和实际 UTF-8 字节收窄窗口。签名头与请求行无法同时容纳时优先交付可容纳的请求行。Java 片段与 XML 共享全局 80 行 / 16000 字节上限，Java 片段仍可能占掉一半以上。SQL 端仍按 8 个 source 封顶，所以 XML 链接达到 7–8 个时可能新出 `UNIT_CAP`。
 - 偏离：Java 事实来自 anchor 解析之后的另一次 `queryFiles`，不在 `queryEvidenceSources` 的同一个 read snapshot 里。靠 bundle hash 等于 anchor hash、末尾的 generation 复核和 anchor 字节复核来兜底。
 - 新 reason：`SOURCE_NOT_UTF8`（共享读取器先比 hash 再严格解码）、`BODY_PARTIAL`（大方法只给签名头加窗口）。05 已封存，名称登记在这里。
 - 局限：构造器和字段的 symbolId 传给 evidence 时，`queryEvidenceSources` 只接受 TYPE/METHOD 锚点，结果是 `ANCHOR_UNRESOLVED`。用 symbolId 定位大方法时，请求行落在签名头里，只会得到签名加 `BODY_PARTIAL`；要看正文，需要传 file/line。

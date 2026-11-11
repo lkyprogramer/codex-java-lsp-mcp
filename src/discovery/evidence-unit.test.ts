@@ -362,3 +362,28 @@ test("Q04: facts that no longer describe the anchor bytes give no Java unit, onl
     assert.ok(out.reasons.includes("ANCHOR_UNRESOLVED"));
   } finally { await f.cleanup(); }
 });
+
+test("Q04: UTF-8 byte pressure cannot displace a short explicit body anchor", async t => {
+  const f = await fixture();
+  t.after(f.cleanup);
+  const largeComment = `// ${"界".repeat(5500)}`;
+  const bodyAnchor = "        value += 7;";
+  const openingAnchor = "    public int run(int value) { value += 7;";
+  for (const [name, methodLines, anchorLine, anchor] of [
+    ["LongPredecessor", ["    public int run(int value) {", `        ${largeComment}`, bodyAnchor], 5, bodyAnchor],
+    ["LongSignature", [`    public int run(int value) { ${largeComment}`, "        value += 1;", bodyAnchor], 5, bodyAnchor],
+    ["LongAnnotation", [`    @Deprecated ${largeComment}`, openingAnchor], 4, openingAnchor]
+  ] as const) {
+    const file = `src/main/java/demo/${name}.java`;
+    const content = ["package demo;", `public class ${name} {`, ...methodLines, "        return value;", "    }", "}", ""].join("\r\n");
+    await f.java(file, content);
+    const out = await runEvidenceUnit(f.client, { repoRoot: f.root, file, line: anchorLine, column: 9 });
+    const unit = javaUnits(out).find(unit => unit.role === "anchor" && unit.startLine <= anchorLine && unit.endLine >= anchorLine);
+    assert.ok(unit, `${name}: ${JSON.stringify(out.reasons)}`);
+    assert.ok(unit.text.includes(`${anchor}\r\n`));
+    assert.equal(unit.contentHash, hash(content));
+    assert.equal(out.scopeState, "PARTIAL");
+    assert.ok(out.reasons.includes("BODY_PARTIAL"));
+    assert.ok(out.units.reduce((bytes, unit) => bytes + Buffer.byteLength(unit.text, "utf8"), 0) <= 16000);
+  }
+});

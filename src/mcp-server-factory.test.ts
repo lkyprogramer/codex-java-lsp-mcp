@@ -15,6 +15,7 @@ import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
 import { resetImpactTelemetryForTests } from "./telemetry/impact-telemetry.js";
 import { IndexOwner } from "./java-index/snapshot/index-owner.js";
+import { parseEvidenceHandle } from "./java-index/symbol-identity.js";
 import { FSEVENT_FLAGS } from "./java-index/snapshot/workspace-tracker.js";
 import { RepoRuntimeManager } from "./repo-runtime-manager.js";
 import { NoopCrossProcessLeaseStore } from "./cross-process-lease.js";
@@ -311,6 +312,22 @@ test("MAC11 public symbol freezes STALE labels, suppresses misses, then converge
     assert.equal(held.snapshotId, before.snapshotId);
     assert.equal(held.bindingVersion, before.bindingVersion);
     assert.ok(elapsedMs < 5000, `prepare must cap rather than wait for the held builder: ${elapsedMs}`);
+    // Both static operations must keep the held view while the replacement round is paused.
+    const [outline, evidence] = await Promise.all([
+      { operation: "outline", file: relative },
+      { operation: "evidence", file: relative, line: 1, column: 32 }
+    ].map(async args => {
+      const result = await client!.callTool({ name: "java_symbol", arguments: { repoRoot: root, ...args } });
+      assert.notEqual(result.isError, true, toolText(result));
+      return toolJson(result);
+    }));
+    for (const result of [outline!, evidence!]) {
+      assert.equal(result.scopeState, "PARTIAL");
+      assert.deepEqual(result.indexView, held);
+      assert.ok((result.reasons as string[]).includes("ANCHOR_STALE"));
+    }
+    assert.deepEqual(outline!.entries, []);
+    assert.deepEqual(evidence!.units, []);
     // MAC-13: java_impact(symbol=) on the held STALE view cannot call the new method absent.
     const staleImpact = await client!.callTool({ name: "java_impact", arguments: { repoRoot: root, symbol: "com.acme.Ready#addedMac11" } });
     assert.notEqual(staleImpact.isError, true, toolText(staleImpact));
@@ -367,7 +384,7 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     "src/main/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/test/java/com/acme/Dup.java": "package com.acme; public class Dup {}\n",
     "src/main/java/com/acme/Other.java": "package com.acme; public class Other {}\n",
-    "src/main/java/com/acme/Jobs.java": "package com.acme; public class Jobs { public void run() { class LocalStep {} new LocalStep(); } }\n",
+    "src/main/java/com/acme/Jobs.java": "package com.acme; public class Jobs { private int pending = 7; public void run() { class LocalStep {} new LocalStep(); } }\n",
     // A deep source path and a long signature: its mac1 symbolId passes 512 characters.
     [`src/main/java/com/acme/${"deeply/nested/".repeat(12)}Deep.java`]: `package com.acme.${"deeply.nested.".repeat(12)}x; public class Deep { public void handle(${Array.from({ length: 8 }, (_, i) => `java.util.Map<java.lang.String, java.lang.Object> argument${i}`).join(", ")}) {} }\n`
   };
@@ -426,6 +443,29 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     assert.equal(local[0]!.declaration.stability, "SNAPSHOT");
     assert.equal(Object.hasOwn(local[0]!.declaration, "symbolId"), false);
     assert.match(local[0]!.declaration.evidenceHandle!, /^jev:mac1:/);
+    const jobs = "src/main/java/com/acme/Jobs.java";
+    const outline = await ok("java_symbol", { operation: "outline", file: jobs });
+    assert.equal(outline.scopeState, "READY");
+    const entries = outline.entries as Declaration[];
+    const localEntry = entries.find(entry => entry.kind === "type" && entry.name === "LocalStep");
+    assert.ok(localEntry);
+    assert.equal(localEntry.stability, "SNAPSHOT");
+    assert.equal(Object.hasOwn(localEntry, "symbolId"), false);
+    assert.equal(localEntry.evidenceHandle, local[0]!.declaration.evidenceHandle);
+    const parsed = parseEvidenceHandle(localEntry.evidenceHandle!);
+    assert.ok(parsed.ok);
+    const view = outline.indexView as { snapshotId: string; contentManifestId: string };
+    assert.equal(parsed.handle.snapshotId, view.snapshotId);
+    assert.equal(parsed.handle.contentManifestId, view.contentManifestId);
+    assert.equal(parsed.handle.relativePath, jobs);
+    assert.equal(parsed.handle.sourceHash, outline.contentHash);
+    const field = entries.find(entry => entry.kind === "field" && entry.name === "pending");
+    assert.ok(field);
+    assert.equal(field.signature, "int pending");
+    assert.equal(field.stability, "STABLE");
+    assert.match(field.symbolId!, /^jsym:mac1:/);
+    assert.equal(Object.hasOwn(field, "evidenceHandle"), false);
+    assert.ok(entries.every(entry => !Object.hasOwn(entry, "declarationKey")));
     assert.equal(ship.symbolId!.split(":")[2], workspace.workspaceId);
     const evidence = await ok("java_symbol", { operation: "evidence", symbolId: ship.symbolId });
     const anchor = evidence.anchor as Declaration;
@@ -482,7 +522,7 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
     assert.ok(deep.symbolId!.length > 512, String(deep.symbolId!.length));
     assert.equal((await ok("java_impact", { symbol: deep.symbolId, verbosity: "compact" })).status, undefined);
     for (const symbol of ["com.acme.Orders#ship", ship.symbolId!]) {
-      const ran = await ok("java_impact", { symbol, verbosity: "compact" });
+      const ran = await ok("java_impact", { symbol, verbosity: "diagnostic" });
       assert.equal(ran.status, undefined, JSON.stringify(ran).slice(0, 400));
       assert.equal((ran.indexView as { workspaceId: string }).workspaceId, workspace.workspaceId);
     }

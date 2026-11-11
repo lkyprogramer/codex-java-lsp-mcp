@@ -245,7 +245,7 @@ test("installer rejects dirty release provenance before assembling a new immutab
   const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
   assert.match(installer, /assert_clean_release_source\(\)/);
   assert.match(installer, /verify-clean-source-tree\.mjs/);
-  assert.match(installer, /assert_clean_release_source\ncopy_release/);
+  assert.match(installer, /^[ \t]*assert_clean_release_source\n[ \t]*copy_release$/m);
 });
 
 test("runtime installer excludes eval dumps from immutable releases and prunes unreferenced copies", () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // input: An explicit task file (--tasks), its gold (--gold), the optional MAC-10 dataset manifest
-//         (--dataset) both must belong to,
+//         (--dataset) both must belong to (native MAC-10 rows are dry-run only),
 //         a model backend (OpenAI-compatible API or codex CLI), and the local
 //         product MCP server for java_symbol. No backend credentials means the
 //         run reports BLOCKED_AUTH and nothing is measured.
@@ -29,6 +29,7 @@ import { serializeModelToolResult, splitSourceLines } from "./eval-tool-wire.mjs
 import { buildFrozenResultsPack, runProfileFrom } from "./eval-frozen-adapter.mjs";
 import { evaluateRepair } from "./eval-repair-adapter.mjs";
 import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
+import { TASK_SCHEMA as MAC10_TASK_SCHEMA, verifyDataset } from "./ilv2-mac-eval-dataset.mjs";
 export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
 /**
@@ -52,19 +53,23 @@ export function nativeNames(arm) {
 
 export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
 /**
- * Eval protocol v1.4 uses exclusive typed submission and explicit source
- * exhaustion; discovery defaults to locators without source previews.
+ * Eval protocol v1.7 uses the same source-first tool selection prompt across arms.
  * Results from different protocol versions are not comparable.
  */
-export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.5";
+export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.7";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
 // its tools freely - it is never forced to call java_symbol first.
-// R01/W05 + R03: the prompt only references tools actually provided; both
-// arms share the same native tools (list/rg/read; repair adds write_file)
-// and the ONLY arm difference is the product arm's java_symbol.
-export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session, in any order, or none at all. Never assume an unlisted tool. Locate declarations, then read the implementation needed for the question. rg/list and symbol results without source previews are locators only, not source evidence. Before submitting, read the implementation and field declarations supporting every answer, including relevant callees, helpers and XML mappings. Target exact matching lines with rg and short read windows; do not consume the budget by reading a large file from its beginning or by requesting previews for many candidates. After receiving that implementation, continue retrieval only to resolve a specific missing fact or dependency; do not repeat discovery of an already located declaration. For concrete return values, trace the operations in the received source step by step before answering. Source previews and explicit reads both consume the source budget, including repeated lines. Read non-Java evidence such as XML explicitly when the question requires it. Assistant body text is draft only. Finish exclusively with submit_answer as the only tool action in that response. For QA use exactly the task's public keys, field roles, types and representation constraints. Member names must be simple identifiers, without package, owner, signature, call arguments or explanation. Return an enum constant's simple name without its owner. Return an expression only when the question requests an expression; do not add prose inside string values. For repair use {"patchApplied": true|false, "summary": "..."}.`;
+// All arms share the same native tools. The product tools vary by profile.
+export const EVAL_SYSTEM_PROMPT = [
+  "You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session, in any order, or none at all. Never assume an unlisted tool.",
+  "Choose the shortest available route to exact source for each fact. Locate the relevant declarations and linked resources. When an available tool can return the needed Java or linked XML source at a known declaration anchor, it can replace a separate file lookup and read. Otherwise locate the file and read the relevant lines.",
+  "Before submitting, obtain the exact source supporting every answer, including relevant declarations, implementations, callees and XML mappings. Paths, search matches, declaration summaries and reconstructed signatures alone are locators. Continue retrieval only to resolve a specific missing fact or dependency. Avoid broad reads, previews for irrelevant candidates and repeated discovery. All delivered source, including previews, linked evidence and repeated lines, consumes the same source budget.",
+  "For concrete return values, trace the operations in the received source step by step before answering. Assistant body text is draft only. Finish exclusively with submit_answer as the only tool action in that response.",
+  "For QA use exactly the task's public keys, field roles, types and representation constraints. Member names must be simple identifiers, without package, owner, signature, call arguments or explanation. Return an enum constant's simple name without its owner. Return an expression only when the question requests an expression. Do not add prose inside string values.",
+  'For repair use {"patchApplied": true|false, "summary": "..."}.'
+].join(" ");
 
 export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
@@ -91,7 +96,7 @@ export const EVAL_JAVA_EVIDENCE_TOOL = {
   type: "function",
   function: {
     name: "java_evidence",
-    description: "Request byte-exact indexed MyBatis XML source units linked by fully qualified Java names. For resultMap type links use an already located type declaration's 1-based anchor, not its constructor; method anchors return associated mapped XML statements. Unit completeness describes only the XML source range, not task completion. Stale or omitted bindings remain explicit.",
+    description: "Read byte-exact source for a located Java type or method and any linked, indexed MyBatis XML. Use the candidate's relativePath as file and its selection.line/column as the 1-based anchor. A type returns its declaration header and linked result maps. A mapped method returns its Java source and SQL statement even when the XML filename differs from the Java name. For large methods, pass a line inside the relevant body and expect a bounded window. Check partial coverage and read any missing lines.",
     parameters: {
       type: "object", additionalProperties: false,
       properties: { file: { type: "string", minLength: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 } },
@@ -1074,7 +1079,8 @@ function runPython(argv, { cwd, timeoutMs = 300_000 }) {
  * become a java-specialist-results/v1 pack (eval-frozen-adapter) and are
  * scored by `python -m harness score` against the kit's own corpora. QA
  * taskSuccess is replaced by the kit's qa_contract_pass; the JS outcome is
- * kept only as `preliminary`. Repair rows keep the frozen judge verdict.
+ * kept only as `preliminary`. Blocked or missing slots keep their unmeasured
+ * outcome. Repair rows keep the frozen judge verdict.
  */
 export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, outputDir, model, productProfile = "broad", python = process.env.JSB_PYTHON ?? "python3" }) {
   const kit = path.resolve(kitRoot);
@@ -1129,7 +1135,7 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
   for (const run of runs) {
     if (run.kind !== "qa" || !reports[run.arm]) continue;
     const row = reports[run.arm].report.rows.find(r => r.task_id === run.taskId && r.variant === "primary" && r.repeat === run.repeat - 1);
-    if (!row) continue;
+    if (!row || row.status === "BLOCKED" || row.status === "MISSING") continue;
     run.preliminary = { taskSuccess: run.taskSuccess, answerStatus: run.answerStatus };
     run.frozenScore = {
       qaContractPass: row.qa_contract_pass,
@@ -1167,19 +1173,30 @@ export function checkRunIdentity({ tasks, allTaskIds, filter = [], arms, product
   if (new Set(arms).size !== arms.length) problems.push("DUPLICATE_ARM");
   let productArm = false;
   for (const arm of arms) {
-    try { productArm ||= Boolean(armProfile(arm, productProfile)); } catch { problems.push(`UNKNOWN_ARM:${arm}`); }
+    try { if (armProfile(arm, productProfile)) productArm = true; }
+    catch { problems.push(`UNKNOWN_ARM:${arm}`); }
   }
   if (!dataset?.datasetId || !dataset?.split) problems.push("DATASET_UNNAMED");
   for (const task of tasks) {
-    if (typeof task.corpus !== "string" || task.corpus === "") { problems.push(`TASK_WITHOUT_CORPUS:${task.id}`); continue; }
-    const root = repoRoots[task.corpus] ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", task.corpus) : undefined);
+    const corpus = task.corpus ?? task.corpusId;
+    if (typeof corpus !== "string" || corpus === "") { problems.push(`TASK_WITHOUT_CORPUS:${task.id}`); continue; }
+    const root = repoRoots[corpus] ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", corpus) : undefined);
     let isDirectory = false;
     try { isDirectory = root !== undefined && statSync(root).isDirectory(); } catch { isDirectory = false; }
-    if (!isDirectory) problems.push(`CORPUS_UNRESOLVED:${task.corpus}`);
+    if (!isDirectory) problems.push(`CORPUS_UNRESOLVED:${corpus}`);
   }
-  if (productArm && !existsSync(serverJs)) problems.push("PRODUCT_SERVER_MISSING");
+  let serverJsSha256 = null;
+  let serverProblem = "PRODUCT_SERVER_INVALID";
+  try {
+    const server = statSync(serverJs, { throwIfNoEntry: false });
+    if (!server) serverProblem = "PRODUCT_SERVER_MISSING";
+    else if (server.isFile()) serverJsSha256 = createHash("sha256").update(readFileSync(serverJs)).digest("hex");
+  } catch {
+    // The selected server cannot be read and hashed.
+  }
+  if (productArm && serverJsSha256 === null) problems.push(serverProblem);
   const unique = [...new Set(problems)];
-  return { status: unique.length === 0 ? "VERIFIED" : "FAILED", problems: unique };
+  return { status: unique.length === 0 ? "VERIFIED" : "FAILED", problems: unique, serverJsSha256 };
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
@@ -1191,7 +1208,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const goldFile = flag("--gold");
   const output = flag("--output");
   const arms = (flag("--arms") ?? "product,control").split(",").filter(Boolean);
-  const repeats = Math.max(1, Number(flag("--repeats") ?? 1));
+  const repeats = argv.includes("--repeats") ? Number(flag("--repeats")) : 1;
   const seed = Number(flag("--seed") ?? 1984);
   const maxRounds = Math.max(1, Number(flag("--max-rounds") ?? 16));
   const kitRoot = flag("--kit-root");
@@ -1205,6 +1222,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--arms product,control|b0,b2|...] [--product-profile broad|evidence|exact-evidence|outline|outline-evidence] [--dry-run] [--require-identity]");
     return 2;
   }
+  if (!Number.isSafeInteger(repeats) || repeats < 1) {
+    console.error("--repeats must be a positive safe integer");
+    return 2;
+  }
   const datasetHash = goldFile
     ? createHash("sha256").update(readFileSync(goldFile)).digest("hex")
     : null;
@@ -1212,8 +1233,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   // MAC-10: the dataset is named, never implied. --tasks is one split's tasks part and --gold that same split's gold.
   let dataset = null;
   if (flag("--dataset")) {
-    const { verifyDataset } = await import("./ilv2-mac-eval-dataset.mjs");
-    const { manifest } = await verifyDataset(path.resolve(flag("--dataset")));
+    let manifest;
+    try { ({ manifest } = await verifyDataset(path.resolve(flag("--dataset")))); }
+    catch (error) {
+      console.error(`--dataset verification failed: ${error.message}`);
+      return 2;
+    }
     const split = ["dev", "holdout"].find(name => manifest.parts[`tasks-${name}`]?.sha256 === tasksSha256);
     if (!split || (datasetHash && manifest.parts[`gold-${split}`]?.sha256 !== datasetHash)) {
       console.error("--tasks is not a tasks part of --dataset, or --gold is not the gold of the same split");
@@ -1230,10 +1255,15 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       return index > 0 ? [pair.slice(0, index), pair.slice(index + 1)] : [pair, pair];
     }));
   const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
-  const identityCheck = checkRunIdentity({ tasks, allTaskIds: new Set(allTasks.map(task => task.id)), filter, arms, productProfile, dataset, repoRoots, kitRoot, serverJs });
+  const { serverJsSha256, ...identityCheck } = checkRunIdentity({ tasks, allTaskIds: new Set(allTasks.map(task => task.id)), filter, arms, productProfile, dataset, repoRoots, kitRoot, serverJs });
   if (requireIdentity && identityCheck.status !== "VERIFIED") {
     // Fail closed before a schedule is frozen or any request is sent.
     console.error(`run identity is incomplete: ${identityCheck.problems.join(", ")}`);
+    return 2;
+  }
+  const backend = detectBackend(env);
+  if (!dryRun && backend && tasks.some(task => task.schema === MAC10_TASK_SCHEMA)) {
+    console.error("native MAC-10 task and gold rows need a live evaluation adapter; use --dry-run for schedule validation");
     return 2;
   }
   // The full schedule is frozen before anything runs; every row stays in the
@@ -1244,8 +1274,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   writeFileSync(path.join(output, "schedule.jsonl"), scheduleText, "utf8");
   const identity = { datasetId: dataset?.datasetId ?? null, datasetDigest: dataset?.datasetDigest ?? null, split: dataset?.split ?? null, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
     filter, seed, arms, armProfiles: Object.fromEntries(arms.map(arm => [arm, Object.hasOwn(ARM_PROFILES, arm) ? armProfile(arm, productProfile) : "UNKNOWN"])),
-    repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256: existsSync(serverJs) ? createHash("sha256").update(readFileSync(serverJs)).digest("hex") : null } };
-  const backend = detectBackend(env);
+    repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256 } };
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
     const pack = assemblePack({

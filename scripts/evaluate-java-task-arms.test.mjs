@@ -34,6 +34,9 @@ test("06 §6.4 arms map to profiles on one server: B0 query, B1 + outline, B2 + 
   assert.deepEqual(outline.required, ["file"]);
   assert.equal(outline.additionalProperties, false);
   assert.equal(outline.properties.limit.maximum, 20, "the eval tool advertises the product's outline limit");
+  const evidence = productTools(armProfile("b2")).find(tool => tool.function.name === "java_evidence").function;
+  assert.match(evidence.description, /Java (?:type|method|declaration)/);
+  assert.match(evidence.description, /MyBatis XML/);
 });
 
 test("java_outline wire carries declarations but never credits source; other shapes are refused", async () => {
@@ -64,7 +67,9 @@ test("run identity fails closed on unknown tasks/arms, an unnamed dataset, unres
   const tasks = [{ id: "T1", corpus: "a" }, { id: "T2", corpus: "b" }, { id: "T3" }];
   const base = { tasks, allTaskIds: new Set(["T1", "T2", "T3"]), arms: ["b0", "b2"], productProfile: "broad",
     dataset: { datasetId: "mac10", split: "dev" }, repoRoots: { a: path.join(dir, "corpus-a"), b: path.join(dir, "corpus-a") }, serverJs: path.join(dir, "server.js") };
-  assert.deepEqual(checkRunIdentity({ ...base, tasks: tasks.slice(0, 2) }), { status: "VERIFIED", problems: [] });
+  const verified = checkRunIdentity({ ...base, tasks: tasks.slice(0, 2) });
+  assert.equal(verified.status, "VERIFIED");
+  assert.deepEqual(verified.problems, []);
   const failed = checkRunIdentity({ ...base, filter: ["T9"], arms: ["b0", "b0", "b7"], dataset: null,
     repoRoots: { a: path.join(dir, "corpus-a"), b: path.join(dir, "server.js") }, serverJs: path.join(dir, "missing.js") });
   assert.equal(failed.status, "FAILED");
@@ -88,6 +93,15 @@ test("run identity fails closed on unknown tasks/arms, an unnamed dataset, unres
   assert.deepEqual(pack.identity.armProfiles, { b0: "broad", b2: "outline-evidence" });
   assert.equal(pack.schedule.endToEndSuccessRate, null, "a dry run measured nothing");
   assert.equal(pack.schedule.missing, 2);
+});
+
+test("run identity rejects a directory passed as the product server", async t => {
+  const dir = await mkdtemp(path.join(tmpdir(), "eval-server-directory-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const check = checkRunIdentity({ tasks: [{ id: "Q", corpus: "a" }], allTaskIds: new Set(["Q"]), arms: ["b0"],
+    dataset: { datasetId: "mac10", split: "dev" }, repoRoots: { a: dir }, serverJs: dir });
+  assert.equal(check.status, "FAILED");
+  assert.deepEqual(check.problems, ["PRODUCT_SERVER_INVALID"]);
 });
 
 test("pack schedule summary: failures stay in the denominator, missing or unjudged slots make the rate null", () => {

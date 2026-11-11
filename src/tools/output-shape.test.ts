@@ -472,14 +472,14 @@ test("java_symbol operation=outline: the public wire is the documented envelope 
   for (const call of [
     { operation: "outline", file: relativePath },
     { operation: "outline", file: relativePath, nearLine: methodCount + 3, limit: 20 },
-    { operation: "outline", file: relativePath, nearLine: 30, limit: 20, detail: "diagnostic" }
+    { operation: "outline", file: relativePath, nearLine: 30, limit: 20, detail: "diagnostic" },
+    { operation: "outline", file: relativePath, limit: 1, detail: "diagnostic" }
   ]) {
     const out = record(await javaSymbol(context, call as unknown as Parameters<typeof javaSymbol>[1], request));
     const wire = JSON.stringify(out);
     assert.ok(Buffer.byteLength(wire, "utf8") <= 4096, `outline wire ${Buffer.byteLength(wire, "utf8")} B exceeds 4096 for ${JSON.stringify(call)}`);
     const envelope = ["contentHash", "entries", "generation", "indexView", "omittedSymbols", "reasons", "relativePath", "schemaVersion", "scopeState"];
-    // detail=diagnostic may add timing/omission notes (05 §5.1) but never removes the envelope.
-    if ("detail" in call) assert.deepEqual(envelope.filter(key => !(key in out)), []);
+    if ("detail" in call) assert.deepEqual(Object.keys(out).sort(), [...envelope, "diagnostic"].sort());
     else assert.deepEqual(Object.keys(out).sort(), envelope);
     assert.equal(out.schemaVersion, "java-outline/v1");
     assert.equal(out.relativePath, relativePath);
@@ -490,6 +490,19 @@ test("java_symbol operation=outline: the public wire is the documented envelope 
     const entries = out.entries as Array<Record<string, unknown>>;
     assert.ok(entries.length > 0);
     assert.equal(Number(out.omittedSymbols) + entries.length, methodCount + 1, "every declaration is either listed or counted as omitted");
+    if ("detail" in call) {
+      assert.ok(call.limit !== undefined);
+      const diagnostic = record(out.diagnostic);
+      assert.ok(typeof diagnostic.elapsedMs === "number" && Number.isFinite(diagnostic.elapsedMs) && diagnostic.elapsedMs >= 0);
+      assert.deepEqual(diagnostic.omissions, {
+        limitEntries: methodCount + 1 - call.limit,
+        wireEntries: call.limit - entries.length,
+        wireSignatures: entries.filter(entry => entry.signatureOmitted === true).length
+      });
+      assert.deepEqual(Object.keys(diagnostic).sort(), ["elapsedMs", "omissions"]);
+      if (call.limit === 1) assert.deepEqual(out.reasons, [], "limit omission does not mark scope partial");
+      else assert.ok((out.reasons as string[]).includes("SOURCE_BUDGET"));
+    }
     for (const entry of entries) {
       assert.deepEqual(Object.keys(entry).filter(key => !allowedEntryKeys.has(key)), []);
       assert.equal(entry.stability, "STABLE");

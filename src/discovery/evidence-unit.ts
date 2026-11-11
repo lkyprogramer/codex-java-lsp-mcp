@@ -42,14 +42,15 @@ export type EvidenceUnitResult = {
 };
 
 /**
- * Anchor windows inside one method body under a line budget (Q04). Windows come from the
+ * Anchor windows inside one method body under line and optional UTF-8 byte budgets (Q04). Windows come from the
  * existing anchorWindows(): this only narrows the radius until they fit, then drops the last
  * anchors. Anchors outside the method, or dropped, are reported, never silently lost.
  */
 export function selectEvidenceWindows(input: {
   methodStart: number; methodEnd: number; anchorLines: readonly number[]; maxLines: number;
+  byteBudget?: { maxBytes: number; bytesOf(startLine: number, endLine: number): number };
 }): { ranges: Array<{ startLine: number; endLine: number }>; omittedAnchors: number[] } {
-  const { methodStart, methodEnd, maxLines } = input;
+  const { methodStart, methodEnd, maxLines, byteBudget } = input;
   if (!Number.isInteger(maxLines) || maxLines < 0) throw new Error("invalid maxLines");
   const anchors = [...new Set(input.anchorLines)].sort((a, b) => a - b);
   const inside = anchors.filter(line => Number.isInteger(line) && line >= methodStart && line <= methodEnd);
@@ -59,7 +60,9 @@ export function selectEvidenceWindows(input: {
     const chosen = inside.slice(0, kept);
     for (let radius = 16; radius >= 0; radius -= 1) {
       const ranges = anchorWindows(methodStart, methodEnd, chosen, radius);
-      if (total(ranges) <= maxLines) return { ranges, omittedAnchors: [...outside, ...inside.slice(kept)].sort((a, b) => a - b) };
+      if (total(ranges) > maxLines) continue;
+      if (byteBudget && ranges.reduce((sum, range) => sum + byteBudget.bytesOf(range.startLine, range.endLine), 0) > byteBudget.maxBytes) continue;
+      return { ranges, omittedAnchors: [...outside, ...inside.slice(kept)].sort((a, b) => a - b) };
     }
   }
   return { ranges: [], omittedAnchors: anchors };
@@ -84,12 +87,29 @@ function javaFragments(anchor: EvidenceAnchor, bundle: JavaFileBundle, lines: re
     // Too large for the budget: the declaration head, then windows around the requested line.
     const headEnd = Math.min(method.bodyRange?.start.line ?? end, end);
     const head: Fragment = { ...base, sourceKind, startLine: start, endLine: headEnd, role: "signature" };
-    const windows = headEnd < end
-      ? selectEvidenceWindows({ methodStart: headEnd + 1, methodEnd: end, anchorLines: [requestedLine], maxLines: Math.max(0, remaining.lines - (headEnd - start + 1)) }).ranges
-      : [];
+    const bodyPartial = { startLine: start, endLine: end };
+    if (requestedLine < start || requestedLine > end) return { fragments: [head], bodyPartial };
+    const explicit = { startLine: requestedLine, endLine: requestedLine };
+    const anchorFragment: Fragment = { ...base, sourceKind, ...explicit, role: "anchor" };
+    const anchorBytes = bytesOf(requestedLine, requestedLine);
+    if (requestedLine <= headEnd) {
+      const headCoversAnchor = requestedLine - start < EVIDENCE_UNIT_LIMITS.maxLines
+        && bytesOf(start, requestedLine) <= EVIDENCE_UNIT_LIMITS.maxBytes;
+      return { fragments: !headCoversAnchor && anchorBytes <= EVIDENCE_UNIT_LIMITS.maxBytes ? [anchorFragment, head] : [head], bodyPartial };
+    }
+    const headLines = headEnd - start + 1;
+    const windowBytes = EVIDENCE_UNIT_LIMITS.maxBytes - bytesOf(start, headEnd);
+    // If the head and requested line cannot coexist, reserve the explicit line before clipping the head.
+    if (anchorBytes <= EVIDENCE_UNIT_LIMITS.maxBytes && (headLines >= EVIDENCE_UNIT_LIMITS.maxLines || windowBytes < anchorBytes)) {
+      return { fragments: [anchorFragment, head], bodyPartial };
+    }
+    const { ranges } = selectEvidenceWindows({ methodStart: headEnd + 1, methodEnd: end, anchorLines: [requestedLine],
+      maxLines: Math.max(1, remaining.lines - headLines), byteBudget: { maxBytes: windowBytes, bytesOf } });
+    // An over-budget anchor is attempted on its own so delivery reports why it was omitted.
+    const windows = ranges.length ? ranges : [explicit];
     return {
       fragments: [head, ...windows.map((range): Fragment => ({ ...base, sourceKind, ...range, role: "anchor" }))],
-      bodyPartial: { startLine: start, endLine: end }
+      bodyPartial
     };
   }
   const type = bundle.types.find(entry => entry.typeId === anchor.declarationId);

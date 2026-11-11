@@ -170,7 +170,8 @@ test("full fake-model chain: java_symbol, java_evidence and native read source i
   assert.equal(row.candidateReceiptValidation.status, "VALID");
   const stockRows = row.candidateReceiptValidation.rows.filter(item => item.path === "src/Stock.java");
   assert.deepEqual(stockRows.map(item => [item.callId, item.finalCandidateMatches]), [["c-read-stock", false], ["c-reread-stock", true]]);
-  assert.equal(row.sourceReceived.find(event => event.callId === "c-reread-stock").text, "class Stock { int n = 2; }\n");
+  assert.equal(row.sourceReceived.find(event => event.type === "SOURCE_RECEIVED" && event.callId === "c-reread-stock")?.text,
+    "class Stock { int n = 2; }\n");
   assert.equal(row.taskSuccess, true);
 
   // Source the host kept only as paths in the final message is not delivered, whatever the tool returned.

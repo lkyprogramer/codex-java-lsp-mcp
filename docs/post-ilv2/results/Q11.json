@@ -1,32 +1,125 @@
 {
   "schema": "post-ilv2/task-result/v1",
   "taskId": "Q11",
-  "status": "BLOCKED_ENV",
+  "status": "PASS",
   "trigger": {
     "state": "MAINLINE",
-    "evidence": []
+    "evidence": [
+      "acceptance.md"
+    ]
   },
   "identity": {
-    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
-    "productBuildDigest": null,
-    "datasetDigest": null,
+    "baselineSourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "sourceHead": "71e5ce89659e34275b419b5ab64883f960ad4f5a",
+    "dirtyDiffHash": "1db17f9e8f81514023c7ccffdd04141faf9ad97093b627f5bbcb27b1b4b298d9",
+    "sourceDigest": "999bb3a354be3d72e612aa5bcc3a818cf10bd1fd0272da783d5f61b80d5d9757",
+    "productBuildDigest": "8b009a4871f7df5c49c03cae9e88628504ceaac1e36d589e186aff5ff1199dab",
+    "nativeDigest": "4022147233b332df371fda861382257ce7d856a0e6d9122e7b12c1336236fe7c",
+    "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
     "installedDigest": null
   },
   "checks": [
     {
-      "name": "node scripts/check-facts-revision.mjs",
-      "state": "NOT_RUN",
-      "reason": "user directed no compile/test this round (D0); Mac gates and private raw are also not in this environment (BLOCKED_ENV)"
+      "name": "npm ci --offline",
+      "state": "PASS",
+      "log": "npm-ci.log",
+      "sha256": "1379897b94f57ad00e1c1be6ed4a2fa55f6d3357afe1c317ace8aca043e8b92a"
     },
     {
-      "name": "targeted node --test list in docs/post-ilv2/acceptance.md",
-      "state": "NOT_RUN",
-      "reason": "user directed no compile/test this round (D0); Mac gates and private raw are also not in this environment (BLOCKED_ENV)"
+      "name": "npm run build",
+      "state": "PASS",
+      "log": "qualified-build.log",
+      "sha256": "b703060726a764093352552b2a070112e214aa4876c3af2fa005ac8d1ac8fcb6"
     },
     {
-      "name": "npm test && npm run gate:pr && npm run measure:tool-schema",
-      "state": "NOT_RUN",
-      "reason": "user directed no compile/test this round (D0); Mac gates and private raw are also not in this environment (BLOCKED_ENV)"
+      "name": "node scripts/check-facts-revision.mjs --ack (type-only fact API change)",
+      "state": "PASS",
+      "log": "qualified-facts.log",
+      "sha256": "e6cb3706732185f76ef21ab694f99c1878e5e0329e6ded13ca56ca2a7deb3020"
+    },
+    {
+      "name": "acceptance.md targeted source suite",
+      "state": "PASS",
+      "tap": {
+        "tests": 148,
+        "pass": 148,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      },
+      "log": "qualified-src.log",
+      "sha256": "b805a50677b8c1879045a7cebc4faf7442e116cf6ef59ed8372622d69bf42fea"
+    },
+    {
+      "name": "acceptance.md and Q10 targeted script suites",
+      "state": "PASS",
+      "tap": {
+        "tests": 188,
+        "pass": 187,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1
+      },
+      "log": "qualified-scripts.log",
+      "sha256": "e959dfe3c1b9ff558887a5ded146d3473ccf5828d7e0ce4036831800c216b210"
+    },
+    {
+      "name": "npm test -- --reuse (isolated full with mac10-v3)",
+      "state": "PASS",
+      "tap": [
+        {
+          "tests": 1655,
+          "pass": 1654,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 1
+        },
+        {
+          "tests": 709,
+          "pass": 700,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 9
+        }
+      ],
+      "stdioSmoke": "PASS",
+      "log": "qualified-full.log",
+      "sha256": "a6efbe586cff42e34b00aaf26ed8b1f29e41d5c03e21c1de7f9e2d66191145b4"
+    },
+    {
+      "name": "npm run gate:pr",
+      "state": "PASS",
+      "tap": {
+        "tests": 1655,
+        "pass": 1654,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1
+      },
+      "log": "qualified-pr.log",
+      "sha256": "9cbc840dda13ebbf007398cad7d9d3e03a24361cd8b3caed421b50eebe446dd7"
+    },
+    {
+      "name": "npm run measure:tool-schema and same-build measure",
+      "state": "PASS",
+      "tools": 5,
+      "bytes": 9086,
+      "log": "qualified-schema-same-build.log",
+      "sha256": "cf4d20316454c651b5ef433ca93492fba007647c3109b6f0817d2f0b84969b33"
+    },
+    {
+      "name": "manual outline over real MCP stdio",
+      "state": "PASS",
+      "wireBytes": 3791,
+      "log": "qualified-manual.log",
+      "sha256": "6deb6232cbf95f94d8f3b8fab82432d261656a15f3aa9f822c8bae7c11567d88"
+    },
+    {
+      "name": "independent static review of the frozen patch",
+      "state": "PASS",
+      "openP0P1P2": 0,
+      "log": "review.md",
+      "sha256": "2430e4fde7f6da9ecf1a6d40dbc8a25c36e1677a9c11c7f3d091cf3313e1b977"
     }
   ],
   "counts": {
@@ -42,22 +135,29 @@
   },
   "cost": {
     "providerUsage": null,
-    "wireBytes": null,
+    "wireBytes": 3791,
     "sourceBytes": null,
     "plannedBytes": null
   },
-  "engineeringEligibility": "NOT_ASSESSED",
+  "engineeringEligibility": "ENGINEERING_ELIGIBLE",
   "benefit": "UNMEASURED",
   "deployAuthorized": false,
   "limitations": [
-    "BLOCKED_ENV: Mac gates and private raw are not in this environment; Linux fixtures are not a substitute",
-    "engineeringEligibility stays NOT_ASSESSED until the listed gates pass on one build and review has no open P1/P2",
-    "no decision function added: the three fields are recorded in acceptance.md and this result",
-    "tests written later, NOT_RUN: outline under STALE/NOT_READY held view and FRESH-but-incomplete coverage (symbol-static.test), outline deadline before query / during query / before source verification (outline.test), shared reader deadline (evidence-source-reader.test), outline public wire envelope and 4096 B cap on a 60-method generic file (output-shape.test)"
+    "Engineering qualification only. Q02 attribution and formal Q10 LIVE measurement are outside this run.",
+    "The full suite retained the 10 existing conditional skips. The targeted script MAC-10 skip was covered by the full suite.",
+    "The historic G14 absolute-floor failures remain disclosed. Installed build identity was not measured."
   ],
-  "rawEvidence": [],
-  "implementation": "NO_CODE",
-  "changes": [
-    "docs/post-ilv2/acceptance.md"
+  "evidenceRunRoot": "MAC_WORK_ROOT/runs/post-ilv2-engineering-20261111.NPZgeZ",
+  "rawEvidence": [
+    "candidate.patch",
+    "validation-index.jsonl",
+    "entry-build-identity.json",
+    "status.tsv",
+    "qualified-full.log",
+    "qualified-pr.log",
+    "qualified-schema-entry.log",
+    "review.md",
+    "manual/result.json",
+    "raw/validation/qualified-full/1.evidence/mac10-chain.json"
   ]
 }
