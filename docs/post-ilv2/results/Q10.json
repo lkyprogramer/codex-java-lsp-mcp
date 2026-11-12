@@ -174,7 +174,9 @@
     "Both arms cap source slices at 80 lines / 16000 bytes. Outline structure and rg navigation are outside that source-slice accounting.",
     "An initial relative-entry invocation blocked at setup and made zero model requests. The corrected isolated candidate completed all scheduled pairs.",
     "One B2 QA slot reached the round limit and counts as a failure. One B0 repair source unit was refused by receipt validation; the repair verdict uses its frozen oracle.",
-    "Token metrics report the self-hosted provider usage. Cold FRESH waits are included in end-to-end times and recorded separately."
+    "Token metrics report the self-hosted provider usage. Cold FRESH waits are included in end-to-end times and recorded separately.",
+    "Post-hoc tool adoption groups are self-selected and small. The observed associations do not identify the causal effect of using a tool.",
+    "A source-budget signal without a matching missing required line is not counted as a proven budget cause."
   ],
   "rawEvidence": [
     {
@@ -264,6 +266,30 @@
     {
       "path": "post-ilv2-q10-v18.MiUPr3/tmp/codex-java-lsp-isolated-validation-nkg1Nc/q10-live/attempts.json",
       "sha256": "b30c0002e229a97a941f237b616e03dba05c9f5777e608ef23252f43c1729816"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/posthoc/review-q10.mjs",
+      "sha256": "f67fc81997ab0220764a20077ae73c9a9ab216b4aade775fa9675914afb0b11a"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/posthoc/report.json",
+      "sha256": "a30e2a55c14e09a662b35581cd58b52d43784ec94e95dcd9c65e36f8d23b6c40"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/posthoc/review.log",
+      "sha256": "f862344c58cd8072a0cab7f948c5c82fb85b8ffff546711d431ecd0e38d35c9f"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/posthoc/repeat.log",
+      "sha256": "317d53dada44421df3156c87b9b68121a344d4cd6aec82246f912d63e082248a"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/posthoc/invalid-input.log",
+      "sha256": "d536c526f3d494fd5838da9b83b25a50d0d4e34c093cf695ab0efa740da807e7"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/posthoc/existing-output.log",
+      "sha256": "84600d75942216337c59bcb8f18aab452786b8bc9545d8615d3188ae33cc3514"
     }
   ],
   "implementation": "CODE_WRITTEN",
@@ -447,5 +473,122 @@
         "medianIndexWaitMs": 51386.5
       }
     }
+  },
+  "postHocReview": {
+    "status": "PASS",
+    "analysis": "POST_HOC",
+    "modelRequests": 0,
+    "qaByArm": {
+      "b0": {
+        "slots": 33,
+        "successful": 11,
+        "answerCorrect": 26,
+        "requiredEvidenceCovered": 12
+      },
+      "b2": {
+        "slots": 33,
+        "successful": 14,
+        "answerCorrect": 21,
+        "requiredEvidenceCovered": 15
+      }
+    },
+    "b2QaToolUseGroups": {
+      "NEITHER": {
+        "slots": 24,
+        "successful": 10,
+        "answerCorrect": 14,
+        "requiredEvidenceCovered": 11,
+        "evidenceSourceVerified": 0
+      },
+      "OUTLINE_ONLY": {
+        "slots": 3,
+        "successful": 1,
+        "answerCorrect": 1,
+        "requiredEvidenceCovered": 1,
+        "evidenceSourceVerified": 0
+      },
+      "EVIDENCE_ONLY": {
+        "slots": 3,
+        "successful": 1,
+        "answerCorrect": 3,
+        "requiredEvidenceCovered": 1,
+        "evidenceSourceVerified": 1
+      },
+      "BOTH": {
+        "slots": 3,
+        "successful": 2,
+        "answerCorrect": 3,
+        "requiredEvidenceCovered": 2,
+        "evidenceSourceVerified": 3
+      }
+    },
+    "pairedAnswerCorrect": {
+      "qaGroups": 11,
+      "bootstrapMethod": "EXACT_TASK_CLUSTER_PERCENTILE",
+      "meanDelta": -0.1515151515151515,
+      "clusterBootstrap95": [
+        -0.42424242424242425,
+        0.12121212121212122
+      ],
+      "groupsImproved": 1,
+      "groupsRegressed": 3,
+      "groupsTied": 7
+    },
+    "evidenceAttribution": {
+      "replayedQaToolCalls": 441,
+      "localReadWindowChecks": 1,
+      "byArm": {
+        "b0": {
+          "qaSlots": 33,
+          "coverageFailureSlots": 21,
+          "missingRequiredLines": 42,
+          "lineCountsByReason": {
+            "NOT_IN_RAW_SOURCE": 38,
+            "BUDGET_CLIPPED": 4
+          },
+          "slotsByReason": {
+            "NOT_IN_RAW_SOURCE": 19,
+            "BUDGET_CLIPPED": 2
+          },
+          "qaSlotsWithAnyReceiptRefusal": 0,
+          "coverageFailureSlotsWithBudgetSignals": 5,
+          "coverageFailureSlotsWithBudgetSignalsWithoutProvenMissingLine": 3,
+          "coverageFailureSlotsAlsoWrong": 6
+        },
+        "b2": {
+          "qaSlots": 33,
+          "coverageFailureSlots": 18,
+          "missingRequiredLines": 72,
+          "lineCountsByReason": {
+            "BUDGET_CLIPPED": 13,
+            "NOT_IN_RAW_SOURCE": 57,
+            "BUDGET_STOPPED_READ": 2
+          },
+          "slotsByReason": {
+            "BUDGET_CLIPPED": 2,
+            "NOT_IN_RAW_SOURCE": 15,
+            "BUDGET_STOPPED_READ": 1
+          },
+          "qaSlotsWithAnyReceiptRefusal": 0,
+          "coverageFailureSlotsWithBudgetSignals": 12,
+          "coverageFailureSlotsWithBudgetSignalsWithoutProvenMissingLine": 9,
+          "coverageFailureSlotsAlsoWrong": 11
+        }
+      }
+    },
+    "checks": [
+      {
+        "name": "Frozen artifact identity, budget and tool wire replay",
+        "state": "PASS"
+      },
+      {
+        "name": "Repeat report byte comparison and independent exact bootstrap calculation",
+        "state": "PASS"
+      },
+      {
+        "name": "Wrong gold digest and existing output controls",
+        "state": "PASS"
+      }
+    ]
   }
 }
