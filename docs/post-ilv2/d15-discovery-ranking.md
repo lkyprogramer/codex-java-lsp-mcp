@@ -59,7 +59,7 @@
 - 在开始改代码前，先用产品默认的 limit 8 重测一次基线。
 - 同一次运行里补测 Q02 的 14 组 `UNMEASURED`。
 
-**封存检索集**
+**封存检索集**（具体规则以 §7 为准，§7 与本节不一致时按 §7 执行）
 - 在 W1 的 Mac 结果出来之前，先固定抽样规则，作为 D15 的一部分提交。
 - **语料**：冻结的三个仓库。可选再加 1 个从未参与调参的仓库，是否加由用户决定。
 - **规模与分层**：至少 50 组。按（仓库 × 类别）分层抽样，抽样 seed 为 `d15-sealed-20261112`，抽检 seed 为 `d15-audit-20261112`。两个 seed 随本计划一起提交，之后不得更改。
@@ -77,7 +77,7 @@
 | W1 | 排名诊断 | 代码层事实，本节下方；`scripts/ilv2-ranking-diagnosis.mjs`；Mac 上的聚合结果 | 代码事实和脚本已完成，Mac 未运行 |
 | W2 | 在 limit 8 下重测基线，并补测 UNMEASURED | 检索 runner 报告与 ledger | 未开始 |
 | W3 | 排序改动 | 按 W1 中实测余量最大的机制选择，只在 dev 上开发 | 等 W1 |
-| W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | 等抽样规则提交 |
+| W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | 规则（§7）和工具 `scripts/ilv2-sealed-set.mjs` 已完成，Mac 未生成 |
 | W5 | 封存集上的一次性测量 | 按 §3 判定 | 等 W3、W4 |
 | W6 | 结论；必要时用目标宿主的真实 schema 做小样本配对 | 决策记录 | 等 W5 |
 
@@ -138,3 +138,76 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
   - 只有离线的 co-anchor 或 main 优先重排有提升：改 exact 歧义列表的排序，例如 main 优先，或在 exact 路径上接受 `terms` 用于排序。后者是公共 API 变化，需要单独评估兼容性。
 - **B 占主导**：改为按分数融合，或给多路同时命中加分。
 - **大多数目标是 `NOT_RETURNED` 或 `FILE_ONLY`**：问题不在排序，而在查询词或窗口。这时 W3 需要重新立项，不能硬改排序。
+
+## 7. 封存检索集规则（修订，2026-11-12）
+
+提交本修订时，W1 的 Mac 结果尚未产生，`results/D15-W1.json` 不存在。规则代码为 `scripts/ilv2-sealed-set.mjs` 中的 `SEALED_RULES`（`sealed-rules/v1`），它的摘要随每份 selection 记录。生成之后修改任何一条规则，都必须换新的 rules 版本，并重新生成。
+
+### 7.1 对 §3、§4 的修订
+
+- **目标必须能被 `java_symbol query` 返回。** exact 路径只返回简单名等于查询词的声明。所以每题必须有一个 role 为 `declaration` 的目标，即锚点所命名声明的头部。头部指从修饰符和注解起到名字所在行，不含 Javadoc。
+- **主指标只统计 `declaration` 目标，并且按身份匹配。** 只有声明本身对应的候选才算命中，即同一文件，且候选的 `selection.line`（产品返回的 1 起始名字行）落在声明头部的行范围内。不沿用窗口口径，因为在窗口口径下，所属类型的候选会把它后面约 59 行内的短成员一并计为命中，测到的就不是成员自己的排序了。诊断脚本中对应的字段是 `declarationHitAt`（`matchesTarget`）。
+- **`relation` 目标只进端到端层。** 实现类方法、MyBatis 语句这类目标，查询本身返回不了，仍按读取窗口口径计算，只计入检索 runner 读取之后的召回。没有 role 标签的 mac10-v3 gold 也继续用窗口口径。
+- **类别与分层。** 共 3 个类别：`declaration`（方法或类型）、`implementations`、`xml`。按（仓库 × 类别）分层。callers、spring、dto-impact 没有不依赖类型解析的可靠静态规则，v1 不纳入。这一点相对 §4 的"沿用 mac10 类别"有所收窄。
+- **不按名字唯一性筛选。** 同名声明保留。每题记录 `sameNameCount`，即语料中同名方法或类型的数量，test 源码也计入。生成汇总按 1、2–3、4–7、8+ 四档输出分布，用来确认集合里包含 exact 同名歧义的题。
+
+### 7.2 题面模板（公开内容）
+
+锚点固定为两个裸名 `[所属类型, 成员]`，题面不出现路径，也不出现答案：
+
+| 类别/形状 | 题面 | declaration 目标 | relation 目标 |
+|---|---|---|---|
+| declaration/method | Locate the declaration of method `M` in type `T`. | `T#M` 的头部 | — |
+| declaration/type | Locate the declaration of type `T`, the one that declares `M`. | `T` 的头部；`M` 是 `T` 的可用成员之一，按抽样 seed 选取 | — |
+| implementations | Find the implementations of method `M` declared by interface `I`. | `I#M` 的头部 | main 源码中实现 `I`、方法名和参数个数都相同的方法头部，限 1–5 个 |
+| xml | Find the MyBatis SQL statement that mapper method `M` of `I` executes. | `I#M` 的头部 | namespace 等于 `I` 的 FQN 的 mapper XML 中，id 唯一的 select/insert/update/delete 元素 |
+
+**代表性检查**：生成之前，请 Mac 对 mac10-v3 的公开题面回传三个计数：每题的锚点数，裸名与带 `#` 或 `.` 的限定名各占多少，反引号片段的占比。这几个计数不涉及任何结果。如果 v3 的锚点以限定名为主，就先修订模板、换新的 rules 版本，再开始生成。
+
+### 7.3 过滤规则
+
+- 目标声明只取 main 源码，即不匹配 `TEST_SOURCE` 的文件。
+- 排除以下成员：
+  - 访问器：有方法体、名字匹配 `^(get|set|is)[A-Z]`、且声明不超过 3 行。接口方法和抽象方法没有方法体，不按长度认定为访问器，例如 mapper 的 `getById` 会保留；
+  - `toString`、`equals`、`hashCode`；
+  - 同一类型内有重载的方法，因为同名重载时目标不唯一。
+- 关系解析：
+  - implements 引用按显式 import、同包、唯一的通配 import 依次解析；
+  - 泛型实参不算作超类型；
+  - 语料中出现两次的 FQN（例如两个模块各有一份）不参与关系解析；
+  - relation 只取直接实现，不含经子接口或抽象基类间接实现的方法。这只影响端到端召回的分母，不影响主指标。
+- 曝光排除：
+  - 候选的任一锚点等于 mac10-v3 任一题（dev 与 holdout）的 `planQueries` 查询词时，排除；
+  - 候选的目标文件中，过半出现在 v3 同一语料的证据文件里时，排除；
+  - 未通过 `leaks()` 检查的，排除。
+
+### 7.4 抽样、封存与抽检
+
+- **配额**：每层取 q 题，q 从 6 起逐次加 1，直到计划封存数 Σ round(min(q, n_层) × 0.85) 不少于 50，或 q 已等于最大层的候选数。达不到 50 时生成命令以退出码 1 结束，freeze 也会拒绝。
+- **顺序**：层内顺序由 `sha256(d15-sealed-20261112   层   id)` 决定。
+- **划分**：由 MAC-10 转换器按同一 seed，以 0.85 的比例划出 holdout，holdout 即封存部分。其余约 15% 为 dev，只用于流水线冒烟。
+- **抽检**：每层抽 ceil(25% × 入选数) 题，顺序由 `d15-audit-20261112` 决定。每层通常只抽 1–2 题，所以"错误率超过 10% 则整层重做"实际等于"抽到一个错就整层重做"。重做时该层取同一 seed 顺序中的下一块（`--rounds`），然后重新抽检。
+- **可复现**：未抽检题的 `verification.at` 取各冻结 head 中最晚的提交时间，不取当前时钟。同样的输入、规则和 rounds 会得到同样的 `datasetDigest`。
+- **独立性**：候选和 gold 只来自冻结 head 的源码文本，不调用产品，不读取产品索引或排序，也不按任何产品结果筛选难度。需要注意，生成器与产品索引共用 tree-sitter-java 解析库，所以只能声称"独立于产品索引和排序"，不能声称"独立解析"。解析层面的错误由人工抽检兜底。
+
+### 7.5 Mac 执行步骤
+
+1. 回传 §7.2 的代表性计数，只含计数。
+2. 生成：
+
+   ```bash
+   node scripts/ilv2-sealed-set.mjs generate --inputs "$ILV2_MAC10_INPUTS"      --exclude-dataset "$ILV2_MAC10_DATASET" --out "$ILV2_RUN_ROOT/d15-w4-gen"
+   ```
+
+   输入 checkout 必须停在冻结 head，并且没有未跟踪或被忽略的文件。`summary.json` 只含计数，可以回传。`selection.json` 和 `audit-sheet.json` 是私有文件。
+3. 抽检：由人工逐题填写 `audit-sheet.json` 的 `verdict`、`by`、`at`、`notes`。只看源码片段，不运行产品。
+4. 冻结：
+
+   ```bash
+   node scripts/ilv2-sealed-set.mjs freeze --selection "$ILV2_RUN_ROOT/d15-w4-gen"      --audit <填好的 audit-sheet.json> --inputs "$ILV2_MAC10_INPUTS" --out <私有数据集目录>
+   ```
+
+   有 FAIL 时，命令会给出 `--rounds` 参数。带上它重新执行第 2 步，`--out` 换一个新目录，然后重新抽检。封存数不足 50 时，freeze 在写任何文件之前就会拒绝。
+4.1. **口径校准**：只在数据集的 dev 部分（约 15%）跑一次 `ilv2-ranking-diagnosis.mjs`。`declarationTargets` 应等于 dev 部分的题数。`declarationHitAt[20]` 如果为 0，说明产品返回的 `selection.line` 与 gold 头部的行号基准对不上，必须先修正口径，才能进入 W5。
+5. 记录：把 `datasetDigest`、各层计数和抽检结论写入 `results/D15-W4.json`。在 W5 之前，不得在 holdout 上运行检索 runner、诊断脚本或任何产品查询。
+

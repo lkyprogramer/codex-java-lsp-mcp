@@ -168,6 +168,8 @@ export async function prepareMac10Live({ datasetFile, tasksFile, goldFile, input
   const contractTasks = new Map();
   for (const row of rows) {
     requireValue(isMac10TaskRow(row) && row.split === split, `task ${row.taskId} is not a ${split} MAC-10 task`);
+    // Locate tasks (D15 retrieval sets) carry neither answer nor oracle: no agent run can be scored on them.
+    requireValue(row.kind === "qa" || row.kind === "repair", `task ${row.taskId} is a ${row.kind} task; the live adapter scores qa and repair only`);
     const goldRow = goldRows.get(row.taskId);
     requireValue(goldRow && goldRow.kind === row.kind && goldRow.corpusId === row.corpusId, `task ${row.taskId} has no matching gold`);
     const slots = row.kind === "qa" ? contract.tasks?.[row.taskId]?.slots : undefined;

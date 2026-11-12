@@ -41,9 +41,21 @@ export function windowCovers(candidate, target, window = DRIVER_WINDOW) {
   return target.startLine >= start && target.endLine <= end;
 }
 
-/** 1-based rank of the first candidate whose window covers the target, or null. */
+/**
+ * A declaration target (sealed-set gold, role "declaration") is found only by the candidate that IS that declaration:
+ * same file and the candidate's selection (the 1-based name line) inside the declaration head. A window rule would
+ * credit the enclosing type's candidate for every short member, which is not the ranking of the member.
+ */
+export function matchesTarget(candidate, target) {
+  if (target.role !== "declaration") return windowCovers(candidate, target);
+  const declaration = candidate.declaration;
+  const line = declaration?.selection?.line;
+  return declaration?.relativePath === target.path && Number.isInteger(line) && line >= target.startLine && line <= target.endLine;
+}
+
+/** 1-based rank of the first candidate that finds the target, or null. */
 export function rankOf(candidates, target) {
-  const index = candidates.findIndex(candidate => windowCovers(candidate, target));
+  const index = candidates.findIndex(candidate => matchesTarget(candidate, target));
   return index < 0 ? null : index + 1;
 }
 
@@ -87,11 +99,13 @@ export function classifyTarget({ target, plan, responses, fileText }) {
     if (rank !== null && (best === null || rank < best.rank)) best = { term, index, rank, response, candidates };
   }
   const kind = target.path.endsWith(".java") ? "java" : "other";
+  // D15 §7: sealed-set gold labels each range; only role "declaration" counts for the primary product metric.
+  const role = target.role ?? null;
   const probes = { textRoute: probeRank(plan, responses, target, "text"), withTerms: probeRank(plan, responses, target, "withTerms") };
   if (best === null) {
     const fileHit = plan.terms.some(term => (responses.get(term)?.auto?.candidates ?? []).some(candidate => candidate.declaration?.relativePath === target.path));
     const exactOutcomes = plan.terms.map(term => responses.get(term)?.auto?.exact).filter(outcome => outcome !== undefined);
-    return { kind, rank: null, mechanism: fileHit ? "FILE_ONLY" : "NOT_RETURNED", intent: exactOutcomes.length ? "exact" : "text", exactOutcomes,
+    return { kind, role, rank: null, mechanism: fileHit ? "FILE_ONLY" : "NOT_RETURNED", intent: exactOutcomes.length ? "exact" : "text", exactOutcomes,
       counterfactual: { mainFirst: null, coAnchor: null, mainFirstCoAnchor: null, ...probes } };
   }
   const { response, candidates, rank } = best;
@@ -101,7 +115,7 @@ export function classifyTarget({ target, plan, responses, fileText }) {
   const coTerms = plan.terms.filter(term => term !== best.term);
   const mechanism = rank === 1 ? "TOP1" : intent === "exact" ? (response.auto.exact === "ambiguous" ? "EXACT_AMBIGUOUS" : "EXACT_OTHER") : "TEXT_MERGE";
   return {
-    kind, rank, mechanism, intent, exact: response.auto.exact ?? null, termIndex: best.index,
+    kind, role, rank, mechanism, intent, exact: response.auto.exact ?? null, termIndex: best.index,
     selectionLimited: response.auto.selectionLimited === true,
     returned: candidates.length,
     ahead: {
@@ -146,6 +160,7 @@ export function summarize(rows) {
     orTextRoute: targets.map(item => minRank(item.rank, item.counterfactual.textRoute)),
     orWithTerms: targets.map(item => minRank(item.rank, item.counterfactual.withTerms))
   };
+  const declarations = targets.filter(item => item.role === "declaration");
   const missed = targets.filter(item => item.rank === null);
   const exactTargets = targets.filter(item => item.intent === "exact");
   const ambiguous = targets.filter(item => item.mechanism === "EXACT_AMBIGUOUS");
@@ -154,6 +169,9 @@ export function summarize(rows) {
     emptyPlanTasks: rows.filter(row => row.planTerms === 0).length,
     targets: targets.length,
     javaTargets: targets.filter(item => item.kind === "java").length,
+    // Primary product metric on role-labelled gold (sealed set); null when the gold carries no roles (mac10-v3).
+    declarationTargets: declarations.length,
+    declarationHitAt: declarations.length ? Object.fromEntries(CUTOFFS.map(cutoff => [cutoff, hitAt(declarations.map(item => item.rank), cutoff)])) : null,
     byMechanism,
     hitAt: Object.fromEntries(Object.entries(series).map(([name, ranks]) => [name, Object.fromEntries(CUTOFFS.map(cutoff => [cutoff, hitAt(ranks, cutoff)]))])),
     exactRoute: {

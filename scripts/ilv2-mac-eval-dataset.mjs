@@ -17,9 +17,14 @@ export const ANSWER_CONTRACT_SCHEMA = "ilv2-mac10-answer-contract/v1";
 export const CORPUS_SCHEMA = "ilv2-mac10-corpus/v1";
 export const DATASET_SCHEMA = "ilv2-mac10-dataset/v1";
 export const ORACLE_SCHEMA = "ilv2-mac10-repair-oracle/v1";
-export const CATEGORIES = Object.freeze(["callers", "implementations", "xml", "spring", "dto-impact", "repair"]);
+export const CATEGORIES = Object.freeze(["callers", "implementations", "xml", "spring", "dto-impact", "repair", "declaration"]);
 export const SLOT_TYPES = Object.freeze(["string", "string-set", "boolean", "integer"]);
-const CANDIDATE_SOURCES = new Set(["jin-commit-tasks/v1", "git-history"]);
+// D15 W4: a locate task has neither answer nor oracle; it is scored by required evidence alone (retrieval sets).
+export const TASK_KINDS = Object.freeze(["qa", "repair", "locate"]);
+// declaration: the declaration an anchor names; relation: reached from it (an implementation, a MyBatis statement).
+export const EVIDENCE_ROLES = Object.freeze(["declaration", "relation"]);
+// static-head: generated from the frozen head itself (no commit pair), D15 W4.
+const CANDIDATE_SOURCES = new Set(["jin-commit-tasks/v1", "git-history", "static-head"]);
 const PRIVATE_FILE = 0o600;
 
 /** Lines [startLine, endLine] (1-based, inclusive) joined by "\n"; the unit every evidence hash covers. */
@@ -86,18 +91,21 @@ function validateTask(task, candidates, changed) {
   const where = `task ${task.id}`;
   requireValue(/^[A-Z0-9][A-Z0-9-]{1,31}$/.test(task.id ?? ""), `${where}: invalid id`);
   requireValue(CATEGORIES.includes(task.category), `${where}: unknown category ${task.category}`);
-  requireValue(task.kind === (task.category === "repair" ? "repair" : "qa"), `${where}: kind must follow category`);
+  requireValue(task.category === "repair" ? task.kind === "repair" : task.kind === "qa" || task.kind === "locate", `${where}: kind must follow category`);
+  requireValue(task.category !== "declaration" || task.kind === "locate", `${where}: declaration tasks are locate tasks`);
   requireValue(typeof task.prompt === "string" && task.prompt.trim().length >= 20, `${where}: prompt required`);
   requireValue(task.anchors === undefined || (Array.isArray(task.anchors) && task.anchors.every(item => typeof item === "string" && item.length > 0)), `${where}: anchors must be strings`);
   const verification = task.verification;
   requireValue(verification && typeof verification.by === "string" && verification.by && !Number.isNaN(Date.parse(verification.at)) && typeof verification.method === "string" && verification.method && typeof verification.notes === "string" && verification.notes.length >= 20, `${where}: unverified (verification.by/at/method/notes required)`);
-  requireValue(CANDIDATE_SOURCES.has(task.source?.type) && /^[0-9a-f]{40}$/.test(task.source.commit ?? "") && /^[0-9a-f]{40}$/.test(task.source.parent ?? ""), `${where}: candidate source commit required`);
+  requireValue(CANDIDATE_SOURCES.has(task.source?.type) && /^[0-9a-f]{40}$/.test(task.source.commit ?? "") && (task.source.type === "static-head" || /^[0-9a-f]{40}$/.test(task.source.parent ?? "")), `${where}: candidate source commit required`);
+  requireValue(task.source.type !== "static-head" || (task.kind === "locate" && task.source.parent === undefined), `${where}: static-head sources are for locate tasks and carry no parent`);
   const candidate = task.source.type === "jin-commit-tasks/v1" ? candidates.get(`${task.repo}:${task.source.commit}`) : null;
   requireValue(task.source.type !== "jin-commit-tasks/v1" || candidate, `${where}: commit is not a jin-commit-tasks/v1 candidate of ${task.repo}`);
   requireValue(Array.isArray(task.evidence) && task.evidence.length > 0, `${where}: verified evidence required`);
   for (const item of task.evidence) {
     requireValue(typeof item.path === "string" && !path.isAbsolute(item.path) && !item.path.split("/").includes("..") && Number.isInteger(item.startLine) && Number.isInteger(item.endLine), `${where}: invalid evidence row`);
     requireValue(typeof item.why === "string" && item.why.length >= 10, `${where}: evidence ${item.path} lacks its verified reason`);
+    requireValue(item.role === undefined || EVIDENCE_ROLES.includes(item.role), `${where}: evidence ${item.path} has an unknown role`);
     // A commit's changed files are a candidate list: one becomes required evidence only with its own verification.
     requireValue(!changed.has(item.path) || item.fromCommitFiles === true, `${where}: ${item.path} is a changed file of the source commit; mark fromCommitFiles after verifying it`);
   }
@@ -113,6 +121,9 @@ function validateTask(task, candidates, changed) {
       requireValue(ok, `${where}: gold value for ${name} does not match ${slot.type}`);
     }
     requireValue(!task.repair, `${where}: a QA task has no repair oracle`);
+  } else if (task.kind === "locate") {
+    requireValue(!task.answer && !task.repair, `${where}: a locate task has neither answer nor repair oracle`);
+    requireValue(task.evidence.some(item => item.role === "declaration"), `${where}: a locate task needs a declaration target`);
   } else {
     const repair = task.repair;
     requireValue(repair && typeof repair.file === "string" && Number.isInteger(repair.startLine) && Number.isInteger(repair.endLine) && typeof repair.preState === "string"
@@ -185,6 +196,7 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
       try { changed = await listChanged(record.repoRoot, task.source.parent, task.source.commit); }
       catch { throw new Error(`task ${task.id}: source commit ${task.source.commit} is not in ${task.repo}`); }
     }
+    requireValue(task.source?.type !== "static-head" || task.source.commit === record.head, `task ${task.id}: a static-head source must be the frozen head of ${task.repo}`);
     validateTask(task, candidates, new Set(changed));
     changedBy.set(task.id, changed);
   }
@@ -242,7 +254,8 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
     for (const item of task.evidence) {
       // Evidence inside a repair's own file is hashed on the pre-state the agent actually sees.
       const text = preState && item.path === task.repair.file ? preState.broken : await source(task.repo, item.path);
-      requiredEvidence.push({ path: item.path, startLine: item.startLine, endLine: item.endLine, sha256: rangeHash(text, item.startLine, item.endLine), fileSha256: sha256(text) });
+      requiredEvidence.push({ path: item.path, startLine: item.startLine, endLine: item.endLine, sha256: rangeHash(text, item.startLine, item.endLine), fileSha256: sha256(text),
+        ...(item.role ? { role: item.role } : {}) });
       evidenceFiles.set(`${task.repo}:${item.path}`, { corpusId: task.repo, path: item.path, sha256: sha256(await source(task.repo, item.path)) });
     }
     const visible = { schema: TASK_SCHEMA, taskId: task.id, corpusId: task.repo, kind: task.kind, category: task.category, split: split.get(task.id),
@@ -252,7 +265,7 @@ export async function buildDataset({ curation, curationDir, inputs, candidateSet
     const row = { schema: GOLD_SCHEMA, taskId: task.id, split: split.get(task.id), kind: task.kind, category: task.category, corpusId: task.repo,
       requiredEvidence, source: task.source, verification: task.verification };
     if (task.kind === "qa") row.answer = task.answer.value;
-    else {
+    else if (task.kind === "repair") {
       const testSource = await readFile(path.resolve(curationDir, task.repair.oracle));
       const oracle = { schema: ORACLE_SCHEMA, taskId: task.id, corpusId: task.repo, head: record.head, file: task.repair.file,
         startLine: task.repair.startLine, endLine: task.repair.endLine, mainClass: task.repair.mainClass, release: task.repair.release, timeoutMs: task.repair.timeoutMs,

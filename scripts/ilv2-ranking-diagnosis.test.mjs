@@ -7,7 +7,7 @@ import path from "node:path";
 import { sha256 } from "./ilv2-mac-contracts.mjs";
 import { convertDataset } from "./ilv2-mac-eval-dataset.mjs";
 import { evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
-import { classifyTarget, coAnchorOrder, diagnoseTask, inIdentityOrder, mainFirst, predictedIntent, rankOf, runDiagnosis, summarize, windowCovers } from "./ilv2-ranking-diagnosis.mjs";
+import { classifyTarget, coAnchorOrder, diagnoseTask, inIdentityOrder, mainFirst, matchesTarget, predictedIntent, rankOf, runDiagnosis, summarize, windowCovers } from "./ilv2-ranking-diagnosis.mjs";
 
 const decl = (relativePath, line, name = "find", fqn = `demo.${relativePath.split("/").pop().replace(/\.java$/, "")}#${name}`) =>
   ({ declaration: { relativePath, name, fqn, kind: "method", selection: { line, column: 5 } }, matchedBy: ["exact"], binding: "ambiguous" });
@@ -23,6 +23,16 @@ test("windowCovers mirrors the runner window: line-20, at most 80 lines, ending 
   assert.equal(windowCovers(candidate, target("a/src/main/java/B.java", 100, 101)), false, "other file");
   assert.equal(rankOf([decl("x/X.java", 1), candidate], target("a/src/main/java/A.java", 100, 110)), 2);
   assert.equal(rankOf([decl("x/X.java", 1)], target("a/src/main/java/A.java", 100, 110)), null);
+});
+
+test("a declaration target is found only by its own candidate, never by the enclosing type's window", () => {
+  const typeCandidate = { declaration: { relativePath: "src/main/java/shop/api/Discount.java", name: "Discount", fqn: "shop.api.Discount", kind: "type", selection: { line: 3, column: 18 } } };
+  const head = { path: "src/main/java/shop/api/Discount.java", startLine: 4, endLine: 4 };
+  assert.equal(rankOf([typeCandidate], head), 1, "the window rule credits the type");
+  assert.equal(matchesTarget(typeCandidate, { ...head, role: "declaration" }), false);
+  assert.equal(rankOf([typeCandidate, decl("src/main/java/shop/api/Discount.java", 4, "apply")], { ...head, role: "declaration" }), 2);
+  assert.equal(matchesTarget(decl("src/main/java/shop/api/Discount.java", 4, "apply"), { ...head, startLine: 2, endLine: 4, role: "declaration" }), true, "annotations above the name stay in the head");
+  assert.equal(matchesTarget(typeCandidate, { ...head, role: "relation" }), true, "relations keep the reader's window rule");
 });
 
 test("identity order and the stable re-orderings never add or drop a candidate", () => {
@@ -51,6 +61,7 @@ test("classifyTarget: ambiguous exact list ordered by path, with test sources ah
   ]);
   const row = classifyTarget({ target: target(goal, 40, 60), plan, responses, fileText: file => file === goal ? "RefundLedger ledger;" : "" });
   assert.equal(row.rank, 8);
+  assert.equal(row.role, null);
   assert.equal(row.mechanism, "EXACT_AMBIGUOUS");
   assert.equal(row.identityOrdered, true);
   assert.deepEqual(row.ahead, { sameName: 7, test: 1, sameFile: 0 });
@@ -90,6 +101,11 @@ test("the best-ranked term decides and summarize carries counts only", () => {
   assert.deepEqual(summary.hitAt.observed, { 1: 1, 3: 1, 8: 1, 20: 1 });
   assert.equal(summary.byMechanism.NOT_RETURNED, 1);
   assert.doesNotMatch(JSON.stringify(summary), /demo|first|second/);
+  assert.equal(summary.declarationTargets, 0);
+  assert.equal(summary.declarationHitAt, null, "unlabelled gold has no primary metric");
+  const labelled = summarize([{ planTerms: 2, targets: [{ ...row, role: "declaration" }, { ...row, role: "relation", rank: null }] }]);
+  assert.equal(labelled.declarationTargets, 1);
+  assert.deepEqual(labelled.declarationHitAt, { 1: 1, 3: 1, 8: 1, 20: 1 });
 });
 
 test("diagnoseTask queries the agent-visible plan, probes the text route after an exact answer and the plan's other terms", async () => {
