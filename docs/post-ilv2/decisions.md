@@ -148,4 +148,4 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 | P3 | Q10 | 72 个正式 slot 完成，收益判定 INCONCLUSIVE |
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
-| P5 | D15 发现与排序 | 计划已写；W1 诊断脚本、W4 封存集规则（§7）与生成工具就绪（Linux 单测通过），Mac 均未运行 |
+| P5 | D15 发现与排序 | W1 Mac 校准通过，W2 的 40 个 slot 已测，结果见 [D15-W1.json](results/D15-W1.json)。W4 封存规则与生成工具就绪，Mac 尚未生成封存集 |

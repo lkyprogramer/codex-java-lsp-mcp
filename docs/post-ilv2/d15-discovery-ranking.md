@@ -60,7 +60,7 @@
 - 同一次运行里补测 Q02 的 14 组 `UNMEASURED`。
 
 **封存检索集**（具体规则以 §7 为准，§7 与本节不一致时按 §7 执行）
-- 在 W1 的 Mac 结果出来之前，先固定抽样规则，作为 D15 的一部分提交。
+- 原计划在 W1 的 Mac 结果出来前提交抽样规则。实际 W1 Mac 运行先于 §7 规则提交，封存集仍待生成。
 - **语料**：冻结的三个仓库。可选再加 1 个从未参与调参的仓库，是否加由用户决定。
 - **规模与分层**：至少 50 组。按（仓库 × 类别）分层抽样，抽样 seed 为 `d15-sealed-20261112`，抽检 seed 为 `d15-audit-20261112`。两个 seed 随本计划一起提交，之后不得更改。
 - **排除**：mac10-v3 用过的 commit 和锚点；证据文件与 v3 重叠超过一半的候选。
@@ -74,9 +74,9 @@
 
 | # | 内容 | 产出 | 状态 |
 |---|---|---|---|
-| W1 | 排名诊断 | 代码层事实，本节下方；`scripts/ilv2-ranking-diagnosis.mjs`；Mac 上的聚合结果 | 代码事实和脚本已完成，Mac 未运行 |
-| W2 | 在 limit 8 下重测基线，并补测 UNMEASURED | 检索 runner 报告与 ledger | 未开始 |
-| W3 | 排序改动 | 按 W1 中实测余量最大的机制选择，只在 dev 上开发 | 等 W1 |
+| W1 | 排名诊断 | 代码层事实，本节下方；`scripts/ilv2-ranking-diagnosis.mjs`；Mac 上的聚合结果 | Q07 校准通过，20 组 Q02 和 33 组 dev 已测，见 [Mac 结果](results/D15-W1.json) |
+| W2 | 在 limit 8 下重测基线，并补测 UNMEASURED | 检索 runner 报告与 ledger | 40 个 slot 已测，原 14 组已补测，仍有 8 组缺少定因证据，见 [Mac 结果](results/D15-W1.json) |
+| W3 | 排序改动 | 按 W1 中实测余量最大的机制选择，只在 dev 上开发 | 待根据 W1、W2 结果确定方案 |
 | W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | 规则（§7）和工具 `scripts/ilv2-sealed-set.mjs` 已完成，Mac 未生成 |
 | W5 | 封存集上的一次性测量 | 按 §3 判定 | 等 W3、W4 |
 | W6 | 结论；必要时用目标宿主的真实 schema 做小样本配对 | 决策记录 | 等 W5 |
@@ -141,7 +141,7 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
 
 ## 7. 封存检索集规则（修订，2026-11-12）
 
-提交本修订时，W1 的 Mac 结果尚未产生，`results/D15-W1.json` 不存在。规则代码为 `scripts/ilv2-sealed-set.mjs` 中的 `SEALED_RULES`（`sealed-rules/v1`），它的摘要随每份 selection 记录。生成之后修改任何一条规则，都必须换新的 rules 版本，并重新生成。
+规则首次随 `dd435f22` 提交，该提交未包含 W1 的 Mac 结果。规则代码为 `scripts/ilv2-sealed-set.mjs` 中的 `SEALED_RULES`（`sealed-rules/v1`），它的摘要随每份 selection 记录。生成之后修改任何一条规则，都必须换新的 rules 版本，并重新生成。
 
 ### 7.1 对 §3、§4 的修订
 
