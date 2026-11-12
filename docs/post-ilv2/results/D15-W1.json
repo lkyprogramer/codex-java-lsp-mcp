@@ -638,5 +638,213 @@
     "W1 measures candidate order and declaration-centered window coverage, not actual source delivery or task success.",
     "W2 baseline changed only the product query limit; the supplemental impact diagnostic varied the read-plan file cap from 6 to 20 at 14336 bytes for attribution only.",
     "Three original UNMEASURED groups have complete retrieval and no observed retrieval failure. Eight still have an incomplete retrieval without evidence to identify the earliest failed stage; unobserved stages remain null."
-  ]
+  ],
+  "stepA": {
+    "dev": {
+      "byCategoryAndKind": {
+        "callers/java": {
+          "targets": 16,
+          "TOP1": 1,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 15,
+          "other": 0,
+          "missedAfterExact": 15,
+          "textRecovers": 8,
+          "textRecoversAt8": 3,
+          "withTermsRecovers": 4
+        },
+        "dto-impact/java": {
+          "targets": 22,
+          "TOP1": 7,
+          "TEXT_MERGE": 1,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 14,
+          "other": 0,
+          "missedAfterExact": 14,
+          "textRecovers": 12,
+          "textRecoversAt8": 11,
+          "withTermsRecovers": 7
+        },
+        "implementations/java": {
+          "targets": 21,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 21,
+          "other": 0,
+          "missedAfterExact": 21,
+          "textRecovers": 11,
+          "textRecoversAt8": 4,
+          "withTermsRecovers": 1
+        },
+        "repair/java": {
+          "targets": 3,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 3,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        },
+        "spring/java": {
+          "targets": 26,
+          "TOP1": 11,
+          "TEXT_MERGE": 5,
+          "FILE_ONLY": 1,
+          "NOT_RETURNED": 9,
+          "other": 0,
+          "missedAfterExact": 10,
+          "textRecovers": 3,
+          "textRecoversAt8": 2,
+          "withTermsRecovers": 0
+        },
+        "xml/other": {
+          "targets": 16,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 16,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        }
+      },
+      "responseSize": {
+        "exactTermsAutoBytes": {
+          "n": 45,
+          "p50": 1554,
+          "p95": 8610
+        },
+        "exactTermsTextBytes": {
+          "n": 45,
+          "p50": 20651,
+          "p95": 21924
+        },
+        "textTermsAutoBytes": {
+          "n": 16,
+          "p50": 19963,
+          "p95": 22345
+        },
+        "exactAutoCandidates": {
+          "n": 45,
+          "p50": 1,
+          "p95": 8
+        },
+        "exactTextCandidates": {
+          "n": 45,
+          "p50": 20,
+          "p95": 20
+        }
+      }
+    },
+    "q02": {
+      "byCategoryAndKind": {
+        "callers/java": {
+          "targets": 11,
+          "TOP1": 1,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 10,
+          "other": 0,
+          "missedAfterExact": 10,
+          "textRecovers": 6,
+          "textRecoversAt8": 3,
+          "withTermsRecovers": 4
+        },
+        "dto-impact/java": {
+          "targets": 10,
+          "TOP1": 3,
+          "TEXT_MERGE": 1,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 6,
+          "other": 0,
+          "missedAfterExact": 6,
+          "textRecovers": 6,
+          "textRecoversAt8": 5,
+          "withTermsRecovers": 2
+        },
+        "implementations/java": {
+          "targets": 7,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 7,
+          "other": 0,
+          "missedAfterExact": 7,
+          "textRecovers": 3,
+          "textRecoversAt8": 2,
+          "withTermsRecovers": 1
+        },
+        "repair/java": {
+          "targets": 3,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 3,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        },
+        "spring/java": {
+          "targets": 18,
+          "TOP1": 6,
+          "TEXT_MERGE": 4,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 8,
+          "other": 0,
+          "missedAfterExact": 8,
+          "textRecovers": 3,
+          "textRecoversAt8": 2,
+          "withTermsRecovers": 0
+        },
+        "xml/other": {
+          "targets": 8,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 8,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        }
+      },
+      "responseSize": {
+        "exactTermsAutoBytes": {
+          "n": 26,
+          "p50": 1552,
+          "p95": 3621
+        },
+        "exactTermsTextBytes": {
+          "n": 26,
+          "p50": 20651,
+          "p95": 21924
+        },
+        "textTermsAutoBytes": {
+          "n": 7,
+          "p50": 21172,
+          "p95": 22345
+        },
+        "exactAutoCandidates": {
+          "n": 26,
+          "p50": 1,
+          "p95": 3
+        },
+        "exactTextCandidates": {
+          "n": 26,
+          "p50": 20,
+          "p95": 20
+        }
+      }
+    }
+  }
 }
