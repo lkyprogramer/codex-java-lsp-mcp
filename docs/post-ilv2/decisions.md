@@ -139,4 +139,4 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 | P3 | Q10 | 72 个正式 slot 完成，收益判定 INCONCLUSIVE |
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
-| P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。见 [D15 收尾决策](decision-log.md#d15-收尾) |
+| P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。见 [D15 收尾决策](decision-log.md#d15-收尾)。追加 XML-3 定位（D15 §11）：dev 的 16 个 XML 目标产品读到 0 个，诊断脚本已完成，Mac 未运行 |

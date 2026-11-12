@@ -365,3 +365,56 @@ Q02 的 20 组同时报告，用于和 native 的 42.8% 对照，不参与判定
 
 D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evidence 和 D14 发布合同继续按各自的决策记录处理。[决策日志](decision-log.md#d15-收尾)
 
+## 11. XML-3：MyBatis XML 证据定位（2026-11-12，Mac 运行之前提交）
+
+用户于 2026-11-12 批准。只做定位，不改 `src/`。
+
+### 11.1 已有事实
+
+- F：dev 的 16 个 XML 目标在 C0–C3 下均未读到，全部 `POOL_ABSENT`（[D15-F.json](results/D15-F.json) 的 `xmlAttribution`）。
+- XML-2：6 个目标的 gold 语句行内原样出现了题面查询词；java_symbol 在 limit 20 的 auto 与 text 路径上从未返回指向任何 XML 的 `evidenceRange`；W2 中 xml 题 native 召回合计 1.0/3，product 为 0（`xmlAttribution2`）。
+- 代码：每条 mapper 语句只建一个检索文档，绑定到"FQN 等于 namespace 的 Java 类型中同名的方法"，文档文本只有 `mybatis <kind> <namespace>.<statementId>`，不含 SQL 正文（`src/discovery/search-document.ts` 的 `pushMyBatisDocuments`）。`<sql>`、`<resultMap>` 不建文档。
+- 口径：W1 诊断的 `windowCovers` 只看 `declaration`，不看 `evidenceRange`，数不到 XML 目标。XML-2 显示 XML evidence 从未出现，现有数字不受影响；修复 XML 发现后再用 W1 测量前，须先改这个口径。
+
+### 11.2 诊断（`scripts/ilv2-xml-discovery-diagnosis.mjs`）
+
+每个 XML 目标沿固定阶梯检查，记第一个失败的阶段：
+
+| 阶段 | 含义 |
+|---|---|
+| `NOT_STATEMENT` | gold 范围不在 `<select/insert/update/delete id=…>` 内（例如 `<sql>`、`<resultMap>`） |
+| `NO_NAMESPACE_TYPE` | 语料中没有按包路径声明 namespace 的 Java 文件 |
+| `NO_SAME_NAMED_METHOD` | 该类型没有与语句 id 同名的方法 |
+| `DOC_NOT_RETRIEVED` | 以语句 id 做 `searchMode: "text"` 查询（limit 20），没有候选的 `evidenceRange` 指向这条语句 |
+| `DOC_RANK_GT8` | 能返回，但排在第 8 名之后 |
+| `TERMS_MISS_DOC` | 能返回，但题面查询词与文档文本没有共享的非通用标识符 |
+| `REACHABLE` | 题面查询词本可以检索到它 |
+
+另记两项：绑定成功的目标中题面查询词是否命中文档文本（`termsHitDocAmongBound`）；从 mapper 方法（`namespace#id` 精确查询的首个候选）按 driver 的 balanced/compact 调用 java_impact 时，读取计划是否覆盖该语句（`impactAtMapperMethod`）。前三个阶段是镜像索引规则的文本检查，不读取产品索引。
+
+### 11.3 判读规则（看数字之前固定）
+
+取非 `REACHABLE` 中目标数最多的阶段（并列时都报告）：
+
+| 最多的阶段 | 结论 | 下一步 |
+|---|---|---|
+| `DOC_NOT_RETRIEVED` | 文档缺失或检索缺陷 | 产品缺陷修复，最高优先级：先查该语料的 `mybatis_resource` 与 `search_doc` |
+| `DOC_RANK_GT8` | DOCUMENT 层排名 | 并入发现层排名问题，单独预注册 |
+| `TERMS_MISS_DOC`，或 `termsHitDocAmongBound.no` 多于 `yes` | 词汇不匹配：文档只有 id 和 namespace，题面说的是 SQL 内容 | 候选改动：把有界的 SQL 正文标识符（表名、列名）写入语句文档；先预注册评估口径和字节预算 |
+| `NO_NAMESPACE_TYPE` 或 `NO_SAME_NAMED_METHOD` | 绑定缺口 | 查绑定规则；确属项目约定之外的写法时记为不支持 |
+| `NOT_STATEMENT` | gold 指向 `<sql>` 或 `<resultMap>`，按设计不建文档 | 交用户决定是否为片段建文档 |
+
+`impactAtMapperMethod` 中 `ABSENT` 与 `LISTED_NO_SPAN` 合计过半时，另记 impact 路径缺陷：即使从正确的 mapper 方法出发，读取计划也不交付 XML。
+
+### 11.4 Mac 执行步骤
+
+1. `git pull --ff-only`；`npm run build:isolated`（HEAD 须包含本节的提交）。
+2. `node --test scripts/ilv2-xml-discovery-diagnosis.test.mjs`，期望 0 失败。
+3. 运行：
+   ```bash
+   node scripts/ilv2-xml-discovery-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" --tasks "$DS/tasks-dev.jsonl" \
+     --gold "$DS/private/gold-dev.jsonl" --inputs "$ILV2_MAC10_INPUTS" --server-js "$PWD/dist/server.js" --out "$RUN/d15-xml3-dev"
+   ```
+   期望 `xmlTargets = 16`。
+4. 回传：新建 `results/D15-XML3.json`，放 `summary.json`（只有计数）和私有 `rows.jsonl` 的路径与哈希。
+
