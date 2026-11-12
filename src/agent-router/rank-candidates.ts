@@ -88,28 +88,32 @@ export async function rankCandidatePool(
 export function truncateRankedCandidatePool(
   ranked: CandidateFile[],
   context: RankCandidatesContext,
-  requiredPaths: ReadonlySet<string> = new Set<string>()
+  selectedPaths: ReadonlySet<string> = new Set<string>()
 ): CandidateFile[] {
   // Preserve Task 29's public candidate-tail contract independently of the
   // V6 byte planner. The legacy file-slot selector is used only to decide
   // which CandidateFile records survive the output cap; it does not feed the
   // V6 shortlist, buckets, utility, or byte budget.
   const readPlanCovered = new Set(baselineReadPlanCoverage(ranked, context));
+  const selectedFiles = new Set(ranked.filter(file => selectedPaths.has(file.absolutePath)));
   for (const file of ranked) {
-    if (requiredPaths.has(file.absolutePath)
+    if (selectedFiles.has(file)
       || file.reasons.includes("typeGraph:implementation-lookup")) {
       readPlanCovered.add(file);
     }
   }
-  const hardLimit = candidateLimit(context.options.mode);
-  const anchorLimits = context.anchors.map(anchor => candidateLimit(context.options.mode, anchor.profile));
-  const limit = anchorLimits.length === 0
-    ? hardLimit
-    : Math.min(hardLimit, Math.max(...anchorLimits));
+  const limit = rankedCandidateLimit(context);
   for (const file of focusModuleRepresentatives(ranked, context.options.focusModules, limit, readPlanCovered)) {
     readPlanCovered.add(file);
   }
-  return truncateCandidateTail(ranked, readPlanCovered, limit);
+  return truncateCandidateTail(ranked, readPlanCovered, limit, selectedFiles);
+}
+
+export function rankedCandidateLimit({ anchors, options }: Pick<RankCandidatesContext, "anchors" | "options">): number {
+  const hardLimit = candidateLimit(options.mode);
+  return anchors.length === 0 ? hardLimit : Math.min(hardLimit, Math.max(
+    ...anchors.map(anchor => candidateLimit(options.mode, anchor.profile))
+  ));
 }
 
 /**

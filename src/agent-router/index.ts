@@ -16,6 +16,7 @@ import {
   baselineReadPlanSafePaths,
   familyReadPlanProtectedPaths,
   rankCandidatePool,
+  rankedCandidateLimit,
   truncateRankedCandidatePool,
   type RankCandidatesContext
 } from "./rank-candidates.js";
@@ -395,10 +396,13 @@ export class AgentRouter {
     const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, rankContext));
     const plannerProtectedPaths = readPlanProtectedPaths(rankedPool, protectedReadPlanPaths, rankContext);
     const poolIdByPath = new Map(rankedPool.map((file, index) => [file.absolutePath, `P${index + 1}`]));
+    const outputFileLimit = rankedCandidateLimit(rankContext);
     const readPlanResult = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
       files: rankedPool,
       ids: poolIdByPath,
-      options,
+      options: (options.readPlanMaxItems ?? 0) > outputFileLimit
+        ? { ...options, readPlanMaxItems: outputFileLimit }
+        : options,
       javaIndex: this.javaIndex,
       protectedPaths: plannerProtectedPaths,
       generation
@@ -411,12 +415,6 @@ export class AgentRouter {
       ...publicReadPlanMetrics
     } = readPlanResult;
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
-    const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
-    const pathById = new Map([...idByPath].map(([absolutePath, id]) => [id, absolutePath]));
-    const readPlan = readPlanResult.items.map((item, index) => ({
-      ...item,
-      fileId: idByPath.get(readPlanResult.selectedPaths[index]!) || "F?"
-    }));
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     // One status() call shared by the Lombok gap and semantic.readiness below -
@@ -428,7 +426,7 @@ export class AgentRouter {
     // Lombok annotation itself.
     const lombokScopePaths = [...new Set([
       ...anchorPaths,
-      ...readPlan.map(item => pathById.get(item.fileId)).filter((item): item is string => item !== undefined)
+      ...readPlanResult.selectedPaths
     ])];
     const lombok = await timed(phaseMs, "lombokCompleteness", async () =>
       lombokCompleteness(sessionStatus.generatedCode, lombokScopePaths, this.javaIndex, generation, budget));
@@ -443,7 +441,7 @@ export class AgentRouter {
       anchors,
       options,
       ranked,
-      readPlan,
+      readPlan: readPlanResult,
       rgExecution: lexicalOutcome.rgExecution,
       suppressed,
       evidenceGaps: [

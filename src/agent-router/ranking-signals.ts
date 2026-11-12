@@ -150,7 +150,8 @@ function countsTowardStructuralTailDensity(candidate: CandidateFile): boolean {
 export function truncateCandidateTail(
   ranked: CandidateFile[],
   readPlanCovered: Set<CandidateFile>,
-  limit = ranked.length
+  limit = ranked.length,
+  selectedReadFiles: ReadonlySet<CandidateFile> = new Set()
 ): CandidateFile[] {
   const isProtected = (file: CandidateFile): boolean =>
     readPlanCovered.has(file)
@@ -164,12 +165,12 @@ export function truncateCandidateTail(
   }
 
   if (ranked.length <= 10) {
-    return limitKeepingProtected(sortByScore(ranked), protectedFiles, readPlanCovered, limit);
+    return limitKeepingProtected(sortByScore(ranked), protectedFiles, readPlanCovered, limit, selectedReadFiles);
   }
 
   const structuralCount = ranked.filter(countsTowardStructuralTailDensity).length;
   if (structuralCount < MIN_STRUCTURAL_EVIDENCE_FOR_TAIL_TRUNCATION) {
-    return limitKeepingProtected(sortByScore(ranked), protectedFiles, readPlanCovered, limit);
+    return limitKeepingProtected(sortByScore(ranked), protectedFiles, readPlanCovered, limit, selectedReadFiles);
   }
   const dynamicBudget = Math.min(Math.floor(structuralCount * 0.5), 4);
   let cliffIdx = discardable.length;
@@ -186,14 +187,15 @@ export function truncateCandidateTail(
     kept = [...kept, ...discardable.slice(keep, keep + (floor - kept.length))];
   }
 
-  return limitKeepingProtected(sortByScore(kept), protectedFiles, readPlanCovered, limit);
+  return limitKeepingProtected(sortByScore(kept), protectedFiles, readPlanCovered, limit, selectedReadFiles);
 }
 
 function limitKeepingProtected(
   sorted: CandidateFile[],
   protectedFiles: CandidateFile[],
   requiredFiles: ReadonlySet<CandidateFile>,
-  limit: number
+  limit: number,
+  selectedReadFiles: ReadonlySet<CandidateFile>
 ): CandidateFile[] {
   if (sorted.length <= limit) {
     return sorted;
@@ -210,9 +212,8 @@ function limitKeepingProtected(
       }
     }
   };
-  // Read-plan-covered files include the anchor and are mandatory. Other exact
-  // structural/framework evidence remains preferred, but a large protected
-  // set must not turn candidateLimit into a soft suggestion.
+  // Reserve IDs for the actual read plan before retaining legacy candidates.
+  addUntilLimit(file => selectedReadFiles.has(file));
   addUntilLimit(file => requiredFiles.has(file));
   // A resolved `@Mapper(uses = Type.class)` edge is an explicit compile-time
   // dependency. Retain it before generic structural compatibility evidence so
