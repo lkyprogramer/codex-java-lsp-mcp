@@ -27,3 +27,5 @@ Q07 的同预算对照定位到查询 Top 3 截断，ReadUnit 暂无改动依据
 
 - outline 或 evidence v2 测出 NO_GAIN：删除对应路径。
 - Q10 的结果仍是 INCONCLUSIVE：停止本路线，不再自动生成新的平台级路线。
+
+Q10 最终为 INCONCLUSIVE，按上一条规则，outline/evidence 路线停止，不再为它们单独做模型验证，代码保留，去留延后。2026-11-12 用户另行批准了发现与排序阶段（D15），见 [D15 阶段计划](d15-discovery-ranking.md)。该阶段有独立的预注册采纳规则，不是由上述规则自动生成的。
