@@ -4,16 +4,16 @@
 
 ## 1. 范围
 
-**已确认**
+**立项时已确认**
 - 停止为 outline 和 evidence 单独做模型验证：不做 v4 QA 新题集，不补 B1。
 - 封存检索集的 gold 采用半自动生成，再随机抽检约 25%。
 
-**延后**（本阶段不处理，阶段末再定）
+**延后**（由各自决策记录处理）
 - evidence v2 的发布合同（D14）。
 - outline 和 evidence 的去留。
 - evidence 单元大小与源码预算的解耦。
 
-**本阶段做**：`java_symbol operation=query` 静态发现的候选排序，即 exact 路径与 text 路径的结果顺序。
+**原定范围**是 `java_symbol operation=query` 静态发现的候选排序，即 exact 路径与 text 路径的结果顺序。Mac 诊断后的调整见 §8、§9。
 
 **本阶段不做**
 - driver 的锚点选择策略，例如 Q07 中"首选锚点"取 top-1。这是评测 driver 的行为，不属于产品工作。产品侧改进只计"目标在 `java_symbol` 候选中的名次"。
@@ -59,8 +59,8 @@
 - 在开始改代码前，先用产品默认的 limit 8 重测一次基线。
 - 同一次运行里补测 Q02 的 14 组 `UNMEASURED`。
 
-**封存检索集**（具体规则以 §7 为准，§7 与本节不一致时按 §7 执行）
-- 原计划在 W1 的 Mac 结果出来前提交抽样规则。实际 W1 Mac 运行先于 §7 规则提交，封存集仍待生成。
+**封存检索集（原计划，当前处置见 §10）**
+- 原计划在 W1 的 Mac 结果出来前提交抽样规则。实际 W1 Mac 运行先于 §7 规则提交。§7 的 v1 规则保留供追溯。
 - **语料**：冻结的三个仓库。可选再加 1 个从未参与调参的仓库，是否加由用户决定。
 - **规模与分层**：至少 50 组。按（仓库 × 类别）分层抽样，抽样 seed 为 `d15-sealed-20261112`，抽检 seed 为 `d15-audit-20261112`。两个 seed 随本计划一起提交，之后不得更改。
 - **排除**：mac10-v3 用过的 commit 和锚点；证据文件与 v3 重叠超过一半的候选。
@@ -76,14 +76,14 @@
 |---|---|---|---|
 | W1 | 排名诊断 | 代码层事实，本节下方；`scripts/ilv2-ranking-diagnosis.mjs`；Mac 上的聚合结果 | Q07 校准通过，20 组 Q02 和 33 组 dev 已测，见 [Mac 结果](results/D15-W1.json) |
 | W2 | 在 limit 8 下重测基线，并补测 UNMEASURED | 检索 runner 报告与 ledger | 40 个 slot 已测，原 14 组已补测，仍有 8 组缺少定因证据，见 [Mac 结果](results/D15-W1.json) |
-| W3 | 排序改动 | 按 W1 中实测余量最大的机制选择，只在 dev 上开发 | 按 §6 末条重新立项，改为 §8 的 A–F |
-| W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | §7 的 v1 规则暂停，不生成；改用 §8 步骤 E 的 v2 |
-| W5 | 封存集上的一次性测量 | 按 §3 判定 | 等 W3、W4 |
-| W6 | 结论；必要时用目标宿主的真实 schema 做小样本配对 | 决策记录 | 等 W5 |
+| W3 | 排序改动 | 排序和查询路径诊断 | 已停止，步骤 B 的预算内增益未达到进入实现的门槛，见 §8.6 |
+| W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | `NOT_RUN`，v1 保留作历史记录，v2 延后 |
+| W5 | 封存集上的一次性测量 | 按 §3 判定 | `NOT_RUN`，本阶段没有候选变更进入封存评估 |
+| W6 | 阶段结论 | 决策记录 | 已完成，见 §10 |
 
 ## 6. W1 排名诊断
 
-### 代码层事实（已读代码，未运行）
+### Mac 实测前的代码检查
 
 1. **带大写的单个标识符走 exact 路径。** 锚点通常是 `OrderService`、`getUserInfo` 这类形状，`classifyQuery` 在 auto 模式下判为 `exact`（`src/discovery/query-intent.ts:11-24`）。exact 路径不会回落到 BM25（`src/java-index/sql/entity-search.ts:810-817`）。
 2. **exact 路径内部按路径字母序排序。**
@@ -93,7 +93,7 @@
 3. **text 路径不融合分数。** identifier、chunk、document 三路各自做 BM25，然后按名次轮转合并（`entity-search.ts:855-871`）。不按分数融合，多路同时命中也不加分。所以在一路中排第 r 的候选，合并后大约落在第 3r 位。
 4. **带上下文的消歧目前只能走 text 路径。** 显式 `searchMode=exact` 不接受 `terms`（`src/discovery/query.ts:251-252`）。auto 模式下只要带了 `terms`，就一律走 text 路径，把 query 和 terms 拼成一段文本做 BM25（`query.ts:254-255`）。所以调用方现在就能用 `query=锚点, terms=其他锚点` 带上下文查询，代价是放弃 exact 的名字精确匹配。
 
-### 候选机制（未运行，等 Mac 数据区分）
+### Mac 实测前的候选机制
 
 | 机制 | 预期特征 |
 |---|---|
@@ -101,7 +101,7 @@
 | B. text 路径轮转合并 | 没有 `exact` 字段；目标在单路中名次靠前，合并后被挤后 |
 | C. test 源码挤占 | 目标前面有 `src/test` 等非 main 声明，可与 A、B 叠加 |
 
-Q07 中目标名次为 8–11，A 和 B 都能解释这个结果。Mac 结果回来之前，根因只能写作"候选机制"，不能当作结论，`src/` 的排序也不动。
+Q07 中目标名次为 8–11。A 和 B 是运行前提出的候选解释，实际结果见 §8.1。
 
 ### 诊断脚本
 
@@ -215,19 +215,19 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
 
 ## 8. W1 结果与重新立项（2026-11-12）
 
-本节在步骤 B 的任何数字产生之前提交。用户于 2026-11-12 批准 A–F 重新立项。
+用户于 2026-11-12 批准 A–F 重新立项。步骤 B 的仓库脚本和选择规则随 `ccb88e9` 提交，Mac 上的自有脚本模拟先于该提交，见 §8.6。
 
 ### 8.1 W1、W2 事实（[D15-W1.json](results/D15-W1.json)，dev 33 组，104 个目标）
 
 - 校准通过：Q07 的 4 个目标名次为 8、8、9、11；`intentMismatchTerms = 0`。
 - 默认查询 hit@1/3/8/20 = 19/19/22/25；`TOP1` 19，`EXACT_AMBIGUOUS` 0，`TEXT_MERGE` 6，`NOT_RETURNED` 78。
-- `NOT_RETURNED` 中 60 个发生在 exact 路径之后，其中 34 个能被 text 路径找回。默认与 text 取较好名次：hit@3/8/20 = 29/42/59。
+- 79 个未命中目标（含 1 个 `FILE_ONLY`）中，60 个发生在 exact 路径之后，其中 34 个能被 text 路径找回。默认与 text 取较好名次时，hit@3/8/20 = 29/42/59。
 - 离线重排（main 优先、co-anchor）最多 +1。
 - W2：product（limit 8）平均召回 38.9%，native 42.8%，配对 4 好 4 差 12 平。
 
-推断：§6 的"大多数目标是 `NOT_RETURNED`"成立，排序不是主要瓶颈。exact 路径只返回锚点点名的声明本身，题目需要的调用方、实现和 XML 不在结果中。
+W1 满足 §6 的重新立项条件。多数目标未进入候选列表，重排无法找回这些目标。exact 路径只查精确匹配的声明。text 探针找回了部分 Java 证据范围，XML 目标没有找回。
 
-### 8.2 步骤 B：合并模拟（预注册）
+### 8.2 步骤 B：合并模拟方案
 
 脚本 `scripts/ilv2-merge-simulation.mjs`，只重放 W1 已捕获的 auto 和 text 列表（limit 20，preview none），不调用产品。text 路径的词（auto 未走 exact 的词）在所有策略下都不变。
 
@@ -244,7 +244,7 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
 - 输出：各策略 hit@1/3/5/8/20（分 java 与非 java、分类别）；相对 baseline 新增的目标按所在词的路径结果（match / ambiguous / miss / text）归因；L = 3、5、8 下每个 exact 词的候选数和 locator 字节、每题候选总数和不同文件数。head 预览字节只按产品上限给出界（每候选 1024 B、每请求 2048 B），不是实测。
 - 只读 dev gold，拒绝 holdout gold。
 
-**选择规则（看数字之前固定）**
+**仓库脚本的选择规则**
 1. 按 hit@3 排序，其次 hit@8，再次 L = 8 时 exact 词 locator 字节 p50 较小者。
 2. `fillAlways` 和 `interleaveAlways` 改变 R07 契约。只有在 hit@8 比 `fillAfterHit` 多至少 3 个目标、且 `lostVsBaseline[8] = 0` 时才可入选，入选后还要用户单独批准契约变更。
 3. 最优策略相对 baseline 的 hit@8 增益少于 5 个目标时，不进入步骤 D，直接转向 F。
@@ -254,16 +254,16 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
 
 | 步骤 | 内容 | 状态 |
 |---|---|---|
-| A | 目标去向按类别拆分、两条路径的响应大小。并入步骤 B 的输出（`hitAt8ByCategory`、`perLimit`），不再单独跑 | 并入 B |
-| B | 合并模拟，§8.2 | Mac 用自有脚本完成（见 §8.6）；本仓库脚本未运行 |
-| C | 依据 B 选策略；修订 §3 的 wire 规则 | 不做：按 §8.2 规则 3 转向 F |
+| A | 目标去向按类别拆分、两条路径的响应大小 | Mac 已离线统计，见 [D15-W1.json](results/D15-W1.json) 的 `stepA` |
+| B | 合并模拟，§8.2 | Mac 用自有脚本完成，见 §8.6。仓库脚本未运行 |
+| C | 依据 B 选策略，修订 §3 的 wire 规则 | 预算内增益不足，转向 F |
 | D | 在 auto 模式实现选定策略 | 不做 |
-| E | 封存集 rules v2，主指标随 F 的结论重定 | 等 F |
-| F | java_impact 读取预算，§9 | 诊断脚本已完成，Mac 未运行 |
+| E | 封存集 rules v2，主指标随 F 的结论重定 | 延后，规则未冻结，见 §10 |
+| F | java_impact 读取预算，§9 | Mac 已测，O2，保持 C0 |
 
 ### 8.4 §7 v1 的处置
 
-§7 规则与 `scripts/ilv2-sealed-set.mjs` 保留，v1 不生成。v2 修订主指标后换新 rules 版本。转换器的 `locate` 任务类型、`static-head` 来源与 evidence role 继续可用。
+§7 规则与 `scripts/ilv2-sealed-set.mjs` 保留，v1 不生成。转换器的 `locate` 任务类型、`static-head` 来源与 evidence role 继续可用。v2 的规则制定延后，重启条件见 §10。
 
 ### 8.5 Mac 执行步骤（步骤 B）
 
@@ -330,7 +330,7 @@ node scripts/ilv2-merge-simulation.mjs --dataset "$ILV2_MAC10_DATASET" --gold "$
 
 Q02 的 20 组同时报告，用于和 native 的 42.8% 对照，不参与判定。
 
-### 9.4 Mac 执行步骤
+### 9.4 首轮 Mac 执行步骤
 
 1. `git pull --ff-only`，HEAD 须包含本节的提交；在此之前不要运行 F。**复用 W1/W2 用过的已编译候选**（`dist/server.js` sha256 `a51b04eb…`），不重新 build，保证校准可以逐位复现。该目录已不存在时，从 `13f9dc9a` 之后任一提交重新 build（`src/` 未变），记录新的 build-stamp sha256，由校准决定能否继续。
 2. 定向测试：`node --test scripts/ilv2-impact-budget-diagnosis.test.mjs scripts/ilv2-ranking-diagnosis.test.mjs scripts/ilv2-mac-retrieval-eval.test.mjs`，期望 0 失败。
@@ -343,4 +343,25 @@ Q02 的 20 组同时报告，用于和 native 的 42.8% 对照，不参与判定
    ```
    投影不一致或校准失败会以非 0 退出：停下，回传 `summary.json` 的 `calibration` 块和报错原文。校准失败时首先怀疑截止时间：重放每次 impact 固定传 `deadlineMs: 15000`，W2 的 driver 传的是 `min(15000, 剩余时间)`。
 4. 回传：新建 `results/D15-F.json`，放 `summary.json` 全文（只有计数）和私有产物的路径与哈希。只认 §9.2 的 4 种配置，不追加扫描。
+
+### 9.5 Mac 结果
+
+首轮旧构建在 C2 有 6 对 compact 和 diagnostic 读取范围不一致，评分前退出。`828f8a3d` 修复输出裁剪，使实际选入读取计划的文件优先保留，两个投影使用同一文件 ID 映射。新构建定向测试 41/41 通过，C0–C3 各 56 对响应的文件 ID 均可解析，读取范围一致。Q02 原 20 组校准复现 W2 的平均召回 38.92% 和全召回 3/20。以下为全量 dev 33 组结果。[D15-F.json](results/D15-F.json)
+
+| 配置 | 平均召回 | 较 C0 提升 | `lostVsC0` | 每题接收源码字节 p50 | 较 C0 增幅 |
+|---|---:|---:|---:|---:|---:|
+| C0 | 42.42% | — | 0 | 15,154 B | — |
+| C1 | 44.44% | +2.02 pp | 2 | 18,068 B | +19.23% |
+| C2 | 43.94% | +1.52 pp | 2 | 18,068 B | +19.23% |
+| C3 | 46.21% | +3.79 pp | 0 | 22,097 B | +45.82% |
+
+按 §9.3 判为 **O2**。C1、C2 未达到 3 pp 的召回门槛，C3 达到召回门槛但超出 20% 的源码字节预算。用户确认保持 C0，`balanced` 默认仍是 6 个文件、14 KiB。
+
+## 10. W6 收尾决策（2026-11-12）
+
+- **停止 W3。** W1 有 78/104 个目标未返回，main 优先和 co-anchor 重排在 hit@8 均无增益。步骤 B 直接补齐让 hit@8 从 22/104 增至 42/104，响应字节 p50 从 1,590 B 升至 8,478 B。在 p50 增幅 ≤10% 的配置中，hit@8 最多增加 3 个目标，低于 §8.2 进入实现所需的 5 个，hit@3 只增加 1 个。策略从同一批 dev 中选出，结果用于本阶段取舍。步骤 C、D 到此结束。[D15-W1.json](results/D15-W1.json)
+- **F 保持 C0。** §9.5 的 O2 结果支持保留现有默认预算。`828f8a3d` 保留为读取计划文件 ID 和输出投影的一致性修复。[D15-F.json](results/D15-F.json)
+- **封存集延后。** v1 的主指标关注锚点点名声明的排序，与本轮发现的证据覆盖缺口不匹配。§7 规则与生成工具保留供追溯。v2 尚未冻结，本阶段未生成、抽检或运行 D15 封存集。W4、W5 和正式采纳判定均为 `NOT_RUN`。有新候选改动时，先确定与改动相符的指标和预算，再冻结新版本的采样规则和数据，然后按预设口径做一次性评估。
+
+D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evidence 和 D14 发布合同继续按各自的决策记录处理。[决策日志](decision-log.md#d15-收尾)
 
