@@ -43,7 +43,7 @@ export function mac10PublicFields(slots) {
   return { answerKeys, fields };
 }
 
-/** Parses --source-budget: "none", or LINES:BYTES applied to every QA task of every arm. */
+/** Parses --source-budget: "none", or LINES:BYTES applied to each task on both arms. */
 export function parseSourceBudget(value) {
   requireValue(typeof value === "string", "--source-budget none|LINES:BYTES is required for MAC-10 runs (06 §6.4: the same budget on every arm)");
   if (value === "none") return null;
@@ -59,13 +59,13 @@ export function toEvalTask(task, slots, sourceBudget = null, rules = null) {
   requireValue(isMac10TaskRow(task) && typeof task.taskId === "string" && typeof task.corpusId === "string", "MAC-10 task row required");
   const anchors = Array.isArray(task.anchors) && task.anchors.length > 0 ? `\nNamed anchors: ${task.anchors.map(anchor => `\`${anchor}\``).join(", ")}.` : "";
   const row = { id: task.taskId, schema: TASK_SCHEMA, corpus: task.corpusId, kind: task.kind, category: task.category, split: task.split, query: `${task.prompt}${anchors}` };
+  if (sourceBudget) row.budget = { ...sourceBudget };
   if (task.kind === "qa") {
     const { answerKeys } = mac10PublicFields(slots);
     row.output_contract = { answer_keys: answerKeys };
     row.answerSlots = Object.fromEntries(Object.entries(slots).map(([name, slot]) => [name, slot.type]));
     // The dataset's agent-visible answer rules (answer-contract.json `rules`).
     if (typeof rules === "string" && rules.trim()) row.query += `\nAnswer rules: ${rules.trim()}`;
-    if (sourceBudget) row.budget = { ...sourceBudget };
   }
   return row;
 }

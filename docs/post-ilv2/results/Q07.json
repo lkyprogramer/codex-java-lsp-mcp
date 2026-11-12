@@ -1,11 +1,13 @@
 {
   "schema": "post-ilv2/task-result/v1",
   "taskId": "Q07",
-  "status": "NOT_TRIGGERED",
+  "status": "PASS",
   "trigger": {
-    "state": "UNASSESSED",
+    "state": "TRIGGERED",
     "evidence": [
-      "trigger not assessable: no Q02 ledger (BLOCKED_ENV, docs/post-ilv2/attribution.md); CANDIDATE_EVICTED / RANGE_MISS was not measured, not measured as zero"
+      "Two dev groups have same-view CANDIDATE_EVICTED witnesses at the offline query limit. This triggers investigation of fixed-budget product selection; the ReadUnit mechanism has not been established.",
+      "See results/Q02.json and attribution.md.",
+      "The fixed-budget follow-up reproduced loss before anchoring, and the unchanged ReadUnit covered all four witnesses given the correct anchor."
     ]
   },
   "identity": {
@@ -14,7 +16,20 @@
     "datasetDigest": null,
     "installedDigest": null
   },
-  "checks": [],
+  "checks": [
+    {
+      "name": "Fixed balanced budget replay against real MCP on both triggered task groups",
+      "state": "PASS",
+      "budget": {
+        "files": 6,
+        "bytes": 14336
+      },
+      "groups": 2,
+      "witnesses": 4,
+      "originalCovered": 0,
+      "targetAnchoredCovered": 4
+    }
+  ],
   "counts": {
     "scheduled": null,
     "attempted": null,
@@ -36,9 +51,23 @@
   "benefit": "UNMEASURED",
   "deployAuthorized": false,
   "limitations": [
-    "re-assess after the Mac ledger run; trigger needs >=2 task groups or one recorded critical deterministic defect"
+    "The diagnostic widens only the query candidate list to identify the omitted anchors. It does not measure changing the default query limit or test model benefit."
   ],
-  "rawEvidence": [],
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/q07-fixed-balanced.json",
+      "sha256": "7bb5f601ba796e881f76d90251a1b81457ed346f4a39b73cd14fe1b3e42d7873"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/q07-fixed-balanced.mjs",
+      "sha256": "c42c2159e9acbf7f2a1213bdaafa75f50200cc2aee2534138d8ef42e4228fac9"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/q07-fixed-balanced-retry.log",
+      "sha256": "781617421e7790448577d626e5ddfc278e31c0b607c9422473bebf2b24dc0737"
+    }
+  ],
   "implementation": "NO_CODE",
-  "changes": []
+  "changes": [],
+  "decision": "NO_READUNIT_CHANGE"
 }

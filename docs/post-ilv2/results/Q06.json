@@ -3,9 +3,10 @@
   "taskId": "Q06",
   "status": "NOT_TRIGGERED",
   "trigger": {
-    "state": "UNASSESSED",
+    "state": "NOT_TRIGGERED",
     "evidence": [
-      "trigger not assessable: no Q02 ledger (BLOCKED_ENV, docs/post-ilv2/attribution.md); NOT_DISCOVERED was not measured, not measured as zero"
+      "One dev group has a proven NOT_DISCOVERED label. This is below the two-group threshold and no critical deterministic defect was registered.",
+      "See results/Q02.json and attribution.md."
     ]
   },
   "identity": {
@@ -36,7 +37,7 @@
   "benefit": "UNMEASURED",
   "deployAuthorized": false,
   "limitations": [
-    "re-assess after the Mac ledger run; trigger needs >=2 task groups or one recorded critical deterministic defect"
+    "Trigger assessment is limited to the recorded evidence. Additional unmeasured stages are not counted as zero failures."
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",

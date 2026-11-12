@@ -49,7 +49,7 @@ npm test && npm run gate:pr && npm run measure:tool-schema
 
 上述命令全部通过、独立 review 没有未处置的 P1/P2 之后，才能把 engineeringEligibility 改为 ENGINEERING_ELIGIBLE。G14 地板限制照旧披露；skip 白名单和原有 FAIL 保留。
 
-## Q10 MAC-10 LIVE 前置（D11，NOT_RUN）
+## Q10 MAC-10 LIVE 前置（D11）
 
 `b96a9c1` 之后的提交只改了 `scripts/` 和文档，`src/` 没动，server 构建身份不变。下面几步全部不调用模型，按顺序在同一 Tier-1 候选（`--reuse`）上执行，环境按上节设置。另需 `ILV2_TOOLCHAINS`（冻结 JDK，适配器会逐个核对 javaHome 下文件的 hash），以及与数据集冻结时一致的 `ILV2_MAC10_DATASET` 和 `ILV2_MAC10_INPUTS`。`ILV2_MAC10_INPUTS` 里每个输入 checkout 必须停在冻结 head，且 `git status --porcelain --ignored --untracked-files=all` 为空；否则适配器拒绝运行。如果冻结输入里有构建目录，需要先另做一份干净的 checkout，并在新的 inputs 记录里指向它（head 和 manifest 不变）。
 
@@ -68,3 +68,15 @@ node scripts/evaluate-java-task.mjs --dataset "$ILV2_MAC10_DATASET" \
    期望 exit 0，`results-pack.json` 中：`identity.identityCheck.status=VERIFIED`、`denominator=72`、`identity.pilot.taskIds` 12 个、`identity.mac10.corpora` 与冻结输入一致；有 repair 题时还要求 `identity.mac10.java` 非空且 `frozenFiles` 大于 0。`identity.indexReadyTimeoutMs=900000`。缺 `--source-budget`、同时给 `--repo-roots`/`--kit-root`、pilot 超出题数时 exit 2，且不写 schedule。
 
 以上四步通过后，Q10 LIVE 的工程前置才算满足。真正发出 LIVE 请求（去掉 `--dry-run` 并配置 `OPENAI_*`）属于产生费用的操作，需要用户单独授权，并先确定预算、split 和 seed。
+
+### Mac 执行结果
+
+在 `d7a295e4` 的同一个隔离候选上，本地无模型验证通过。定向脚本 201 项、源码定向 67 项、真实 MAC-10 链路 2 项全部通过，无失败或跳过。真实链路包含 5 个 oracle 的正确和错误版本各重复 3 次。3 个 B2 修复控制均只改了 oracle 文件。
+
+严格 dry-run 以 `20261105` 固定选题和执行顺序，使用 QA 源码上限 `80:16000`，冻结 72 个 slot。三仓与 JDK 身份核对通过。缺预算、冲突 repo roots、冲突 kit、超额选题、server 缺失五个负例均退出 `2`，未写 schedule。真实 B2 MCP 返回的 Java 和 XML 证据也通过了假 transport 的最终请求回执校验。命令、退出码和产物哈希见 [Q10 结果](results/Q10.json)。
+
+### 正式 LIVE 验收（D13）
+
+MAC-10 dev 的 12 个任务组各跑 B0、B2 两臂，每臂重复三次。冻结的 72 个 slot 全部返回结果，进程退出码为 0，正式矩阵内共 474 次串行模型请求。66 个 QA 最终请求的 222 个源码单元通过独立回执复验。76 个索引会话都有查询计数差值。B2 的一个 QA slot 达到轮次上限，按失败计入。使用的模型和预算见 [v1.8 协议](../next-stage/evaluation-protocol-v1.8.json)。
+
+B0 通过 11/36，B2 通过 15/36。按任务组配对的差值为 +11.1 个百分点，95% bootstrap 区间为 −2.8 至 +27.8 个百分点。三仓方向不一致，B2 每 slot 的输入 token 中位数增加 18.0%。运行验收为 `PASS`，收益判定为 `INCONCLUSIVE`。见 [Q10 结果及原始产物哈希](results/Q10.json)。

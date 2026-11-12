@@ -3,9 +3,10 @@
   "taskId": "Q09",
   "status": "NOT_TRIGGERED",
   "trigger": {
-    "state": "NOT_TRIGGERED",
+    "state": "UNASSESSED",
     "evidence": [
-      "no measured repeated waits or source I/O on the Mac this round (Q00 baseline has no timing raw)"
+      "Three first FRESH waits were observed on cold evaluation clones. The required daily repeated-wait or source I/O sample has not been measured.",
+      "See results/Q02.json and attribution.md."
     ]
   },
   "identity": {
@@ -36,7 +37,7 @@
   "benefit": "UNMEASURED",
   "deployAuthorized": false,
   "limitations": [
-    "re-assess with measured per-request waits; no optimisation without a measured wait"
+    "Trigger assessment is limited to the recorded evidence. Additional unmeasured stages are not counted as zero failures."
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",

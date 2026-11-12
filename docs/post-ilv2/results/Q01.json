@@ -1,22 +1,36 @@
 {
   "schema": "post-ilv2/task-result/v1",
   "taskId": "Q01",
-  "status": "NOT_RUN",
+  "status": "PASS",
   "trigger": {
     "state": "MAINLINE",
     "evidence": []
   },
   "identity": {
-    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
-    "productBuildDigest": null,
-    "datasetDigest": null,
+    "sourceHead": "d7a295e49287bc8e68d8861330b5d2b18d0b0f8a",
+    "productBuildDigest": "5263b59138ee8f06a227fcd5aea9e1da46954e4b9dbfae6ba6042626715e98e5",
+    "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
     "installedDigest": null
   },
   "checks": [
     {
-      "name": "node --test scripts/ilv2-mac-delivery-receipt.test.mjs scripts/ilv2-mac-repair-oracle.test.mjs scripts/eval-repair-adapter.test.mjs scripts/evaluate-java-task.test.mjs",
-      "state": "NOT_RUN",
-      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+      "name": "Mac D11 targeted delivery, strict QA and repair oracle controls",
+      "state": "PASS",
+      "suiteTests": 201
+    },
+    {
+      "name": "Frozen MAC-10 known-good and known-bad oracle replay",
+      "state": "PASS",
+      "oracles": 5,
+      "repeatsPerCondition": 3
+    },
+    {
+      "name": "Default serialized path through fake fetch on real B0 and B2 MCP sessions",
+      "state": "PASS",
+      "arms": [
+        "b0",
+        "b2"
+      ]
     }
   ],
   "counts": {
@@ -40,18 +54,28 @@
   "benefit": "UNMEASURED",
   "deployAuthorized": false,
   "limitations": [
-    "the completion receipt guards accidental passes; same-JVM candidate code can read the run id and write the file (not a sandbox)",
-    "scripts/eval-repair-adapter.mjs delegates to the external Python frozen judge (not in this repo); its completion rule is unchanged here",
-    "the live runners still do not call receiptForSerializedRequest during a run; receipts are built post hoc from the captured body via receiptUnitsFromEvents (wiring into the LIVE path belongs to Q10)",
-    "oracles must signal success by a normal return of main; an oracle that calls System.exit(0) on success now judges TEST_FAILED (private mac10-v3 oracles not checked here)",
-    "strict QA: the existing scoreQaAnswer/scoreRunOutcome already are the thin adapter (no second comparator); controls for false vs \"false\", 2 vs \"2\", null, duplicate keys, extra keys, pre-parsed objects and one unread required line written in evaluate-java-task.test (NOT_RUN)",
-    "fake-model chain written (NOT_RUN): runLiveEvalRun product arm (evidence profile) through openaiCompatibleChat with a fake fetch; receiptUnitsFromEvents maps SOURCE_RECEIVED events onto the last serialized body (pointer only at the slice's own path and start line); java_symbol preview, java_evidence unit and native read are receipted and verified; paths-only final message, a pre-tool body and a post-write re-read are refused; the replace_file result (written, replacements) is asserted in the body and the read receipts before/after the write via candidateReceiptValidation rows",
-    "06 §6.2 item 3: existing eval-repair-adapter policy pinned by new scripts/eval-repair-adapter.test.mjs (NOT_RUN): evaluateRepair rejects an edited test file (REJECTED_DISALLOWED_EDIT) and a deleted allowed file (REJECTED_MISSING_ALLOWED_FILE) before any judge or toolchain runs; added files and symlinks are covered only at the diffCandidateTrees level (REJECTED_UNSAFE_PATH through evaluateRepair not tested); frozen oracle tests live in the kit outside the candidate tree",
-    "docs/post-ilv2/baseline.md added as a human summary of baseline.json",
-    "reason codes differ from check_delivery.py in a few refusal orders (parse before hash, non-numeric array index, lone surrogates, CLI reads body as UTF-8 text); refuse/accept outcomes match",
-    "receiptUnitsFromEvents: a SOURCE_RECEIVED event without fileContentHash is checked only by the byte comparison against the current file"
+    "The completion receipt checks normal oracle return. Code sharing its execution privileges can forge it, so this is not a security sandbox.",
+    "The frozen Python kit judge remains unchanged. The MAC-10 v1.8 scorer verifies the exact final serialized request before it credits QA source.",
+    "Delivery proof binds tool call, path, line range and file bytes; model use is not inferred."
   ],
-  "rawEvidence": [],
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/raw/validation/scripts/0.command.json",
+      "sha256": "c65c03cd41bb2273dc7fcf560af5505cf34473b562a54bb1f793385e61caea12"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/raw/validation/mac10-chains/0.evidence/mac10-chain.json",
+      "sha256": "7529645bd66cc6029b2669c74373cff324eabcdd16366c8b21b041b15fa40b16"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/relative-entry-control/verification.json",
+      "sha256": "4bcc39799aa513f639512e8eb8c70b03aa4ef79e9f9860f51de77f725a5ee1fd"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/raw/validation/q10-fixed-tests/0.command.json",
+      "sha256": "cb3fbac1994233bc7a59357f929334899a6aaf9e57de48252ec881f36bad4cdd"
+    }
+  ],
   "implementation": "CODE_WRITTEN",
   "changes": [
     "scripts/ilv2-mac-delivery-receipt.mjs/.test.mjs (new)",
@@ -62,6 +86,7 @@
     "scripts/ilv2-mac-delivery-receipt.test.mjs: full fake-model chain",
     "scripts/evaluate-java-task.test.mjs: strict QA controls",
     "scripts/eval-repair-adapter.test.mjs (new): disallowed edit controls",
-    "docs/post-ilv2/baseline.md (new)"
+    "docs/post-ilv2/baseline.md (new)",
+    "Q10 MAC-10 v1.8 wires the actual default transport body into the existing QA scorer"
   ]
 }

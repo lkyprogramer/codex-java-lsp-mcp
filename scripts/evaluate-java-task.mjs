@@ -32,6 +32,7 @@ import { evaluateRepair } from "./eval-repair-adapter.mjs";
 import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
 import { verifyDataset } from "./ilv2-mac-eval-dataset.mjs";
 import { isMac10TaskRow, parseSourceBudget, prepareMac10Live, selectPilot } from "./eval-mac10-live.mjs";
+import { LIMITS as RECEIPT_LIMITS, readBoundedSource, receiptForSerializedRequest, receiptUnitsFromEvents } from "./ilv2-mac-delivery-receipt.mjs";
 export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
 /**
@@ -59,6 +60,7 @@ export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
  * Results from different protocol versions are not comparable.
  */
 export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.7";
+const MAC10_LIVE_PROTOCOL_VERSION = "eval-protocol/v1.8";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
@@ -600,10 +602,12 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     ...(run.attemptState ? { attemptState: run.attemptState } : {}),
     ...(run.repairJudge ? { repairJudge: run.repairJudge } : {}),
     ...(run.candidateReceiptValidation ? { candidateReceiptValidation: run.candidateReceiptValidation } : {}),
+    ...(run.requestDelivery ? { requestDelivery: run.requestDelivery } : {}),
+    ...(run.indexTelemetry ? { indexTelemetry: run.indexTelemetry, indexReadyMs: run.indexReadyMs ?? [] } : {}),
     ...(run.frozenScore ? { frozenScore: run.frozenScore, preliminary: run.preliminary } : {}),
     ...(run.partial ? { partial: true } : {}),
     toolCallCount: run.toolCallCount ?? 0,
-    sourceReceived: receivedSourceEvents(run.sourceReceived),
+    sourceReceived: run.verifiedSourceReceived ?? receivedSourceEvents(run.sourceReceived),
     usage: usageOrNull(run.usage),
     timedOut: Boolean(run.timedOut),
     ...(run.stopReason ? { stopReason: run.stopReason } : {}),
@@ -683,12 +687,15 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   };
   const schedule = { ...summarize(slots),
     byArm: Object.fromEntries([...new Set(slots.map(slot => slot.arm))].map(arm => [arm, summarize(slots.filter(slot => slot.arm === arm))])) };
+  const missingOutcome = status === "MEASURED" && identity?.evalProtocol === MAC10_LIVE_PROTOCOL_VERSION
+    && schedule.endToEndSuccessRate === null;
+  const resultStatus = missingOutcome ? (schedule.attempted === 0 ? "BLOCKED_SETUP" : "INCOMPLETE") : status;
   return {
     schemaVersion: EVAL_PACK_SCHEMA_VERSION,
-    evalProtocol: EVAL_PROTOCOL_VERSION,
+    evalProtocol: identity?.evalProtocol ?? EVAL_PROTOCOL_VERSION,
     productProfile,
     publicAnswerContract: publicAnswerContract ? { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256 } : null,
-    status,
+    status: resultStatus,
     ...(blockedReasons?.length ? { blockedReasons } : {}),
     backend: backend ?? null,
     datasetHash: datasetHash ?? null,
@@ -700,7 +707,7 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     packs,
     // End-to-end rate: successes / scheduled. Never successes / measured. A pack that measured
     // nothing (no backend, dry run) has no rate at all: 0 would read as a measured failure.
-    taskSuccessRate: status === "MEASURED" && packs.length > 0 ? successes / packs.length : null,
+    taskSuccessRate: resultStatus === "MEASURED" && packs.length > 0 ? successes / packs.length : null,
     schedule,
     conditionalAccuracy: measured.length > 0 ? successes / measured.length : null,
     measuredAttempts: measured.length
@@ -746,6 +753,46 @@ export function attemptStateOf(run) {
   return "COMPLETED";
 }
 
+async function verifyFinalRequest({ body, events, candidateRoot, snapshotRoot, mutable }) {
+  const sources = receivedSourceEvents(events);
+  if (body == null) return { events: [], proof: { status: "NO_COMPLETED_REQUEST", verifiedUnits: 0 } };
+  const { units, refused } = await receiptUnitsFromEvents({
+    body,
+    events: sources,
+    workspaceRoot: candidateRoot,
+    loadSource: event => {
+      const hash = event.fileContentHash;
+      if (mutable && /^[a-f0-9]{64}$/.test(hash ?? "") && existsSync(path.join(snapshotRoot, hash))) {
+        return readBoundedSource(snapshotRoot, hash);
+      }
+      return readBoundedSource(candidateRoot, event.path);
+    }
+  });
+  const receipts = [];
+  const workspaceId = createHash("sha256").update(candidateRoot).digest("hex");
+  const contentManifestId = createHash("sha256").update(JSON.stringify(units.map(unit => [unit.relativePath, unit.contentHash]))).digest("hex");
+  for (let i = 0; i < units.length; i += RECEIPT_LIMITS.maxUnits) {
+    receipts.push(receiptForSerializedRequest({
+      body,
+      workspaceId,
+      contentManifestId,
+      units: units.slice(i, i + RECEIPT_LIMITS.maxUnits)
+    }));
+  }
+  const accepted = new Set(receipts.flatMap(receipt => receipt.units.map(unit => unit.id)));
+  const failures = [...refused, ...receipts.flatMap(receipt => receipt.refused)];
+  return {
+    events: sources.filter((_, i) => accepted.has(`u${i + 1}`)),
+    proof: {
+      status: failures.length ? "PARTIAL" : accepted.size ? "VERIFIED" : "NO_SOURCE",
+      requestBodySha256: createHash("sha256").update(body).digest("hex"),
+      verifiedUnits: accepted.size,
+      refused: failures,
+      receipts
+    }
+  };
+}
+
 /**
  * Live eval runner: every planned attempt (task x arm x repeat) gets its own
  * candidate workspace that is the single analysis/read/write/test root; the
@@ -767,6 +814,8 @@ export async function runLiveEvalRun({
   seed = 1984,
   maxRounds = 16,
   chat,
+  fetchImpl,
+  verifyRequestDelivery = false,
   chatRequestConfig = {},
   repairJudge = evaluateRepair,
   openSessionImpl = openImpactSession,
@@ -789,16 +838,27 @@ export async function runLiveEvalRun({
   if (!chat && (!config.baseUrl || !config.apiKey || !config.model)) {
     throw new Error("OPENAI_BASE_URL, OPENAI_API_KEY, and OPENAI_MODEL are required for a live eval run");
   }
-  const chatImpl = chat ?? (({ messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }) =>
-    openaiCompatibleChat({ ...config, messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }));
+  if (chat && verifyRequestDelivery) throw new Error("request verification requires the default transport");
   mkdirSync(outputDir, { recursive: true });
   const payloadLog = path.join(outputDir, "model-payloads.jsonl");
   const completionLog = path.join(outputDir, "model-completions.jsonl");
   const toolLog = path.join(outputDir, "raw-tool-results.jsonl");
+  const finalRequestLog = path.join(outputDir, "final-requests.jsonl");
+  const progressLog = path.join(outputDir, "attempt-progress.jsonl");
   const recorder = createRecorder();
   const runs = [];
+  const recordRun = row => {
+    runs.push(row);
+    if (!verifyRequestDelivery) return;
+    const { sourceReceived, verifiedSourceReceived, finalAnswer, requestDelivery, ...summary } = row;
+    appendFileSync(progressLog, `${JSON.stringify({
+      ...summary,
+      ...(requestDelivery ? { requestDelivery: requestDelivery.status, requestCount: requestDelivery.requestCount } : {})
+    })}\n`, "utf8");
+  };
   for (const task of tasks) {
     const goldRow = gold?.get(task.id);
+    const sourceBudget = task.kind === "qa" || verifyRequestDelivery ? task.budget : null;
     const fixtureRoot = repoRoots?.[task.corpus]
       ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", task.corpus) : undefined);
     for (let repeat = 1; repeat <= repeats; repeat += 1) {
@@ -813,7 +873,7 @@ export async function runLiveEvalRun({
         // productProfile stays the run flag (as before for product/control); armProfile is what this arm exposed.
         const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind, productProfile, armProfile: profile, publicAnswerContract: contractIdentity };
         if (!fixtureRoot || !existsSync(fixtureRoot)) {
-          runs.push({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
+          recordRun({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
           continue;
         }
         let candidateRoot;
@@ -821,6 +881,19 @@ export async function runLiveEvalRun({
         let sessionGeneration = 0;
         const sessions = [];
         const indexReadyMs = [];
+        const indexTelemetry = [];
+        const telemetryFor = new Map();
+        let finalRequestBody;
+        let requestCount = 0;
+        const chatImpl = chat ?? (async ({ messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }) => {
+          let body;
+          const completion = await openaiCompatibleChat({
+            ...config, messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs, fetchImpl,
+            ...(verifyRequestDelivery ? { onSerializedBody: serialized => { body = serialized; requestCount += 1; } } : {})
+          });
+          if (verifyRequestDelivery) finalRequestBody = body;
+          return completion;
+        });
         let partial = false;
         let agentStarted = false;
         const cacheFor = generation => path.join(outputDir, "mcp-cache", createHash("sha256").update(attemptKey).digest("hex").slice(0, 16), `w${generation}`);
@@ -831,7 +904,25 @@ export async function runLiveEvalRun({
             if (typeof opened.waitIndexFresh !== "function") throw new Error("product session cannot report index readiness");
             indexReadyMs.push(await opened.waitIndexFresh({ timeoutMs: indexReadyTimeoutMs }));
           }
+          if (verifyRequestDelivery) {
+            const telemetry = { generation: sessionGeneration, before: null, after: null, queryCounterDelta: null };
+            indexTelemetry.push(telemetry);
+            telemetryFor.set(opened, telemetry);
+            try { telemetry.before = await opened.readIndexTelemetry(); }
+            catch (error) { telemetry.error = String(error?.message ?? error); }
+          }
           return opened;
+        };
+        const captureIndexEnd = async opened => {
+          const telemetry = telemetryFor.get(opened);
+          if (!telemetry || telemetry.after || telemetry.error) return;
+          try {
+            telemetry.after = await opened.readIndexTelemetry();
+            telemetry.queryCounterDelta = Object.fromEntries(Object.entries(telemetry.after.queryCounters).flatMap(([key, value]) => {
+              const before = telemetry.before.queryCounters[key];
+              return Number.isFinite(value) && Number.isFinite(before) && value >= before ? [[key, value - before]] : [];
+            }));
+          } catch (error) { telemetry.error = String(error?.message ?? error); }
         };
         try {
           candidateRoot = createAttemptWorkspace(fixtureRoot, attemptKey, outputDir);
@@ -841,8 +932,8 @@ export async function runLiveEvalRun({
           const contract = task.output_contract?.answer_keys
             ? Object.entries(task.output_contract.answer_keys).map(([key, type]) => `${key}: ${type}`).join(", ")
             : "";
-          const budget = task.budget
-            ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${task.budget.max_lines} lines / ${task.budget.max_bytes} bytes; receiving more fails the task.`
+          const budget = sourceBudget
+            ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${sourceBudget.max_lines} lines / ${sourceBudget.max_bytes} bytes; receiving more fails the task.`
             : "";
           let callSeq = 0;
           const snapshotRoot = path.join(outputDir, "source-snapshots", path.basename(candidateRoot));
@@ -859,9 +950,9 @@ export async function runLiveEvalRun({
               if (hash === event.fileContentHash) writeFileSync(path.join(snapshotRoot, hash), bytes);
             }
             const projected = name === "java_symbol" ? projectDiscoveryForModel(raw) : raw;
-            const limited = task.kind === "qa" && task.budget ? boundSourceResult(name, projected, {
-              lines: task.budget.max_lines - sourceSpent.lines,
-              bytes: task.budget.max_bytes - sourceSpent.bytes
+            const limited = sourceBudget ? boundSourceResult(name, projected, {
+              lines: sourceBudget.max_lines - sourceSpent.lines,
+              bytes: sourceBudget.max_bytes - sourceSpent.bytes
             }) : projected;
             // Reserve the serialized slices before dispatch (a conservative
             // upper bound if dispatch fails). Only onChat mints received events.
@@ -882,7 +973,7 @@ export async function runLiveEvalRun({
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
-              taskText: `${task.query}${contract ? `\nAnswer contract: submit_answer with exactly these keys: ${contract}.` : ""}${task.kind === "qa" && publicAnswerContract ? `\nPublic field roles and representations: ${JSON.stringify(publicAnswerContract.tasks.get(task.id))}` : ""}${task.kind === "qa" ? budget : ""}`,
+              taskText: `${task.query}${contract ? `\nAnswer contract: submit_answer with exactly these keys: ${contract}.` : ""}${task.kind === "qa" && publicAnswerContract ? `\nPublic field roles and representations: ${JSON.stringify(publicAnswerContract.tasks.get(task.id))}` : ""}${budget}`,
               projectId: task.corpus,
               requiredContextFiles: [],
               anchor: normalizeTaskAnchor(task.anchors?.[0])
@@ -896,7 +987,7 @@ export async function runLiveEvalRun({
             chatRequestConfig: effectiveChatRequestConfig,
             maxRounds,
             // Eval protocol v1.4: the same enforced source budget for every arm.
-            ...(task.kind === "qa" && task.budget ? { sourceBudget: task.budget } : {}),
+            ...(sourceBudget ? { sourceBudget } : {}),
             onChat: request => {
               appendFileSync(payloadLog, `${JSON.stringify({
                 attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile },
@@ -928,9 +1019,9 @@ export async function runLiveEvalRun({
                 // Outline carries declarations and ranges, never source text: it spends no source budget.
                 if (name === "java_outline") return modelResult(name, args, await session.outline(args), callId);
                 if (name === "java_evidence") {
-                  const remaining = task.kind === "qa" && task.budget ? {
-                    lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
-                    bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
+                  const remaining = sourceBudget ? {
+                    lines: Math.max(0, sourceBudget.max_lines - sourceSpent.lines),
+                    bytes: Math.max(0, sourceBudget.max_bytes - sourceSpent.bytes)
                   } : null;
                   if (remaining && (remaining.lines === 0 || remaining.bytes === 0)) return modelResult(name, args,
                     { error: "SOURCE_BUDGET_EXHAUSTED", errorClass: "SOURCE_BUDGET", remainingSourceBudget: remaining, terminal: true }, callId);
@@ -941,9 +1032,9 @@ export async function runLiveEvalRun({
                   ...(!Object.hasOwn(args, "preview") ? { preview: "none" } : {}) });
                 return modelResult(name, args, result, callId);
               }
-              const remaining = task.kind === "qa" && task.budget ? {
-                lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
-                bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
+              const remaining = sourceBudget ? {
+                lines: Math.max(0, sourceBudget.max_lines - sourceSpent.lines),
+                bytes: Math.max(0, sourceBudget.max_bytes - sourceSpent.bytes)
               } : null;
               const result = await invokeWithSourceBudget(toolSet, name, args, remaining);
               if (result?.written === true && productArm) {
@@ -951,6 +1042,7 @@ export async function runLiveEvalRun({
                 // it, so the session is re-opened on a fresh index.
                 const old = session;
                 session = null;
+                await captureIndexEnd(old);
                 await old?.close().catch(() => undefined);
                 sessionGeneration += 1;
                 try {
@@ -963,6 +1055,7 @@ export async function runLiveEvalRun({
               return modelResult(name, args, result, callId);
             }
           });
+          await captureIndexEnd(session);
           let repairVerdict = null;
           // A frozen kit judge needs its kit; an injected judge (MAC-10 oracle) carries its own fixtures.
           if (task.kind === "repair" && (kitRoot || repairJudge !== evaluateRepair)) {
@@ -977,8 +1070,13 @@ export async function runLiveEvalRun({
           const events = recorder.events().slice(eventsBefore);
           const candidateReceiptValidation = task.kind === "repair"
             ? diagnoseCandidateReceipts(events, { candidateRoot, snapshotRoot }) : null;
-          const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: events }, repairVerdict });
-          runs.push({
+          let delivery;
+          if (verifyRequestDelivery) {
+            if (finalRequestBody != null) appendFileSync(finalRequestLog, `${JSON.stringify({ attemptKey, requestCount, body: finalRequestBody })}\n`, "utf8");
+            delivery = await verifyFinalRequest({ body: finalRequestBody, events, candidateRoot, snapshotRoot, mutable: task.kind === "repair" });
+          }
+          const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: delivery?.events ?? events }, repairVerdict });
+          recordRun({
             ...base,
             attemptState: attemptStateOf(run),
             taskOutcome: scored.taskOutcome,
@@ -987,6 +1085,7 @@ export async function runLiveEvalRun({
             ...(scored.missingEvidence ? { missingEvidence: scored.missingEvidence } : {}),
             ...(Object.hasOwn(scored, "answerCorrect") ? { answerCorrect: scored.answerCorrect, requiredEvidenceCovered: scored.requiredEvidenceCovered } : {}),
             ...(indexReadyMs.length ? { indexReadyMs: [...indexReadyMs] } : {}),
+            ...(verifyRequestDelivery ? { indexTelemetry, requestDelivery: { ...delivery.proof, requestCount }, verifiedSourceReceived: delivery.events } : {}),
             stopReason: run.stopReason,
             primaryStopReason: run.primaryStopReason,
             finalAnswerMode: run.finalAnswerMode,
@@ -1012,13 +1111,15 @@ export async function runLiveEvalRun({
             ...(run.error ? { error: run.error } : {})
           });
         } catch (error) {
-          runs.push({
+          await captureIndexEnd(session);
+          recordRun({
             ...base,
             attemptState: agentStarted ? "FAILED_RUNTIME" : "BLOCKED_SETUP",
             taskOutcome: "UNMEASURED",
             taskSuccess: null,
             answerStatus: "ATTEMPT_SETUP_OR_RUNTIME_ERROR",
             ...(candidateRoot ? { candidateRoot } : {}),
+            ...(verifyRequestDelivery ? { indexTelemetry, indexReadyMs, requestDelivery: { status: "UNMEASURED", requestCount }, verifiedSourceReceived: [] } : {}),
             sourceReceived: recorder.events().slice(eventsBefore),
             error: String(error instanceof Error ? error.message : error).slice(0, 500)
           });
@@ -1360,7 +1461,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
   const identity = { datasetId: dataset?.datasetId ?? null, datasetDigest: dataset?.datasetDigest ?? null, split: dataset?.split ?? null, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
     filter, seed, arms, armProfiles: Object.fromEntries(arms.map(arm => [arm, Object.hasOwn(ARM_PROFILES, arm) ? armProfile(arm, productProfile) : "UNKNOWN"])),
     repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256 },
-    evalProtocol: EVAL_PROTOCOL_VERSION, indexReadyTimeoutMs, pilot, mac10: adapter ? adapter.identity : null };
+    evalProtocol: adapter ? MAC10_LIVE_PROTOCOL_VERSION : EVAL_PROTOCOL_VERSION, indexReadyTimeoutMs, pilot, mac10: adapter ? adapter.identity : null };
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
     const pack = assemblePack({
@@ -1400,7 +1501,8 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
     publicAnswerContract,
     serverJs,
     indexReadyTimeoutMs: indexReadyTimeoutMs || null,
-    ...(adapter ? { repairJudge: adapter.repairJudge } : {})
+    ...(adapter ? { repairJudge: adapter.repairJudge, verifyRequestDelivery: true } : {}),
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {})
   });
   const scorer = adapter
     ? { kind: "mac10-adapter", adapter: adapter.identity.adapter, ...adapter.identity.scoring }

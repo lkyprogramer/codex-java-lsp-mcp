@@ -5,7 +5,8 @@
   "trigger": {
     "state": "UNASSESSED",
     "evidence": [
-      "trigger not assessable: no Q02 ledger (BLOCKED_ENV, docs/post-ilv2/attribution.md); WRONG_DECLARATION was not measured, not measured as zero"
+      "No wrong declaration was proven by the 20-group dev ledger. Some declaration stages remain unmeasured.",
+      "See results/Q02.json and attribution.md."
     ]
   },
   "identity": {
@@ -36,7 +37,7 @@
   "benefit": "UNMEASURED",
   "deployAuthorized": false,
   "limitations": [
-    "re-assess after the Mac ledger run; trigger needs >=2 task groups or one recorded critical deterministic defect"
+    "Trigger assessment is limited to the recorded evidence. Additional unmeasured stages are not counted as zero failures."
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",

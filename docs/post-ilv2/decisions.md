@@ -103,15 +103,25 @@ MAC-10 LIVE 适配（新文件 `scripts/eval-mac10-live.mjs`，`evaluate-java-ta
 
 验证：新增 `scripts/eval-mac10-live.test.mjs`（6 项：fixture 数据集、可移植复制、假 JDK 清单、oracle 桩、假模型；覆盖 JDK 漂移、输入不干净、judge 异常、kit 行误带 MAC-10 参数）。另有 Mac 专用的 `eval-mac10-live-chain.test.mjs`，含 b2 臂 repair 用例：写入前后两次就绪等待，并断言候选里只改了 oracle 文件。独立 review 没有 P1；4 个 P2 均已修复：JDK 未 fail-closed、product 臂 repair 无覆盖、物化可能带入构建产物、judge 异常被算成 agent 失败。P3 中的 symlink、就绪默认值、文档措辞、合同 rules 未传、测试缺口也已修复。在 Linux 开发机上，它与 evaluate-java-task、evaluate-java-task-arms、eval-frozen-adapter、run-agent-trace-live、ilv2-mac-delivery-receipt、eval-evidence-e2e 这几个脚本套件一起运行通过（没有构建 dist，eval-evidence-e2e 跳过 1 项）。Mac 上未运行；真实 APFS 物化和 javac oracle 只在 Mac 上覆盖。
 
+## D12 本地 MAC-10 验收与 Q02 ledger
+
+在 `d7a295e4` 执行 D11 无模型验收，定向脚本、两条真实 Mac 链路和严格 dry-run 均通过。B2 的真实工具输出在假 transport 的最终请求中完成逐字节校验。72 个 slot 已冻结，实际模型请求为 0。见 [Q10 结果](results/Q10.json)。
+
+Q02 完成 20 个 dev 任务组的 ledger。两个直接声明在离线 Top 3 中被截断，Q07 达到调查阈值。确认产品 ReadUnit 在固定预算下复现相同损失后，才决定是否实施。Q06 仅有一组发现缺口，Q05、Q08、Q09 仍缺充分证据。见 [Q02 结果](results/Q02.json)。
+
+## D13 Q10 正式配对与 Q07 定向复查
+
+Q10 用自部署 `openclaw/Qwen3.8-next` 串行完成 72 个 slot。B0 通过 11/36，B2 通过 15/36。B2 在 6 个 slot 调用 outline、在 6 个 slot 调用 evidence，evidence 在 4 个 slot 提供了通过最终请求校验的源码。按任务组配对的成功率差为 +11.1 个百分点，95% bootstrap 区间覆盖 0，三仓的变化方向不一致。按 G3 判定 `INCONCLUSIVE`，本轮维持现有默认配置。见 [Q10 结果](results/Q10.json)。
+
+Q07 在固定预算下复查两组任务。查询 Top 3 漏掉的 4 个证据范围，在提供对应声明锚点后均由 ReadUnit 覆盖。本轮归因落在查询截断，ReadUnit 维持现状。见 [Q07 结果](results/Q07.json)。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
 |---|---|---|
-| P0 | Q00、Q01、Q02 | 已 review、已修复、已提交（代码未运行） |
-| P1 | Q03、Q04 | 已 review、已修复、已提交（代码未运行） |
-| P2 | Q05–Q09 | NOT_TRIGGERED，无代码 |
-| P3 | Q10 | 已 review、已修复、已提交（代码未运行） |
+| P0 | Q00、Q01、Q02 | Mac 控制已跑，Q02 ledger 已生成 |
+| P1 | Q03、Q04 | Mac 定向回归通过，模型收益未测 |
+| P2 | Q05–Q09 | Q07 调查完成，损失定位到查询截断 |
+| P3 | Q10 | 72 个正式 slot 完成，收益判定 INCONCLUSIVE |
 | P4 | Q11、Q12 | Q11 已在 Mac 上验收为 ENGINEERING_ELIGIBLE（`b96a9c1`），Q12 决策日志（decision-log.md） |
-| P3+ | Q10 MAC-10 LIVE 适配（D11） | 代码已写，Linux 上定向脚本测试通过，Mac 未运行 |
-
-待用户决定：在 Mac 上按 acceptance.md 重跑脚本套件和 MAC-10 前置检查；Q02 ledger；Q10 LIVE 的预算、split、seed 和费用授权。
+| P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |

@@ -4,8 +4,9 @@
 // pos: V5R live agent-trace execute path. 112K context cap. Golden mustHit is never sent to the model.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createHash } from "node:crypto";
-import { mkdir, realpath } from "node:fs/promises";
+import { mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildSubmitAnswerTool, validateSubmission } from "./eval-answer-contract.mjs";
@@ -1113,12 +1114,13 @@ function runtimeFailure(task, message) {
 }
 
 export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
+  const serverEntry = path.resolve(serverJs);
   const childEnv = { ...env };
   for (const name of ["OPENAI_API_KEY", "JAVA_LSP_AGENT_API_KEY", "ANTHROPIC_API_KEY"]) {
     delete childEnv[name];
   }
   // stdio only relays (MAC-08B): the session runs its own isolated owner for this cache.
-  const owner = await startOwnerDaemon({ serverJs, cacheRoot, ephemeralCache: true, env: {
+  const owner = await startOwnerDaemon({ serverJs: serverEntry, cacheRoot, ephemeralCache: true, env: {
     ...childEnv,
     PATH: withHomebrewPathFirst(childEnv.PATH),
     JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false"
@@ -1126,7 +1128,7 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
   let session;
   try {
     // The relay resolves selector-free calls against its cwd: the repository under test.
-    const transport = new StdioClientTransport({ command: process.execPath, args: [serverJs], cwd: repoRoot, env: owner.relayEnv, stderr: "inherit" });
+    const transport = new StdioClientTransport({ command: process.execPath, args: [serverEntry], cwd: repoRoot, env: owner.relayEnv, stderr: "inherit" });
     const client = new Client({ name: "v5r-live-agent-trace", version: "0.1.0" });
     await client.connect(transport);
     session = impactSessionFromClient({ repoRoot, client });
@@ -1134,7 +1136,40 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
     await owner.stop();
     throw error;
   }
-  return { ...session, async close() { try { await session.close(); } finally { await owner.stop(); } } };
+  let telemetryClient;
+  return {
+    ...session,
+    async readIndexTelemetry() {
+      if (!telemetryClient) {
+        telemetryClient = new Client({ name: "mac10-index-telemetry", version: "1.0.0" });
+        await telemetryClient.connect(new StreamableHTTPClientTransport(new URL(owner.url)), { timeout: 10000 });
+      }
+      // The stdio relay supplies a workspace selector, so ask this run's owner directly.
+      const reply = await telemetryClient.callTool({ name: "java_status", arguments: {} }, undefined, { timeout: 10000 });
+      if (reply.isError) throw new Error("owner java_status failed");
+      const { index } = JSON.parse(reply.content.map(part => part.text).join(""));
+      const canonicalRoot = await realpath(repoRoot);
+      const workspace = index?.workspaces?.find(row => row.canonicalRoot === canonicalRoot);
+      const history = await readFile(path.join(owner.cacheRoot, "mac1", "snapshot-publications.jsonl"), "utf8");
+      const published = history.trim().split("\n").map(line => JSON.parse(line))
+        .findLast(row => row.snapshotId === workspace?.snapshotId);
+      if (!workspace || !published || !index.queryCounters) throw new Error("index publication or query counters unavailable");
+      return {
+        snapshotId: workspace.snapshotId,
+        plannedMode: published.plannedMode,
+        actualBuildMode: published.actualBuildMode,
+        fullReason: published.fullReason ?? null,
+        queryCounters: index.queryCounters
+      };
+    },
+    async close() {
+      try { await session.close(); }
+      finally {
+        try { await telemetryClient?.close(); }
+        finally { await owner.stop(); }
+      }
+    }
+  };
 }
 
 /** MCP mapping shared by the live session and capture-client contract tests. */

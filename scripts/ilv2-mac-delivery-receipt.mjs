@@ -270,7 +270,7 @@ export function findTextPointer(value, text, { relativePath, startLine }) {
  * as SOURCE_HASH_MISMATCH (pass the root that still holds them, e.g. the pristine fixture); a slice
  * without a recorded file hash is checked only by the byte comparison against the current file.
  */
-export async function receiptUnitsFromEvents({ body, events, workspaceRoot }) {
+export async function receiptUnitsFromEvents({ body, events, workspaceRoot, loadSource = event => readBoundedSource(workspaceRoot, event.path) }) {
   const request = parseBody(body);
   const units = [];
   const refused = [];
@@ -281,8 +281,9 @@ export async function receiptUnitsFromEvents({ body, events, workspaceRoot }) {
     const id = `u${++ordinal}`;
     try {
       require(typeof event.path === "string" && event.path !== "", "INVALID_PATH");
-      if (!files.has(event.path)) files.set(event.path, await readBoundedSource(workspaceRoot, event.path));
-      const bytes = files.get(event.path);
+      const key = JSON.stringify([event.path, event.fileContentHash]);
+      if (!files.has(key)) files.set(key, await loadSource(event));
+      const bytes = files.get(key);
       const contentHash = sha256(bytes);
       require(event.fileContentHash === undefined || event.fileContentHash === contentHash, "SOURCE_HASH_MISMATCH");
       require(Number.isInteger(event.startLine) && Number.isInteger(event.endLine) && event.startLine >= 1 && event.startLine <= event.endLine, "INVALID_RANGE");

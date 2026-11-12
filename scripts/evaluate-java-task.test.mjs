@@ -230,7 +230,8 @@ test("live repair exposes replace success and validates both source versions wit
     let round = 0;
     const requests = [];
     const output = path.join(dir, "run");
-    const run = await runLiveEvalRun({ tasks: [{ id: "R", corpus: "c", kind: "repair", query: "Change initial n to 2." }],
+    const run = await runLiveEvalRun({ tasks: [{ id: "R", corpus: "c", kind: "repair", query: "Change initial n to 2.",
+      budget: { max_lines: 1, max_bytes: 1 } }],
       arms: ["control"], repoRoots: { c: fixture }, outputDir: output, kitRoot: dir,
       repairJudge: async () => ({ state: "VALIDATED_SUCCESS", validatedSuccess: true }),
       chat: async request => {
@@ -246,7 +247,7 @@ test("live repair exposes replace success and validates both source versions wit
     assert.equal(written.replacements, 1);
     const diagnostic = run.runs[0].candidateReceiptValidation;
     assert.equal(diagnostic.status, "VALID");
-    assert.deepEqual(diagnostic.rows.map(row => row.finalCandidateMatches), [false, true]);
+    assert.deepEqual(diagnostic.rows.map(row => row.finalCandidateMatches), [false, true], "legacy repair budgets do not clip source");
     assert.equal(run.runs[0].taskSuccess, true, "success still comes from the external repair judge");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -572,6 +573,20 @@ test("recorded-run replay: pack invariants hold for a mix of measured and failed
   assert.equal(pack.packs[1].usage, null, "UNMEASURED usage stays null");
   assert.equal(pack.packs[2].usage, null);
   assert.equal(pack.packs[2].timedOut, true);
+});
+
+test("strict MAC-10 packs expose setup blocks and unjudged slots in their status", () => {
+  const planned = [{ taskId: "T-A", arm: "b0", repeat: 1 }];
+  const common = { status: "MEASURED", arms: ["b0"], repeats: 1, planned, identity: { evalProtocol: "eval-protocol/v1.8" } };
+  for (const [attemptState, status] of [["BLOCKED_SETUP", "BLOCKED_SETUP"], ["COMPLETED", "INCOMPLETE"]]) {
+    const pack = assemblePack({ ...common, runs: [{ ...planned[0], attemptState, taskSuccess: null }] });
+    assert.equal(pack.status, status);
+    assert.equal(pack.taskSuccessRate, null);
+    assert.equal(pack.schedule.endToEndSuccessRate, null);
+  }
+  const measured = assemblePack({ ...common, runs: [{ ...planned[0], attemptState: "COMPLETED", taskSuccess: false }] });
+  assert.equal(measured.status, "MEASURED");
+  assert.equal(measured.taskSuccessRate, 0);
 });
 
 test("task and gold loaders read the frozen jsonl pair", async () => {

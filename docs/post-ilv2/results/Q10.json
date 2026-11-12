@@ -1,23 +1,19 @@
 {
   "schema": "post-ilv2/task-result/v1",
   "taskId": "Q10",
-  "status": "NOT_RUN",
+  "status": "PASS",
   "trigger": {
     "state": "MAINLINE",
     "evidence": []
   },
   "identity": {
-    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
-    "productBuildDigest": null,
-    "datasetDigest": null,
-    "installedDigest": null
+    "sourceHead": "d7a295e49287bc8e68d8861330b5d2b18d0b0f8a",
+    "productBuildDigest": "27810e1d4b1b1f3570595d475967457391bd353df8fea8bd4b66bf352596ddf8",
+    "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "installedDigest": null,
+    "candidatePatchSha256": "0770be9bc3903b5f9a4374b8b54eaf887c564985981b78a09f128d90aac17717"
   },
   "checks": [
-    {
-      "name": "node --test scripts/run-agent-trace-live.test.mjs scripts/run-agent-trace-matrix.test.mjs scripts/eval-pilot-compare.test.mjs scripts/live-model-profiles.test.mjs scripts/evaluate-java-task-arms.test.mjs scripts/evaluate-java-task.test.mjs scripts/eval-tool-wire.test.mjs",
-      "state": "NOT_RUN",
-      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
-    },
     {
       "name": "node --test scripts/eval-mac10-live.test.mjs scripts/evaluate-java-task.test.mjs scripts/evaluate-java-task-arms.test.mjs scripts/eval-frozen-adapter.test.mjs scripts/run-agent-trace-live.test.mjs scripts/ilv2-mac-delivery-receipt.test.mjs scripts/eval-evidence-e2e.test.mjs",
       "state": "PASS",
@@ -30,53 +26,246 @@
       }
     },
     {
-      "name": "acceptance.md 'Q10 MAC-10 LIVE 前置' steps 1-4 (scripts suite, eval-mac10-live-chain + ilv2-mac-eval-chain, oracle check, strict adapter dry-run)",
-      "state": "NOT_RUN",
-      "reason": "Mac only: APFS materialization, dist/server.js, frozen JDK and the private dataset"
+      "name": "npm ci and isolated compile on frozen Mac Node",
+      "state": "PASS"
+    },
+    {
+      "name": "MAC-10 impacted evaluation scripts",
+      "state": "PASS",
+      "tap": {
+        "tests": 201,
+        "pass": 201,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "name": "Impacted server source tests on the same candidate",
+      "state": "PASS",
+      "tap": {
+        "tests": 67,
+        "pass": 67,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "name": "node --test scripts/eval-mac10-live-chain.test.mjs scripts/ilv2-mac-eval-chain.test.mjs",
+      "state": "PASS",
+      "tap": {
+        "tests": 2,
+        "pass": 2,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "oracles": {
+        "status": "PASS",
+        "tasks": 5,
+        "repeatsPerCondition": 3
+      }
+    },
+    {
+      "name": "Strict MAC-10 dev dry-run and five fail-closed CLI controls",
+      "state": "PASS",
+      "verification": {
+        "status": "DRY_RUN",
+        "slots": 72,
+        "identity": "VERIFIED",
+        "scheduleSha256": "4315abb97061d390f4abc449098d6ecf1c24c2a803e21641f6a50c1ca6994283",
+        "javaFrozenFiles": 5,
+        "readinessMs": 900000,
+        "negativeWithoutSchedule": [
+          "budget",
+          "roots",
+          "kit",
+          "count",
+          "server"
+        ]
+      }
+    },
+    {
+      "name": "Real B2 MCP evidence through a fake transport and exact final-request receipt",
+      "state": "PASS",
+      "verification": {
+        "status": "PASS",
+        "arm": "b2",
+        "transport": "fake",
+        "requestBodySha256": "f4b3d1d7c5f3ec6404780eaaec4b8a0a19a7086b4ceea6b143475c8e7a9b9795",
+        "evidenceUnits": 2,
+        "javaAndXmlVerified": true,
+        "requestCount": 5
+      }
+    },
+    {
+      "name": "Frozen Mac candidate v1.8 targeted tests",
+      "state": "PASS",
+      "tap": {
+        "tests": 152,
+        "pass": 152,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "Local legacy repair and incomplete pack compatibility tests",
+      "state": "PASS",
+      "tap": {
+        "tests": 36,
+        "pass": 36,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "Formal 72-slot model pilot and frozen-schedule reconciliation",
+      "state": "PASS",
+      "exitCode": 0,
+      "providerRequests": 474,
+      "roundLimitSlots": 1
+    },
+    {
+      "name": "Independent replay of QA source receipt checks against saved requests and candidate files",
+      "state": "PASS",
+      "verification": {
+        "status": "PASS",
+        "qaSlots": 66,
+        "qaFinalBodiesChecked": 66,
+        "qaSourceUnitsVerified": 222
+      }
     }
   ],
   "counts": {
-    "scheduled": null,
-    "attempted": null,
-    "completed": null,
-    "successful": null
+    "scheduled": 72,
+    "attempted": 72,
+    "completed": 72,
+    "successful": 26
   },
   "quality": {
     "criticalRegressions": null,
-    "requiredEvidenceRecall": null,
-    "validatedTaskOutcome": "UNMEASURED"
+    "requiredEvidenceRecall": {
+      "b0": 0.7345238095238095,
+      "b2": 0.7292929292929293
+    },
+    "validatedTaskOutcome": "MEASURED"
   },
   "cost": {
-    "providerUsage": null,
+    "providerUsage": {
+      "status": "MEASURED",
+      "inputTokens": 3001946,
+      "outputTokens": 32016,
+      "cachedInputTokens": 2451815
+    },
     "wireBytes": null,
     "sourceBytes": null,
     "plannedBytes": null
   },
   "engineeringEligibility": "NOT_ASSESSED",
-  "benefit": "UNMEASURED",
+  "benefit": "INCONCLUSIVE",
   "deployAuthorized": false,
   "limitations": [
-    "G0 not met (Q01 controls and Q02 ledger not run): only the no-cost control is delivered, no LIVE slot",
-    "dry-run identity: checkRunIdentity + --require-identity fail closed (exit 2, before a schedule is frozen) on unknown filter ids, unknown/duplicate arms, an unnamed dataset/split, unresolved corpora, tasks without corpus and an unreadable product server. The 12 x 2 x 3 matrix is now frozen by --pilot 12 --pilot-seed S (deterministic stratified rule, gold never read) instead of waiting for a Q02 selection",
-    "scripts/ilv2-quality-pilot.mjs not created: no thin orchestration was needed for the no-cost control",
-    "per-slot round mode/fullReason and index.queryCounters deltas not wired (needs the LIVE runner)",
-    "audit: evaluate-java-task.mjs runLiveEvalRun EXTEND as the two-arm runner (it already drives run-agent-trace-live runLiveAgentTask with the same native tools on every arm (list/rg/read; repair adds write/replace/test), a per-attempt candidate workspace, the frozen schedule and the oracle/QA scorers): arms b0/b1/b2 map to product profiles broad / outline / outline-evidence on one server build, java_outline is a model-facing tool backed by java_symbol operation=outline (impactSessionFromClient.outline), outline spends no source budget and is never credited as received source; run-agent-trace-live.mjs EXTEND (summarizeSchedule + session outline); run-agent-trace-matrix.mjs not used for the pairing (its plan is the V4 old/jin schedule); openai-compatible-chat.mjs / live-model-profiles.mjs REUSE; eval-pilot-compare.mjs REUSE",
-    "summarizeSchedule is called by assemblePack (pack.schedule, overall and byArm; usage in the pack rows' field names, raw provider usage dropped). Two readings now coexist: pack.taskSuccessRate / byArm count missing slots as failures (historical), pack.schedule makes the rate null while any slot is not run, blocked or unjudged; reports must name which one they quote",
-    "sourceHead records the plan baseline 665d66e, as for Q00-Q04; code sits on this branch",
-    "B2 vs B1/B0 on one server build isolates offering outline / Java evidence v2 as tools; it does not compare evidence v2 against the pre-Q04 server (that would need two server builds per arm, not supported by runLiveEvalRun)",
-    "receipts are still built post hoc (receiptUnitsFromEvents) rather than inside the LIVE loop",
-    "a failure before runLiveAgentTask starts (attempt workspace, product session) is now attemptState BLOCKED_SETUP (was FAILED_RUNTIME), so an environment block is not counted as a failed task",
-    "frozen-kit per-arm packs record product_profile = the arm's own profile for b0/b1/b2 (product/control unchanged); top-level pack.productProfile stays the run flag, the per-arm truth is identity.armProfiles and row armProfile",
-    "outline spends no source budget but gives B1/B2 extra structure (rebuilt signatures, ranges) for free: a deliberate D9 choice in tension with 06 §6.4 'same budget', to be disclosed with any result",
-    "checkRunIdentity checks that the server file exists, not its hash or tool schema (the hash is recorded in identity.driver), and does not require --gold for live runs",
-    "the frozen Python kit scorer has not been checked with arm names other than product/control",
-    "MAC-10 LIVE adapter (decisions.md D11, scripts/eval-mac10-live.mjs): --dataset + --inputs + explicit --source-budget; input checkouts must be clean at the frozen head; corpora by materializeCorpus; answer contract and rules from the dataset part; string-set scored as a set; required evidence bound to the verified file hash; repair judged by the MAC-10 oracle with the hash-checked JDK of ILV2_TOOLCHAINS after rejecting edits outside the oracle file; judge exceptions are JUDGE_ERROR (unmeasured)",
-    "MAC-10 adapter runs wait per product session for indexView FRESH (default 900 s; kit runs default 0 unless --index-ready-timeout-ms), indexReadyMs per row and included in elapsedMs; BLOCKED_SETUP when the first wait fails. Reason: outline answers NOT_READY at once on a cold view since b96a9c1",
-    "eval protocol v1.7 (b96a9c1) has a rewritten shared prompt and java_evidence description whose rationale is not recorded; v1.6 never existed. docs/next-stage/evaluation-protocol-v1.7.json records the delta; v1.7 results are not comparable with earlier versions",
-    "open user decisions before LIVE: source budget, split (mac10-v3 dev and the already-viewed holdout are historical regression sets), pilot seed, model and cost authorization",
-    "not yet shown on the Mac: that a product session writes nothing into the candidate tree (eval-mac10-live-chain b2 repair case); if it does, product-arm repairs would be rejected as disallowed edits"
+    "The frozen historical MAC-10 dev pilot contains 11 QA groups and one repair group. The paired interval crosses zero and the direction differs by corpus.",
+    "The B0/B2 pair measures the combined availability of outline and evidence on one server build. B1 and a pre-Q04 server were not evaluated in this pilot.",
+    "Both arms cap source slices at 80 lines / 16000 bytes. Outline structure and rg navigation are outside that source-slice accounting.",
+    "An initial relative-entry invocation blocked at setup and made zero model requests. The corrected isolated candidate completed all scheduled pairs.",
+    "One B2 QA slot reached the round limit and counts as a failure. One B0 repair source unit was refused by receipt validation; the repair verdict uses its frozen oracle.",
+    "Token metrics report the self-hosted provider usage. Cold FRESH waits are included in end-to-end times and recorded separately."
   ],
-  "rawEvidence": [],
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/verification.json",
+      "sha256": "8e5f4be48e24c02872881f5f0c0de4de6c263c624f379be2679c3452888a95b0"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/validation-index.jsonl",
+      "sha256": "255692ed8eeb70efab342e5af03ff1be3afc7fdc0abc7ff98b37eeec518fe60d"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/build-comparison.json",
+      "sha256": "3d6b740a266eed8be36235aa45ab9c4723a25e6d32bae71e097593177d50bb68"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/input-postcheck.json",
+      "sha256": "f55ef1ca33aef59686e18d41919ee455ff476952d50dbf1c704afcb04c9d82e8"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/raw/validation/mac10-chains/0.evidence/mac10-chain.json",
+      "sha256": "7529645bd66cc6029b2669c74373cff324eabcdd16366c8b21b041b15fa40b16"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/raw/validation/mac10-chains/0.evidence/mac10-live-chain.json",
+      "sha256": "bcad5616c11ad0baa3a5c0fd36afe707e0d8eecbe67927cbfb896c65ce6841aa"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q10-dry/schedule.jsonl",
+      "sha256": "4315abb97061d390f4abc449098d6ecf1c24c2a803e21641f6a50c1ca6994283"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q10-dry/results-pack.json",
+      "sha256": "8d3d4e48307f45f2995b90a2816e31515101cc9198eb214f7b92aae24ddae42c"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q10-b2-control.mjs",
+      "sha256": "f4d9b73608d2a87ffcf6f61e8feca9b55c6de523aba482afdcdfc1d588108f40"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q10-b2-control/verification.json",
+      "sha256": "d25a8d2412f62018687e81af7c9e83a271b521222659598c57f2082632d792fa"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q10-b2-control/receipt.json",
+      "sha256": "ede08f9cf82df2a12b3d6d732bca991fee16265adc45584b79defa10c92ba848"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/q10-closeout.json",
+      "sha256": "26ca1e3cb9fdbcd6fca417150a7326227f18e9d4bd45966dbbd340d7e00b2731"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/q10-paired-report.json",
+      "sha256": "6a2ddf54212498721000fa370f9c605ccc3907bed4433dd58b2869eb50c110c9"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/q10-receipt-audit.json",
+      "sha256": "0082a8d022433dc85e7f41281be4a2b3fd4f8c0acafb1e840ed747bd1ccac78f"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/fixed-live-preregistration.json",
+      "sha256": "a74086f3f193412269c574df13c598885c67fce111acf293335e42e02de5a08b"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/source-fixed.patch",
+      "sha256": "0770be9bc3903b5f9a4374b8b54eaf887c564985981b78a09f128d90aac17717"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/raw/validation/q10-fixed-live/0.command.json",
+      "sha256": "9ff2a54313344936f7376cf7cbaa8deb8f1e78dacb4661d8d6a4eec1bed4ec62"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/raw/validation/q10-fixed-tests/0.command.json",
+      "sha256": "cb3fbac1994233bc7a59357f929334899a6aaf9e57de48252ec881f36bad4cdd"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/final-compatibility-tests.log",
+      "sha256": "b8c300897b4ea9f038f6efcaab3a7c6295f68cd929831e5d2a5888da617d2e63"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/tmp/codex-java-lsp-isolated-validation-nkg1Nc/q10-live/schedule.jsonl",
+      "sha256": "4315abb97061d390f4abc449098d6ecf1c24c2a803e21641f6a50c1ca6994283"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/tmp/codex-java-lsp-isolated-validation-nkg1Nc/q10-live/results-pack.json",
+      "sha256": "1e06c8b25f25b8ac129660e66de3f8f8215cf5d598308707cf6f858b2940f52c"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/tmp/codex-java-lsp-isolated-validation-nkg1Nc/q10-live/attempts.json",
+      "sha256": "b30c0002e229a97a941f237b616e03dba05c9f5777e608ef23252f43c1729816"
+    }
+  ],
   "implementation": "CODE_WRITTEN",
   "changes": [
     "scripts/run-agent-trace-live.mjs: SLOT_STATES, summarizeSchedule",
@@ -90,6 +279,173 @@
     "scripts/eval-mac10-live-chain.test.mjs (new, Mac only)",
     "scripts/evaluate-java-task.mjs: MAC-10 CLI path, --pilot/--pilot-seed, --index-ready-timeout-ms, set-aware QA scoring, hash-bound evidence, answerCorrect/requiredEvidenceCovered, injected repair judge gate",
     "scripts/run-agent-trace-live.mjs: impactSessionFromClient.waitIndexFresh",
-    "docs/next-stage/evaluation-protocol-v1.7.json (new)"
-  ]
+    "docs/next-stage/evaluation-protocol-v1.7.json (new)",
+    "scripts/evaluate-java-task.mjs: credit verified final request source in MAC-10 v1.8, record live attempt progress and classify incomplete packs",
+    "scripts/run-agent-trace-live.mjs: resolve the relay entry point before switching directories and record index publication and counter deltas",
+    "docs/next-stage/evaluation-protocol-v1.8.json: freeze the live matrix, budgets and receipt semantics"
+  ],
+  "macAcceptance": {
+    "state": "PASS",
+    "candidate": "d7a295e49287bc8e68d8861330b5d2b18d0b0f8a",
+    "providerRequests": 0,
+    "dryRunSlots": 72,
+    "dryRunMeasuredSlots": 0,
+    "dryRunScheduleSha256": "4315abb97061d390f4abc449098d6ecf1c24c2a803e21641f6a50c1ca6994283"
+  },
+  "liveAcceptance": {
+    "state": "PASS",
+    "protocol": "eval-protocol/v1.8",
+    "model": "openclaw/Qwen3.8-next",
+    "providerRequests": 474,
+    "completedSlots": 72,
+    "paired": {
+      "groups": 12,
+      "meanDelta": 0.1111111111111111,
+      "clusterBootstrap95": [
+        -0.027777777777777776,
+        0.2777777777777778
+      ]
+    },
+    "pairedQA": {
+      "groups": 11,
+      "meanDelta": 0.0909090909090909,
+      "clusterBootstrap95": [
+        -0.0606060606060606,
+        0.2727272727272727
+      ]
+    },
+    "sameRepeatPairs": {
+      "bothPass": 10,
+      "b2Only": 5,
+      "b0Only": 1,
+      "neitherPass": 20
+    },
+    "byCorpus": {
+      "exam-parent-v3": {
+        "slotsPerArm": 9,
+        "b0": 3,
+        "b2": 4
+      },
+      "lishuedu": {
+        "slotsPerArm": 15,
+        "b0": 4,
+        "b2": 8
+      },
+      "lishu-v2": {
+        "slotsPerArm": 12,
+        "b0": 4,
+        "b2": 3
+      }
+    },
+    "byArm": {
+      "b0": {
+        "scheduled": 36,
+        "scheduledSuccessful": 11,
+        "endToEndSuccessRate": 0.3055555555555556,
+        "qaAnswerCorrect": 26,
+        "qaRequiredEvidenceCovered": 12,
+        "toolUsage": {
+          "java_symbol": {
+            "slots": 24,
+            "calls": 54
+          },
+          "java_outline": {
+            "slots": 0,
+            "calls": 0
+          },
+          "java_evidence": {
+            "slots": 0,
+            "calls": 0
+          },
+          "read": {
+            "slots": 34,
+            "calls": 90
+          },
+          "rg": {
+            "slots": 36,
+            "calls": 78
+          }
+        },
+        "javaEvidenceVerifiedSourceSlots": 0,
+        "usage": {
+          "promptTokens": {
+            "slotCount": 36,
+            "totalReported": 1423258,
+            "median": 21770.0
+          },
+          "completionTokens": {
+            "slotCount": 36,
+            "totalReported": 15612,
+            "median": 395.0
+          },
+          "cachedInputTokens": {
+            "slotCount": 36,
+            "totalReported": 1153170,
+            "median": 17901.0
+          },
+          "reasoningTokens": {
+            "slotCount": 0,
+            "totalReported": null,
+            "median": null
+          }
+        },
+        "medianElapsedMs": 64142.0,
+        "medianIndexWaitMs": 50867.0
+      },
+      "b2": {
+        "scheduled": 36,
+        "scheduledSuccessful": 15,
+        "endToEndSuccessRate": 0.4166666666666667,
+        "qaAnswerCorrect": 21,
+        "qaRequiredEvidenceCovered": 15,
+        "toolUsage": {
+          "java_symbol": {
+            "slots": 27,
+            "calls": 51
+          },
+          "java_outline": {
+            "slots": 6,
+            "calls": 10
+          },
+          "java_evidence": {
+            "slots": 6,
+            "calls": 12
+          },
+          "read": {
+            "slots": 35,
+            "calls": 87
+          },
+          "rg": {
+            "slots": 35,
+            "calls": 64
+          }
+        },
+        "javaEvidenceVerifiedSourceSlots": 4,
+        "usage": {
+          "promptTokens": {
+            "slotCount": 36,
+            "totalReported": 1578688,
+            "median": 25682.5
+          },
+          "completionTokens": {
+            "slotCount": 36,
+            "totalReported": 16404,
+            "median": 394.0
+          },
+          "cachedInputTokens": {
+            "slotCount": 36,
+            "totalReported": 1298645,
+            "median": 21820.5
+          },
+          "reasoningTokens": {
+            "slotCount": 0,
+            "totalReported": null,
+            "median": null
+          }
+        },
+        "medianElapsedMs": 66309.5,
+        "medianIndexWaitMs": 51386.5
+      }
+    }
+  }
 }

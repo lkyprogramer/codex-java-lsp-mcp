@@ -70,7 +70,7 @@ test("MAC-10 adapter: agent-visible rows only, sorted set gold with file hashes,
   assert.deepEqual(callers.budget, { max_lines: 120, max_bytes: 24000 });
   assert.match(callers.query, /Named anchors: `Calc`, `Calc.clamp`\./);
   const repair = live.tasks.find(task => task.id === "FX-REPAIR");
-  assert.equal(repair.budget, undefined, "the source budget applies to QA only");
+  assert.deepEqual(repair.budget, callers.budget);
   // Nothing evaluator-side reaches an agent-visible task row.
   const visible = JSON.stringify(live.tasks);
   for (const secret of ["demo.OrderService", "OrderService.java", "FlatRule.java", "requiredEvidence", "repairOracle", "ORACLE", "private/"]) {
@@ -148,6 +148,53 @@ const scripted = steps => {
   let index = 0;
   return { requests, chat: async request => { requests.push(JSON.stringify(request)); const step = steps[Math.min(index, steps.length - 1)]; index += 1; return step; } };
 };
+
+test("default serialized transport verifies the exact final source on both arms", async t => {
+  const data = await dataset(t);
+  const live = await prepare(data, { sourceBudget: { max_lines: 80, max_bytes: 16000 } });
+  const outputDir = path.join(data.dir, "verified-transport");
+  const bodies = [];
+  let inFlight = false;
+  const result = await runLiveEvalRun({
+    tasks: live.tasks.filter(task => task.id === "FX-CALLERS"),
+    gold: live.gold, repoRoots: live.repoRoots, outputDir, publicAnswerContract: live.publicAnswerContract,
+    arms: ["b0", "b2"], verifyRequestDelivery: true, indexReadyTimeoutMs: 1000,
+    env: { OPENAI_API_KEY: "fake", OPENAI_BASE_URL: "http://fake.invalid", OPENAI_MODEL: "fixture" },
+    openSessionImpl: async () => {
+      let sample = 0;
+      return {
+        waitIndexFresh: async () => 2,
+        readIndexTelemetry: async () => ({ actualBuildMode: "full", fullReason: "no-base", queryCounters: { queueFull: 0, runKills: sample++ } }),
+        close: async () => {}
+      };
+    },
+    fetchImpl: async (_url, { body }) => {
+      assert.equal(inFlight, false);
+      inFlight = true;
+      try {
+        bodies.push(body);
+        const request = JSON.parse(body);
+        const reply = request.messages.some(message => message.role === "tool")
+          ? toolCall("s", "submit_answer", { callers: ["demo.OrderService"] })
+          : toolCall("r", "read", { path: "src/main/java/demo/OrderService.java", startLine: 10, maxLines: 3 });
+        await new Promise(resolve => setImmediate(resolve));
+        return new Response(JSON.stringify(reply));
+      } finally { inFlight = false; }
+    }
+  });
+  const captures = (await readFile(path.join(outputDir, "final-requests.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(bodies.length, 4);
+  assert.deepEqual(captures.map(row => row.body), [bodies[1], bodies[3]]);
+  for (const [i, run] of result.runs.entries()) {
+    const request = JSON.parse(captures[i].body);
+    assert.equal(request.tools.some(tool => tool.function.name === "java_evidence"), run.arm === "b2");
+    assert.equal(run.taskSuccess, true);
+    assert.equal(run.requestDelivery.status, "VERIFIED");
+    assert.equal(run.requestDelivery.requestBodySha256, sha256(captures[i].body));
+    assert.equal(run.verifiedSourceReceived.length, 1);
+    assert.deepEqual(run.indexTelemetry[0].queryCounterDelta, { queueFull: 0, runKills: 1 });
+  }
+});
 
 test("MAC-10 LIVE chain (fake model): QA credited on received verified source, repair judged by the oracle, gold never sent", async t => {
   const data = await dataset(t);
