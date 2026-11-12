@@ -914,5 +914,83 @@
       "path": "post-ilv2-d15-f-projection.AutSUN/d15-f-dev/rows.jsonl",
       "sha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a"
     }
-  ]
+  ],
+  "xmlAttribution2": {
+    "xmlTasks": 6,
+    "xmlTargets": 16,
+    "termShape": {
+      "other": 12,
+      "lowerSnake": 1
+    },
+    "targetsWithTermInFile": 8,
+    "targetsWithTermInRange": 6,
+    "targetsWithWordInRange": 10,
+    "tasksWhereLimit8ReturnedAnyXml": 0,
+    "tasksWhereLimit8ReturnedGoldFile": 0,
+    "limit20XmlEvidenceRankOfGoldFile": {
+      "found": 0,
+      "ranks": {}
+    },
+    "limit20TasksWithAnyXmlEvidence": 0,
+    "w2RecallByCategoryAndDriver": {
+      "spring/product": {
+        "slots": 4,
+        "recallSum": 2.8
+      },
+      "xml/native": {
+        "slots": 3,
+        "recallSum": 1
+      },
+      "implementations/native": {
+        "slots": 3,
+        "recallSum": 2
+      },
+      "repair/product": {
+        "slots": 3,
+        "recallSum": 0
+      },
+      "dto-impact/product": {
+        "slots": 3,
+        "recallSum": 2.4166666666666665
+      },
+      "repair/native": {
+        "slots": 3,
+        "recallSum": 0
+      },
+      "callers/product": {
+        "slots": 4,
+        "recallSum": 1.1666666666666665
+      },
+      "dto-impact/native": {
+        "slots": 3,
+        "recallSum": 1.7499999999999998
+      },
+      "spring/native": {
+        "slots": 4,
+        "recallSum": 2.0666666666666664
+      },
+      "xml/product": {
+        "slots": 3,
+        "recallSum": 0
+      },
+      "callers/native": {
+        "slots": 4,
+        "recallSum": 1.75
+      },
+      "implementations/product": {
+        "slots": 3,
+        "recallSum": 1.4
+      }
+    }
+  },
+  "xmlAttribution2Hashes": {
+    "scriptSha256": "a44067b98b83738344864eb61b6ef0d0328076408a63bb1ec2353778d434f6fb",
+    "inputsSha256": {
+      "tasksDev": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldDev": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "fResponses": "206fe3e0e403e4c586b23310793ff80d3469df29bc0e211af5324fe0afc18a5b",
+      "w1Responses": "c700032e16b33037c260ab8dfe05a19f3373ba96ed9ce43ca1d28cf9ed0ad148",
+      "w2Report": "59e35b05fdde56a7f75879e5c762e99bdc61479523c69c16752455e26c291995"
+    }
+  }
 }
