@@ -255,11 +255,11 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
 | 步骤 | 内容 | 状态 |
 |---|---|---|
 | A | 目标去向按类别拆分、两条路径的响应大小。并入步骤 B 的输出（`hitAt8ByCategory`、`perLimit`），不再单独跑 | 并入 B |
-| B | 合并模拟，§8.2 | 脚本已完成，Mac 未运行 |
-| C | 依据 B 选策略；修订 §3 的 wire 规则（exact 词从 1 个候选变成最多 8 个，p50 增幅不超过 10% 必然不成立），在看封存集结果前提交 | 等 B |
-| D | 在 `src/discovery/query.ts` 的 auto 模式实现选定策略；显式 `searchMode=exact` 不变，补入候选用 `matchedBy` 区分；单测、三项工程门；Mac dev 上重跑 W1、W2 | 等 C |
-| E | 封存集 rules v2：主指标改为默认查询下全部 required 目标的窗口命中（limit 8），类别配比参考 B 的类别分布 | 等 B |
-| F | java_impact 读取文件上限（W2 中 6 → 20 多找回 5 个目标），单独立卡 | D 之后 |
+| B | 合并模拟，§8.2 | Mac 用自有脚本完成（见 §8.6）；本仓库脚本未运行 |
+| C | 依据 B 选策略；修订 §3 的 wire 规则 | 不做：按 §8.2 规则 3 转向 F |
+| D | 在 auto 模式实现选定策略 | 不做 |
+| E | 封存集 rules v2，主指标随 F 的结论重定 | 等 F |
+| F | java_impact 读取预算，§9 | 诊断脚本已完成，Mac 未运行 |
 
 ### 8.4 §7 v1 的处置
 
@@ -275,4 +275,72 @@ node scripts/ilv2-merge-simulation.mjs --dataset "$ILV2_MAC10_DATASET" --gold "$
 ```
 
 自检失败（exit 非 0）时停止并回传错误信息。成功时 `strategies.baseline.hitAt` 应为 19/19/·/22/25（@1/3/·/8/20），`bestOfBothHitAt` 的 @3/8/20 应为 29/42/59。summary 以 `stepB` 字段写入 `results/D15-W1.json`。
+
+### 8.6 步骤 B 结果（[D15-W1.json](results/D15-W1.json) 的 `stepB`、`stepBByteBudget`、`w3Assessment`）
+
+- Mac 在本节规则提交（`ccb88e9`）之前，用自有脚本跑了步骤 A、B，并另做了 289 种策略的字节预算扫描。本仓库的 `ilv2-merge-simulation.mjs` 没有运行，结果里没有按 match / miss 拆分的增益。
+- limit 8，exact 在前、text 补满：hit@3 19 → 28，hit@8 22 → 42（等于"默认与 text 取较好名次"的上界）；单次响应字节 p50 1590 → 8478。交错合并命中相同。
+- §3 的 p50 增幅不超过 10% 之内，最好的策略 hit@3 +1、hit@8 +3，且在同一批 dev 上挑选。
+- 按 §8.2 规则 3（增益不足 5 个目标）：不进入 C、D，转向 F。Mac 的结论 `STOP_CURRENT_W3` 与此一致。
+
+## 9. F：java_impact 读取预算（2026-11-12，Mac 运行之前提交）
+
+### 9.1 代码层事实
+
+- 检索 runner 的 product driver 对每个查询词：java_symbol（limit 8）每个候选读一个窗口，再对第 1 个候选调用 java_impact（`mode: "balanced"`、`semanticPolicy: "fast"`、`verbosity: "compact"`），逐个读取返回的 span（`scripts/ilv2-mac-retrieval-eval.mjs:230-249`）。
+- balanced 预算为 6 个文件、14 KB（`src/agent-router/read-plan.ts:33`）；recall 为 12 个文件、32 KB，候选池上限也随 mode 变化（`candidateLimit`，balanced 约 26，recall 70）。
+- `readPlanMaxItems` 已经是 java_impact 的公开参数（上限 30，`src/tools/impact.ts:62`）；字节上限没有公开参数。W2 中"文件上限 6 → 20 多找回 5 个目标"就是这个参数，不需要改产品。
+- 受保护核心（实现、调用、MyBatis 语句等）在任何文件预算下最多 4 个文件，配额释放后也不能超过（`BUCKET_RULES.core.max`，`read-plan.ts:77` 与 `canAddAfterQuotaRelease`）。没有公开参数能改它；被挤掉时 evidence gap 中出现 "Protected core exceeded read-plan limits"。
+
+### 9.2 诊断（预注册）
+
+脚本 `scripts/ilv2-impact-budget-diagnosis.mjs`，不调用模型，只在 dev 上运行。按 driver 的顺序重放 java_symbol 和 java_impact，java_impact 在以下 4 种配置下各调用一次。只认这 4 种，不在 dev 上追加配置。
+
+| 配置 | 参数 | 对应的改动 |
+|---|---|---|
+| C0 | balanced（6 文件 / 14 KB） | 现状，W2 的 driver |
+| C1 | balanced，`readPlanMaxItems: 12` | 调用方传参，或把 balanced 默认文件数改为 12 |
+| C2 | balanced，`readPlanMaxItems: 20` | 同上，取 20 |
+| C3 | recall（12 文件 / 32 KB） | 调用方换 mode |
+
+- 每次调用同时取 compact（driver 实际读取的 span）和 diagnostic（完整候选池、read plan 和 evidence gap）。两者选出的 span 不一致就拒绝评分。
+- 评分沿用 runner 的 `readWindow`、`readSpan` 和 `scoreSlot`。
+- **校准**：C0 在 Q02 的 20 组上必须复现 W2 的 product 结果（平均召回 0.38916…，全召回 3 组），否则只写校准块并退出。
+- 未读到的目标按原因归类：`SELECTED_RANGE_MISS`（文件已选中但 span 没覆盖）、`UNSELECTED`（在候选池中但未选中）、`POOL_ABSENT`（不在候选池）、`NO_IMPACT_CALL`（没有 impact 调用，例如空查询计划）。
+- `UNSELECTED` 只有同时满足两点才记为"被核心上限挤掉"（`coreCapped`）：本次调用的 evidence gap 含 "Protected core exceeded"，且目标文件自身带受保护核心的 reason（`PROTECTED_CORE_KINDS`）。
+- impact 调用按锚点词的路径结果（match / ambiguous / miss / text）计数。
+- 成本：每题接收的源码字节（W2 的 `receivedBytes`，含重复）和工具响应字节，分别给 p50 / p95 / 均值。
+- 敏感性：剔除含 PARTIAL 调用（覆盖不完整或语义未完成）的题后重算平均召回。
+
+### 9.3 判定规则（看数字之前固定）
+
+某配置**合格**需同时满足：
+1. dev 33 组的每题平均召回比 C0 高至少 3pp（约等于多一组全召回）；
+2. `lostVsC0 ≤ 2`。字节上限固定为 14 KB 时，多选文件可能挤掉 C0 的某个大文件，少量丢失已计入条件 1 的净值；
+3. 每题接收字节 p50 增幅不超过 20%。
+
+结论按顺序取第一条成立的：
+
+| 结论 | 条件 | 下一步 |
+|---|---|---|
+| O1 改默认 | 至少一个配置合格 | 取合格配置中接收字节 p50 最小的。C1、C2 对应把 balanced 默认文件数改为 12 或 20；C3 对应把 balanced 预算改为 recall 的预算。单测和三项工程门；Mac 重跑 W2；封存集 v2 一次性判定 |
+| O2 有收益但超预算 | 有配置满足条件 1，但不满足 2 或 3 | 不改默认。记录收益与代价，交用户决定是否放宽条件 2、3；放宽需要先修订本节再看封存集 |
+| O3 核心上限 | 没有配置满足条件 1，且 C2 下未读到的 java 目标中至少 1/3 为 `coreCapped`（`unselectedCoreCappedJava / uncreditedJava`） | 另立核心上限卡：需要非公开参数的产品实验构建，单独预注册 |
+| O4 收尾 | 以上都不成立（主要是 `POOL_ABSENT`、`NO_IMPACT_CALL`） | 结束 F，写 D15 W6 结论 |
+
+Q02 的 20 组同时报告，用于和 native 的 42.8% 对照，不参与判定。
+
+### 9.4 Mac 执行步骤
+
+1. `git pull --ff-only`，HEAD 须包含本节的提交；在此之前不要运行 F。**复用 W1/W2 用过的已编译候选**（`dist/server.js` sha256 `a51b04eb…`），不重新 build，保证校准可以逐位复现。该目录已不存在时，从 `13f9dc9a` 之后任一提交重新 build（`src/` 未变），记录新的 build-stamp sha256，由校准决定能否继续。
+2. 定向测试：`node --test scripts/ilv2-impact-budget-diagnosis.test.mjs scripts/ilv2-ranking-diagnosis.test.mjs scripts/ilv2-mac-retrieval-eval.test.mjs`，期望 0 失败。
+3. 运行（`Q02_IDS` 为 Q02 schedule 中的 20 个 taskId，逗号分隔）：
+   ```bash
+   node scripts/ilv2-impact-budget-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" --tasks "$DS/tasks-dev.jsonl" \
+     --gold "$DS/private/gold-dev.jsonl" --inputs "$ILV2_MAC10_INPUTS" --server-js <W2 的 dist/server.js> \
+     --out "$RUN/d15-f-dev" --calibration-task-ids "$Q02_IDS" \
+     --expect-mean-recall 0.38916666666666666 --expect-full-recall 3
+   ```
+   投影不一致或校准失败会以非 0 退出：停下，回传 `summary.json` 的 `calibration` 块和报错原文。校准失败时首先怀疑截止时间：重放每次 impact 固定传 `deadlineMs: 15000`，W2 的 driver 传的是 `min(15000, 剩余时间)`。
+4. 回传：新建 `results/D15-F.json`，放 `summary.json` 全文（只有计数）和私有产物的路径与哈希。只认 §9.2 的 4 种配置，不追加扫描。
 

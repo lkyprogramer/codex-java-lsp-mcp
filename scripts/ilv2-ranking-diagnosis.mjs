@@ -215,7 +215,7 @@ export async function diagnoseTask({ task, call, limit = DIAGNOSIS_LIMIT }) {
   return { plan, responses, intentMismatchTerms };
 }
 
-async function openProductSession({ serverJs, corpusRoot, workDir, readyTimeoutMs }) {
+export async function openProductSession({ serverJs, corpusRoot, workDir, readyTimeoutMs }) {
   const { startOwnerDaemon } = await import("./owner-daemon.mjs");
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
   const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
@@ -224,12 +224,14 @@ async function openProductSession({ serverJs, corpusRoot, workDir, readyTimeoutM
   const client = new Client({ name: "ilv2-ranking-diagnosis", version: "1.0.0" });
   try {
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [serverJs], cwd: corpusRoot, env: owner.relayEnv, stderr: "ignore" }));
-    const call = async (name, args) => {
+    // callRaw mirrors the retrieval runner's call: the parsed value and the UTF-8 bytes of the tool text.
+    const callRaw = async (name, args) => {
       const result = await client.callTool({ name, arguments: { repoRoot: corpusRoot, ...args } }, undefined, { timeout: 120000 });
       const text = result.content?.map(part => part.text).join("\n") ?? "";
       requireValue(!result.isError, `${name} failed: ${text.slice(0, 300)}`);
-      return JSON.parse(text);
+      return { value: JSON.parse(text), bytes: Buffer.byteLength(text) };
     };
+    const call = async (name, args) => (await callRaw(name, args)).value;
     const started = performance.now();
     await call("java_status", { start: true });
     for (;;) {
@@ -238,7 +240,7 @@ async function openProductSession({ serverJs, corpusRoot, workDir, readyTimeoutM
       requireValue(performance.now() - started < readyTimeoutMs, `product index not FRESH within ${readyTimeoutMs} ms (state ${status.indexView?.state})`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    return { call, readyMs: performance.now() - started, close: async () => { try { await client.close(); } finally { await owner.stop(); } } };
+    return { call, callRaw, readyMs: performance.now() - started, close: async () => { try { await client.close(); } finally { await owner.stop(); } } };
   } catch (error) {
     try { await client.close(); } finally { await owner.stop(); }
     throw error;
