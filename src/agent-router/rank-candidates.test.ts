@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  boundReadPlanMaxItems,
   familyReadPlanProtectedPaths,
   rankCandidatePool,
   rankCandidates,
@@ -446,6 +447,43 @@ test("selected read-plan files take precedence over legacy coverage in both impa
   const expected = new Map(selected.map((file, index) => [file.path!, [{ startLine: index + 1, endLine: index + 2 }]]));
   assert.deepEqual(viewSelectedRangesByFile(diagnostic), expected);
   assert.deepEqual(viewSelectedRangesByFile(compact), expected);
+});
+
+test("readPlanMaxItems above the candidate output limit is planned at the limit and reported", () => {
+  const unset = options({ mode: "balanced" });
+  assert.deepEqual(boundReadPlanMaxItems(unset, 16), { options: unset }, "the mode default is never bounded");
+  const atLimit = options({ mode: "balanced", readPlanMaxItems: 16 });
+  assert.deepEqual(boundReadPlanMaxItems(atLimit, 16), { options: atLimit });
+  const above = options({ mode: "balanced", readPlanMaxItems: 30 });
+  const bounded = boundReadPlanMaxItems(above, 16);
+  assert.equal(bounded.options.readPlanMaxItems, 16);
+  assert.equal(above.readPlanMaxItems, 30, "the caller's options are not mutated");
+  assert.match(bounded.gap ?? "", /readPlanMaxItems 30 exceeds .*candidate output limit \(16\).*at most 16 files/);
+});
+
+test("the dense structural tail never drops a selected read-plan file, even below every legacy candidate", () => {
+  // controller profile in balanced mode: output limit 16. The dense structural
+  // set takes the cliff path; legacy coverage and protected structure outrank
+  // every selected file, which must still all keep their public file IDs.
+  const target = anchor({ profile: "controller", path: "module-a/src/main/java/demo/Anchor.java" });
+  const context = { anchors: [target], options: options({ mode: "balanced", profile: "controller", readPlanMaxItems: 16 }), suppressed: emptySuppressed(), repoRoot: "/repo" };
+  const structural = Array.from({ length: 12 }, (_, index) => ({
+    ...candidate(`/repo/src/Structural${index}.java`, 500 - index), path: `src/Structural${index}.java`, sourceSet: "main" as const,
+    scoreBreakdown: [{ id: "finalize.type-relation", source: "finalize" as const, delta: 10, reason: "type relation" }]
+  }));
+  const selected = [
+    { ...candidate(target.absolutePath, 1), path: target.path, reasons: ["target"], verifiedBy: [], sourceSet: "main" as const },
+    ...Array.from({ length: 15 }, (_, index) => ({
+      ...candidate(`/repo/src/Selected${index}.java`, 1), path: `src/Selected${index}.java`, reasons: ["rg"], verifiedBy: [], sourceSet: "main" as const
+    }))
+  ];
+  const lexical = Array.from({ length: 10 }, (_, index) => ({
+    ...candidate(`/repo/src/Lexical${index}.java`, 50 - index), path: `src/Lexical${index}.java`, reasons: ["rg"], verifiedBy: [], sourceSet: "main" as const
+  }));
+  const selectedPaths = new Set(selected.map(file => file.absolutePath));
+  const ranked = truncateRankedCandidatePool([...structural, ...lexical, ...selected], context, selectedPaths);
+  assert.equal(ranked.length, 16);
+  assert.deepEqual(new Set(ranked.map(file => file.absolutePath)), selectedPaths);
 });
 
 test("output-tail compatibility retains a direct collaborator without making it V6 protected core", async () => {

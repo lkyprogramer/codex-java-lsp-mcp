@@ -109,6 +109,23 @@ export function truncateRankedCandidatePool(
   return truncateCandidateTail(ranked, readPlanCovered, limit, selectedFiles);
 }
 
+/**
+ * Every selected read-plan file needs a public file ID, so the read plan can
+ * never be wider than the candidate output. A larger readPlanMaxItems is
+ * planned at the output limit and reported instead of being bounded silently.
+ */
+export function boundReadPlanMaxItems(
+  options: ImpactOptions,
+  outputFileLimit: number
+): { options: ImpactOptions; gap?: string } {
+  const requested = options.readPlanMaxItems;
+  if (requested === undefined || requested <= outputFileLimit) return { options };
+  return {
+    options: { ...options, readPlanMaxItems: outputFileLimit },
+    gap: `readPlanMaxItems ${requested} exceeds this request's candidate output limit (${outputFileLimit}); the read plan used at most ${outputFileLimit} files.`
+  };
+}
+
 export function rankedCandidateLimit({ anchors, options }: Pick<RankCandidatesContext, "anchors" | "options">): number {
   const hardLimit = candidateLimit(options.mode);
   return anchors.length === 0 ? hardLimit : Math.min(hardLimit, Math.max(

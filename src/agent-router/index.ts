@@ -15,6 +15,7 @@ import { evidenceGaps } from "./evidence-gaps.js";
 import {
   baselineReadPlanSafePaths,
   familyReadPlanProtectedPaths,
+  boundReadPlanMaxItems,
   rankCandidatePool,
   rankedCandidateLimit,
   truncateRankedCandidatePool,
@@ -396,13 +397,11 @@ export class AgentRouter {
     const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, rankContext));
     const plannerProtectedPaths = readPlanProtectedPaths(rankedPool, protectedReadPlanPaths, rankContext);
     const poolIdByPath = new Map(rankedPool.map((file, index) => [file.absolutePath, `P${index + 1}`]));
-    const outputFileLimit = rankedCandidateLimit(rankContext);
+    const readPlanBound = boundReadPlanMaxItems(options, rankedCandidateLimit(rankContext));
     const readPlanResult = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
       files: rankedPool,
       ids: poolIdByPath,
-      options: (options.readPlanMaxItems ?? 0) > outputFileLimit
-        ? { ...options, readPlanMaxItems: outputFileLimit }
-        : options,
+      options: readPlanBound.options,
       javaIndex: this.javaIndex,
       protectedPaths: plannerProtectedPaths,
       generation
@@ -446,6 +445,7 @@ export class AgentRouter {
       suppressed,
       evidenceGaps: [
         ...evidenceGaps(anchors, options, { ...semantic, lombokIncomplete: lombok.taskGapDetected }),
+        ...(readPlanBound.gap ? [readPlanBound.gap] : []),
         ...readPlanResult.evidenceGaps
       ],
       compactPositionGaps,
