@@ -80,3 +80,17 @@ node scripts/evaluate-java-task.mjs --dataset "$ILV2_MAC10_DATASET" \
 MAC-10 dev 的 12 个任务组各跑 B0、B2 两臂，每臂重复三次。冻结的 72 个 slot 全部返回结果，进程退出码为 0，正式矩阵内共 474 次串行模型请求。66 个 QA 最终请求的 222 个源码单元通过独立回执复验。76 个索引会话都有查询计数差值。B2 的一个 QA slot 达到轮次上限，按失败计入。使用的模型和预算见 [v1.8 协议](../next-stage/evaluation-protocol-v1.8.json)。
 
 B0 通过 11/36，B2 通过 15/36。按任务组配对的差值为 +11.1 个百分点，95% bootstrap 区间为 −2.8 至 +27.8 个百分点。三仓方向不一致，B2 每 slot 的输入 token 中位数增加 18.0%。运行验收为 `PASS`，收益判定为 `INCONCLUSIVE`。见 [Q10 结果及原始产物哈希](results/Q10.json)。
+
+## 最终候选无模型验收（D14）
+
+以下结果对应已推送的冻结候选 `13f9dc9a`。主分支合同对照使用 `665d66e`。
+
+| 工程门 | 结果 |
+|---|---|
+| `npm test` | 2,363 通过、0 失败、10 个既有条件跳过，stdio smoke 通过 |
+| `npm run gate:pr` | 1,654 通过、0 失败、1 个既有条件跳过 |
+| `npm run measure:tool-schema` | 5 个工具，共 9,086 B。 `java_symbol` 为 3,532 B，比主分支增加 649 B |
+
+三项命令均退出 0。后台原始汇总把四条通过的嵌套候选登记计入顶层记录，数量断言报错并保留为 `FAIL`。离线复核验证了三项入口的 455 个编译文件逐字节一致、10 个条件跳过项符合历史白名单。当前候选的工程门为 `PASS`，独立评审尚未执行。见 [Q11 最终候选记录](results/Q11.json)。
+
+真实 MCP 对照中，evidence v1/v2 均接受坐标和 `symbolId`。实测样例的旧 XML 单元字段、源码和哈希一致。v2 另加 Java 声明、`role` 与 `proof`，并更改了 `schemaVersion` 和 `supportedScope`。严格匹配 v1 的调用方需要适配。见 [Q11 合同对照](results/Q11.json)。

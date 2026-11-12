@@ -65,9 +65,94 @@
     {
       "path": "post-ilv2-q10-v18.MiUPr3/q07-fixed-balanced-retry.log",
       "sha256": "781617421e7790448577d626e5ddfc278e31c0b607c9422473bebf2b24dc0737"
+    },
+    {
+      "path": "post-ilv2-final-13f9dc9a.CBMtDg/q07-summary.json",
+      "sha256": "136e53f5e9b3288b7a0a342336c622c261531ae0fe5b2bb086c98da8c4d21b12"
+    },
+    {
+      "path": "post-ilv2-final-13f9dc9a.CBMtDg/q07.log",
+      "sha256": "b336cacc090d9b5f5073d508bec0d492da3a997661f4f06db4752260ac7e657f"
+    },
+    {
+      "path": "post-ilv2-final-13f9dc9a.CBMtDg/verify-mcp.mjs",
+      "sha256": "92c92261d79c80fc480b4902be01d574f70c9f5d11fb0ff2df566daa391d170c"
     }
   ],
   "implementation": "NO_CODE",
   "changes": [],
-  "decision": "NO_READUNIT_CHANGE"
+  "decision": "NO_READUNIT_CHANGE",
+  "productionLimitReplay": {
+    "status": "PASS",
+    "sourceHead": "13f9dc9a7235ce9bdf067e74afb17d79c08362c5",
+    "productBuildDigest": "ec4891cddf42a0d212cdd5d752299620c2352973bfcff04bf57eb787a402ff25",
+    "modelRequests": 0,
+    "groups": 2,
+    "witnesses": 4,
+    "ranks": [
+      8,
+      8,
+      9,
+      11
+    ],
+    "budget": {
+      "files": 6,
+      "bytes": 14336
+    },
+    "productionDefaultMatchesLimit8": true,
+    "byLimit": {
+      "3": {
+        "visible": 0,
+        "topOneCovered": 0,
+        "targetAnchoredCovered": 0,
+        "queryWireBytes": [
+          3513,
+          3629,
+          3629,
+          3629
+        ],
+        "actualSourceBytesWhenAnchored": [
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "8": {
+        "visible": 2,
+        "topOneCovered": 0,
+        "targetAnchoredCovered": 2,
+        "queryWireBytes": [
+          9344,
+          8980,
+          8980,
+          8980
+        ],
+        "actualSourceBytesWhenAnchored": [
+          4860,
+          6536,
+          null,
+          null
+        ]
+      },
+      "20": {
+        "visible": 4,
+        "topOneCovered": 0,
+        "targetAnchoredCovered": 4,
+        "queryWireBytes": [
+          22345,
+          12805,
+          12805,
+          12805
+        ],
+        "actualSourceBytesWhenAnchored": [
+          4860,
+          6536,
+          11063,
+          1555
+        ]
+      }
+    },
+    "conclusion": "A wider result window exposes more target anchors. The top-one policy still misses all four witnesses under the fixed budget."
+  }
 }

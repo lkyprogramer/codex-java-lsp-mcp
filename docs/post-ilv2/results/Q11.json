@@ -159,5 +159,216 @@
     "review.md",
     "manual/result.json",
     "raw/validation/qualified-full/1.evidence/mac10-chain.json"
-  ]
+  ],
+  "finalCandidateVerification": {
+    "status": "PASS",
+    "sourceHead": "13f9dc9a7235ce9bdf067e74afb17d79c08362c5",
+    "sourceDigest": "3c52ac3ea074f66a2a794ecbdc82396b08d544970bf4769e61e5c928bc11ba1b",
+    "productBuildDigest": "ec4891cddf42a0d212cdd5d752299620c2352973bfcff04bf57eb787a402ff25",
+    "nativeDigest": "4022147233b332df371fda861382257ce7d856a0e6d9122e7b12c1336236fe7c",
+    "modelRequests": 0,
+    "engineeringGates": {
+      "npm-test": {
+        "status": "PASS",
+        "exitCode": 0,
+        "record": "final-full",
+        "tap": [
+          {
+            "tests": 1655,
+            "pass": 1654,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 1,
+            "todo": 0
+          },
+          {
+            "tests": 718,
+            "pass": 709,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 9,
+            "todo": 0
+          }
+        ],
+        "log": {
+          "path": "post-ilv2-final-13f9dc9a.CBMtDg/npm-test.log",
+          "sha256": "17149d03fb363d7b0993572b29d1ffd5a149e5b1c2ca4c35b503cab5e0db88ec"
+        },
+        "stdioSmoke": "PASS"
+      },
+      "gate-pr": {
+        "status": "PASS",
+        "exitCode": 0,
+        "record": "1794452435933-071c21d8-7112-4958-a156-3f31ccedbd07",
+        "tap": [
+          {
+            "tests": 1655,
+            "pass": 1654,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 1,
+            "todo": 0
+          }
+        ],
+        "log": {
+          "path": "post-ilv2-final-13f9dc9a.CBMtDg/gate-pr.log",
+          "sha256": "a1d6c4905b96f3d035650f90aa8441bfe85d8537594c71a94c73e477911e1ccc"
+        }
+      },
+      "tool-schema": {
+        "status": "PASS",
+        "exitCode": 0,
+        "record": "1794452709631-1153d4e9-ac83-44eb-a762-c8cd7416a578",
+        "tap": [],
+        "log": {
+          "path": "post-ilv2-final-13f9dc9a.CBMtDg/tool-schema.log",
+          "sha256": "b86f377c0bc67b42f2c10e53bcb75679baf68a0f2e55f97ba568e61dab14c369"
+        },
+        "measurement": {
+          "tools": 5,
+          "jsonBytes": 9086,
+          "estimatedTokens": 2272,
+          "perTool": [
+            {
+              "name": "java_diagnostics",
+              "jsonBytes": 591,
+              "estimatedTokens": 148
+            },
+            {
+              "name": "java_impact",
+              "jsonBytes": 3783,
+              "estimatedTokens": 946
+            },
+            {
+              "name": "java_runtime",
+              "jsonBytes": 648,
+              "estimatedTokens": 162
+            },
+            {
+              "name": "java_status",
+              "jsonBytes": 526,
+              "estimatedTokens": 132
+            },
+            {
+              "name": "java_symbol",
+              "jsonBytes": 3532,
+              "estimatedTokens": 883
+            }
+          ]
+        }
+      },
+      "facts-revision": {
+        "status": "PASS",
+        "exitCode": 0,
+        "log": {
+          "path": "post-ilv2-final-13f9dc9a.CBMtDg/facts-revision.log",
+          "sha256": "e6cb3706732185f76ef21ab694f99c1878e5e0329e6ded13ca56ca2a7deb3020"
+        }
+      }
+    },
+    "entryIdentityAudit": {
+      "status": "PASS",
+      "originalOrchestratorStatus": "FAIL",
+      "originalOrchestratorIssue": "The audit counted four successful nested validation records as additional top-level npm-test records.",
+      "selectedCompiledFilesEqual": 455,
+      "buildMetadataExcluded": [
+        "build-stamp.json",
+        "native/manifest.json"
+      ],
+      "historicalConditionalSkipsMatched": 10,
+      "nestedValidationRecordsPassed": 4
+    },
+    "mcpContract": {
+      "status": "PASS",
+      "modelRequests": 0,
+      "fixture": "PAYMENTS receipt type and linked MyBatis result map",
+      "bothExistingAnchorForms": true,
+      "xmlLegacyFieldsAndBytesEqual": true,
+      "addedXmlFields": [
+        "proof",
+        "role"
+      ],
+      "v2IncludesJavaDeclaration": true,
+      "acceptsV1Discriminant": {
+        "main": true,
+        "final": false
+      },
+      "compatibility": "EXISTING_INPUT_AND_XML_COMPATIBLE_V1_RESPONSE_DISCRIMINANT_CHANGED",
+      "main": {
+        "operations": [
+          "query",
+          "position",
+          "references",
+          "evidence"
+        ],
+        "schemaVersion": "java-evidence-unit/v1",
+        "supportedScope": "indexed-mybatis-xml-fqn-links",
+        "toolDefinitionBytes": 8437,
+        "javaSymbolDefinitionBytes": 2883,
+        "evidenceWireBytes": 1255,
+        "outlineWireBytes": null,
+        "evidenceSourceBudgetUsed": {
+          "units": 1,
+          "lines": 3,
+          "bytes": 129
+        }
+      },
+      "final": {
+        "operations": [
+          "query",
+          "position",
+          "references",
+          "evidence",
+          "outline"
+        ],
+        "schemaVersion": "java-evidence-unit/v2",
+        "supportedScope": "java-declaration-and-indexed-resource-links",
+        "toolDefinitionBytes": 9086,
+        "javaSymbolDefinitionBytes": 3532,
+        "evidenceWireBytes": 1620,
+        "outlineWireBytes": 1972,
+        "evidenceSourceBudgetUsed": {
+          "units": 2,
+          "lines": 4,
+          "bytes": 158
+        }
+      },
+      "mainSourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09"
+    },
+    "independentReview": "NOT_RUN",
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/engineering-result.json",
+        "sha256": "bcf931c0a51e21ea2324ea3da79c39d4835852df3706ddfe28c47c39bb124432"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/engineering-offline-audit.json",
+        "sha256": "5f88e70a3500d8015a1d779fab62f0828c41f7fbdbdf7076512c932496bcedae"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/audit-engineering-results.py",
+        "sha256": "c94ad871ee58bc119812ac949c8d0780eaf0f05b4b02d476bef19f4a7fd6d150"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/final/validation-index.jsonl",
+        "sha256": "1a5a44cc8671319bc172b4029495e5e879f097e92bb0b0c24f08e0ceb6dd054d"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/contract-summary.json",
+        "sha256": "28581cc25bbf8e07432115bf232b5d5ea13119c424ea40b1ce23ec72770194a6"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/contract-main.json",
+        "sha256": "a7208ef3f0d9f54e7507ce3ab363b88728a0c40deda941fd1d854b01d3ae5394"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/contract-final.json",
+        "sha256": "e93b0706fd4e1b832ba79608f0a08b3201edea737193a94b40bbc989501007c6"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/verify-mcp.mjs",
+        "sha256": "92c92261d79c80fc480b4902be01d574f70c9f5d11fb0ff2df566daa391d170c"
+      }
+    ]
+  }
 }

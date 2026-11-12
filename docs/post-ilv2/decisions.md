@@ -115,6 +115,12 @@ Q10 用自部署 `openclaw/Qwen3.8-next` 串行完成 72 个 slot。B0 通过 11
 
 Q07 在固定预算下复查两组任务。查询 Top 3 漏掉的 4 个证据范围，在提供对应声明锚点后均由 ReadUnit 覆盖。本轮归因落在查询截断，ReadUnit 维持现状。见 [Q07 结果](results/Q07.json)。
 
+## D14 最终候选工程门与发布判断
+
+`13f9dc9a` 的全量测试、PR 门和工具 schema 测量已通过。后台汇总的记录计数误报已用现有日志离线复核。evidence v2 保留了实测旧 XML 内容及调用方式，版本与 scope 字段变化需要明确发布合同。见 [最终候选验收](acceptance.md#最终候选无模型验收d14)。
+
+Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查询与显式 `8` 一致。三种上限下首选锚点均覆盖 0/4。先明确 v2 合同和候选选取策略，当前评测维持 `INCONCLUSIVE`。见 [Q07 复测](results/Q07.json)。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -123,5 +129,5 @@ Q07 在固定预算下复查两组任务。查询 Top 3 漏掉的 4 个证据范
 | P1 | Q03、Q04 | Mac 定向回归通过，模型收益未测 |
 | P2 | Q05–Q09 | Q07 调查完成，损失定位到查询截断 |
 | P3 | Q10 | 72 个正式 slot 完成，收益判定 INCONCLUSIVE |
-| P4 | Q11、Q12 | Q11 已在 Mac 上验收为 ENGINEERING_ELIGIBLE（`b96a9c1`），Q12 决策日志（decision-log.md） |
+| P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
