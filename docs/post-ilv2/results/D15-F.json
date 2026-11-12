@@ -811,5 +811,108 @@
       "path": "post-ilv2-d15-f-projection.AutSUN/d15-f-dev/rows.jsonl",
       "sha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a"
     }
+  ],
+  "xmlAttribution": {
+    "labelsByCategory": {
+      "C0/callers/java": {
+        "IMPACT_SPAN": 7,
+        "UNSELECTED:related": 3,
+        "UNSELECTED:reference": 4,
+        "SELECTED_RANGE_MISS": 2
+      },
+      "C3/callers/java": {
+        "IMPACT_SPAN": 10,
+        "UNSELECTED:related": 1,
+        "UNSELECTED:reference": 1,
+        "SELECTED_RANGE_MISS": 4
+      },
+      "C0/dto-impact/java": {
+        "SYMBOL_WINDOW": 8,
+        "UNSELECTED:reference": 1,
+        "IMPACT_SPAN": 10,
+        "POOL_ABSENT": 1,
+        "UNSELECTED:related": 2
+      },
+      "C3/dto-impact/java": {
+        "SYMBOL_WINDOW": 8,
+        "SELECTED_RANGE_MISS": 1,
+        "IMPACT_SPAN": 11,
+        "POOL_ABSENT": 1,
+        "UNSELECTED:related": 1
+      },
+      "C0/implementations/java": {
+        "NO_IMPACT_CALL": 1,
+        "UNSELECTED:related": 5,
+        "UNSELECTED:implementation:coreCapped": 2,
+        "IMPACT_SPAN": 8,
+        "SELECTED_RANGE_MISS": 1,
+        "POOL_ABSENT": 4
+      },
+      "C3/implementations/java": {
+        "NO_IMPACT_CALL": 1,
+        "UNSELECTED:related": 9,
+        "UNSELECTED:implementation:coreCapped": 2,
+        "IMPACT_SPAN": 8,
+        "SELECTED_RANGE_MISS": 1
+      },
+      "C0/repair/java": {
+        "NO_IMPACT_CALL": 3
+      },
+      "C3/repair/java": {
+        "NO_IMPACT_CALL": 3
+      },
+      "C0/spring/java": {
+        "POOL_ABSENT": 5,
+        "SYMBOL_WINDOW": 13,
+        "SELECTED_RANGE_MISS": 1,
+        "UNSELECTED:framework:coreCapped": 1,
+        "IMPACT_SPAN": 6
+      },
+      "C3/spring/java": {
+        "POOL_ABSENT": 5,
+        "SYMBOL_WINDOW": 13,
+        "SELECTED_RANGE_MISS": 1,
+        "UNSELECTED:framework:coreCapped": 1,
+        "IMPACT_SPAN": 6
+      },
+      "C0/xml/other": {
+        "POOL_ABSENT": 16
+      },
+      "C3/xml/other": {
+        "POOL_ABSENT": 16
+      }
+    },
+    "xmlTasks": {
+      "tasks": 6,
+      "terms": 13,
+      "termsByExact": {
+        "text": 13
+      },
+      "anchorKind": {
+        "type/java": 6,
+        "method/java": 6,
+        "none": 1
+      },
+      "impactCalls": {
+        "C0": 12,
+        "C1": 12,
+        "C2": 12,
+        "C3": 12
+      },
+      "callsWithXmlInPool": {
+        "C3": 1
+      },
+      "callsWithXmlSelected": {}
+    }
+  },
+  "xmlAttributionInputs": [
+    {
+      "path": "post-ilv2-d15-f-projection.AutSUN/d15-f-dev/responses.jsonl",
+      "sha256": "206fe3e0e403e4c586b23310793ff80d3469df29bc0e211af5324fe0afc18a5b"
+    },
+    {
+      "path": "post-ilv2-d15-f-projection.AutSUN/d15-f-dev/rows.jsonl",
+      "sha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a"
+    }
   ]
 }
