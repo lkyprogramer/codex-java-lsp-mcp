@@ -846,5 +846,495 @@
         }
       }
     }
+  },
+  "stepB": {
+    "status": "MEASURED_OFFLINE",
+    "limits": [
+      3,
+      5,
+      8
+    ],
+    "method": {
+      "auto": "Slice the captured auto response to the requested limit.",
+      "exactFirstFill": "Keep the ordered exact list first and fill remaining slots from the text probe.",
+      "interleave": "Alternate exact then text, keeping each route's order.",
+      "nonExactTerms": "Keep auto order for all policies.",
+      "deduplication": "First occurrence of declaration.symbolId wins.",
+      "hit": "Best rank across the original plan terms whose W1 declaration window covers the entire required evidence range.",
+      "wire": "Compact UTF-8 JSON of one auto envelope containing the simulated candidates; update selectionLimited and remove emptyReason on nonempty results. No transport, source preview, or new schema fields.",
+      "sensitivity": "Keep all tasks, but do not merge incomplete text responses.",
+      "limitations": "Saved responses used limit=20 and preview=none. This is a prefix simulation on exposed dev tasks, not a product rerun or a retrieval or latency measurement. Q02 is a subset of dev."
+    },
+    "cohorts": {
+      "dev": {
+        "tasks": 33,
+        "targets": 104,
+        "plannedQueries": 61,
+        "exactTextPairs": 45,
+        "partialTextProbes": 17,
+        "comparison": {
+          "3": {
+            "auto": {
+              "hitAt": {
+                "1": 19,
+                "3": 19
+              },
+              "wireBytes": {
+                "p50": 1590,
+                "p95": 3634
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 20,
+                "3": 28
+              },
+              "wireBytes": {
+                "p50": 3502,
+                "p95": 3711
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 20,
+                "3": 28
+              },
+              "wireBytes": {
+                "p50": 3484,
+                "p95": 3696
+              },
+              "exactCandidatesDisplaced": 4
+            }
+          },
+          "5": {
+            "auto": {
+              "hitAt": {
+                "1": 19,
+                "3": 19,
+                "5": 20
+              },
+              "wireBytes": {
+                "p50": 1590,
+                "p95": 5692
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36
+              },
+              "wireBytes": {
+                "p50": 5495,
+                "p95": 5814
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36
+              },
+              "wireBytes": {
+                "p50": 5495,
+                "p95": 5814
+              },
+              "exactCandidatesDisplaced": 4
+            }
+          },
+          "8": {
+            "auto": {
+              "hitAt": {
+                "1": 19,
+                "3": 19,
+                "5": 20,
+                "8": 22
+              },
+              "wireBytes": {
+                "p50": 1590,
+                "p95": 8785
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36,
+                "8": 42
+              },
+              "wireBytes": {
+                "p50": 8478,
+                "p95": 9137
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36,
+                "8": 42
+              },
+              "wireBytes": {
+                "p50": 8478,
+                "p95": 9137
+              },
+              "exactCandidatesDisplaced": 4
+            }
+          }
+        },
+        "hitAt8WithoutPartialTextProbes": {
+          "exactFirstFill": 40,
+          "interleave": 40
+        }
+      },
+      "q02": {
+        "tasks": 20,
+        "targets": 57,
+        "plannedQueries": 33,
+        "exactTextPairs": 26,
+        "partialTextProbes": 9,
+        "comparison": {
+          "3": {
+            "auto": {
+              "hitAt": {
+                "1": 10,
+                "3": 10
+              },
+              "wireBytes": {
+                "p50": 1583,
+                "p95": 3634
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 11,
+                "3": 16
+              },
+              "wireBytes": {
+                "p50": 3505,
+                "p95": 3793
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 11,
+                "3": 16
+              },
+              "wireBytes": {
+                "p50": 3505,
+                "p95": 3793
+              },
+              "exactCandidatesDisplaced": 1
+            }
+          },
+          "5": {
+            "auto": {
+              "hitAt": {
+                "1": 10,
+                "3": 10,
+                "5": 10
+              },
+              "wireBytes": {
+                "p50": 1583,
+                "p95": 5710
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22
+              },
+              "wireBytes": {
+                "p50": 5508,
+                "p95": 5907
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22
+              },
+              "wireBytes": {
+                "p50": 5508,
+                "p95": 5907
+              },
+              "exactCandidatesDisplaced": 0
+            }
+          },
+          "8": {
+            "auto": {
+              "hitAt": {
+                "1": 10,
+                "3": 10,
+                "5": 10,
+                "8": 12
+              },
+              "wireBytes": {
+                "p50": 1583,
+                "p95": 8980
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22,
+                "8": 24
+              },
+              "wireBytes": {
+                "p50": 8490,
+                "p95": 9344
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22,
+                "8": 24
+              },
+              "wireBytes": {
+                "p50": 8490,
+                "p95": 9344
+              },
+              "exactCandidatesDisplaced": 0
+            }
+          }
+        },
+        "hitAt8WithoutPartialTextProbes": {
+          "exactFirstFill": 22,
+          "interleave": 22
+        }
+      }
+    },
+    "mergePoliciesHitSameTargetsAtEveryMeasuredCutoff": true,
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b/merge-simulation.mjs",
+        "sha256": "7e6111b3c1610490eb5de057a9e37eb6e1f3300eb7b17ec2b496b7cab17fca65"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b/summary.json",
+        "sha256": "2b4316d684bf5b50bf9a31243e8bcf178e3f14de78a3b88345d9e74f746b5272"
+      }
+    ]
+  },
+  "stepBByteBudget": {
+    "status": "MEASURED_OFFLINE",
+    "limit": 8,
+    "wireP50IncreaseLimitPct": 10,
+    "medianGuardBytes": 1749,
+    "counts": {
+      "policies": 289,
+      "devPassing": 213,
+      "bothPassing": 212
+    },
+    "design": {
+      "selection": "Evaluate 9 query/response conditions, 8 extra-byte caps, a fixed low-response guard, and two probe-completeness rules. The 10% relative per-response cap is a separate control.",
+      "scoring": "Gold is used for scoring and selecting among runs, never to decide the response for any query.",
+      "caps": "Keep all original top-8 auto candidates. Append in text order with symbolId deduplication. Stop at the first unique candidate that would exceed the extra-byte cap or limit. With guard enabled, responses originally at or below the calibrated threshold may not cross it.",
+      "bytes": "Estimate compact UTF-8 JSON as in Step B. No transport, source preview, new schema fields, or search latency.",
+      "scope": "Existing W1 dev artifacts only. Q02 is a subset. The calibrated byte threshold and ranking among policies are dev evidence."
+    },
+    "baseline": {
+      "dev": {
+        "hitAt": {
+          "1": {
+            "hits": 19,
+            "gained": 0,
+            "lost": 0
+          },
+          "3": {
+            "hits": 19,
+            "gained": 0,
+            "lost": 0
+          },
+          "8": {
+            "hits": 22,
+            "gained": 0,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 61,
+          "p50": 1590,
+          "p95": 8785,
+          "mean": 3609.245901639344
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 0,
+        "expandedQueries": 0,
+        "appendedCandidates": 0,
+        "maxAddedBytes": 0
+      },
+      "q02": {
+        "hitAt": {
+          "1": {
+            "hits": 10,
+            "gained": 0,
+            "lost": 0
+          },
+          "3": {
+            "hits": 10,
+            "gained": 0,
+            "lost": 0
+          },
+          "8": {
+            "hits": 12,
+            "gained": 0,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 33,
+          "p50": 1583,
+          "p95": 8980,
+          "mean": 3228.030303030303
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 0,
+        "expandedQueries": 0,
+        "appendedCandidates": 0,
+        "maxAddedBytes": 0
+      }
+    },
+    "bestPassing": {
+      "policy": {
+        "trigger": "bare",
+        "addedBytes": 8192,
+        "guard": true,
+        "includePartial": false
+      },
+      "dev": {
+        "hitAt": {
+          "1": {
+            "hits": 20,
+            "gained": 1,
+            "lost": 0
+          },
+          "3": {
+            "hits": 20,
+            "gained": 1,
+            "lost": 0
+          },
+          "8": {
+            "hits": 25,
+            "gained": 3,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 61,
+          "p50": 1590,
+          "p95": 8785,
+          "mean": 3925.622950819672
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 25,
+        "expandedQueries": 7,
+        "appendedCandidates": 20,
+        "maxAddedBytes": 6155
+      },
+      "q02": {
+        "hitAt": {
+          "1": {
+            "hits": 11,
+            "gained": 1,
+            "lost": 0
+          },
+          "3": {
+            "hits": 11,
+            "gained": 1,
+            "lost": 0
+          },
+          "8": {
+            "hits": 15,
+            "gained": 3,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 33,
+          "p50": 1583,
+          "p95": 8980,
+          "mean": 3765.6666666666665
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 14,
+        "expandedQueries": 5,
+        "appendedCandidates": 18,
+        "maxAddedBytes": 6155
+      },
+      "audit": {
+        "dev": {
+          "gainedTaskGroups": 3,
+          "gainedByCategory": {
+            "implementations": 2,
+            "callers": 1
+          },
+          "meanBytesIncreasePct": 8.76573826783671,
+          "maxAddedBytes": 6155
+        },
+        "q02": {
+          "gainedTaskGroups": 3,
+          "gainedByCategory": {
+            "implementations": 2,
+            "callers": 1
+          },
+          "meanBytesIncreasePct": 16.65524524759445,
+          "maxAddedBytes": 6155
+        }
+      }
+    },
+    "additionalControls": {
+      "maxDevGainWithUpTo4096AddedBytesAndCompleteProbes": 1,
+      "relativePerResponse10Pct": {
+        "devGainAt8": 0,
+        "devAppendedCandidates": 0
+      }
+    },
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b-budget/budget-simulation.mjs",
+        "sha256": "48ab1b5eac066b4884a4bba8e3c4d06b95d0777888604a32a2b8a43f29127195"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b-budget/summary.json",
+        "sha256": "727fca7c4770ab51d3f8451b93873274489afe2e937a34b20919a2ffff54433a"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b-budget/selected-policy-audit.json",
+        "sha256": "49f695ced2d711603231720b9f1880a59b45f35124aa9e0afc1a2258617bbc92"
+      }
+    ]
+  },
+  "w3Assessment": {
+    "recommendation": "STOP_CURRENT_W3",
+    "scope": "The original candidate reranking work and the tested exact-to-text supplementation strategy.",
+    "basis": [
+      "W1 returned a covering candidate for 25/104 dev targets at limit 20. It recorded 78 NOT_RETURNED and 1 FILE_ONLY target. Main-first and co-anchor reordering did not improve hit@8.",
+      "At limit 8, unconditional exact-first text fill raised hit@3 from 19 to 28 and hit@8 from 22 to 42, but estimated response p50 rose from 1590 to 8478 bytes, above the 10% allowance.",
+      "The best passing budgeted policy raised hit@3 by 1 and hit@8 by 3 across 3 task groups. Estimated p50 and p95 stayed constant on dev while mean response bytes rose by 8.8%. The guard was calibrated on this same dev sample."
+    ],
+    "adoptionVerdict": "NOT_RUN",
+    "limitations": [
+      "The tested policies were selected on exposed dev data. Q02 is a subset and provides no independent confirmation.",
+      "The simulations measure declaration-window hits and estimated response bytes. Product runtime, latency, end-to-end retrieval, and sealed evaluation of these policies were not run."
+    ],
+    "revisitWhen": "A new discovery mechanism shows a material hit@3 gain under the existing byte budget on an independently selected development sample."
   }
 }
