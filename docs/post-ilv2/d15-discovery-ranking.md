@@ -76,8 +76,8 @@
 |---|---|---|---|
 | W1 | 排名诊断 | 代码层事实，本节下方；`scripts/ilv2-ranking-diagnosis.mjs`；Mac 上的聚合结果 | Q07 校准通过，20 组 Q02 和 33 组 dev 已测，见 [Mac 结果](results/D15-W1.json) |
 | W2 | 在 limit 8 下重测基线，并补测 UNMEASURED | 检索 runner 报告与 ledger | 40 个 slot 已测，原 14 组已补测，仍有 8 组缺少定因证据，见 [Mac 结果](results/D15-W1.json) |
-| W3 | 排序改动 | 按 W1 中实测余量最大的机制选择，只在 dev 上开发 | 待根据 W1、W2 结果确定方案 |
-| W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | 规则（§7）和工具 `scripts/ilv2-sealed-set.mjs` 已完成，Mac 未生成 |
+| W3 | 排序改动 | 按 W1 中实测余量最大的机制选择，只在 dev 上开发 | 按 §6 末条重新立项，改为 §8 的 A–F |
+| W4 | 构建封存检索集 | 数据集、抽检记录、身份冻结 | §7 的 v1 规则暂停，不生成；改用 §8 步骤 E 的 v2 |
 | W5 | 封存集上的一次性测量 | 按 §3 判定 | 等 W3、W4 |
 | W6 | 结论；必要时用目标宿主的真实 schema 做小样本配对 | 决策记录 | 等 W5 |
 
@@ -140,6 +140,8 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
 - **大多数目标是 `NOT_RETURNED` 或 `FILE_ONLY`**：问题不在排序，而在查询词或窗口。这时 W3 需要重新立项，不能硬改排序。
 
 ## 7. 封存检索集规则（修订，2026-11-12）
+
+> **已暂停（见 §8.4）。** v1 的主指标只测锚点点名的声明自身的名次，W1 显示这类目标在真实题里几乎都排第一，同名歧义为 0。v1 规则不生成，保留作记录。
 
 规则首次随 `dd435f22` 提交，该提交未包含 W1 的 Mac 结果。规则代码为 `scripts/ilv2-sealed-set.mjs` 中的 `SEALED_RULES`（`sealed-rules/v1`），它的摘要随每份 selection 记录。生成之后修改任何一条规则，都必须换新的 rules 版本，并重新生成。
 
@@ -210,4 +212,67 @@ node scripts/ilv2-ranking-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" \
    有 FAIL 时，命令会给出 `--rounds` 参数。带上它重新执行第 2 步，`--out` 换一个新目录，然后重新抽检。封存数不足 50 时，freeze 在写任何文件之前就会拒绝。
 4.1. **口径校准**：只在数据集的 dev 部分（约 15%）跑一次 `ilv2-ranking-diagnosis.mjs`。`declarationTargets` 应等于 dev 部分的题数。`declarationHitAt[20]` 如果为 0，说明产品返回的 `selection.line` 与 gold 头部的行号基准对不上，必须先修正口径，才能进入 W5。
 5. 记录：把 `datasetDigest`、各层计数和抽检结论写入 `results/D15-W4.json`。在 W5 之前，不得在 holdout 上运行检索 runner、诊断脚本或任何产品查询。
+
+## 8. W1 结果与重新立项（2026-11-12）
+
+本节在步骤 B 的任何数字产生之前提交。用户于 2026-11-12 批准 A–F 重新立项。
+
+### 8.1 W1、W2 事实（[D15-W1.json](results/D15-W1.json)，dev 33 组，104 个目标）
+
+- 校准通过：Q07 的 4 个目标名次为 8、8、9、11；`intentMismatchTerms = 0`。
+- 默认查询 hit@1/3/8/20 = 19/19/22/25；`TOP1` 19，`EXACT_AMBIGUOUS` 0，`TEXT_MERGE` 6，`NOT_RETURNED` 78。
+- `NOT_RETURNED` 中 60 个发生在 exact 路径之后，其中 34 个能被 text 路径找回。默认与 text 取较好名次：hit@3/8/20 = 29/42/59。
+- 离线重排（main 优先、co-anchor）最多 +1。
+- W2：product（limit 8）平均召回 38.9%，native 42.8%，配对 4 好 4 差 12 平。
+
+推断：§6 的"大多数目标是 `NOT_RETURNED`"成立，排序不是主要瓶颈。exact 路径只返回锚点点名的声明本身，题目需要的调用方、实现和 XML 不在结果中。
+
+### 8.2 步骤 B：合并模拟（预注册）
+
+脚本 `scripts/ilv2-merge-simulation.mjs`，只重放 W1 已捕获的 auto 和 text 列表（limit 20，preview none），不调用产品。text 路径的词（auto 未走 exact 的词）在所有策略下都不变。
+
+| 策略 | exact 命中（match / ambiguous） | exact 未命中（miss） |
+|---|---|---|
+| `baseline` | 现状 | 现状（空） |
+| `fillAfterHit` | exact 结果在前，text 结果去重后补满 | 保持空，符合 R07"未命中不回退" |
+| `fillAlways` | 同 `fillAfterHit` | 返回 text 结果，**推翻 R07** |
+| `interleaveAlways` | exact 与 text 交替 | 返回 text 结果，**推翻 R07** |
+
+- 去重键：`declaration.id`，加上 `evidenceRange` 的路径和起始行（MyBatis XML 候选单独计）。
+- 匹配：沿用诊断脚本的 `matchesTarget`（mac10-v3 gold 无 role，即读取窗口口径）。
+- 自检：先按 W1 的 `rows.jsonl` 复算每个目标的默认名次和 text 探针名次，有任何不一致就拒绝输出。任何策略在任何 k 上都不得超过"默认与 text 取较好名次"的上界。
+- 输出：各策略 hit@1/3/5/8/20（分 java 与非 java、分类别）；相对 baseline 新增的目标按所在词的路径结果（match / ambiguous / miss / text）归因；L = 3、5、8 下每个 exact 词的候选数和 locator 字节、每题候选总数和不同文件数。head 预览字节只按产品上限给出界（每候选 1024 B、每请求 2048 B），不是实测。
+- 只读 dev gold，拒绝 holdout gold。
+
+**选择规则（看数字之前固定）**
+1. 按 hit@3 排序，其次 hit@8，再次 L = 8 时 exact 词 locator 字节 p50 较小者。
+2. `fillAlways` 和 `interleaveAlways` 改变 R07 契约。只有在 hit@8 比 `fillAfterHit` 多至少 3 个目标、且 `lostVsBaseline[8] = 0` 时才可入选，入选后还要用户单独批准契约变更。
+3. 最优策略相对 baseline 的 hit@8 增益少于 5 个目标时，不进入步骤 D，直接转向 F。
+4. 选择与开发都在同一批 33 组 dev 上进行，结论只作为方向，效果以步骤 E 的封存集为准。
+
+### 8.3 计划
+
+| 步骤 | 内容 | 状态 |
+|---|---|---|
+| A | 目标去向按类别拆分、两条路径的响应大小。并入步骤 B 的输出（`hitAt8ByCategory`、`perLimit`），不再单独跑 | 并入 B |
+| B | 合并模拟，§8.2 | 脚本已完成，Mac 未运行 |
+| C | 依据 B 选策略；修订 §3 的 wire 规则（exact 词从 1 个候选变成最多 8 个，p50 增幅不超过 10% 必然不成立），在看封存集结果前提交 | 等 B |
+| D | 在 `src/discovery/query.ts` 的 auto 模式实现选定策略；显式 `searchMode=exact` 不变，补入候选用 `matchedBy` 区分；单测、三项工程门；Mac dev 上重跑 W1、W2 | 等 C |
+| E | 封存集 rules v2：主指标改为默认查询下全部 required 目标的窗口命中（limit 8），类别配比参考 B 的类别分布 | 等 B |
+| F | java_impact 读取文件上限（W2 中 6 → 20 多找回 5 个目标），单独立卡 | D 之后 |
+
+### 8.4 §7 v1 的处置
+
+§7 规则与 `scripts/ilv2-sealed-set.mjs` 保留，v1 不生成。v2 修订主指标后换新 rules 版本。转换器的 `locate` 任务类型、`static-head` 来源与 evidence role 继续可用。
+
+### 8.5 Mac 执行步骤（步骤 B）
+
+不需要 build，不启动产品，不调用模型。使用 W1 的私有产物：
+
+```bash
+node scripts/ilv2-merge-simulation.mjs --dataset "$ILV2_MAC10_DATASET" --gold "$DS/private/gold-dev.jsonl" \
+  --responses "$RUN/d15-w1-dev/responses.jsonl" --rows "$RUN/d15-w1-dev/rows.jsonl" --out "$RUN/d15-b-dev"
+```
+
+自检失败（exit 非 0）时停止并回传错误信息。成功时 `strategies.baseline.hitAt` 应为 19/19/·/22/25（@1/3/·/8/20），`bestOfBothHitAt` 的 @3/8/20 应为 29/42/59。summary 以 `stepB` 字段写入 `results/D15-W1.json`。
 
