@@ -371,8 +371,8 @@ D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evi
 
 ### 11.1 已有事实
 
-- F：dev 的 16 个 XML 目标在 C0–C3 下均未读到，全部 `POOL_ABSENT`（[D15-F.json](results/D15-F.json) 的 `xmlAttribution`）。
-- XML-2：6 个目标的 gold 语句行内原样出现了题面查询词；java_symbol 在 limit 20 的 auto 与 text 路径上从未返回指向任何 XML 的 `evidenceRange`；W2 中 xml 题 native 召回合计 1.0/3，product 为 0（`xmlAttribution2`）。
+- F：dev 中 6 道 `category=xml` 题共有 16 个证据范围，其中 15 个 XML、1 个 YAML。C0–C3 均未读到这些范围，C0 和 C3 的逐类归因均为 `POOL_ABSENT`。见 [D15-F.json](results/D15-F.json) 的 `xmlAttribution`。
+- XML-2：6 个 gold 范围内原样出现了题面查询词。`java_symbol` 在 limit 20 的 auto 与 text 路径上均未返回指向 XML 的 `evidenceRange`。W2 中 xml 题 native 召回合计 1.0/3，product 为 0。见 `xmlAttribution2`。
 - 代码：每条 mapper 语句只建一个检索文档，绑定到"FQN 等于 namespace 的 Java 类型中同名的方法"，文档文本只有 `mybatis <kind> <namespace>.<statementId>`，不含 SQL 正文（`src/discovery/search-document.ts` 的 `pushMyBatisDocuments`）。`<sql>`、`<resultMap>` 不建文档。
 - 口径：W1 诊断的 `windowCovers` 只看 `declaration`，不看 `evidenceRange`，数不到 XML 目标。XML-2 显示 XML evidence 从未出现，现有数字不受影响；修复 XML 发现后再用 W1 测量前，须先改这个口径。
 
@@ -382,7 +382,7 @@ D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evi
 
 | 阶段 | 含义 |
 |---|---|
-| `NOT_STATEMENT` | gold 范围不在 `<select/insert/update/delete id=…>` 内（例如 `<sql>`、`<resultMap>`） |
+| `NOT_STATEMENT` | 从 gold 起始行向上查找时，未找到脚本识别的开标签，或最近匹配的标签是 `<sql>`、`<resultMap>` |
 | `NO_NAMESPACE_TYPE` | 语料中没有按包路径声明 namespace 的 Java 文件 |
 | `NO_SAME_NAMED_METHOD` | 该类型没有与语句 id 同名的方法 |
 | `DOC_NOT_RETRIEVED` | 以语句 id 做 `searchMode: "text"` 查询（limit 20），没有候选的 `evidenceRange` 指向这条语句 |
@@ -394,7 +394,7 @@ D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evi
 
 ### 11.3 判读规则（看数字之前固定）
 
-取非 `REACHABLE` 中目标数最多的阶段（并列时都报告）：
+先核对样本是否含 MyBatis 语句目标。样本中有语句目标时，取非 `REACHABLE` 中目标数最多的阶段，并列时都报告。
 
 | 最多的阶段 | 结论 | 下一步 |
 |---|---|---|
@@ -402,7 +402,7 @@ D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evi
 | `DOC_RANK_GT8` | DOCUMENT 层排名 | 并入发现层排名问题，单独预注册 |
 | `TERMS_MISS_DOC`，或 `termsHitDocAmongBound.no` 多于 `yes` | 词汇不匹配：文档只有 id 和 namespace，题面说的是 SQL 内容 | 候选改动：把有界的 SQL 正文标识符（表名、列名）写入语句文档；先预注册评估口径和字节预算 |
 | `NO_NAMESPACE_TYPE` 或 `NO_SAME_NAMED_METHOD` | 绑定缺口 | 查绑定规则；确属项目约定之外的写法时记为不支持 |
-| `NOT_STATEMENT` | gold 指向 `<sql>` 或 `<resultMap>`，按设计不建文档 | 交用户决定是否为片段建文档 |
+| `NOT_STATEMENT` | 普通配置 XML，或按现有规则不建语句文档的 MyBatis 片段 | 先确认目标类型。确认为 `<sql>` 或 `<resultMap>` 时，再决定是否为片段建文档 |
 
 `impactAtMapperMethod` 中 `ABSENT` 与 `LISTED_NO_SPAN` 合计过半时，另记 impact 路径缺陷：即使从正确的 mapper 方法出发，读取计划也不交付 XML。
 
@@ -415,6 +415,12 @@ D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evi
    node scripts/ilv2-xml-discovery-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" --tasks "$DS/tasks-dev.jsonl" \
      --gold "$DS/private/gold-dev.jsonl" --inputs "$ILV2_MAC10_INPUTS" --server-js "$PWD/dist/server.js" --out "$RUN/d15-xml3-dev"
    ```
-   期望 `xmlTargets = 16`。
-4. 回传：新建 `results/D15-XML3.json`，放 `summary.json`（只有计数）和私有 `rows.jsonl` 的路径与哈希。
+   本批 dev 的验收口径为 16 个证据范围（15 个 `.xml`、1 个 YAML），其中 MyBatis 语句目标为 0。脚本按 `.xml` 后缀筛选，预期 `xmlTargets = 15`。
+4. 回传：新建 `results/D15-XML3.json`，保留 `summary.json` 全文、定向测试 TAP 计数、build-stamp 的 SHA-256 和私有 `rows.jsonl` 的路径与 SHA-256。
+
+### 11.5 Mac 结果与收尾（2026-11-13）
+
+`a62c2d59` 的 Mac 隔离构建通过，定向测试 3/3 通过、0 跳过。诊断命令退出 0，首轮外层计数校验因预期写成 16 而停止。离线对账确认，16 个证据范围中有 1 个 YAML，15 个 `.xml` 范围全部出现在原始行记录中。对账同时核对了语料文件和目标范围的哈希。[D15-XML3.json](results/D15-XML3.json)
+
+15 个 XML 范围中，2 个来自 Maven POM，13 个来自日志配置。MyBatis 语句目标为 0，全部记录在 `NOT_STATEMENT` 阶段结束。绑定、文档检索、排名和 mapper 锚点读取计划均未测到。这批 dev 无法验证 MyBatis 发现，XML-3 以样本口径校正收尾。若后续重开该验证，需另选含真实 mapper 语句的 dev 样本。
 

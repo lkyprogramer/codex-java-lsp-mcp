@@ -1,0 +1,110 @@
+{
+  "schema": "post-ilv2/d15-xml3-result/v1",
+  "taskId": "D15-XML3",
+  "status": "CLOSED_NO_MYBATIS_TARGETS",
+  "execution": {
+    "sourceHead": "a62c2d59f6c704431777ed264c43263827133118",
+    "buildStampSha256": "4cf66f18d4f78113341cf29903b0392bc6b347300ce24fdda80ab50c166d4fb5",
+    "npmCiExitCode": 0,
+    "buildExitCode": 0,
+    "targetedTap": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "diagnosisExitCode": 0,
+    "originalExpectedXmlTargets": 16,
+    "originalCountCheck": "FAIL",
+    "originalCountCheckMessage": "xmlTargets mismatch: expected 16, got 15",
+    "rerun": false
+  },
+  "datasetProvenance": {
+    "originalDatasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "devViewDatasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+    "reusedOverlays": 5
+  },
+  "reconciliation": {
+    "xmlCategoryTasks": 6,
+    "totalEvidenceRanges": 16,
+    "xmlRanges": 15,
+    "yamlRanges": 1,
+    "myBatisStatementTargets": 0,
+    "xmlRangesByType": {
+      "mavenPom": 2,
+      "loggingConfig": 13
+    },
+    "status": "PASS_CORRECTED_COUNT"
+  },
+  "summary": {
+    "schema": "post-ilv2/xml-discovery-diagnosis/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+      "split": "dev",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "serverBuildStampSha256": "4cf66f18d4f78113341cf29903b0392bc6b347300ce24fdda80ab50c166d4fb5",
+      "probeLimit": 20
+    },
+    "sessions": {
+      "exam-parent-v3": {
+        "readyMs": 12175
+      },
+      "lishuedu": {
+        "readyMs": 50369
+      },
+      "lishu-v2": {
+        "readyMs": 136809
+      }
+    },
+    "xmlTargets": 15,
+    "byLabel": {
+      "NOT_STATEMENT": 15,
+      "NO_NAMESPACE_TYPE": 0,
+      "NO_SAME_NAMED_METHOD": 0,
+      "DOC_NOT_RETRIEVED": 0,
+      "DOC_RANK_GT8": 0,
+      "TERMS_MISS_DOC": 0,
+      "REACHABLE": 0
+    },
+    "byElement": {
+      "none": 15
+    },
+    "impactAtMapperMethod": {},
+    "termsHitDocAmongBound": {
+      "yes": 0,
+      "no": 0
+    },
+    "probeRanks": {
+      "1-3": 0,
+      "4-8": 0,
+      "9-20": 0
+    },
+    "notClaimed": "Locates the first failing stage per XML target from corpus text and product calls. Element, namespace and method checks are text heuristics mirroring the index rules; no reads, recall or agent outcome are measured."
+  },
+  "myBatisDiscovery": {
+    "status": "NOT_RUN",
+    "reason": "The 15 XML ranges are Maven POM or logging configuration. The remaining evidence range is YAML. The saved diagnostic stopped before binding and retrieval probes for every XML target."
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-d15-xml3-a62c2d5.34hmtI/d15-xml3-dev/rows.jsonl",
+      "sha256": "17c9da185eff781ed075debd55e0fbae2c9c4787d66ca051f74d8a60db75252a"
+    },
+    {
+      "path": "post-ilv2-d15-xml3-a62c2d5.34hmtI/d15-xml3-dev/summary.json",
+      "sha256": "2e9ae04cd5ede1b3f4ddf73ded8dd8b30bd2bc0afd493177b0b82ada780d15ea"
+    },
+    {
+      "path": "post-ilv2-d15-xml3-a62c2d5.34hmtI/diagnosis-progress.log",
+      "sha256": "cfbd6dec3807f34877bf5bb8afb8fb5e06af574340b35e304853f438b67f7dcd"
+    },
+    {
+      "path": "post-ilv2-d15-xml3-a62c2d5.34hmtI/targeted.log",
+      "sha256": "bd1d154a95e596649623f811e240c5b2529ab7cf759501b8aacb38ff8e5d1d95"
+    }
+  ]
+}
