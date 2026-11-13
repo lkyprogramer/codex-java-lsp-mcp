@@ -189,7 +189,7 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 
 ## D19 关系后续核查（2026-11-13 批准）
 
-离线区分 H0 的三种解释（`@Primary` 过滤、跨模块边缺失、同名类型误合并），并统计 D15-F C0 下已命中的 callers 靠什么 label 和 reason 进入读取计划。无模型、不调用产品，判读规则在 Mac 运行前固定。之后由用户对 Q05 的范围一次决定。见 [D19](d19-relation-followup-check.md)。Mac 未运行。
+离线区分 H0 的三种解释（`@Primary` 过滤、跨模块边缺失、同名类型误合并），并统计 D15-F C0 下已命中的 callers 靠什么 label 和 reason 进入读取计划。无模型、不调用产品，判读规则在 Mac 运行前固定。之后由用户对 Q05 的范围一次决定。见 [D19](d19-relation-followup-check.md)。Mac 已运行，判读见 [D19 §6](d19-relation-followup-check.md#6-结果与判读2026-11-13)：H0 为 `PRIMARY_FILTER`，方法级调用方未接线的说法成立；13 个目标中没有产品缺陷，诊断链收尾。更正：H0、H3 是 `java_impact` 类型图的独立决定，不属于 Q05。用户决定：S1（接口锚点列实现类不套用 `@Primary` 过滤）另开分支实现，S2 暂缓，S3 未决（[D18 §5.4](d18-relation-defect-shape.md#54-d19-之后的更正与决定2026-11-13)）。
 
 ## 阶段进度
 
@@ -206,4 +206,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P7 | D16 未命中拆表 | Mac 已运行（[D16-MISS](results/D16-MISS.json)）。R2 未触发、R3 触发：选择策略不改。16/22 焦点未命中在 F 的调用里没有受保护关系 reason，原因未定（见 D16 §5、§6）。更正：评测 owner 未启用 JDT，D15 与 D16 只测了静态路径；三策略重放在现有框架里跑不了，锚点粒度已大体排除，首调用规则待 Mac 离线补跑。Q05 静态路径触发，Q08 仍 UNASSESSED。用户决定不做 JDT 对照（日常几乎不用 JDT，静态路径即实际路径）。首调用补跑 `protectedInAnotherCall`=0，R3 不扣减，D16 收尾（[D16 §7](d16-impact-miss-breakdown.md#7-首调用补跑结果2026-11-13)） |
 | P8 | D17 关系文本核查 | Mac 已运行（[D17-LINK](results/D17-LINK.json)）。13 个可判定目标：直接关系 6、间接关系 7、无文本联系 0；R_defect、R_q05 触发 |
 | P9 | D18 缺陷复现与形态 | Mac 已运行（[D18-SHAPE](results/D18-SHAPE.json)）。13/13 复现：H3 7、H0 2、C_OWNER_BOUND 4。C_OWNER_BOUND 改判为缺少能力（Q05），H0 待 D19 |
-| P10 | D19 关系后续核查 | 脚本与判读规则已提交，Mac 未运行 |
+| P10 | D19 关系后续核查 | Mac 已运行（[D19-FOLLOWUP](results/D19-FOLLOWUP.json)）。H0 2/2 为 `PRIMARY_FILTER`；已命中 callers 受保护 reason 0/7。诊断链收尾，S1 另开分支 |

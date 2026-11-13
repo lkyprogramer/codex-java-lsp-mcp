@@ -71,3 +71,29 @@ node scripts/ilv2-relation-followup-check.mjs --dataset "$ILV2_MAC10_DATASET" --
 - `@Primary` 只看声明前的注解，不看配置类里的 `@Bean @Primary`。
 - 锚点 FQN 按顶层类型推出；锚点是嵌套类型时，按 `Outer.Inner` 写的 import 会判为 `other-same-name` 或 `unresolved`。
 - 池信息是 F 的记录，F 跑在 `828f8a3`；D18 已确认当前构建上 13/13 仍复现。
+
+## 6. 结果与判读（2026-11-13）
+
+Mac 在 `66a5380` 上运行（[D19-FOLLOWUP](results/D19-FOLLOWUP.json)）：定向测试 13/13 通过，`h0.targets` = 2，与预期一致。
+
+**H0：2/2 为 `PRIMARY_FILTER`。**
+- 两个目标写出的超类型都解析到锚点。语料中锚点简单名只有 1 处声明，排除同名误合并。
+- 池中那个子类型带 `@Primary`，同样解析到锚点，并带 `typeGraph:implementation-lookup`。
+- 全部直接子类型都与锚点跨模块，包括池中那个，排除跨模块边缺失。
+- 两行的子类型列表相同，证据实际是 **1 个锚点**。
+
+**机制对上代码（读代码，未运行）。**`selectPreferredImplementers` 有两个调用点：
+- `candidate-collectors.ts`：锚点即接口，列它的实现类。H0 丢在这里。
+- `type-reference.ts`：从锚点引用的接口推断注入的实现，`@Primary` 语义在这里合理。
+
+**已命中的 callers（§3.2）。**
+- 7 个均为 `IMPACT_SPAN`，都在 F 的 C0 读取计划里（`impactSpanNotInPlan` = 0）。
+- 带受保护 reason 的为 0/7，D18 §5.1 的说法成立：方法级调用方没有接线。
+- 白名单内的 reason：`typeReference` 3 个、`PACKAGE_PROXIMITY` 2 个。另有 2 到 4 个目标的 reason 不在白名单内，未记录，所以不能说"7 个都靠类型级弱 reason"。
+
+**诊断链收尾。**D17 到 D19 的 13 个目标中没有产品缺陷：
+- H3 有 7 个，2 道题，是现有设计；
+- H0 有 2 个，1 个锚点，是设计取舍；
+- callers 有 4 个，约 2 个锚点，是缺少能力。
+
+后续去向见 [D18 §5.4](d18-relation-defect-shape.md#54-d19-之后的更正与决定2026-11-13)。
