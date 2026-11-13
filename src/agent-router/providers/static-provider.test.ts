@@ -117,6 +117,25 @@ test("static provider keeps each implementation evidence tied to its own anchor"
   );
 });
 
+test("static structure marks the non-@Primary interface implementers as alternatives", async () => {
+  const port = anchor("A1", "PricePort");
+  const primary = facts("/repo/src/main/java/demo/DefaultPrice.java", { annotations: ["Service", "Primary"] });
+  const alternative = facts("/repo/src/main/java/demo/VipPrice.java", { annotations: ["Service"] });
+  const result = await collectStaticStructureEvidence(providerInput([port], {
+    factsFor: async (file: string) => facts(file, { kind: "interface" }),
+    findImplementers: async () => [alternative, primary],
+    findTypeDefinitions: async () => [],
+    findImporters: async () => []
+  }));
+
+  // Both implementations are evidence; only the alternative carries the role.
+  assert.deepEqual(new Set(result.evidence.map(signal => signal.candidateFile)), new Set([primary.absolutePath, alternative.absolutePath]));
+  assert.deepEqual(
+    result.evidence.filter(signal => signal.kind === "IMPLEMENTS").map(signal => [signal.candidateFile, signal.implementationRole]),
+    [[alternative.absolutePath, "alternative"], [primary.absolutePath, undefined]]
+  );
+});
+
 test("an A2 static lookup failure retains A1 evidence and degrades the provider outcome", async () => {
   const first = anchor("A1", "FirstPort");
   const second = anchor("A2", "SecondPort");

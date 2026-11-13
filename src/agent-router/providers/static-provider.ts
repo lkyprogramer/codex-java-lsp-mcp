@@ -70,6 +70,7 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
   const candidates = seedZeroStubs(input.repoRoot, input.existingCandidatePaths);
   const evidence: EvidenceSignal[] = [];
   const implementationPathsByAnchor = new Map<string, Set<string>>();
+  const alternativeImplementationPaths = new Set<string>();
   const failedAnchors = new Set<string>();
 
   await timed(input.phaseMs, "typeGraph", async () => {
@@ -80,7 +81,8 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
         options: input.options,
         javaIndex: input.javaIndex,
         routingPolicy: input.routingPolicy,
-        generation: input.generation
+        generation: input.generation,
+        alternativeImplementationPaths
       });
       // Defer-mode test implementations remain visible as ordinary recall,
       // but must not fan their fixtures/mocks into the main-source core.
@@ -111,6 +113,16 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
     });
   });
 
+  for (const paths of implementationPathsByAnchor.values()) {
+    for (const preferred of paths) alternativeImplementationPaths.delete(preferred);
+  }
+  // The single carrier of the alternative role: read plan and call
+  // continuation both read it from planner evidence.
+  for (const signal of evidence) {
+    if (signal.kind === "IMPLEMENTS" && alternativeImplementationPaths.has(signal.candidateFile)) {
+      signal.implementationRole = "alternative";
+    }
+  }
   return outcome(evidence, startedAt, failedAnchors);
 }
 

@@ -298,3 +298,21 @@ test("planner evidence preserves family, kind, and source-target identity", () =
     "planner-only identity must not widen the public CandidateFile JSON schema"
   );
 });
+
+test("an alternative implementer's role reaches planner evidence without widening the JSON", () => {
+  const file = path.join(repoRoot, "src/main/java/com/example/VipPrice.java");
+  const ranked = candidateEvidence(file, [
+    signal({ candidateFile: file, kind: "IMPLEMENTS", sourceFile: file, implementationRole: "alternative" })
+  ]);
+
+  const materialized = materializeRankedCandidates([ranked], [anchor()], repoRoot)
+    .find(item => item.absolutePath === file)!;
+
+  assert.deepEqual(materialized.plannerEvidence, [{
+    family: "STATIC_STRUCTURE",
+    kind: "IMPLEMENTS",
+    sourceTarget: `A1:${file}->${file}`,
+    implementationRole: "alternative"
+  }]);
+  assert.doesNotMatch(JSON.stringify(materialized), /alternative/);
+});

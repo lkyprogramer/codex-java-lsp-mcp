@@ -15,6 +15,7 @@ import {
   candidateFromFacts,
   mergeCandidate,
   scoreBase,
+  selectMainSourceImplementers,
   selectPreferredImplementers
 } from "./candidate-helpers.js";
 
@@ -32,6 +33,8 @@ type CollectCandidatesInput = {
   readonly javaIndex: RouterIndex;
   readonly routingPolicy: RoutingPolicy;
   readonly generation?: number;
+  /** Filled with interface implementers listed but not preferred (non-@Primary alternatives). */
+  readonly alternativeImplementationPaths?: Set<string>;
 };
 
 type CollectImportGraphInput = CollectCandidatesInput & {
@@ -70,7 +73,7 @@ export function candidateFromAnchor(anchor: ResolvedAnchor): CandidateFile {
 }
 
 /**
- * Returns exactly the implementation facts merged into `candidates`.  The
+ * Returns exactly the preferred implementation facts merged into `candidates`.  The
  * provider needs that identity for a bounded, exact second hop; deriving it
  * later from score/reason deltas is lossy when providers share candidates.
  */
@@ -95,13 +98,24 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
       // means this candidate cannot claim the stronger implementation reason.
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    for (const facts of selectPreferredImplementers(await javaIndex.findImplementers(
+    const listed = selectMainSourceImplementers(await javaIndex.findImplementers(
       typeName,
       20,
       anchor.absolutePath,
       { typeId: anchorTypeId, hydrate: true }
-    ))) {
-      implementations.push(facts);
+    ));
+    // Listing an interface's implementations is not bean resolution: every
+    // main-source implementer of an interface anchor is a candidate (D18/D19).
+    // The @Primary choice alone is returned: it drives dependency fan-out and
+    // (via static-provider) is the only seed of the implementation call continuation.
+    // Class anchors keep the @Primary-only pool.
+    const preferred = new Set(selectPreferredImplementers(listed));
+    for (const facts of isInterface ? listed : [...preferred]) {
+      if (preferred.has(facts)) {
+        implementations.push(facts);
+      } else {
+        input.alternativeImplementationPaths?.add(facts.absolutePath);
+      }
       const candidate = candidateFromFacts(
         facts,
         scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70,

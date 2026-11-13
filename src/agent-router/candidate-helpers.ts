@@ -112,6 +112,12 @@ export function isPrimaryImplementer(facts: JavaSourceFacts): boolean {
   return (facts.annotations ?? []).some(name => simpleTypeName(name) === "Primary");
 }
 
+/** Main-source implementers; test fixtures only when no main-source implementer exists. */
+export function selectMainSourceImplementers(implementers: readonly JavaSourceFacts[]): JavaSourceFacts[] {
+  const main = implementers.filter(item => item.sourceSet !== "test");
+  return main.length > 0 ? main : [...implementers];
+}
+
 /**
  * A single implementer stays as-is. Several alternatives keep only
  * `@Primary` when that annotation exists; otherwise every main-source
@@ -119,8 +125,7 @@ export function isPrimaryImplementer(facts: JavaSourceFacts): boolean {
  * Test fixtures are ignored when a main-source implementer exists.
  */
 export function selectPreferredImplementers(implementers: readonly JavaSourceFacts[]): JavaSourceFacts[] {
-  const main = implementers.filter(item => item.sourceSet !== "test");
-  const pool = main.length > 0 ? main : [...implementers];
+  const pool = selectMainSourceImplementers(implementers);
   if (pool.length <= 1) return pool;
   const primary = pool.filter(isPrimaryImplementer);
   return primary.length > 0 ? primary : pool;

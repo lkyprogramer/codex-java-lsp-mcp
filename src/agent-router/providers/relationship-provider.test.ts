@@ -10,7 +10,7 @@ import {
 } from "../../java-index/router-facts.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import type { ProviderInput } from "../evidence.js";
-import { collectRelationshipEvidence, type RelationshipProviderInput } from "./relationship-provider.js";
+import { collectRelationshipEvidence, prioritizedImplementationContinuationPaths, type RelationshipProviderInput } from "./relationship-provider.js";
 
 const options: ImpactOptions = {
   anchors: [],
@@ -1274,3 +1274,27 @@ test("an already-expired relationship request performs no JavaIndex work", async
   assert.match(result.degradation ?? "", /DEADLINE_EXCEEDED/);
 });
 
+
+test("implementation continuation never starts from a non-@Primary alternative", () => {
+  const port = anchor({ kind: "method", methodName: "price", absolutePath: "/repo/src/main/java/demo/PricePort.java", path: "src/main/java/demo/PricePort.java", className: "PricePort" });
+  const lookup = { reasons: ["typeGraph:implementation-lookup"], verifiedBy: ["typeGraph"] };
+  const implements_ = (file: string, alternative: boolean) => [{
+    family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: `A1:${file}->${file}`,
+    ...(alternative ? { implementationRole: "alternative" as const } : {})
+  }];
+  const implementer = (name: string, alternative: boolean, score: number) => {
+    const file = `/repo/src/main/java/demo/${name}.java`;
+    return candidate(file, { ...lookup, score, plannerEvidence: implements_(file, alternative) });
+  };
+  const primary = implementer("DefaultPrice", false, 150);
+  const alternatives = ["VipPrice", "GoldPrice", "SilverPrice", "BronzePrice"].map(name => implementer(name, true, 140));
+  const pool = [...alternatives, primary];
+
+  // A @Primary choice is a runtime-bean claim: listed alternatives must not fan out their callees.
+  assert.deepEqual(prioritizedImplementationContinuationPaths(providerInput([port], pool, pool, noopJavaIndex())), [primary.absolutePath]);
+  // Nor through the fallback when the preferred implementer itself left the ranked pool.
+  assert.deepEqual(prioritizedImplementationContinuationPaths(providerInput([port], alternatives, alternatives, noopJavaIndex())), []);
+  // Unmarked implementation-lookup candidates (no @Primary, or the type-reference injection path) are untouched.
+  const unmarked = ["VipPrice", "GoldPrice", "SilverPrice", "BronzePrice", "DefaultPrice"].map(name => implementer(name, false, 140));
+  assert.equal(prioritizedImplementationContinuationPaths(providerInput([port], unmarked, unmarked, noopJavaIndex())).length, 4);
+});

@@ -829,6 +829,42 @@ test("an implementer of a called port outranks an unrelated implementer without 
   );
 });
 
+test("the @Primary implementer keeps its core slot over listed non-@Primary alternatives", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/PricePort.java",
+    path: "src/main/java/demo/PricePort.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const implementer = (name: string, alternative: boolean) => candidate({
+    absolutePath: `/repo/src/main/java/demo/${name}.java`,
+    path: `src/main/java/demo/${name}.java`,
+    reasons: ["typeGraph:implementation-lookup"],
+    verifiedBy: ["typeGraph"],
+    score: 150,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:/repo/src/main/java/demo/${name}.java->/repo/src/main/java/demo/${name}.java`,
+      ...(alternative ? { implementationRole: "alternative" as const } : {})
+    }]
+  });
+  // The preferred bean sorts last by path, so only the role can keep it ahead.
+  const plan = async (marked: boolean) => {
+    const files = [anchor, implementer("AlphaPrice", marked), implementer("BetaPrice", marked), implementer("ZetaPrimaryPrice", false)];
+    const result = await buildReadPlan({
+      files,
+      ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+      options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+      javaIndex: fixedRangeIndex()
+    });
+    return result.items.map(item => item.fileId);
+  };
+  assert.deepEqual(await plan(false), ["F1", "F2"], "control: unmarked implementers tie and fall back to path order");
+  assert.deepEqual(await plan(true), ["F1", "F4"], "a listed alternative must not displace the runtime-preferred implementer");
+});
+
 test("a first-hop implementer outranks a same-priority method-parameter DTO in a constrained core", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/CheckController.java",

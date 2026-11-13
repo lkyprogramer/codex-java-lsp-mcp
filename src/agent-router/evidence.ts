@@ -63,6 +63,8 @@ export type EvidenceSignal = {
   callDepth?: number;
   /** Distinguishes an anchor-body receiver call from a same-owner helper or a validated implementation continuation. */
   callOrigin?: "anchor" | "implementation" | "helper";
+  /** Internal: an interface implementer listed although a `@Primary` sibling is the preferred bean. */
+  implementationRole?: "alternative";
   positions: Array<{ line: number; column: number }>;
   providerId: string;
   providerVersion: string;

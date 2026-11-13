@@ -668,7 +668,10 @@ function protectedCorePriority(
     || kind === "typeGraph:implementation-lookup"
     || kind === "implementation"
     || kind === "persisted-implementation")) {
-    return closesCalledPort(file, calledPorts) ? 2.45 : 2.4;
+    // A listed non-@Primary alternative stays a first-hop implementer but
+    // yields the tie to the runtime-preferred bean (S1).
+    const alternative = file.plannerEvidence?.some(evidence => evidence.implementationRole === "alternative") ? 0.01 : 0;
+    return (closesCalledPort(file, calledPorts) ? 2.45 : 2.4) - alternative;
   }
   if (kinds.has("METHOD_RELATION")) {
     return 2;

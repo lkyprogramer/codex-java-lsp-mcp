@@ -139,7 +139,7 @@ test("type graph uses the unique caller-site callee when the implementer has no 
   assert.deepEqual(candidates.get(deleteImpl.absolutePath)?.positions, [{ line: 172, column: 1 }]);
 });
 
-test("type graph keeps only the @Primary implementer when several alternatives exist", async () => {
+test("type graph lists every implementer of an interface anchor but returns only @Primary", async () => {
   const candidates = new Map<string, CandidateFile>();
   const primary = {
     ...implementation,
@@ -162,9 +162,59 @@ test("type graph keeps only the @Primary implementer when several alternatives e
     routingPolicy: resolveRoutingPolicy("/repo")
   });
 
+  // The returned set drives dependency fan-out and call continuation: it stays the runtime-preferred bean.
+  assert.deepEqual(implementations.map(item => item.absolutePath), [primary.absolutePath]);
+  // Listing implementations is not bean resolution: the alternative is still an implementation.
+  assert.deepEqual(candidates.get(primary.absolutePath)?.reasons, ["typeGraph:implementation-lookup"]);
+  assert.deepEqual(candidates.get(other.absolutePath)?.reasons, ["typeGraph:implementation-lookup"]);
+});
+
+test("type graph keeps the @Primary-only pool for a class anchor", async () => {
+  const candidates = new Map<string, CandidateFile>();
+  const primary = { ...implementation, annotations: ["Service", "Primary"] };
+  const other = {
+    ...implementation,
+    absolutePath: "/repo/src/main/java/demo/OtherPortImpl.java",
+    path: "src/main/java/demo/OtherPortImpl.java",
+    annotations: ["Service"]
+  };
+  const implementations = await collectTypeGraphCandidates({
+    candidates,
+    anchors: [anchor],
+    options,
+    javaIndex: {
+      factsFor: async () => ({ ...implementation, absolutePath: anchor.absolutePath, kind: "class" }),
+      findImplementers: async () => [other, primary]
+    } as never,
+    routingPolicy: resolveRoutingPolicy("/repo")
+  });
+
   assert.deepEqual(implementations.map(item => item.absolutePath), [primary.absolutePath]);
   assert.equal(candidates.has(primary.absolutePath), true);
   assert.equal(candidates.has(other.absolutePath), false);
+});
+
+test("type graph still drops test-source implementers when a main-source one exists", async () => {
+  const candidates = new Map<string, CandidateFile>();
+  const fixture = {
+    ...implementation,
+    absolutePath: "/repo/src/test/java/demo/FakePortImpl.java",
+    path: "src/test/java/demo/FakePortImpl.java",
+    sourceSet: "test"
+  };
+  await collectTypeGraphCandidates({
+    candidates,
+    anchors: [anchor],
+    options,
+    javaIndex: {
+      factsFor: async () => ({ ...implementation, absolutePath: anchor.absolutePath, kind: "interface" }),
+      findImplementers: async () => [fixture, { ...implementation, annotations: ["Service", "Primary"] }]
+    } as never,
+    routingPolicy: resolveRoutingPolicy("/repo")
+  });
+
+  assert.equal(candidates.has(fixture.absolutePath), false);
+  assert.equal(candidates.has(implementation.absolutePath), true);
 });
 
 test("type graph keeps every implementer when none is @Primary", async () => {

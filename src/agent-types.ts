@@ -101,6 +101,8 @@ export type CandidateEvidenceKey = {
   callDepth?: number;
   /** Whether CALLS originates in the anchor body, a same-owner helper, or one validated implementation dispatch. */
   callOrigin?: "anchor" | "implementation" | "helper";
+  /** Internal read-plan tie-break: a listed non-@Primary implementer ranks below the preferred one. */
+  implementationRole?: "alternative";
 };
 
 export type ReadRange = {

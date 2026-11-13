@@ -713,13 +713,16 @@ function isUnqualifiedOrThisReceiver(receiverText: string | undefined): boolean 
   return !receiver || receiver === "this";
 }
 
-function prioritizedImplementationContinuationPaths(input: RelationshipProviderInput): string[] {
+export function prioritizedImplementationContinuationPaths(input: RelationshipProviderInput): string[] {
   const anchorPaths = new Set(input.anchors.map(anchor => anchor.absolutePath));
   const priority = (candidate: CandidateFile): number => candidate.reasons.includes("typeGraph:implementation-lookup")
     ? 0
     : (candidate.verifiedBy || []).includes("typeGraph") ? 1 : 2;
   const candidates = [...input.allCandidates]
     .filter(candidate => !anchorPaths.has(candidate.absolutePath) && candidate.absolutePath.endsWith(".java"))
+    // A listed non-@Primary implementer (S1) is a candidate, never a
+    // continuation source: listing an implementation is not a dispatch claim.
+    .filter(candidate => !candidate.plannerEvidence?.some(evidence => evidence.implementationRole === "alternative"))
     .sort((left, right) => priority(left) - priority(right)
       || right.score - left.score
       || left.absolutePath.localeCompare(right.absolutePath))

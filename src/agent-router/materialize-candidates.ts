@@ -162,9 +162,10 @@ function plannerEvidence(candidate: CandidateEvidence): CandidateEvidenceKey[] {
       kind: signal.kind,
       sourceTarget,
       ...(signal.callDepth === undefined ? {} : { callDepth: signal.callDepth }),
-      ...(signal.callOrigin === undefined ? {} : { callOrigin: signal.callOrigin })
+      ...(signal.callOrigin === undefined ? {} : { callOrigin: signal.callOrigin }),
+      ...(signal.implementationRole === undefined ? {} : { implementationRole: signal.implementationRole })
     };
-    const key = `${item.family}\0${item.kind}\0${item.sourceTarget}\0${item.callOrigin ?? ""}`;
+    const key = `${item.family}\0${item.kind}\0${item.sourceTarget}\0${item.callOrigin ?? ""}\0${item.implementationRole ?? ""}`;
     const current = evidence.get(key);
     // Multiple resolved calls to the same candidate collapse to one planner
     // identity; retain the shallowest AST call as the strongest direct path.
