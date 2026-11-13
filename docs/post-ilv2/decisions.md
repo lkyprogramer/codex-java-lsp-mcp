@@ -35,6 +35,7 @@
 ## D4 测量与 repair 判定（Q01）
 
 - 最终请求 receipt：`scripts/ilv2-mac-delivery-receipt.mjs`，语义对齐计划包 `tools/check_delivery.py`；`openai-compatible-chat.mjs` 新增 `onSerializedBody`，receipt 绑定实际发送的同一串字节。
+- PR #4 修复：先匹配最终请求里的完整源码，再按每份 8 单元、80 行、16000 字节分批。超限单元按整行拆分，含拆分片段的回执使用 `post-ilv2/evidence-receipt/v2`，以 `textLineOffset` 记录指针所指文本内的零基行偏移。使用 `scripts/ilv2-mac-delivery-receipt.mjs` 可复验 v1 和 v2。
 - MAC-10 repair oracle：加入评测方自带的 `OracleCompletionWrapper`，测试 main 正常返回才写完成凭据；PASS 需要 `COMPLETE` 且仍有 `ORACLE PASS` 行。凭据只防偶然误判，不是对同权限恶意代码的沙箱。
 - `eval-repair-adapter.mjs` 调用仓库外的 Python 冻结判定器，本轮不改，局限记入 Q01 结果。
 - 前提：oracle 测试必须以 main 正常返回表示成功。若私有 mac10-v3 的 oracle 在成功时调用 `System.exit(0)`，新判定会把正确修复判为 TEST_FAILED。上 Mac 后先跑一次 `checkOracles`，known-good 不是 PASS 就停下来登记，不能放宽判定。

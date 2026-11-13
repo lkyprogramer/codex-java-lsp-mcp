@@ -11,6 +11,7 @@ import { convertDataset } from "./ilv2-mac-eval-dataset.mjs";
 import { evalFixture, removeTree } from "./ilv2-mac-eval-fixture.mjs";
 import { sha256 } from "./ilv2-mac-contracts.mjs";
 import { hashBoundEvents, main, runLiveEvalRun, scoreQaAnswer } from "./evaluate-java-task.mjs";
+import { LIMITS as RECEIPT_LIMITS, verifyReceipt } from "./ilv2-mac-delivery-receipt.mjs";
 import { impactSessionFromClient } from "./run-agent-trace-live.mjs";
 import { mac10PublicFields, parseSourceBudget, prepareMac10Live, selectPilot } from "./eval-mac10-live.mjs";
 
@@ -194,6 +195,60 @@ test("default serialized transport verifies the exact final source on both arms"
     assert.equal(run.verifiedSourceReceived.length, 1);
     assert.deepEqual(run.indexTelemetry[0].queryCounterDelta, { queueFull: 0, runKills: 1 });
   }
+});
+
+test("final request receipts cover source above the per-receipt limits", async t => {
+  const file = "A.java";
+  const shortLines = Array.from({ length: 160 }, (_, index) => `// line ${index + 1} 订单\r\n`);
+  const byteHeavyLine = `// ${"界".repeat(3000)}\r\n`;
+  const cases = [
+    { name: "split one 81-line read", lines: [...shortLines.slice(0, 81), "class A {}"],
+      reads: [{ startLine: 2, maxLines: 81 }], receiptRanges: [[[2, 81]], [[82, 82]]] },
+    { name: "two default reads", lines: shortLines, reads: [{}, { startLine: 81 }], receiptRanges: [[[1, 80]], [[81, 160]]] },
+    { name: "UTF-8 byte cap", lines: [byteHeavyLine, byteHeavyLine], reads: [{ maxLines: 1 }, { startLine: 2, maxLines: 1 }],
+      budget: parseSourceBudget("80:20000"), receiptRanges: [[[1, 1]], [[2, 2]]] },
+    { name: "unit cap", lines: shortLines.slice(0, 9), reads: shortLines.slice(0, 9).map((_, index) => ({ startLine: index + 1, maxLines: 1 })),
+      receiptRanges: [[...Array.from({ length: 8 }, (_, index) => [index + 1, index + 1])], [[9, 9]]] }
+  ];
+  for (const { name, lines, reads, budget, receiptRanges } of cases) await t.test(name, async t => {
+    const dir = await mkdtemp(path.join(tmpdir(), "mac10-receipt-batches-"));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const fixture = path.join(dir, "fixture");
+    await mkdir(fixture);
+    await writeFile(path.join(fixture, file), lines.join(""));
+    const start = reads[0].startLine ?? 1;
+    const required = { path: file, start_line: start, end_line: lines.length, file_sha256: sha256(lines.join("")) };
+    const task = { id: "Q", corpus: "c", kind: "qa", query: "Which file contains the source?", output_contract: { answer_keys: { file: "string" } }, budget };
+    const replies = reads.map((args, index) => toolCall(`r${index + 1}`, "read", { path: file, ...args }));
+    replies.push(toolCall("s", "submit_answer", { file }));
+    let finalBody;
+    let requestIndex = 0;
+    const { runs: [run] } = await runLiveEvalRun({
+      tasks: [task], gold: new Map([[task.id, { answer: { file }, required_evidence: [required] }]]),
+      arms: ["control"], repoRoots: { c: fixture }, outputDir: path.join(dir, "run"), verifyRequestDelivery: true,
+      env: { OPENAI_API_KEY: "fake", OPENAI_BASE_URL: "http://fake.invalid", OPENAI_MODEL: "fixture" },
+      fetchImpl: async (_url, { body }) => {
+        finalBody = body;
+        return new Response(JSON.stringify(replies[requestIndex++]));
+      }
+    });
+    assert.equal(requestIndex, replies.length);
+    assert.deepEqual([run.answerStatus, run.taskSuccess, run.requiredEvidenceCovered], ["CORRECT", true, true]);
+    const delivery = run.requestDelivery;
+    assert.equal(delivery.status, "VERIFIED");
+    assert.equal(delivery.verifiedUnits, reads.length);
+    assert.deepEqual(delivery.refused, []);
+    assert.deepEqual(run.verifiedSourceReceived, run.sourceReceived.filter(event => event.type === "SOURCE_RECEIVED"));
+    assert.deepEqual(delivery.receipts.map(receipt => receipt.units.map(unit => [unit.startLine, unit.endLine])), receiptRanges);
+    const { workspaceId, contentManifestId } = delivery.receipts[0];
+    for (const receipt of delivery.receipts) {
+      const result = await verifyReceipt({ body: finalBody, receipt, workspaceRoot: fixture, expectedView: { workspaceId, contentManifestId } });
+      assert.equal(result.status, "REQUEST_BODY_VERIFIED");
+      assert.ok(result.verifiedUnits <= RECEIPT_LIMITS.maxUnits);
+      assert.ok(result.sourceLines <= RECEIPT_LIMITS.maxLines);
+      assert.ok(result.sourceBytes <= RECEIPT_LIMITS.maxBytes);
+    }
+  });
 });
 
 test("MAC-10 LIVE chain (fake model): QA credited on received verified source, repair judged by the oracle, gold never sent", async t => {

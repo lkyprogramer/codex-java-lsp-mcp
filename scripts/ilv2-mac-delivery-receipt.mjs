@@ -1,10 +1,10 @@
 // input: the exact serialized chat request body (openai-compatible-chat onSerializedBody) and the source
 //        units an evaluator expects the model to have received.
-// output: a post-ilv2/evidence-receipt/v1 receipt binding each unit to a tool message, a JSON pointer and
-//         the source bytes, plus a verifier that re-reads the workspace files.
+// output: receipts binding each unit to a tool message, a JSON pointer and the source bytes,
+//         plus a verifier that re-reads the workspace files.
 // pos: post-ILV2 Q01 (docs/java-specialist-post-ilv2-v1/docs/05-contracts.md §5.6). A receipt proves only
 //      that the serialized body contained these source bytes: not that the provider received the request,
-//      that the model used it, or that the task succeeded. Mirrors the bundle's tools/check_delivery.py.
+//      that the model used it, or that the task succeeded. Whole-field receipts use the bundle's v1 format.
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
@@ -12,6 +12,7 @@ import path from "node:path";
 import { isMain, readJson, requireValue, runCli } from "./ilv2-mac-contracts.mjs";
 
 export const RECEIPT_SCHEMA = "post-ilv2/evidence-receipt/v1";
+const SLICED_RECEIPT_SCHEMA = "post-ilv2/evidence-receipt/v2";
 export const LIMITS = Object.freeze({ maxBodyBytes: 8 * 1024 * 1024, maxFileBytes: 2 * 1024 * 1024, maxUnits: 8, maxLines: 80, maxBytes: 16000 });
 
 export class ReceiptError extends Error {
@@ -111,22 +112,50 @@ function parseBody(body) {
   return request;
 }
 
-/**
- * Builds a receipt from the final serialized body. Each input unit names where the evaluator expects
- * its source (tool call, message, pointer) and the exact source bytes of its range (`sourceText`, read by
- * the evaluator from the held snapshot or file at `contentHash`). A unit whose text is not in the body
- * byte for byte is refused with its reason, never receipted: a planned range or a tool object that did
- * not reach the final message produces nothing.
- */
-export function receiptForSerializedRequest({ body, workspaceId, contentManifestId, units }) {
+function receiptLimit(receipt, part) {
+  if (receipt.units.length >= LIMITS.maxUnits) return "UNIT_CAP";
+  if (receipt.sourceBytes + part.bytes > LIMITS.maxBytes) return "SOURCE_BYTE_BUDGET";
+  if (receipt.sourceLines + part.lines > LIMITS.maxLines) return "SOURCE_LINE_BUDGET";
+}
+
+function splitReceiptUnit(unit, lines, size) {
+  if (lines.length <= LIMITS.maxLines && size <= LIMITS.maxBytes) {
+    return [{ unit, lines: lines.length, bytes: size }];
+  }
+  const ranges = [];
+  let from = 0;
+  let bytes = 0;
+  for (const [index, line] of lines.entries()) {
+    require(line.length <= LIMITS.maxBytes, "SOURCE_BYTE_BUDGET");
+    if (index - from === LIMITS.maxLines || bytes + line.length > LIMITS.maxBytes) {
+      ranges.push({ from, to: index, bytes });
+      from = index;
+      bytes = 0;
+    }
+    bytes += line.length;
+  }
+  ranges.push({ from, to: lines.length, bytes });
+  // Offsets are zero-based lines in the pointed-to text, independent of the file's line numbers.
+  // Adjacent parts cannot fit in one receipt. They retain the original unit ID across receipts.
+  return ranges.map(({ from, to, bytes }) => ({
+    unit: { ...unit, startLine: unit.startLine + from, endLine: unit.startLine + to - 1, textLineOffset: from },
+    lines: to - from,
+    bytes
+  }));
+}
+
+function buildReceipts({ body, workspaceId, contentManifestId, units }, batch) {
   require(typeof workspaceId === "string" && workspaceId !== "" && typeof contentManifestId === "string" && contentManifestId !== "", "MISSING_VIEW");
   require(Array.isArray(units), "INVALID_UNITS");
   const request = parseBody(body);
-  const accepted = [];
-  const refused = [];
+  const requestBodySha256 = sha256(body);
+  const newReceipt = () => ({
+    schema: RECEIPT_SCHEMA, workspaceId, contentManifestId, requestBodySha256,
+    units: [], refused: [], sourceBytes: 0, sourceLines: 0
+  });
+  let receipt = newReceipt();
+  const receipts = [receipt];
   const ids = new Set();
-  let bytes = 0;
-  let lines = 0;
   for (const unit of units) {
     try {
       require(unit && typeof unit.id === "string" && unit.id !== "" && !ids.has(unit.id), "DUPLICATE_OR_MISSING_UNIT_ID");
@@ -136,24 +165,41 @@ export function receiptForSerializedRequest({ body, workspaceId, contentManifest
       require(Number.isInteger(unit.startLine) && Number.isInteger(unit.endLine) && unit.startLine >= 1 && unit.startLine <= unit.endLine, "INVALID_RANGE");
       require(typeof unit.sourceText === "string", "SOURCE_NOT_TEXT");
       // The claimed range must describe the text: a receipt that cannot verify is not issued.
-      require(lfLines(Buffer.from(unit.sourceText, "utf8")).length === unit.endLine - unit.startLine + 1, "SOURCE_RANGE_MISMATCH");
-      const delivered = deliveredText(request, unit);
-      require(delivered === unit.sourceText, "FINAL_TEXT_MISMATCH");
-      const size = Buffer.byteLength(delivered, "utf8");
-      require(accepted.length < LIMITS.maxUnits, "UNIT_CAP");
-      require(bytes + size <= LIMITS.maxBytes, "SOURCE_BYTE_BUDGET");
-      require(lines + (unit.endLine - unit.startLine + 1) <= LIMITS.maxLines, "SOURCE_LINE_BUDGET");
-      bytes += size;
-      lines += unit.endLine - unit.startLine + 1;
-      accepted.push({ id: unit.id, toolCallId: unit.toolCallId, messageIndex: unit.messageIndex, textPointer: unit.textPointer,
-        relativePath: unit.relativePath, contentHash: unit.contentHash, startLine: unit.startLine, endLine: unit.endLine, previewKind: "source" });
+      const source = Buffer.from(unit.sourceText, "utf8");
+      const lines = lfLines(source);
+      require(lines.length === unit.endLine - unit.startLine + 1, "SOURCE_RANGE_MISMATCH");
+      require(deliveredText(request, unit) === unit.sourceText, "FINAL_TEXT_MISMATCH");
+      const verified = { id: unit.id, toolCallId: unit.toolCallId, messageIndex: unit.messageIndex, textPointer: unit.textPointer,
+        relativePath: unit.relativePath, contentHash: unit.contentHash, startLine: unit.startLine, endLine: unit.endLine, previewKind: "source" };
+      const parts = batch ? splitReceiptUnit(verified, lines, source.length) : [{ unit: verified, lines: lines.length, bytes: source.length }];
+      for (const part of parts) {
+        const limit = receiptLimit(receipt, part);
+        if (limit) {
+          require(batch, limit);
+          receipt = newReceipt();
+          receipts.push(receipt);
+        }
+        if (part.unit.textLineOffset !== undefined) receipt.schema = SLICED_RECEIPT_SCHEMA;
+        receipt.units.push(part.unit);
+        receipt.sourceBytes += part.bytes;
+        receipt.sourceLines += part.lines;
+      }
     } catch (error) {
       if (!(error instanceof ReceiptError)) throw error;
-      refused.push({ id: typeof unit?.id === "string" ? unit.id : null, reason: error.reason });
+      receipt.refused.push({ id: typeof unit?.id === "string" ? unit.id : null, reason: error.reason });
     }
   }
-  return { schema: RECEIPT_SCHEMA, workspaceId, contentManifestId, requestBodySha256: sha256(Buffer.from(body, "utf8")),
-    units: accepted, refused, sourceBytes: bytes, sourceLines: lines };
+  return receipts;
+}
+
+/** Verify the exact bytes at the given tool-message pointers and apply one receipt's limits. */
+export function receiptForSerializedRequest(options) {
+  return buildReceipts(options, false)[0];
+}
+
+/** Verify whole source units before partitioning them into independently bounded receipts. */
+export function receiptsForSerializedRequest(options) {
+  return buildReceipts(options, true).filter(receipt => receipt.units.length || receipt.refused.length);
 }
 
 /** Reads `relativePath` under `root`: no symlink on the way, a regular file of at most 2 MiB, unchanged while read. */
@@ -197,11 +243,11 @@ export async function readBoundedSource(root, relativePath) {
 }
 
 /**
- * Re-checks a receipt against the body and the workspace files (check_delivery.py semantics): the body
- * hash, the held view, and for each unit the file hash and the exact bytes of its range in the body.
+ * Re-checks the body hash, held view, file hash and exact range bytes. v2 supports a whole-line
+ * slice of the pointed-to text, while v1 always compares the whole field (check_delivery.py).
  */
 export async function verifyReceipt({ body, receipt, workspaceRoot, expectedView }) {
-  require(receipt && typeof receipt === "object" && receipt.schema === RECEIPT_SCHEMA, "SCHEMA_MISMATCH");
+  require(receipt && (receipt.schema === RECEIPT_SCHEMA || receipt.schema === SLICED_RECEIPT_SCHEMA), "SCHEMA_MISMATCH");
   for (const key of ["workspaceId", "contentManifestId"]) {
     require(typeof expectedView?.[key] === "string" && expectedView[key] !== "", "MISSING_VIEW");
     require(receipt[key] === expectedView[key], "VIEW_MISMATCH");
@@ -222,7 +268,12 @@ export async function verifyReceipt({ body, receipt, workspaceRoot, expectedView
     require(sha256(file) === unit.contentHash, "SOURCE_HASH_MISMATCH");
     const expected = lineRangeBytes(file, unit.startLine, unit.endLine);
     try { new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(expected); } catch { throw new ReceiptError("INVALID_SOURCE_ENCODING"); }
-    const encoded = Buffer.from(delivered, "utf8");
+    let encoded = Buffer.from(delivered, "utf8");
+    if (receipt.schema === SLICED_RECEIPT_SCHEMA && unit.textLineOffset !== undefined) {
+      const offset = unit.textLineOffset;
+      require(Number.isSafeInteger(offset) && offset >= 0, "INVALID_TEXT_LINE_OFFSET");
+      encoded = lineRangeBytes(encoded, offset + 1, offset + unit.endLine - unit.startLine + 1);
+    }
     require(encoded.equals(expected), "FINAL_TEXT_MISMATCH");
     bytes += encoded.length;
     lines += unit.endLine - unit.startLine + 1;

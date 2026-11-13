@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { openaiCompatibleChat } from "./openai-compatible-chat.mjs";
-import { ReceiptError, lineRangeBytes, findTextPointer, receiptForSerializedRequest, receiptUnitsFromEvents, strictParse, verifyReceipt } from "./ilv2-mac-delivery-receipt.mjs";
+import { ReceiptError, lineRangeBytes, findTextPointer, receiptForSerializedRequest, receiptsForSerializedRequest, receiptUnitsFromEvents, strictParse, verifyReceipt } from "./ilv2-mac-delivery-receipt.mjs";
 import { runLiveEvalRun } from "./evaluate-java-task.mjs";
 
 const SOURCE = "package example;\r\n\r\npublic class OrderService {\n    // 订单 🚚\n    public void cancel(long id) {\n        ledger.release(id);\n    }\n}";
@@ -113,6 +113,31 @@ test("the budget of 8 units, 80 lines and 16000 bytes is enforced across units",
   ] });
   assert.equal(receipt.units.length, 1);
   assert.deepEqual(receipt.refused.map(item => item.reason), ["SOURCE_BYTE_BUDGET"]);
+});
+
+test("byte-heavy fields are split on whole lines and verified at the recorded offset", async t => {
+  const root = await workspace(t);
+  const first = `${"界".repeat(3000)}\r\n`;
+  const second = "é".repeat(4500);
+  const text = first + second;
+  const relativePath = "src/OrderService.java";
+  await writeFile(path.join(root, relativePath), text);
+  const source = unit({ startLine: 1, endLine: 2, sourceText: text, contentHash: hash(text) });
+  const body = await capturedBody(JSON.stringify({ units: [{ text }] }));
+  const receipts = receiptsForSerializedRequest({ body, ...VIEW, units: [source] });
+  assert.deepEqual(receipts.map(receipt => [receipt.units[0].startLine, receipt.units[0].endLine, receipt.units[0].textLineOffset]),
+    [[1, 1, 0], [2, 2, 1]]);
+  for (const [index, receipt] of receipts.entries()) {
+    const verified = await verifyReceipt({ body, receipt, workspaceRoot: root, expectedView: VIEW });
+    assert.equal(verified.sourceBytes, Buffer.byteLength(index === 0 ? first : second));
+  }
+  const wrongOffset = structuredClone(receipts[1]);
+  wrongOffset.units[0].textLineOffset = 0;
+  await assert.rejects(verifyReceipt({ body, receipt: wrongOffset, workspaceRoot: root, expectedView: VIEW }), { reason: "FINAL_TEXT_MISMATCH" });
+  const altered = await capturedBody(JSON.stringify({ units: [{ text: first + second.replace("é", "e") }] }));
+  const [refusal] = receiptsForSerializedRequest({ body: altered, ...VIEW, units: [source] });
+  assert.deepEqual(refusal.units, []);
+  assert.deepEqual(refusal.refused, [{ id: source.id, reason: "FINAL_TEXT_MISMATCH" }]);
 });
 
 test("full fake-model chain: java_symbol, java_evidence and native read source is receipted from the last sent body; the write is checked separately", async t => {

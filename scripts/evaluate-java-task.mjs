@@ -32,7 +32,7 @@ import { evaluateRepair } from "./eval-repair-adapter.mjs";
 import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
 import { verifyDataset } from "./ilv2-mac-eval-dataset.mjs";
 import { isMac10TaskRow, parseSourceBudget, prepareMac10Live, selectPilot } from "./eval-mac10-live.mjs";
-import { LIMITS as RECEIPT_LIMITS, readBoundedSource, receiptForSerializedRequest, receiptUnitsFromEvents } from "./ilv2-mac-delivery-receipt.mjs";
+import { readBoundedSource, receiptsForSerializedRequest, receiptUnitsFromEvents } from "./ilv2-mac-delivery-receipt.mjs";
 export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
 /**
@@ -768,17 +768,9 @@ async function verifyFinalRequest({ body, events, candidateRoot, snapshotRoot, m
       return readBoundedSource(candidateRoot, event.path);
     }
   });
-  const receipts = [];
   const workspaceId = createHash("sha256").update(candidateRoot).digest("hex");
   const contentManifestId = createHash("sha256").update(JSON.stringify(units.map(unit => [unit.relativePath, unit.contentHash]))).digest("hex");
-  for (let i = 0; i < units.length; i += RECEIPT_LIMITS.maxUnits) {
-    receipts.push(receiptForSerializedRequest({
-      body,
-      workspaceId,
-      contentManifestId,
-      units: units.slice(i, i + RECEIPT_LIMITS.maxUnits)
-    }));
-  }
+  const receipts = receiptsForSerializedRequest({ body, workspaceId, contentManifestId, units });
   const accepted = new Set(receipts.flatMap(receipt => receipt.units.map(unit => unit.id)));
   const failures = [...refused, ...receipts.flatMap(receipt => receipt.refused)];
   return {
