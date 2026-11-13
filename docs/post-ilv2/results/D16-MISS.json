@@ -1,7 +1,7 @@
 {
   "taskId": "D16-MISS",
   "status": "PASS",
-  "sourceHead": "4eb2de331d3ea33444e04e027554ec975c9c4bec",
+  "sourceHead": "43259475531230996a4feadc6d57e2049858c5ff",
   "targetedTest": {
     "command": "node --test scripts/ilv2-impact-miss-breakdown.test.mjs",
     "nodeVersion": "v22.16.0",
@@ -19,8 +19,8 @@
   "breakdown": {
     "exitCode": 0,
     "summaryArtifact": {
-      "path": "post-ilv2-d16-miss-4eb2de33.8n4WNb/d16-impact-miss-breakdown/summary.json",
-      "sha256": "f6279500b4c48877c388869158b16014dab022c74dd6a927c28281b9f1eb8eb0"
+      "path": "post-ilv2-d16-first-call-43259475.GqqOpN/d16-impact-miss-breakdown/summary.json",
+      "sha256": "e1be3cba2fc061053070b10741be2204472251c01695f78e79d6c53a6cb6452e"
     }
   },
   "summary": {
@@ -206,6 +206,7 @@
         "exactAnchor": 12,
         "all": 12,
         "half": 10.5,
+        "protectedInAnotherCall": 0,
         "triggered": true
       },
       "R4_range": {
