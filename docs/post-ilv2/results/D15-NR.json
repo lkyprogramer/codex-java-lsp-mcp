@@ -401,5 +401,36 @@
     "rerunReasons": {
       "SOURCE_BUDGET": 47
     }
+  },
+  "rankedOutOfflineBreakdown": {
+    "targets": 59,
+    "byBestAlternativeRank": {
+      "top8": 20,
+      "ranks9To20": 14,
+      "notReturnedByEither": 25
+    },
+    "alternativeTop8ByRoute": {
+      "textTop8": 20,
+      "withTermsTop8": 7
+    },
+    "joinKeys": [
+      "taskId",
+      "path",
+      "startLine",
+      "endLine"
+    ],
+    "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+    "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-nr-budget.8bnciM/d15-nr-dev/rows.jsonl",
+        "sha256": "6dbd9a22b29098ed28b3b44804096cfc76ff3cf15b34b69ef4b8a895e19604dc"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-dev/rows.jsonl",
+        "sha256": "2c6f351982a089655f238fa6897049a419649d276a5f845dcf7e500481c71dad"
+      }
+    ],
+    "interpretation": "Best saved W1 rank across textRoute and withTerms. An absent probe supplies no rank. The no-return group does not distinguish missing candidates from ranks beyond 20. The original D15-NR diagnosis is retained."
   }
 }
