@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // S1 Mac validation, one branch, one background run (docs/post-ilv2/s1-implementation-listing.md §4). Follows the
 // long-running validation rules (docs/deep/ilv2-mac-manual/long-running-validation.md): every stage has its own log,
-// exit code, timeout and check; status.json carries a heartbeat; result.json is the terminal hand-off.
+// exit code, timeout and check; status.json carries a heartbeat; result.json is the terminal hand-off, written on
+// failure, exception and SIGTERM/SIGINT as well.
 // The baseline build is main's src on this branch: the S1 src diff is reversed in the working tree only for that build
 // (run-isolated-validation turns uncommitted changes into the candidate patch) and restored right after.
 import { spawn } from "node:child_process";
@@ -25,7 +26,8 @@ export const TARGETED_TESTS = Object.freeze([
   "dist/agent-router/candidate-collectors.test.js", "dist/agent-router/candidate-helpers.test.js",
   "dist/agent-router/providers/static-provider.test.js", "dist/agent-router/providers/relationship-provider.test.js",
   "dist/agent-router/read-plan.test.js", "dist/agent-router/materialize-candidates.test.js", "dist/agent-router/evidence-normalizer.test.js",
-  "dist/java-index/router-integration.test.js", "dist/java-index/router-java-index.test.js"
+  "dist/agent-router/rank-candidates.test.js", "dist/agent-router/type-reference.test.js", "dist/agent-router/request-budget.test.js",
+  "dist/agent-router/anchor.test.js", "dist/java-index/router-integration.test.js", "dist/java-index/router-java-index.test.js"
 ]);
 export const SCRIPT_TESTS = Object.freeze(["scripts/ilv2-s1-gate.test.mjs", "scripts/ilv2-s1-mac-run.test.mjs",
   "scripts/ilv2-relation-defect-shape.test.mjs", "scripts/ilv2-relation-text-check.test.mjs", "scripts/ilv2-impact-budget-diagnosis.test.mjs"]);
@@ -57,7 +59,7 @@ export function checkMechanism(recorded, rerun) {
   return { pass: problems.length === 0, problems };
 }
 
-/** §3.2 step 0: main must reproduce F exactly before F can be S1's baseline. */
+/** §3.2 step 0: does main reproduce F exactly (so F can be S1's baseline)? */
 export function checkBaselineGate(summary) {
   const problems = [];
   if (summary.lostTargets.count !== 0) problems.push(`lost ${summary.lostTargets.count}`);
@@ -66,13 +68,15 @@ export function checkBaselineGate(summary) {
   return { pass: problems.length === 0, problems };
 }
 
-/** Terminal status: every stage ran and passed its check, and the S1 gate passed. */
+/** Terminal status: any timeout, else any non-pass stage, else pass. */
 export function terminalStatus(stages) {
   if (stages.some(stage => stage.status === "TIMEOUT")) return "TIMEOUT";
   if (stages.some(stage => stage.status !== "PASS")) return "FAIL";
   return "PASS";
 }
 
+/** Absolute paths out of anything that leaves the Mac. */
+export const redactPaths = text => String(text).replace(/(?:~|\/)[^\s:'",)]*\/[^\s:'",)]*/g, "<path>");
 const sha256File = async file => createHash("sha256").update(await readFile(file)).digest("hex");
 const readJsonFile = async file => JSON.parse(await readFile(file, "utf8"));
 async function writeAtomic(file, value) {
@@ -82,190 +86,273 @@ async function writeAtomic(file, value) {
   await rename(temp, file);
 }
 
-function capture(command, args, options = {}) {
+export function capture(command, args, cwd = repoRoot) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: repoRoot, ...options });
-    let out = "";
+    const child = spawn(command, args, { cwd });
+    let out = "", err = "";
     child.stdout.on("data", chunk => { out += chunk; });
+    child.stderr.on("data", chunk => { err += chunk; });
     child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve(out) : reject(new Error(`${command} ${args.join(" ")} exited ${code}`)));
+    child.on("close", code => code === 0 ? resolve(out) : reject(new Error(`${command} ${args.join(" ")} exited ${code}: ${err.trim().slice(0, 300)}`)));
   });
 }
 
-/** One stage process in its own group; stdout+stderr to <stage>.log; killed as a group on timeout. */
-function runProcess({ command, args, log, timeoutMs, env }) {
+/**
+ * One stage process in its own group; stdout+stderr appended to `log`. On timeout the group gets SIGTERM, then SIGKILL
+ * after `killGraceMs`. Resolves on `exit`, not `close`: a descendant holding the pipes must not keep the stage open.
+ */
+export function runProcess({ command, args, log, timeoutMs, env, cwd = repoRoot, killGraceMs = 10_000 }) {
   return new Promise(resolve => {
     const stream = createWriteStream(log, { flags: "a" });
-    const child = spawn(command, args, { cwd: repoRoot, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "", timedOut = false;
+    let child;
+    try { child = spawn(command, args, { cwd, env, detached: true, stdio: ["ignore", "pipe", "pipe"] }); }
+    catch (error) { stream.end(); resolve({ exitCode: null, timedOut: false, stdout: "", error: error.message }); return; }
+    let stdout = "", timedOut = false, settled = false, killTimer;
+    const kill = signal => { try { process.kill(-child.pid, signal); } catch {} };
+    const settle = result => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer); clearTimeout(killTimer);
+      // Let already-buffered output land, then detach from the pipes.
+      setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); stream.end(); resolve({ ...result, timedOut, stdout }); }, 200);
+    };
     child.stdout.on("data", chunk => { stdout += chunk; stream.write(chunk); });
     child.stderr.on("data", chunk => stream.write(chunk));
-    const timer = setTimeout(() => { timedOut = true; try { process.kill(-child.pid, "SIGTERM"); } catch {} }, timeoutMs);
-    child.on("close", code => { clearTimeout(timer); stream.end(); resolve({ exitCode: code, timedOut, stdout }); });
+    const timer = setTimeout(() => { timedOut = true; kill("SIGTERM"); killTimer = setTimeout(() => kill("SIGKILL"), killGraceMs); }, timeoutMs);
+    child.on("error", error => settle({ exitCode: null, error: error.message }));
+    child.on("exit", code => settle({ exitCode: code }));
   });
 }
 
-export async function runS1Validation({ runDir }) {
-  const env = process.env;
-  for (const name of ["ILV2_NODE_BIN", "ILV2_RUNTIME_MANIFEST", "ILV2_MAC10_DATASET", "ILV2_MAC10_INPUTS", "DS", "F_RUN", "Q02_IDS"]) requireValue(env[name], `${name} is required`);
-  requireValue(path.isAbsolute(runDir) && existsSync(runDir), "--run-dir must be an existing absolute directory");
-  requireValue((await readdir(runDir)).every(name => name === "runner.log"), "--run-dir must be empty (runner.log allowed)");
-  const node = env.ILV2_NODE_BIN;
-  const head = (await capture("git", ["rev-parse", "HEAD"])).trim();
+/**
+ * The generic engine. A stage: { name, timeoutMs, stop, needs?(ctx), prepare?(ctx), restore?(ctx), command?, args?(ctx),
+ * check(run, ctx) → { pass, problems?, detail? } }. `stop` ends the run when the stage does not pass; later stages
+ * become notRun. Any exception, and SIGTERM/SIGINT, still restores the active stage and writes result.json.
+ */
+export async function runStages({ runDir, gitSha, stages, env = process.env, cwd = repoRoot, heartbeatMs = 30_000, killGraceMs = 10_000, extraResult = () => ({}) }) {
   const statusFile = path.join(runDir, "status.json");
-  const eventsFile = path.join(runDir, "events.jsonl");
-  const stages = [];
-  let current = null;
-  const status = extra => writeAtomic(statusFile, { schema: RUN_SCHEMA, runDir, gitSha: head, pid: process.pid, heartbeat: new Date().toISOString(),
-    stage: current?.name ?? null, stageStartedAt: current?.startedAt ?? null, stageTimeoutMs: current?.timeoutMs ?? null, completed: stages.map(stage => stage.name), ...extra });
-  const event = record => appendFile(eventsFile, `${JSON.stringify({ at: new Date().toISOString(), ...record })}\n`);
-  const heartbeat = setInterval(() => { status({ state: "RUNNING" }).catch(() => {}); }, 30_000);
-  const artifacts = {};
-  const facts = {};
+  const ctx = { runDir, env, facts: {}, artifacts: {} };
+  const records = [];
+  let current = null, restoreActive = null, finished = false;
+  const status = extra => writeAtomic(statusFile, { schema: RUN_SCHEMA, runDir, gitSha, pid: process.pid, heartbeat: new Date().toISOString(),
+    stage: current?.name ?? null, stageStartedAt: current?.startedAt ?? null, stageTimeoutMs: current?.timeoutMs ?? null,
+    completed: records.map(record => record.name), ...extra });
+  const event = record => appendFile(path.join(runDir, "events.jsonl"), `${JSON.stringify({ at: new Date().toISOString(), ...record })}\n`);
+  const heartbeat = setInterval(() => { if (!finished) status({ state: "RUNNING" }).catch(() => {}); }, heartbeatMs);
 
-  const finish = async (failure) => {
+  const finish = async (override) => {
+    if (finished) return null;
+    finished = true;
     clearInterval(heartbeat);
-    const result = { schema: RUN_SCHEMA, status: failure ? failure.status : terminalStatus(stages), gitSha: head, runDir,
-      failedStage: failure?.stage ?? stages.find(stage => stage.status !== "PASS")?.name ?? null, firstError: failure?.error ?? null,
-      stages, notRun: STAGES_DEF.map(stage => stage.name).filter(name => !stages.some(stage => stage.name === name)), facts, artifacts };
+    const result = { schema: RUN_SCHEMA, status: override?.status ?? terminalStatus(records), gitSha, runDir,
+      failedStage: override?.stage ?? records.find(record => record.status !== "PASS")?.name ?? null, firstError: override?.error ?? null,
+      stages: records, notRun: stages.map(stage => stage.name).filter(name => !records.some(record => record.name === name)),
+      facts: ctx.facts, artifacts: ctx.artifacts, ...extraResult(ctx, records) };
     current = null;
     await status({ state: result.status });
     await writeAtomic(path.join(runDir, "result.json"), result);
+    await event({ event: "run-end", status: result.status });
     return result;
   };
 
-  // A stage: run, then check. `stop: true` ends the run on failure; later stages become NOT_RUN.
-  const stage = async ({ name, timeoutMin, stop, command, args, check }) => {
-    current = { name, startedAt: new Date().toISOString(), timeoutMs: timeoutMin * MINUTE };
-    await status({ state: "RUNNING" });
-    await event({ stage: name, event: "start" });
-    const log = path.join(runDir, `${name}.log`);
-    const run = command ? await runProcess({ command, args, log, timeoutMs: current.timeoutMs, env }) : { exitCode: 0, timedOut: false, stdout: "" };
-    let verdict;
-    try { verdict = run.timedOut ? { pass: false, problems: ["timeout"] } : await check(run); }
-    catch (error) { verdict = { pass: false, problems: [error.message] }; }
-    const record = { name, status: run.timedOut ? "TIMEOUT" : verdict.pass ? "PASS" : "FAIL", exitCode: run.exitCode, startedAt: current.startedAt,
-      endedAt: new Date().toISOString(), log, problems: verdict.problems ?? [], ...(verdict.detail ? { detail: verdict.detail } : {}) };
-    stages.push(record);
-    await event({ stage: name, event: "end", status: record.status, exitCode: run.exitCode, problems: record.problems });
-    return record.status === "PASS" || !stop;
+  const onSignal = signal => {
+    (async () => {
+      try { await restoreActive?.(); } catch {}
+      if (current) records.push({ name: current.name, status: "FAIL", problems: [`interrupted by ${signal}`] });
+      await finish({ status: "INTERRUPTED", stage: current?.name ?? null, error: `received ${signal}` });
+    })().finally(() => process.exit(130));
   };
+  process.once("SIGTERM", onSignal);
+  process.once("SIGINT", onSignal);
 
-  const isolated = (name, profile, extra = []) => ({ command: "sh", args: ["scripts/run-isolated-node.sh", "scripts/run-isolated-validation.mjs", "--profile", profile, "--keep", "--name", name, ...extra] });
-  const replayArgs = (server, out) => ["scripts/ilv2-impact-budget-diagnosis.mjs", "--dataset", env.ILV2_MAC10_DATASET, "--tasks", `${env.DS}/tasks-dev.jsonl`,
+  try {
+    await status({ state: "RUNNING" });
+    await event({ event: "run-start", gitSha, pid: process.pid });
+    for (const definition of stages) {
+      const missing = definition.needs?.(ctx);
+      if (missing) {
+        records.push({ name: definition.name, status: "FAIL", problems: [`not runnable: ${missing}`] });
+        if (definition.stop) break;
+        continue;
+      }
+      current = { name: definition.name, startedAt: new Date().toISOString(), timeoutMs: definition.timeoutMs };
+      await status({ state: "RUNNING" });
+      await event({ stage: definition.name, event: "start" });
+      let record;
+      restoreActive = definition.restore ? () => definition.restore(ctx) : null;
+      try {
+        await definition.prepare?.(ctx);
+        const run = definition.command
+          ? await runProcess({ command: definition.command, args: definition.args?.(ctx) ?? [], log: path.join(runDir, `${definition.name}.log`),
+            timeoutMs: definition.timeoutMs, env, cwd, killGraceMs })
+          : { exitCode: 0, timedOut: false, stdout: "" };
+        let verdict;
+        if (run.timedOut) verdict = { pass: false, problems: ["timeout"] };
+        else if (run.error) verdict = { pass: false, problems: [`spawn: ${run.error}`] };
+        else { try { verdict = await definition.check(run, ctx); } catch (error) { verdict = { pass: false, problems: [error.message] }; } }
+        record = { name: definition.name, status: run.timedOut ? "TIMEOUT" : verdict.pass ? "PASS" : "FAIL", exitCode: run.exitCode,
+          problems: verdict.problems ?? [], ...(verdict.detail ? { detail: verdict.detail } : {}) };
+      } catch (error) {
+        record = { name: definition.name, status: "FAIL", exitCode: null, problems: [error.message] };
+      } finally {
+        if (restoreActive) {
+          try { await restoreActive(); }
+          catch (error) { record = { ...(record ?? { name: definition.name }), status: "FAIL", problems: [...(record?.problems ?? []), `restore: ${error.message}`] }; ctx.restoreFailed = true; }
+          restoreActive = null;
+        }
+      }
+      records.push({ ...record, startedAt: current.startedAt, endedAt: new Date().toISOString(), log: path.join(runDir, `${definition.name}.log`) });
+      await event({ stage: definition.name, event: "end", status: record.status, exitCode: record.exitCode, problems: record.problems });
+      current = null;
+      if (ctx.restoreFailed) return finish({ status: "FAIL", stage: definition.name, error: "working tree restore failed; run `git checkout HEAD -- src`" });
+      if (record.status !== "PASS" && definition.stop) break;
+    }
+    return await finish(null);
+  } catch (error) {
+    return await finish({ status: "FAIL", stage: current?.name ?? null, error: error.message });
+  } finally {
+    clearInterval(heartbeat);
+    process.removeListener("SIGTERM", onSignal);
+    process.removeListener("SIGINT", onSignal);
+  }
+}
+
+/** The S1 stage table (§4). Main's mismatch with F does not stop the run: S1 is still measured, the verdict waits. */
+export function s1Stages({ env, runDir }) {
+  const node = env.ILV2_NODE_BIN;
+  const slug = path.basename(runDir).replace(/[^a-zA-Z0-9._-]/g, "-").replace(/^[^a-zA-Z0-9]+/, "").slice(0, 80) || "s1";
+  const isolated = (suffix, profile, extra = []) => ({ command: "sh",
+    args: () => ["scripts/run-isolated-node.sh", "scripts/run-isolated-validation.mjs", "--profile", profile, "--keep", "--name", `${slug}-${suffix}`, ...extra] });
+  const replay = (server, out) => ["scripts/ilv2-impact-budget-diagnosis.mjs", "--dataset", env.ILV2_MAC10_DATASET, "--tasks", `${env.DS}/tasks-dev.jsonl`,
     "--gold", `${env.DS}/private/gold-dev.jsonl`, "--inputs", env.ILV2_MAC10_INPUTS, "--server-js", server, "--out", out,
     "--calibration-task-ids", env.Q02_IDS, "--expect-mean-recall", W2_CALIBRATION.meanRecall, "--expect-full-recall", W2_CALIBRATION.fullRecall];
-  const gateArgs = (rows, out) => ["scripts/ilv2-s1-gate.mjs", "--baseline-rows", `${env.F_RUN}/rows.jsonl`, "--expect-baseline-rows-sha256", F_HASHES.rows, "--rows", rows, "--out", out];
-  const builtServer = async (run, key) => {
+  const gate = (baselineRows, baselineSha, rows, out) => ["scripts/ilv2-s1-gate.mjs", "--baseline-rows", baselineRows,
+    "--expect-baseline-rows-sha256", baselineSha, "--rows", rows, "--out", out];
+  const at = (...parts) => path.join(runDir, ...parts);
+  const built = async (run, ctx, key) => {
     const root = parseValidationRoot(run.stdout);
     const server = path.join(root, "candidate/dist/server.js");
-    requireValue(existsSync(server), `no built server at ${server}`);
-    artifacts[key] = { validationRoot: root, server, buildStampSha256: await sha256File(path.join(root, "candidate/dist/build-stamp.json")) };
+    requireValue(existsSync(server), "no built server in the kept validation root");
+    ctx.artifacts[key] = { validationRoot: root, buildStampSha256: await sha256File(path.join(root, "candidate/dist/build-stamp.json")) };
     return server;
   };
+  const scored = dir => existsSync(at(dir, "summary.json")) && existsSync(at(dir, "rows.jsonl"));
+  const exitOk = run => ({ pass: run.exitCode === 0, problems: run.exitCode === 0 ? [] : [`exit ${run.exitCode}`] });
 
-  const STAGES_DEF = [
-    { name: "preflight", timeoutMin: 2, stop: true, check: async () => {
+  return [
+    { name: "preflight", timeoutMs: 2 * MINUTE, stop: true, check: async () => {
       const problems = [];
       if ((await capture("git", ["status", "--porcelain"])).trim()) problems.push("working tree is not clean");
-      try { await capture("git", ["merge-base", "--is-ancestor", S1_COMMIT, "HEAD"]); } catch { problems.push(`HEAD does not contain S1 ${S1_COMMIT}`); }
-      try { await capture("git", ["merge-base", "--is-ancestor", BASELINE_SRC_COMMIT, "HEAD"]); } catch { problems.push(`HEAD does not contain ${BASELINE_SRC_COMMIT}`); }
+      for (const commit of [S1_COMMIT, BASELINE_SRC_COMMIT]) {
+        try { await capture("git", ["merge-base", "--is-ancestor", commit, "HEAD"]); } catch { problems.push(`HEAD does not contain ${commit}`); }
+      }
+      for (const name of ["ILV2_NODE_BIN", "ILV2_RUNTIME_MANIFEST", "ILV2_MAC10_DATASET", "ILV2_MAC10_INPUTS", "DS", "F_RUN", "Q02_IDS"]) {
+        if (!env[name]) problems.push(`${name} is not exported`);
+      }
       for (const [key, expected] of Object.entries(F_HASHES)) {
-        const actual = await sha256File(path.join(env.F_RUN, `${key}.jsonl`));
-        if (actual !== expected) problems.push(`F_RUN ${key}.jsonl sha256 ${actual}`);
+        const file = path.join(env.F_RUN ?? "", `${key}.jsonl`);
+        if (!env.F_RUN || !existsSync(file)) { problems.push(`F_RUN ${key}.jsonl missing`); continue; }
+        if (await sha256File(file) !== expected) problems.push(`F_RUN ${key}.jsonl sha256 differs`);
       }
       return { pass: problems.length === 0, problems };
     } },
-    { name: "baseline-build", timeoutMin: 40, stop: true, prepare: async () => {
-      // Working tree src := baseline src; restored in `restore` whatever happens.
-      const patch = await capture("git", ["diff", "HEAD", BASELINE_SRC_COMMIT, "--", "src"]);
-      await writeFile(path.join(runDir, "baseline-src.patch"), patch);
-      await capture("git", ["apply", path.join(runDir, "baseline-src.patch")]);
-      await capture("git", ["diff", "--quiet", BASELINE_SRC_COMMIT, "--", "src"]);
-    }, restore: () => capture("git", ["checkout", "HEAD", "--", "src"]),
-      ...isolated("s1-baseline-compile", "compile"), check: async run => {
-      if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
-      facts.baselineServer = await builtServer(run, "baselineBuild");
-      return { pass: true };
-    } },
-    { name: "s1-build-targeted", timeoutMin: 60, stop: false, ...isolated("s1-targeted", "targeted", ["--", "node", "--test", "--test-concurrency=1", ...TARGETED_TESTS]),
-      check: async run => {
-        // The kept build serves the later stages even when a test fails; a missing server stops them below.
-        try { facts.s1Server = await builtServer(run, "s1Build"); } catch (error) { return { pass: false, problems: [error.message] }; }
-        return { pass: run.exitCode === 0, problems: run.exitCode === 0 ? [] : [`targeted tests exit ${run.exitCode}`] };
-      } },
-    { name: "script-tests", timeoutMin: 10, stop: false, command: node, args: ["--test", "--test-concurrency=1", ...SCRIPT_TESTS],
-      check: async run => ({ pass: run.exitCode === 0, problems: run.exitCode === 0 ? [] : [`exit ${run.exitCode}`] }) },
-    { name: "mechanism", timeoutMin: 45, stop: true, needs: "s1Server", command: node, args: () => ["scripts/ilv2-relation-defect-shape.mjs", "--dataset", env.ILV2_MAC10_DATASET,
-      "--tasks", `${env.DS}/tasks-dev.jsonl`, "--gold", `${env.DS}/private/gold-dev.jsonl`, "--inputs", env.ILV2_MAC10_INPUTS, "--server-js", facts.s1Server,
-      "--responses", `${env.F_RUN}/responses.jsonl`, "--rows", `${env.F_RUN}/rows.jsonl`,
-      "--expect-responses-sha256", F_HASHES.responses, "--expect-rows-sha256", F_HASHES.rows, "--out", path.join(runDir, "s1-d18")],
-      check: async run => {
+    { name: "baseline-build", timeoutMs: 40 * MINUTE, stop: true,
+      prepare: async ctx => {
+        // Working tree src := baseline src for this build only.
+        const patch = at("baseline-src.patch");
+        await writeFile(patch, await capture("git", ["diff", "HEAD", BASELINE_SRC_COMMIT, "--", "src"]));
+        ctx.artifacts.baselineSrcPatchSha256 = await sha256File(patch);
+        await capture("git", ["apply", patch]);
+        await capture("git", ["diff", "--quiet", BASELINE_SRC_COMMIT, "--", "src"]);
+      },
+      restore: async () => {
+        await capture("git", ["checkout", "HEAD", "--", "src"]);
+        requireValue(!(await capture("git", ["status", "--porcelain", "--", "src"])).trim(), "src is not clean after restore");
+      },
+      ...isolated("baseline", "compile"),
+      check: async (run, ctx) => {
         if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
-        const recorded = (await readJsonFile(path.join(repoRoot, "docs/post-ilv2/results/D18-SHAPE.json"))).summary.shapes;
-        const rerun = await readJsonFile(path.join(runDir, "s1-d18/summary.json"));
-        artifacts.mechanismSummary = { path: path.join(runDir, "s1-d18/summary.json"), sha256: await sha256File(path.join(runDir, "s1-d18/summary.json")) };
-        const verdict = checkMechanism(recorded, rerun.shapes);
-        facts.mechanism = verdict;
-        return verdict;
-      } },
-    { name: "main-replay", timeoutMin: 240, stop: true, needs: "baselineServer", command: node, args: () => replayArgs(facts.baselineServer, path.join(runDir, "main-replay")),
-      check: async run => {
-        const summary = await readJsonFile(path.join(runDir, "main-replay/summary.json"));
-        facts.mainCalibration = summary.calibration;
-        return { pass: run.exitCode === 0 && summary.calibration.status === "PASS", problems: run.exitCode === 0 ? [] : [`exit ${run.exitCode}, calibration ${summary.calibration.status}`] };
-      } },
-    { name: "main-gate", timeoutMin: 5, stop: true, command: node, args: () => gateArgs(path.join(runDir, "main-replay/rows.jsonl"), path.join(runDir, "main-gate")),
-      check: async run => {
-        if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
-        const summary = await readJsonFile(path.join(runDir, "main-gate/summary.json"));
-        facts.mainGate = summary;
-        return checkBaselineGate(summary);
-      } },
-    { name: "s1-replay", timeoutMin: 240, stop: true, needs: "s1Server", command: node, args: () => replayArgs(facts.s1Server, path.join(runDir, "s1-replay")),
-      check: async run => {
-        // Calibration may fail on S1 by design (non-zero exit); scoring must still have happened (no projection mismatch).
-        const summaryFile = path.join(runDir, "s1-replay/summary.json");
-        if (!existsSync(summaryFile) || !existsSync(path.join(runDir, "s1-replay/rows.jsonl"))) return { pass: false, problems: [`exit ${run.exitCode}, not scored (see log)`] };
-        facts.s1Calibration = { ...(await readJsonFile(summaryFile)).calibration, exitCode: run.exitCode };
+        ctx.facts.baselineServer = await built(run, ctx, "baselineBuild");
         return { pass: true };
       } },
-    { name: "s1-gate", timeoutMin: 5, stop: true, command: node, args: () => gateArgs(path.join(runDir, "s1-replay/rows.jsonl"), path.join(runDir, "s1-gate")),
-      check: async run => {
+    { name: "s1-build-targeted", timeoutMs: 60 * MINUTE, stop: false, ...isolated("s1", "targeted", ["--", "node", "--test", "--test-concurrency=1", ...TARGETED_TESTS]),
+      check: async (run, ctx) => {
+        // The kept build serves later stages even when a test fails; without a server they report not runnable.
+        try { ctx.facts.s1Server = await built(run, ctx, "s1Build"); } catch (error) { return { pass: false, problems: [error.message] }; }
+        return exitOk(run);
+      } },
+    { name: "script-tests", timeoutMs: 10 * MINUTE, stop: false, command: node, args: () => ["--test", "--test-concurrency=1", ...SCRIPT_TESTS], check: async run => exitOk(run) },
+    { name: "mechanism", timeoutMs: 45 * MINUTE, stop: true, needs: ctx => ctx.facts.s1Server ? null : "no S1 build",
+      command: node, args: ctx => ["scripts/ilv2-relation-defect-shape.mjs", "--dataset", env.ILV2_MAC10_DATASET,
+        "--tasks", `${env.DS}/tasks-dev.jsonl`, "--gold", `${env.DS}/private/gold-dev.jsonl`, "--inputs", env.ILV2_MAC10_INPUTS, "--server-js", ctx.facts.s1Server,
+        "--responses", `${env.F_RUN}/responses.jsonl`, "--rows", `${env.F_RUN}/rows.jsonl`,
+        "--expect-responses-sha256", F_HASHES.responses, "--expect-rows-sha256", F_HASHES.rows, "--out", at("s1-d18")],
+      check: async (run, ctx) => {
         if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
-        const summary = await readJsonFile(path.join(runDir, "s1-gate/summary.json"));
-        facts.s1Gate = summary;
-        return { pass: summary.status === "PASS", problems: summary.status === "PASS" ? [] : Object.entries(summary.gates).filter(([, ok]) => !ok).map(([gate]) => `gate ${gate} failed`) };
+        const recorded = (await readJsonFile(path.join(repoRoot, "docs/post-ilv2/results/D18-SHAPE.json"))).summary.shapes;
+        ctx.facts.mechanism = checkMechanism(recorded, (await readJsonFile(at("s1-d18/summary.json"))).shapes);
+        return ctx.facts.mechanism;
+      } },
+    { name: "main-replay", timeoutMs: 240 * MINUTE, stop: false, needs: ctx => ctx.facts.baselineServer ? null : "no baseline build",
+      command: node, args: ctx => replay(ctx.facts.baselineServer, at("main-replay")),
+      check: async (run, ctx) => {
+        if (!scored("main-replay")) return { pass: false, problems: [`exit ${run.exitCode}, not scored`] };
+        ctx.facts.mainRowsSha256 = await sha256File(at("main-replay/rows.jsonl"));
+        ctx.facts.mainCalibration = { ...(await readJsonFile(at("main-replay/summary.json"))).calibration, exitCode: run.exitCode };
+        return { pass: ctx.facts.mainCalibration.status === "PASS", problems: ctx.facts.mainCalibration.status === "PASS" ? [] : ["calibration FAIL on main"] };
+      } },
+    { name: "main-gate", timeoutMs: 5 * MINUTE, stop: false, needs: ctx => ctx.facts.mainRowsSha256 ? null : "main replay not scored",
+      command: node, args: () => gate(`${env.F_RUN}/rows.jsonl`, F_HASHES.rows, at("main-replay/rows.jsonl"), at("main-gate")),
+      check: async (run, ctx) => {
+        if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
+        ctx.facts.mainGate = await readJsonFile(at("main-gate/summary.json"));
+        return checkBaselineGate(ctx.facts.mainGate);
+      } },
+    { name: "s1-replay", timeoutMs: 240 * MINUTE, stop: true, needs: ctx => ctx.facts.s1Server ? null : "no S1 build",
+      command: node, args: ctx => replay(ctx.facts.s1Server, at("s1-replay")),
+      check: async (run, ctx) => {
+        // Calibration may fail on S1 by design (non-zero exit); scoring must still have happened (no projection mismatch).
+        if (!scored("s1-replay")) return { pass: false, problems: [`exit ${run.exitCode}, not scored`] };
+        ctx.facts.s1Calibration = { ...(await readJsonFile(at("s1-replay/summary.json"))).calibration, exitCode: run.exitCode };
+        return { pass: true };
+      } },
+    { name: "s1-gate", timeoutMs: 5 * MINUTE, stop: false, command: node, args: () => gate(`${env.F_RUN}/rows.jsonl`, F_HASHES.rows, at("s1-replay/rows.jsonl"), at("s1-gate")),
+      check: async (run, ctx) => {
+        if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
+        ctx.facts.s1Gate = await readJsonFile(at("s1-gate/summary.json"));
+        return { pass: ctx.facts.s1Gate.status === "PASS", problems: Object.entries(ctx.facts.s1Gate.gates).filter(([, ok]) => !ok).map(([name]) => `gate ${name} failed`) };
+      } },
+    // Report only: S1 against main itself, for the case where main does not reproduce F.
+    { name: "s1-vs-main", timeoutMs: 5 * MINUTE, stop: false, needs: ctx => ctx.facts.mainRowsSha256 ? null : "main replay not scored",
+      command: node, args: ctx => gate(at("main-replay/rows.jsonl"), ctx.facts.mainRowsSha256, at("s1-replay/rows.jsonl"), at("s1-vs-main")),
+      check: async (run, ctx) => {
+        if (run.exitCode !== 0) return { pass: false, problems: [`exit ${run.exitCode}`] };
+        ctx.facts.s1VsMain = await readJsonFile(at("s1-vs-main/summary.json"));
+        return { pass: true };
       } }
   ];
-
-  await status({ state: "RUNNING" });
-  await event({ event: "run-start", gitSha: head, pid: process.pid });
-  for (const definition of STAGES_DEF) {
-    if (definition.needs && !facts[definition.needs]) return finish({ status: "FAIL", stage: definition.name, error: `${definition.needs} unavailable from an earlier stage` });
-    let keepGoing;
-    try {
-      await definition.prepare?.();
-      keepGoing = await stage({ ...definition, args: typeof definition.args === "function" ? definition.args() : definition.args });
-    } catch (error) {
-      stages.push({ name: definition.name, status: "FAIL", problems: [error.message] });
-      keepGoing = false;
-    } finally {
-      if (definition.restore) await definition.restore();
-    }
-    if (!keepGoing) return finish(null);
-  }
-  return finish(null);
 }
 
-/** The counts-only file to commit as docs/post-ilv2/results/S1-GATE.json. */
+export async function runS1Validation({ runDir, env = process.env }) {
+  requireValue(path.isAbsolute(runDir) && existsSync(runDir), "--run-dir must be an existing absolute directory");
+  requireValue((await readdir(runDir)).every(name => name === "runner.log"), "--run-dir must be empty (runner.log allowed)");
+  const gitSha = (await capture("git", ["rev-parse", "HEAD"])).trim();
+  return runStages({ runDir, gitSha, env, stages: s1Stages({ env, runDir }),
+    extraResult: (ctx, records) => ({ baselineMatchesF: records.find(record => record.name === "main-gate")?.status === "PASS" }) });
+}
+
+/** The counts-only file to commit as docs/post-ilv2/results/S1-GATE.json: no paths, no task ids. */
 export async function reportFor(runDir) {
   const result = await readJsonFile(path.join(runDir, "result.json"));
   return { taskId: "S1-GATE", status: result.status, sourceHead: result.gitSha, failedStage: result.failedStage, notRun: result.notRun,
-    stages: result.stages.map(({ name, status, exitCode, startedAt, endedAt, problems }) => ({ name, status, exitCode, startedAt, endedAt, problems })),
-    builds: Object.fromEntries(Object.entries(result.artifacts).filter(([key]) => key.endsWith("Build")).map(([key, value]) => [key, { buildStampSha256: value.buildStampSha256 }])),
+    firstError: result.firstError && redactPaths(result.firstError), baselineMatchesF: result.baselineMatchesF ?? null,
+    stages: result.stages.map(({ name, status, exitCode, startedAt, endedAt, problems }) => ({ name, status, exitCode: exitCode ?? null, startedAt, endedAt,
+      problems: (problems ?? []).map(redactPaths) })),
+    builds: { baselineSrcPatchSha256: result.artifacts.baselineSrcPatchSha256 ?? null,
+      baseline: result.artifacts.baselineBuild?.buildStampSha256 ?? null, s1: result.artifacts.s1Build?.buildStampSha256 ?? null },
+    // Gate summaries hold counts and hashes only (task identities stay in target-changes.json on the Mac).
     mechanism: result.facts.mechanism ?? null, mainCalibration: result.facts.mainCalibration ?? null, mainGate: result.facts.mainGate ?? null,
-    s1Calibration: result.facts.s1Calibration ?? null, s1Gate: result.facts.s1Gate ?? null };
+    s1Calibration: result.facts.s1Calibration ?? null, s1Gate: result.facts.s1Gate ?? null, s1VsMain: result.facts.s1VsMain ?? null };
 }
 
 async function main(args) {

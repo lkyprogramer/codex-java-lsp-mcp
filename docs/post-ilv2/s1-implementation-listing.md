@@ -34,7 +34,9 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
 
 **3.2 工程门。**
 
-第 0 步，基线核对：F 跑在 `828f8a3`，S1 从 main（`8f18ea7`）拉出，其间 main 有 read plan 的改动。先在 main 构建上按 D15-F 方式重放，预期校准 PASS；再用门脚本比较 F 与 main，预期丢失 0、新命中 0、接收字节 p50 增幅 0。成立才以 F 为 S1 的基线；不成立就停下报告，由用户重定基线（不自行改用 main 的重放）。
+第 0 步，基线核对：F 跑在 `828f8a3`，S1 从 main（`8f18ea7`）拉出，其间 main 的 `src` 有两个提交改了 impact 与 symbol 输出（`504a5d6`、`bb34f73`）。先在 main 构建上按 D15-F 方式重放，预期校准 PASS；再用门脚本比较 F 与 main，预期丢失 0、新命中 0、接收字节 p50 增幅 0。成立才以 F 为 S1 的基线。
+
+不成立时**不停止**（2026-11-13 Mac 运行前修订：原规则"停下报告"在单次后台运行中会让 S1 一个数都没测）：S1 照常重放并与 F 比较，另加只报告的"S1 对 main"比较（同一门脚本，基线为 main 的重放，哈希运行时计算）。此时终态为 FAIL、`baselineMatchesF` 为 false，以哪个基线判门由用户决定。
 
 然后 S1 构建按 D15-F 方式重放（同脚本、同参数），只比较 C0，与 D15-F 的 C0（`rows.jsonl` sha256 `37c89673…`）对比：
 
@@ -58,15 +60,16 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
 |---|---|---|---|
 | `preflight` | 工作区干净；HEAD 含 `63a2257` 与 `3d9a8d6`；F 产物哈希 | 2 分 | 停止 |
 | `baseline-build` | 工作区 `src` 临时改为 main 后 compile（`--keep`），然后恢复 | 40 分 | 停止 |
-| `s1-build-targeted` | S1 构建（`--keep`）并跑脚本中 `TARGETED_TESTS` 的 9 个 dist 测试文件（含 Linux 跑不了的 router-integration、router-java-index） | 60 分 | 继续（构建不在则后续停止） |
+| `s1-build-targeted` | S1 构建（`--keep`）并跑脚本中 `TARGETED_TESTS` 的 13 个 dist 测试文件（含 Linux 跑不了的 router-integration、router-java-index） | 60 分 | 继续；构建不在时依赖它的阶段记为不可运行 |
 | `script-tests` | 5 个脚本测试文件 | 10 分 | 继续 |
 | `mechanism` | S1 构建上重跑 D18，按 §3.1 逐行比对 `results/D18-SHAPE.json` | 45 分 | 停止 |
-| `main-replay` | main 构建按 D15-F 重放，校准须 PASS | 240 分 | 停止 |
-| `main-gate` | 门脚本比较 F 与 main：丢失 0、新命中 0、字节增幅 0（§3.2 第 0 步） | 5 分 | 停止 |
+| `main-replay` | main 构建按 D15-F 重放，须完成评分且校准 PASS | 240 分 | 继续 |
+| `main-gate` | 门脚本比较 F 与 main：丢失 0、新命中 0、字节增幅 0（§3.2 第 0 步） | 5 分 | 继续 |
 | `s1-replay` | S1 构建重放；校准失败（非 0 退出）属预期，但须完成评分 | 240 分 | 停止 |
-| `s1-gate` | 门脚本比较 F 与 S1（§3.2） | 5 分 | — |
+| `s1-gate` | 门脚本比较 F 与 S1（§3.2） | 5 分 | 继续 |
+| `s1-vs-main` | 只报告：门脚本比较 main 与 S1 | 5 分 | — |
 
-终态 `PASS` 要求每个阶段都通过且 S1 门 `status` 为 PASS。
+终态 `PASS` 要求每个阶段都通过且 S1 门 `status` 为 PASS。任何异常、超时（先 SIGTERM，10 秒后 SIGKILL 整个进程组）或收到 SIGTERM/SIGINT 都会恢复 `src` 并写出 `result.json`（终态分别为 FAIL、TIMEOUT、INTERRUPTED），后续阶段记入 `notRun`。
 
 **步骤：**
 
@@ -75,18 +78,21 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
    cd <Mac 上的仓库>
    git fetch origin && git checkout feat/s1-implementation-listing && git pull --ff-only
    git status --porcelain            # 必须为空
-   # 沿用 D15/D16 的环境变量：ILV2_NODE_BIN、ILV2_RUNTIME_MANIFEST、ILV2_MAC10_DATASET、ILV2_MAC10_INPUTS、
-   # DS、F_RUN（D15-F 运行目录）、Q02_IDS（Q02 的 20 个 taskId，逗号分隔）
+   # 下面 7 个变量沿用 D15/D16 的取值，但必须 export（运行器从环境读取，未 export 的 shell 变量读不到）
+   export ILV2_NODE_BIN=... ILV2_RUNTIME_MANIFEST=... ILV2_MAC10_DATASET=... ILV2_MAC10_INPUTS=...
+   export DS=...        # 数据集目录，含 tasks-dev.jsonl 与 private/gold-dev.jsonl
+   export F_RUN=...     # D15-F 运行目录（post-ilv2-d15-f-projection.AutSUN/d15-f-dev）
+   export Q02_IDS=...   # Q02 schedule 的 20 个 taskId，逗号分隔
    RUN=<Mac 运行根>/post-ilv2-s1-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M)
    mkdir -p "$RUN"                   # 必须在仓库外
    ```
 2. 后台启动（运行期间不要在这个仓库里切分支或改文件）：
    ```bash
    nohup "$ILV2_NODE_BIN" scripts/ilv2-s1-mac-run.mjs --run-dir "$RUN" > "$RUN/runner.log" 2>&1 < /dev/null &
-   echo $! > "$RUN/runner.pid"
-   sleep 5 && cat "$RUN/status.json"  # 确认首条状态已落盘
+   sleep 5 && cat "$RUN/status.json"  # 确认首条状态已落盘；pid 记在 status.json 里
+   # 不要往 $RUN 里写别的文件：运行器要求启动时目录里只有 runner.log
    ```
-3. 查看进度：`cat "$RUN/status.json"`（当前阶段、心跳）；`tail "$RUN/<阶段>.log"`。`result.json` 出现即结束。
+3. 查看进度：`cat "$RUN/status.json"`（当前阶段、阶段起点、心跳；心跳超过 2 分钟没更新说明运行器已退出）；`tail "$RUN/<阶段>.log"`；`cat "$RUN/events.jsonl"`。`result.json` 出现即结束。需要中止时 `kill <status.json 里的 pid>`，运行器会恢复 `src` 并写 INTERRUPTED 终态。
 4. 生成回传文件并提交：
    ```bash
    "$ILV2_NODE_BIN" scripts/ilv2-s1-mac-run.mjs --report "$RUN" > docs/post-ilv2/results/S1-GATE.json
@@ -94,7 +100,7 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
    ```
    `S1-GATE.json` 只含计数、状态和哈希。`$RUN` 下的 `s1-d18/shape-rows.jsonl`、`*-gate/target-changes.json`、各重放目录含路径或任务 ID，留在 Mac。
 
-中断恢复：如果运行在 `baseline-build` 阶段被强行终止，`src` 可能停在 main 的样子，先执行 `git checkout HEAD -- src` 再重跑（换一个新的 `$RUN`）。
+中断恢复：如果运行器被 `kill -9` 或机器重启，`src` 可能停在 main 的样子，先执行 `git checkout HEAD -- src`、确认 `git status --porcelain` 为空，再换一个新的 `$RUN` 重跑。
 
 门通过后、合入前，另跑 Mac 全量 `npm test` 与 `gate:pr`（同 P6）。
 
@@ -102,6 +108,7 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
 
 - Linux 定向测试：已运行并通过。用临时类型转换加载器（Node 24 `--experimental-transform-types`）直接跑 `src` 测试，不是仓库标准路径；新增用例在实现前均先失败。
 - 相关测试宽集（16 个文件）：改动前后失败集合相同（18 个）。其中缺 `owner-lock.js`、缺 JDK17 编译器属环境原因；1 个 router-integration 用例是断言失败，main 上同样失败，原因未定，待 Mac 确认。
-- 路由层接线（`index.ts` 经 `rankCandidatePool` 到读取计划）：无 Linux 测试覆盖，待 Mac 路由层测试。
+- 路由层（`rankCandidatePool` 到读取计划）：无 Linux 测试覆盖，待 Mac。§3 点名的两个用例（"complete JavaIndex resolves implementation relations…"、"production ranking observer…"）都在 `router-integration.test.js` 里。
+- 运行器（`scripts/ilv2-s1-mac-run.mjs`）：纯函数与引擎测试已运行并通过（prepare 失败、超时、后代进程占管道、不可运行阶段、报告脱敏）；按 §4 第 2 步原样在 Linux 冒烟运行（`F_RUN` 不存在），得到 preflight FAIL、其余 9 个阶段 notRun、`--report` 正常输出。基线补丁的应用与恢复在临时 worktree 中演练通过。真实构建与重放阶段未在 Linux 执行。
 - 类型检查：未运行（本机内存不足以跑 tsc），由第 1 步的编译覆盖。
 - Mac：未运行。
