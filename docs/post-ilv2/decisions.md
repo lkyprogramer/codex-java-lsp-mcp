@@ -151,6 +151,21 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 - 成本：两套注册面（关闭/开启）都要测。`mcp-server-factory.test` 覆盖两种状态，`measure-tool-schema` 两种状态各测一次。
 - 复查条件：下一次真实 Agent 评测中，outline 或 evidence 仍为 INCONCLUSIVE 或 NO_GAIN 时，删除对应代码和开关。
 
+## 合入前代码评审（2026-11-13）
+
+`/code-review high` 覆盖 `origin/main...HEAD` 下的生产代码，结论：默认路径无阻断缺陷。用户选择将实验功能的问题登记为已知问题，直接开 PR。
+
+- 默认路径：`format.ts` 在读取计划文件缺少 ID 时 throw，当前不可达（`java_impact` anchors 最多 5 个，候选输出上限最少 16 个；`readPlanMaxItems` 已被 `boundReadPlanMaxItems` 限制），作为断言保留。main 原有的 evidence v1 默认下线是 O2 的有意变更。
+- 已知问题（仅在 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1` 时生效，决定保留 outline/evidence 时再修）：
+  1. `evidence-unit.ts`：`queryFiles` 的非超时异常被吞掉，报成 `ANCHOR_UNRESOLVED`；outline 对同类错误会重新抛出，两者不一致。
+  2. `outline.ts`：为校验哈希整文件读取并严格按 UTF-8 解码，非 UTF-8 或超过 2 MB 的文件拿不到声明。
+  3. `outline.ts`：用 `realpath(repoRoot)` 解析绝对路径，macOS `/var` 与 `/private/var` 两种写法会被误判为仓库外。
+  4. `evidence-unit.ts`：Java 片段的签名头行数不封顶、窗口字节按全局上限计算，极端情况下 XML 关联被挤掉（README 已写明字节和签名头只受全局上限约束）。
+  5. `evidence-unit.ts`：类型声明头 8 行内找不到 `{` 时只保留名字行，extends/implements 丢失。
+  6. `evidence-unit.ts`：请求行落在过长签名头内时，该行重复发送、重复计入预算。
+  7. `symbol.ts`：outline 空信封超过 4096 B 时返回 `INVALID_INPUT`，应为带预算原因的 PARTIAL。
+  8. `outline.ts` 与 `evidence-unit.ts`：覆盖范围查找和路径包含逻辑重复，应移入 `evidence-source-reader.ts`。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -162,4 +177,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
 | P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |
-| P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。D15 §12 发现层诊断已收尾，无产品缺陷。开关按 A 保留。待 Mac 全量 `npm test` 与 `gate:pr`，之后由用户决定合入方式 |
+| P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。D15 §12 发现层诊断已收尾，无产品缺陷。开关按 A 保留。Mac 全量 `npm test`（2405 通过、0 失败、10 个白名单跳过，含 stdio smoke）与 `gate:pr`（1658 通过、0 失败、1 个既有跳过）已通过，见 [P6-GATES](results/P6-GATES.json)。合入前评审无默认路径阻断缺陷，实验功能问题已登记（见上）；走 PR 合入 |
