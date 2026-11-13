@@ -77,3 +77,27 @@ test("probes use outline near the target and an exact owner#member query; the su
   assert.deepEqual(summary.oracleExact, { ambiguous: 1 });
   assert.doesNotMatch(JSON.stringify(summary), /OrderService|cancelOrder|\.java/);
 });
+
+test("budget-only partial outlines use retained evidence and preserve the omission counts", async () => {
+  const { call, calls } = stub({ outline: { scopeState: "PARTIAL", reasons: ["SOURCE_BUDGET"],
+    omittedSymbols: 2, entries: [TYPE, { ...CANCEL, signatureOmitted: true }, { kind: "method" }] } });
+  const row = await diagnoseMissedTarget({ target: target(50, 60), plan: { terms: ["cancelOrder"] }, lines: LINES, call });
+  assert.deepEqual([row.label, row.outlineReasons, row.outlineValidEntries, row.outlineOmittedSymbols],
+    ["RANKED_OUT", ["SOURCE_BUDGET"], 2, 2]);
+  assert.equal(calls[1].query, "OrderService#cancelOrder");
+});
+
+test("budget truncation without a usable declaration is distinct from other partial outlines", async () => {
+  for (const [entries, reasons, label] of [
+    [[], ["SOURCE_BUDGET"], "OUTLINE_BUDGET_INSUFFICIENT"],
+    [[TYPE], ["SOURCE_BUDGET"], "OUTLINE_BUDGET_INSUFFICIENT"],
+    [[CANCEL], ["SOURCE_BUDGET"], "OUTLINE_BUDGET_INSUFFICIENT"],
+    [[TYPE, CANCEL], ["SOURCE_BUDGET", "ANCHOR_PARSE_INCOMPLETE"], "OUTLINE_UNAVAILABLE"]
+  ]) {
+    const { call, calls } = stub({ outline: { scopeState: "PARTIAL", reasons, omittedSymbols: 4, entries } });
+    const row = await diagnoseMissedTarget({ target: target(50, 65), plan: { terms: ["cancelOrder"] }, lines: LINES, call });
+    assert.equal(row.label, label);
+    assert.deepEqual(row.outlineReasons, reasons);
+    assert.equal(calls.length, 1);
+  }
+});

@@ -21,7 +21,7 @@ import { materializeCorpus } from "./ilv2-mac-retrieval-eval.mjs";
 import { DIAGNOSIS_LIMIT, classifyTarget, diagnoseTask, openProductSession, rankOf, windowCovers } from "./ilv2-ranking-diagnosis.mjs";
 
 export const NOT_RETURNED_SCHEMA = "post-ilv2/not-returned-diagnosis/v1";
-export const LADDER = Object.freeze(["NON_JAVA", "NO_PLAN_TERMS", "OUTLINE_UNAVAILABLE", "WINDOW_UNREACHABLE", "ORACLE_MISS", "NO_VOCAB_OVERLAP", "RANKED_OUT"]);
+export const LADDER = Object.freeze(["NON_JAVA", "NO_PLAN_TERMS", "OUTLINE_UNAVAILABLE", "OUTLINE_BUDGET_INSUFFICIENT", "WINDOW_UNREACHABLE", "ORACLE_MISS", "NO_VOCAB_OVERLAP", "RANKED_OUT"]);
 export const OUTLINE_LIMIT = 20;
 const MEMBER_KINDS = new Set(["method", "constructor"]);
 const isType = entry => !MEMBER_KINDS.has(entry.kind) && entry.kind !== "field";
@@ -77,17 +77,24 @@ export function oracleQuery(entry, type) {
 
 /** Ladder for one missed target. `call` is the product session; `lines` the target file's text lines (or null). */
 export async function diagnoseMissedTarget({ target, plan, lines, call }) {
-  const row = { label: null, coveringKind: null, oracleRank: null, oracleExact: null, vocabOverlap: null, outlineState: null };
+  const row = { label: null, coveringKind: null, oracleRank: null, oracleExact: null, vocabOverlap: null, outlineState: null,
+    outlineReasons: [], outlineValidEntries: null, outlineOmittedSymbols: null };
   if (!target.path.endsWith(".java")) return { ...row, label: "NON_JAVA" };
   if (plan.terms.length === 0) return { ...row, label: "NO_PLAN_TERMS" };
   const outline = await call("java_symbol", { operation: "outline", file: target.path, nearLine: target.startLine, limit: OUTLINE_LIMIT });
   row.outlineState = outline.scopeState ?? null;
+  row.outlineReasons = outline.reasons ?? [];
+  row.outlineOmittedSymbols = outline.omittedSymbols ?? null;
   const entries = (outline.entries ?? []).filter(entry => Number.isInteger(entry.selection?.line));
-  if (outline.scopeState !== "READY" || entries.length === 0) return { ...row, label: "OUTLINE_UNAVAILABLE" };
+  row.outlineValidEntries = entries.length;
+  const budgetOnly = outline.scopeState === "PARTIAL" && row.outlineReasons.length > 0
+    && row.outlineReasons.every(reason => reason === "SOURCE_BUDGET");
+  if (!budgetOnly && (outline.scopeState !== "READY" || entries.length === 0)) return { ...row, label: "OUTLINE_UNAVAILABLE" };
   const entry = coveringDeclaration(entries, target);
+  const type = entry ? enclosingType(entries, entry) : null;
+  if (budgetOnly && (!entry || (!isType(entry) && !type))) return { ...row, label: "OUTLINE_BUDGET_INSUFFICIENT" };
   if (!entry) return { ...row, label: "WINDOW_UNREACHABLE" };
   row.coveringKind = entry.kind;
-  const type = enclosingType(entries, entry);
   const oracle = await call("java_symbol", { operation: "query", query: oracleQuery(entry, type), searchMode: "exact", limit: DIAGNOSIS_LIMIT, preview: "none" });
   row.oracleExact = oracle.exact ?? null;
   row.oracleRank = rankOf(oracle.candidates ?? [], target);
@@ -112,7 +119,9 @@ export function summarizeMissed(rows, mechanisms) {
       [category, count(rows.filter(row => row.category === category).map(row => row.label), LADDER)])),
     coveringKind: tally(rows.filter(row => row.coveringKind).map(row => row.coveringKind)),
     oracleExact: tally(rows.filter(row => row.label === "ORACLE_MISS").map(row => row.oracleExact)),
-    outlineState: tally(rows.filter(row => row.label === "OUTLINE_UNAVAILABLE").map(row => row.outlineState))
+    outlineState: tally(rows.filter(row => row.label === "OUTLINE_UNAVAILABLE").map(row => row.outlineState)),
+    outlineReasonsByLabel: Object.fromEntries(LADDER.filter(label => rows.some(row => row.label === label && row.outlineState)).map(label =>
+      [label, tally(rows.filter(row => row.label === label && row.outlineState).flatMap(row => row.outlineReasons ?? []))]))
   };
 }
 
