@@ -1,0 +1,159 @@
+{
+  "taskId": "D17-LINK",
+  "status": "PASS",
+  "sourceHead": "8c7a5d0003c18f78bfcf39389fb000b3589f0b2b",
+  "targetedTest": {
+    "command": "node --test scripts/ilv2-relation-text-check.test.mjs",
+    "nodeVersion": "v22.16.0",
+    "exitCode": 0,
+    "tap": {
+      "tests": 7,
+      "suites": 0,
+      "pass": 7,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  },
+  "relationTextCheck": {
+    "exitCode": 0,
+    "summaryArtifact": {
+      "path": "post-ilv2-d17-link-8c7a5d00.y6Dzzv/d17-relation-text-check/summary.json",
+      "sha256": "94aedf44ed718d6e289768dd46d7d29fb680716916fae518a4e204b8fcdf11c8"
+    },
+    "privateDefectTargets": {
+      "path": "post-ilv2-d17-link-8c7a5d00.y6Dzzv/d17-relation-text-check/defect-targets.jsonl",
+      "count": 6
+    }
+  },
+  "summary": {
+    "schema": "post-ilv2/relation-text-check/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "responsesSha256": "206fe3e0e403e4c586b23310793ff80d3469df29bc0e211af5324fe0afc18a5b",
+      "rowsSha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a",
+      "taskGroupField": "taskId"
+    },
+    "byClass": {
+      "SAME_FILE": 0,
+      "DIRECT": 6,
+      "INDIRECT": 7,
+      "MENTION_ONLY": 0,
+      "NO_TEXT_LINK": 0,
+      "NO_ANCHOR": 0,
+      "TYPE_ANCHOR_ONLY": 3
+    },
+    "byCategory": {
+      "callers": {
+        "SAME_FILE": 0,
+        "DIRECT": 4,
+        "INDIRECT": 0,
+        "MENTION_ONLY": 0,
+        "NO_TEXT_LINK": 0,
+        "NO_ANCHOR": 0,
+        "TYPE_ANCHOR_ONLY": 3
+      },
+      "implementations": {
+        "SAME_FILE": 0,
+        "DIRECT": 2,
+        "INDIRECT": 7,
+        "MENTION_ONLY": 0,
+        "NO_TEXT_LINK": 0,
+        "NO_ANCHOR": 0,
+        "TYPE_ANCHOR_ONLY": 0
+      }
+    },
+    "byCause": {
+      "WEAK_RELATION": {
+        "SAME_FILE": 0,
+        "DIRECT": 4,
+        "INDIRECT": 5,
+        "MENTION_ONLY": 0,
+        "NO_TEXT_LINK": 0,
+        "NO_ANCHOR": 0,
+        "TYPE_ANCHOR_ONLY": 3
+      },
+      "RELATION_MISSING": {
+        "SAME_FILE": 0,
+        "DIRECT": 2,
+        "INDIRECT": 2,
+        "MENTION_ONLY": 0,
+        "NO_TEXT_LINK": 0,
+        "NO_ANCHOR": 0,
+        "TYPE_ANCHOR_ONLY": 0
+      }
+    },
+    "anchorKinds": {
+      "callers": {
+        "methodAnchor": 4,
+        "typeAnchorOnly": 3,
+        "noAnchor": 0
+      },
+      "implementations": {
+        "methodAnchor": 0,
+        "typeAnchorOnly": 9,
+        "noAnchor": 0
+      }
+    },
+    "rules": {
+      "targets": 16,
+      "determinable": 13,
+      "R_defect": {
+        "typedDirect": 6,
+        "allDirect": 6,
+        "gate": 3,
+        "triggered": true
+      },
+      "R_q05": {
+        "value": 7,
+        "taskGroups": 2,
+        "half": 6.5,
+        "triggered": true
+      },
+      "R_gold": {
+        "value": 0,
+        "half": 6.5,
+        "triggered": false
+      },
+      "sameFile": 0
+    },
+    "depthOfIndirect": {
+      "2": 6,
+      "3": 1
+    },
+    "notClaimed": "Text heuristics over the frozen source: comments and literals stripped, simple-name type hierarchy (collisions merged), member calls by name. No compiler binding; overloads, imports and same-name types are not resolved."
+  },
+  "interpretation": {
+    "R_defect": {
+      "triggered": true,
+      "typedDirectByCategory": {
+        "callers": 4,
+        "implementations": 2
+      },
+      "conclusion": "带类型证据的 DIRECT 为 6 个（全部 DIRECT 也为 6），达到 3 个的门槛。按 §3 优先对这些目标写回归复现，区分索引事实缺失与关系收集遗漏。文本匹配尚未证明实际调用绑定。"
+    },
+    "R_q05": {
+      "triggered": true,
+      "conclusion": "间接关系占可判定目标的 7/13，来自 2 个任务组。达到有界关系展开的设计卡条件，按 §3 先处理直接关系候选，再冻结评估指标与数据。"
+    },
+    "R_gold": {
+      "triggered": false,
+      "conclusion": "可判定目标中 NO_TEXT_LINK 为 0/13，未达到按 gold 或题目问题撤回 Q05 的条件。"
+    },
+    "anchorGranularity": {
+      "triggered": false,
+      "callersTypeAnchorOnly": 3,
+      "callersTargets": 7,
+      "conclusion": "仅类型锚点占 callers 的 3/7，未过半。这 3 个目标排除在规则分母之外。"
+    },
+    "sameFile": {
+      "targets": 0,
+      "conclusion": "SAME_FILE 为 0。"
+    },
+    "scope": "本轮仅运行离线文本核查，未调用产品、模型或 JDT。回归复现和 Q05 设计卡未执行。"
+  }
+}
