@@ -41,5 +41,13 @@
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",
-  "changes": []
+  "changes": [],
+  "followUp": {
+    "asOf": "2026-11-13",
+    "state": "UNASSESSED",
+    "note": "D16 cannot assess binding fidelity: the evaluation owner had no JDT (D16 §6), so no binding results exist.",
+    "evidence": [
+      "D16-MISS.json"
+    ]
+  }
 }

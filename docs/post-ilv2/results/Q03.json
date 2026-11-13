@@ -66,5 +66,16 @@
     "src/mcp-server-factory.ts: description",
     "src/tools/symbol-static.test.ts: outline wire test",
     "README.md"
-  ]
+  ],
+  "followUp": {
+    "asOf": "2026-11-13",
+    "state": "ENGINEERING_PASS_BENEFIT_INCONCLUSIVE",
+    "note": "Checks above were NOT_RUN in the D0 round. The outline tests later ran on Mac and passed: Q11 targeted source suite 148/148 at 71e5ce8+diff (Q11.json checks); D14 final candidate npm test/gate:pr PASS at 13f9dc9a (Q11.json finalCandidateVerification); P6 npm test 2405 pass/0 fail and gate:pr at f3ab2cc (P6-GATES.json). Model benefit is INCONCLUSIVE (Q10.json). Default-hidden behind JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1 (O2, P6-O2.json); 8 switch-gated known issues are listed in decisions.md. The real-file byte distribution check was never run.",
+    "evidence": [
+      "Q11.json",
+      "P6-GATES.json",
+      "P6-O2.json",
+      "Q10.json"
+    ]
+  }
 }

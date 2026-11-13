@@ -62,5 +62,14 @@
       "java_runtime"
     ],
     "source": "code inspection, not run"
+  },
+  "followUp": {
+    "asOf": "2026-11-13",
+    "state": "DONE",
+    "note": "decision-log.md records the per-direction decisions. measure:tool-schema was later run on Mac in both switch states (P6-O2.json: 8,228 B default, 9,086 B switch on). measure:production-ts was never run; the LOC figure is still git numstat. README historical trimming remains NOT_DONE.",
+    "evidence": [
+      "decision-log.md",
+      "P6-O2.json"
+    ]
   }
 }

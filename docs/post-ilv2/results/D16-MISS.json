@@ -1,0 +1,286 @@
+{
+  "taskId": "D16-MISS",
+  "status": "PASS",
+  "sourceHead": "43259475531230996a4feadc6d57e2049858c5ff",
+  "targetedTest": {
+    "command": "node --test scripts/ilv2-impact-miss-breakdown.test.mjs",
+    "nodeVersion": "v22.16.0",
+    "exitCode": 0,
+    "tap": {
+      "tests": 5,
+      "suites": 0,
+      "pass": 5,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  },
+  "breakdown": {
+    "exitCode": 0,
+    "summaryArtifact": {
+      "path": "post-ilv2-d16-first-call-43259475.GqqOpN/d16-impact-miss-breakdown/summary.json",
+      "sha256": "e1be3cba2fc061053070b10741be2204472251c01695f78e79d6c53a6cb6452e"
+    }
+  },
+  "summary": {
+    "schema": "post-ilv2/impact-miss-breakdown/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "responsesSha256": "206fe3e0e403e4c586b23310793ff80d3469df29bc0e211af5324fe0afc18a5b",
+      "rowsSha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a"
+    },
+    "byConfig": {
+      "C0": {
+        "uncreditedJava": 36,
+        "byCause": {
+          "NO_IMPACT_CALL": 4,
+          "SELECTED_RANGE_MISS": 4,
+          "ANCHOR_CONFOUND": 3,
+          "RELATION_MISSING": 7,
+          "CORE_CAPPED": 3,
+          "PROTECTED_UNSELECTED": 0,
+          "WEAK_RELATION": 15
+        },
+        "byCategory": {
+          "callers": {
+            "NO_IMPACT_CALL": 0,
+            "SELECTED_RANGE_MISS": 2,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 0,
+            "CORE_CAPPED": 0,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 7
+          },
+          "dto-impact": {
+            "NO_IMPACT_CALL": 0,
+            "SELECTED_RANGE_MISS": 0,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 1,
+            "CORE_CAPPED": 0,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 3
+          },
+          "implementations": {
+            "NO_IMPACT_CALL": 1,
+            "SELECTED_RANGE_MISS": 1,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 4,
+            "CORE_CAPPED": 2,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 5
+          },
+          "repair": {
+            "NO_IMPACT_CALL": 3,
+            "SELECTED_RANGE_MISS": 0,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 0,
+            "CORE_CAPPED": 0,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 0
+          },
+          "spring": {
+            "NO_IMPACT_CALL": 0,
+            "SELECTED_RANGE_MISS": 1,
+            "ANCHOR_CONFOUND": 3,
+            "RELATION_MISSING": 2,
+            "CORE_CAPPED": 1,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 0
+          }
+        },
+        "unselectedPresentAnchorExact": {
+          "true": 18
+        }
+      },
+      "C3": {
+        "uncreditedJava": 32,
+        "byCause": {
+          "NO_IMPACT_CALL": 4,
+          "SELECTED_RANGE_MISS": 7,
+          "ANCHOR_CONFOUND": 3,
+          "RELATION_MISSING": 3,
+          "CORE_CAPPED": 3,
+          "PROTECTED_UNSELECTED": 0,
+          "WEAK_RELATION": 12
+        },
+        "byCategory": {
+          "dto-impact": {
+            "NO_IMPACT_CALL": 0,
+            "SELECTED_RANGE_MISS": 1,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 1,
+            "CORE_CAPPED": 0,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 1
+          },
+          "implementations": {
+            "NO_IMPACT_CALL": 1,
+            "SELECTED_RANGE_MISS": 1,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 0,
+            "CORE_CAPPED": 2,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 9
+          },
+          "repair": {
+            "NO_IMPACT_CALL": 3,
+            "SELECTED_RANGE_MISS": 0,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 0,
+            "CORE_CAPPED": 0,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 0
+          },
+          "spring": {
+            "NO_IMPACT_CALL": 0,
+            "SELECTED_RANGE_MISS": 1,
+            "ANCHOR_CONFOUND": 3,
+            "RELATION_MISSING": 2,
+            "CORE_CAPPED": 1,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 0
+          },
+          "callers": {
+            "NO_IMPACT_CALL": 0,
+            "SELECTED_RANGE_MISS": 4,
+            "ANCHOR_CONFOUND": 0,
+            "RELATION_MISSING": 0,
+            "CORE_CAPPED": 0,
+            "PROTECTED_UNSELECTED": 0,
+            "WEAK_RELATION": 2
+          }
+        },
+        "unselectedPresentAnchorExact": {
+          "true": 15
+        }
+      }
+    },
+    "focusTable": {
+      "callers/WEAK_RELATION": {
+        "exactAnchor": 7,
+        "inexactAnchor": 0
+      },
+      "implementations/NO_IMPACT_CALL": {
+        "exactAnchor": 0,
+        "inexactAnchor": 1
+      },
+      "implementations/WEAK_RELATION": {
+        "exactAnchor": 5,
+        "inexactAnchor": 0
+      },
+      "implementations/CORE_CAPPED": {
+        "exactAnchor": 2,
+        "inexactAnchor": 0
+      },
+      "callers/SELECTED_RANGE_MISS": {
+        "exactAnchor": 2,
+        "inexactAnchor": 0
+      },
+      "implementations/SELECTED_RANGE_MISS": {
+        "exactAnchor": 1,
+        "inexactAnchor": 0
+      },
+      "implementations/RELATION_MISSING": {
+        "exactAnchor": 4,
+        "inexactAnchor": 0
+      }
+    },
+    "rules": {
+      "focusMissesC0": 22,
+      "focusExactAnchorC0": 21,
+      "R1_poolAbsent": {
+        "value": 4,
+        "relationMissing": 4
+      },
+      "R2_selection": {
+        "exactAnchor": 2,
+        "all": 2,
+        "persistsInC3": 2,
+        "gate": 5,
+        "triggered": false
+      },
+      "R3_weak": {
+        "exactAnchor": 12,
+        "all": 12,
+        "half": 10.5,
+        "protectedInAnotherCall": 0,
+        "triggered": true
+      },
+      "R4_range": {
+        "value": 3
+      }
+    },
+    "roleAudit": {
+      "poolFiles": 696,
+      "withProtectedReason": 166,
+      "protectedByRole": {
+        "implementation": 29,
+        "framework": 59,
+        "collaborator": 15,
+        "reference": 41,
+        "target": 7,
+        "related": 1,
+        "config": 14
+      },
+      "relatedWithProtectedReason": 1,
+      "relatedProtectedKinds": {
+        "typeGraph:implementation-lookup": 1
+      }
+    },
+    "notClaimed": "Offline re-read of D15-F (semanticPolicy fast, first-candidate anchors). No product or model call. Protected-core status is approximated from reasons; the product also uses plannerEvidence, which F did not keep."
+  },
+  "interpretation": {
+    "R1_poolAbsent": "4 个池外目标均为 RELATION_MISSING。按 §3.1 仅报告。",
+    "R2_selection": {
+      "triggered": false,
+      "exactAnchor": {
+        "misses": 2,
+        "focusMisses": 21,
+        "persistsInC3": 2
+      },
+      "all": {
+        "misses": 2,
+        "focusMisses": 22,
+        "persistsInC3": 2
+      },
+      "conclusion": "两种口径均为 2 个，且 2 个在 C3 仍未命中。精确锚点口径未达到 5 个的门槛，未触发选择策略设计卡。"
+    },
+    "R3_weak": {
+      "triggered": true,
+      "exactAnchor": {
+        "misses": 12,
+        "focusMisses": 21
+      },
+      "all": {
+        "misses": 12,
+        "focusMisses": 22
+      },
+      "conclusion": "弱关系在精确锚点口径占 12/21，在全部口径占 12/22。选择策略不改，维持 F 的 C0 结论。"
+    },
+    "R4_range": "3 个已入读取计划但行范围未覆盖的目标。按 §3.1 仅报告。",
+    "anchor": {
+      "triggered": false,
+      "withoutExactAnchor": 1,
+      "focusMisses": 22,
+      "conclusion": "唯一无精确锚点的焦点目标没有发起 impact 调用。精确 match 仍不保证锚点是题目所问声明。"
+    },
+    "roleAudit": {
+      "triggered": true,
+      "conclusion": "登记 1 次输出角色标注不一致。该候选带 typeGraph:implementation-lookup reason，输出角色为 related。此审计涉及输出标注，未修改选择策略。"
+    },
+    "Q05": {
+      "status": "STATIC_PATH_TRIGGERED",
+      "exactRelationTargets": 4,
+      "distinctTaskGroups": 2,
+      "conclusion": "4 个精确锚点的关系缺失来自 2 个不同任务组，达到静态路径触发条件。fast 结果不代表 auto 或 required。"
+    },
+    "Q08": {
+      "status": "UNASSESSED",
+      "conclusion": "D15-F 未记录 JDT 绑定结果。"
+    },
+    "replay": "NOT_RUN"
+  }
+}
