@@ -207,10 +207,13 @@ function evidenceSlice(unit) {
     ...(typeof unit.contentHash === "string" ? { fileContentHash: unit.contentHash } : {}) };
 }
 
+const EVIDENCE_SCHEMAS = new Set(["java-evidence-unit/v1", "java-evidence-unit/v2"]);
+
 /** Evidence metadata is not a receipt. Admit only exact whole-line text;
  * shortening a unit always preserves its original range and incompleteness. */
 function serializeEvidence(domain, maxBytes) {
-  if (domain?.schemaVersion !== "java-evidence-unit/v1" || !Array.isArray(domain.units)) return {
+  // v2 (post-ILV2 Q04) adds Java declaration units with the same unit fields; v1 stays readable for old traces.
+  if (!EVIDENCE_SCHEMAS.has(domain?.schemaVersion) || !Array.isArray(domain.units)) return {
     payload: { error: "UNSUPPORTED_TOOL_RESULT", errorClass: "PROTOCOL", tool: "java_evidence", detail: "missing evidence units" }, slices: [], truncated: false
   };
   const suppliedSlices = domain.units.map(evidenceSlice).filter(Boolean);
@@ -308,6 +311,12 @@ export function serializeModelToolResult(toolName, raw, options = {}) {
         break;
       case "java_evidence":
         result = serializeEvidence(domain, maxBytes);
+        break;
+      case "java_outline":
+        // Declarations and ranges only: nothing in an outline is credited as received source.
+        result = domain?.schemaVersion === "java-outline/v1" && Array.isArray(domain.entries)
+          ? { payload: domain, slices: [], truncated: false }
+          : { payload: { error: "UNSUPPORTED_TOOL_RESULT", errorClass: "PROTOCOL", tool: "java_outline", detail: "missing outline entries" }, slices: [], truncated: false };
         break;
       case "write_file":
       case "replace_file":

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { convertDataset } from "./ilv2-mac-eval-dataset.mjs";
 import { CLAMP_ORACLE, FIXED_CLAMP, evalFixture, frozenJavaHome, removeTree } from "./ilv2-mac-eval-fixture.mjs";
-import { ORACLE_STATE, checkOracles, evaluateOracle } from "./ilv2-mac-repair-oracle.mjs";
+import { ORACLE_STATE, checkOracles, evaluateOracle, judgeCompletion } from "./ilv2-mac-repair-oracle.mjs";
 
 async function dataset(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "mac10-oracle-"));
@@ -79,6 +79,36 @@ test("oracle states: compile failure, timeout, output flood and a missing file a
   assert.equal((await judge(undefined)).state, ORACLE_STATE.MISSING_FILE);
   assert.equal((await judge(fixed)).state, ORACLE_STATE.PASS);
   assert.deepEqual((await readdir(root)).filter(name => name.startsWith("oracle-")), [], "every judgement removes its own directory");
+});
+
+test("completion needs a normal return of the oracle main: printing the marker and exiting 0 is not a pass", async t => {
+  const { root, oracle, fixed } = await dataset(t);
+  const javaHome = await frozenJavaHome();
+  const judge = sourceText => evaluateOracle({ oracle, testSource: CLAMP_ORACLE, sourceText, javaHome, workDir: root });
+  // Known-good: the test main returns normally, the wrapper writes the receipt.
+  const good = await judge(fixed);
+  assert.equal(good.state, ORACLE_STATE.PASS);
+  assert.equal(good.completion, "COMPLETE");
+  // Early exit zero: candidate code prints the marker and leaves before the test runs a single check.
+  const early = fixed.replace(/(public (?:final )?class Calc[^{]*\{)/, '$1\n    static { System.out.println("ORACLE PASS"); System.exit(0); }\n');
+  assert.notEqual(early, fixed);
+  const exited = await judge(early);
+  assert.equal(exited.state, ORACLE_STATE.TEST_FAILED);
+  assert.equal(exited.completion, "INCOMPLETE");
+  // Known-bad: the assertion path exits 1, no receipt either.
+  const bad = await judge(fixed.replace("return value;", "return value + 1;"));
+  assert.equal(bad.state, ORACLE_STATE.TEST_FAILED);
+  assert.equal(bad.completion, "INCOMPLETE");
+});
+
+test("judgeCompletion: a zero exit alone, another run or another oracle is not complete", () => {
+  const receipt = { runId: "run-a", oracleHash: "h", normalReturn: true };
+  assert.equal(judgeCompletion({ exitCode: 0, receipt: null, expectedRunId: "run-a", expectedOracleHash: "h" }), "INCOMPLETE");
+  assert.equal(judgeCompletion({ exitCode: 0, receipt, expectedRunId: "run-a", expectedOracleHash: "h" }), "COMPLETE");
+  assert.equal(judgeCompletion({ exitCode: 1, receipt, expectedRunId: "run-a", expectedOracleHash: "h" }), "INCOMPLETE");
+  assert.equal(judgeCompletion({ exitCode: 0, receipt, expectedRunId: "run-b", expectedOracleHash: "h" }), "INCOMPLETE");
+  assert.equal(judgeCompletion({ exitCode: 0, receipt, expectedRunId: "run-a", expectedOracleHash: "other" }), "INCOMPLETE");
+  assert.equal(judgeCompletion({ exitCode: 0, receipt: { ...receipt, normalReturn: "true" }, expectedRunId: "run-a", expectedOracleHash: "h" }), "INCOMPLETE");
 });
 
 test("a changed oracle test or pre-state is refused before anything runs", async t => {

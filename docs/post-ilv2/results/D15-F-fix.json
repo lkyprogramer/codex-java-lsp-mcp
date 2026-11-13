@@ -1,0 +1,292 @@
+{
+  "schema": "post-ilv2/d15-f-fix-result/v1",
+  "taskId": "D15-F-fix",
+  "status": "PASS_WITH_EXISTING_SKIPS",
+  "identity": {
+    "sourceHead": "504a5d680633bf5da688960474a2f8ea8ad6a4d7",
+    "buildStampSha256": "9759fb32e13b4db0da7a42ed775d767d0a4fc3e2a309075fd53adae7aecbd5da",
+    "runtimeManifestSha256": "c50ad85a8a20557345ef28072f4658234f65a190779c2d2f4deb68a130c0570d",
+    "compiledFilesVerified": 455
+  },
+  "npmCi": {
+    "status": "PASS",
+    "exitCode": 0
+  },
+  "build": {
+    "status": "PASS",
+    "exitCode": 0
+  },
+  "targeted": {
+    "status": "PASS",
+    "exitCode": 0,
+    "validationStatus": "SELECTED_COMMANDS_PASSED",
+    "commands": [
+      {
+        "exitCode": 0,
+        "tap": {
+          "tests": 25,
+          "pass": 25,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      }
+    ],
+    "compiledFilesMatched": 455,
+    "buildStampSha256": "9759fb32e13b4db0da7a42ed775d767d0a4fc3e2a309075fd53adae7aecbd5da",
+    "buildStampRecordSha256": "58ef6577ef114b810ec0fd927473c73478bffc5744cc0db79bc35dcca26dc9ae",
+    "tap": {
+      "tests": 25,
+      "pass": 25,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "newRegressionTestsPassed": [
+      "readPlanMaxItems above the candidate output limit is planned at the limit and reported",
+      "the dense structural tail never drops a selected read-plan file, even below every legacy candidate"
+    ]
+  },
+  "engineeringGates": {
+    "npmTest": {
+      "status": "PASS",
+      "exitCode": 0,
+      "validationStatus": "SELECTED_COMMANDS_PASSED",
+      "commands": [
+        {
+          "exitCode": 0,
+          "tap": {
+            "tests": 1658,
+            "pass": 1657,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 1,
+            "todo": 0
+          }
+        },
+        {
+          "exitCode": 0,
+          "tap": {
+            "tests": 743,
+            "pass": 734,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 9,
+            "todo": 0
+          }
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        }
+      ],
+      "compiledFilesMatched": 455,
+      "buildStampSha256": "9759fb32e13b4db0da7a42ed775d767d0a4fc3e2a309075fd53adae7aecbd5da",
+      "buildStampRecordSha256": "58ef6577ef114b810ec0fd927473c73478bffc5744cc0db79bc35dcca26dc9ae",
+      "tap": {
+        "tests": 2401,
+        "pass": 2391,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 10,
+        "todo": 0
+      },
+      "skipAudit": {
+        "sameAsD14": true,
+        "observed": {
+          "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot": 1,
+          "MAC12 actual seal worker task timeline": 1,
+          "MAC12 facts decoder allocation costs on a registered database": 1,
+          "MAC12 bounded verification compares actual complete seal publication": 1,
+          "MAC12 complete integrity partition costs on a registered database": 1,
+          "MAC12 posting reference validation alternatives": 1,
+          "MAC12 remaining seal validation check costs": 1,
+          "MAC12 seal validation preserves data checks without an unused logical manifest": 1,
+          "G11 recorded evidence completes the gate only after verified supplementation": 1,
+          "G11 system loop on isolated lishu-v2 run copies": 1
+        },
+        "added": {},
+        "removed": {}
+      },
+      "zeroFailuresZeroSkipsExpectation": "NOT_MET",
+      "stdioSmoke": "PASS"
+    },
+    "gatePr": {
+      "status": "PASS",
+      "exitCode": 0,
+      "validationStatus": "SELECTED_COMMANDS_PASSED",
+      "commands": [
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": {
+            "tests": 1658,
+            "pass": 1657,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 1,
+            "todo": 0
+          }
+        }
+      ],
+      "compiledFilesMatched": 455,
+      "buildStampSha256": "a5dccdf1c0791bc358cb8806491480ed7eca637320517ddc5ace05db3ff56bf7",
+      "buildStampRecordSha256": "9d48980894d386d163eb19a3031667cb019f34bd0890053f90478b08a6961680",
+      "tap": {
+        "tests": 1658,
+        "pass": 1657,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "skipAudit": {
+        "sameAsD14": true,
+        "observed": {
+          "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot": 1
+        },
+        "added": {},
+        "removed": {}
+      }
+    },
+    "measureToolSchema": {
+      "status": "PASS",
+      "exitCode": 0,
+      "validationStatus": "SELECTED_COMMANDS_PASSED",
+      "commands": [
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        },
+        {
+          "exitCode": 0,
+          "tap": null
+        }
+      ],
+      "compiledFilesMatched": 455,
+      "buildStampSha256": "8b8cfb06e8671e8d7cf86deab2516ccd9305af0d0281a5f33062b11e73ba12ec",
+      "buildStampRecordSha256": "3ba57e256ef656e7b6044efd8c96ea5de3bee0191efdbc08c81cae9d071f91ea",
+      "measurement": {
+        "tools": 5,
+        "jsonBytes": 9086,
+        "estimatedTokens": 2272,
+        "perTool": [
+          {
+            "name": "java_diagnostics",
+            "jsonBytes": 591,
+            "estimatedTokens": 148
+          },
+          {
+            "name": "java_impact",
+            "jsonBytes": 3783,
+            "estimatedTokens": 946
+          },
+          {
+            "name": "java_runtime",
+            "jsonBytes": 648,
+            "estimatedTokens": 162
+          },
+          {
+            "name": "java_status",
+            "jsonBytes": 526,
+            "estimatedTokens": 132
+          },
+          {
+            "name": "java_symbol",
+            "jsonBytes": 3532,
+            "estimatedTokens": 883
+          }
+        ]
+      },
+      "matchesD14": true
+    }
+  },
+  "limits": {
+    "modelRequests": 0,
+    "holdoutSlots": 0,
+    "defaultReadBudget": {
+      "config": "C0",
+      "maxFiles": 6,
+      "maxReadBytes": 14336
+    }
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/source-head.txt",
+      "sha256": "5e64f847fcf8a6bc08ac1dc8c5c2188baf0ac3f68b9a5bdc67fc665fb91bce73"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/progress.log",
+      "sha256": "e2791a1a38d13f75f092bc89a60a6ab89d3333a40900b5bc10f4fd5580709333"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/build-stamp.sha256",
+      "sha256": "0f675a1e844355d0801d188649cfa42efa56308f4b4dbe69233e8339d049c301"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/tmp/codex-java-lsp-isolated-validation-qU3nIA/candidate/dist/build-stamp.json",
+      "sha256": "9759fb32e13b4db0da7a42ed775d767d0a4fc3e2a309075fd53adae7aecbd5da"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/raw/validation/compile/result.json",
+      "sha256": "0ed4b92acb667f3eb264b78c66ad1dc617c1ee721a441b4b2fc8d6dd70d2d060"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/validation-index.jsonl",
+      "sha256": "bc0c1af29cf8ab08f40fa88a206f0ac6fdd4899ffef921a3c5c594e81cda998e"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/npm-ci.log",
+      "sha256": "9332f794b78d77905b84b51822b2cac4fed3d426c142cd28b17aec894a392e12"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/compile.log",
+      "sha256": "4d3a22624ae69c8742f2eb95880b92bd4c49bfc1508d324995be89f435473599"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/targeted.log",
+      "sha256": "189c3f8f227b27cd204e0ea66d86a25f82da6f71b5fcb326c8ff4617771e2523"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/npm-test.log",
+      "sha256": "819ee58d085f524fe1cc924f37158bf7eaaa8b41760a6478b8fa5eeaf3ba691e"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/gate-pr.log",
+      "sha256": "e4af5d9f43e79df7940762397928a6b233fcfd0af63098270c168205c5ca091b"
+    },
+    {
+      "path": "post-ilv2-d15-f-fix-504a5d6.jGpu0o/tool-schema.log",
+      "sha256": "17aec9b4978595e93375b5f7faa116bd6492098a30dc1f289ad0ca3cc036bfb1"
+    }
+  ]
+}

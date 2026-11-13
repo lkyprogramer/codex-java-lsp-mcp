@@ -97,7 +97,7 @@ export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
 }
 
 export type EvidenceAnchor = { declarationId: string; kind: "TYPE" | "METHOD"; relativePath: string; contentHash: string; line: number; column: number };
-export type EvidenceSource = { relativePath: string; contentHash: string; startLine: number; endLine: number; sourceKind: string; relation: "result-map-type" | "declaration-document" };
+export type EvidenceSource = { relativePath: string; contentHash: string; startLine: number; endLine: number; sourceKind: string; relation: "result-map-type" | "declaration-document" | "java-declaration" };
 export type EvidenceSourcesResult = { generation: number; anchor?: EvidenceAnchor; sources: EvidenceSource[]; partial: boolean; reasons: string[] };
 
 export interface JavaIndexClientApi {

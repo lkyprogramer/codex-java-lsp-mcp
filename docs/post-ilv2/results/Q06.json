@@ -1,0 +1,45 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q06",
+  "status": "NOT_TRIGGERED",
+  "trigger": {
+    "state": "NOT_TRIGGERED",
+    "evidence": [
+      "One dev group has a proven NOT_DISCOVERED label. This is below the two-group threshold and no critical deterministic defect was registered.",
+      "See results/Q02.json and attribution.md."
+    ]
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "Trigger assessment is limited to the recorded evidence. Additional unmeasured stages are not counted as zero failures."
+  ],
+  "rawEvidence": [],
+  "implementation": "NO_CODE",
+  "changes": []
+}

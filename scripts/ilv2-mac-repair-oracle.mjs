@@ -3,6 +3,7 @@
 // The only dependency is the frozen JDK; javac and java each run under the oracle's time limit with
 // bounded output, and the whole process group is killed on expiry.
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { cliOptions, isMain, readJson, requireValue, runCli, sha256, writeJson } from "./ilv2-mac-contracts.mjs";
@@ -14,6 +15,54 @@ export const ORACLE_STATE = Object.freeze({
 });
 export const PASS_MARKER = "ORACLE PASS";
 export const MAX_OUTPUT_BYTES = 64 * 1024;
+/**
+ * Evaluator-owned entry point (post-ILV2 Q01): it runs the oracle test's main and writes the completion
+ * receipt only when that main returns normally. A candidate that prints the pass marker and calls
+ * System.exit(0) never reaches the write. Java 8 APIs only (oracle releases start at 8). The run id and
+ * receipt path are visible to code in the same JVM: this guards against accidental passes, it is not a
+ * sandbox against a hostile candidate.
+ */
+export const COMPLETION_WRAPPER_CLASS = "OracleCompletionWrapper";
+export const COMPLETION_WRAPPER_SOURCE = `public final class ${COMPLETION_WRAPPER_CLASS} {
+    private ${COMPLETION_WRAPPER_CLASS}() {
+    }
+
+    public static void main(String[] args) throws Throwable {
+        java.lang.reflect.Method main = Class.forName(args[3]).getMethod("main", String[].class);
+        // The oracle class may be package-private; its public static main is still the entry point.
+        main.setAccessible(true);
+        try {
+            main.invoke(null, (Object) new String[0]);
+        } catch (java.lang.reflect.InvocationTargetException error) {
+            throw error.getCause();
+        }
+        String receipt = "{\\"runId\\":\\"" + args[1] + "\\",\\"oracleHash\\":\\"" + args[2] + "\\",\\"normalReturn\\":true}";
+        java.io.FileOutputStream out = new java.io.FileOutputStream(args[0]);
+        try {
+            out.write(receipt.getBytes("UTF-8"));
+        } finally {
+            out.close();
+        }
+    }
+}
+`;
+
+/**
+ * COMPLETE only for a zero exit together with a receipt of this run and this oracle that records a
+ * normal return. A zero exit alone (System.exit(0) in candidate code) is INCOMPLETE.
+ */
+export function judgeCompletion({ exitCode, receipt, expectedRunId, expectedOracleHash }) {
+  return exitCode === 0 && receipt !== null && typeof receipt === "object" && receipt.runId === expectedRunId
+    && receipt.oracleHash === expectedOracleHash && receipt.normalReturn === true ? "COMPLETE" : "INCOMPLETE";
+}
+
+async function readCompletion(file) {
+  try {
+    const value = JSON.parse(await readFile(file, "utf8"));
+    return value && typeof value === "object" ? value : null;
+  } catch { return null; }
+}
+
 const JVM_FLAGS = ["-Xmx256m", "-Xss8m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-Djava.awt.headless=true", "-Dfile.encoding=UTF-8"];
 
 function bounded(binary, args, { cwd, timeoutMs, signal }) {
@@ -53,7 +102,7 @@ const firstLine = text => text.split("\n").map(line => line.trim()).find(Boolean
 /** Judge one source text of `oracle.file` with the oracle's own test. */
 export async function evaluateOracle({ oracle, testSource, sourceText, javaHome, workDir, signal }) {
   requireValue(oracle?.schema === ORACLE_SCHEMA, "repair oracle schema required");
-  if (typeof sourceText !== "string") return { state: ORACLE_STATE.MISSING_FILE, compileMs: null, runMs: null, detail: oracle.file };
+  if (typeof sourceText !== "string") return { state: ORACLE_STATE.MISSING_FILE, completion: "INCOMPLETE", compileMs: null, runMs: null, detail: oracle.file };
   const root = await mkdtemp(path.join(workDir, `oracle-${oracle.taskId}-`));
   try {
     const src = path.join(root, "src");
@@ -61,19 +110,28 @@ export async function evaluateOracle({ oracle, testSource, sourceText, javaHome,
     await mkdir(path.join(root, "out"));
     await writeFile(path.join(src, path.basename(oracle.file)), sourceText);
     await writeFile(path.join(src, oracle.test), testSource);
+    await writeFile(path.join(src, `${COMPLETION_WRAPPER_CLASS}.java`), COMPLETION_WRAPPER_SOURCE);
     const compile = await bounded(path.join(javaHome, "bin/javac"), ["--release", String(oracle.release), "-proc:none", "-implicit:none", "-nowarn", "-encoding", "UTF-8",
-      "-d", path.join(root, "out"), path.join(src, path.basename(oracle.file)), path.join(src, oracle.test)], { cwd: root, timeoutMs: oracle.timeoutMs, signal });
-    const result = (state, run) => ({ state, compileMs: compile.ms, runMs: run?.ms ?? null, detail: firstLine((run ?? compile).output ?? (run ?? compile).error ?? "") });
+      "-d", path.join(root, "out"), path.join(src, path.basename(oracle.file)), path.join(src, oracle.test), path.join(src, `${COMPLETION_WRAPPER_CLASS}.java`)],
+    { cwd: root, timeoutMs: oracle.timeoutMs, signal });
+    const result = (state, run, completion = "INCOMPLETE") => ({ state, completion, compileMs: compile.ms, runMs: run?.ms ?? null, detail: firstLine((run ?? compile).output ?? (run ?? compile).error ?? "") });
     if (compile.timedOut) return result(ORACLE_STATE.TIMEOUT);
     if (compile.limited) return result(ORACLE_STATE.OUTPUT_LIMIT);
     if (compile.code !== 0) return result(compile.code === null ? ORACLE_STATE.JUDGE_ERROR : ORACLE_STATE.COMPILE_FAILED);
     const main = oracle.mainClass;
-    const run = await bounded(path.join(javaHome, "bin/java"), [...JVM_FLAGS, "-cp", path.join(root, "out"), main], { cwd: root, timeoutMs: oracle.timeoutMs, signal });
+    const runId = randomUUID();
+    // Bound to the bytes actually compiled, not the frozen claim: checkOracles compares those separately.
+    const oracleHash = sha256(testSource);
+    const receiptFile = path.join(root, `completion-${runId}.json`);
+    const run = await bounded(path.join(javaHome, "bin/java"), [...JVM_FLAGS, "-cp", path.join(root, "out"), COMPLETION_WRAPPER_CLASS, receiptFile, runId, oracleHash, main],
+      { cwd: root, timeoutMs: oracle.timeoutMs, signal });
     if (run.timedOut) return result(ORACLE_STATE.TIMEOUT, run);
     if (run.limited) return result(ORACLE_STATE.OUTPUT_LIMIT, run);
     if (run.code === null) return result(ORACLE_STATE.JUDGE_ERROR, run);
-    const passed = run.code === 0 && run.output.split("\n").some(line => line.trim() === PASS_MARKER);
-    return result(passed ? ORACLE_STATE.PASS : ORACLE_STATE.TEST_FAILED, run);
+    const completion = judgeCompletion({ exitCode: run.code, receipt: await readCompletion(receiptFile), expectedRunId: runId, expectedOracleHash: oracleHash });
+    // The marker stays required as well: a pass needs the test's own success line and a normal return.
+    const passed = completion === "COMPLETE" && run.output.split("\n").some(line => line.trim() === PASS_MARKER);
+    return result(passed ? ORACLE_STATE.PASS : ORACLE_STATE.TEST_FAILED, run, completion);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -41,11 +41,12 @@ import {
 } from "./evaluate-java-task.mjs";
 import { serializeModelToolResult } from "./eval-tool-wire.mjs";
 
-test("v1.5 anchor paths become file locators and both arms receive generic answer conventions", () => {
-  assert.equal(EVAL_PROTOCOL_VERSION, "eval-protocol/v1.5");
+test("anchor paths become file locators and both arms receive generic answer conventions", () => {
+  assert.equal(EVAL_PROTOCOL_VERSION, "eval-protocol/v1.7");
   assert.deepEqual(normalizeTaskAnchor({ path: "a/B.java", line: 7 }), { path: "a/B.java", file: "a/B.java", line: 7, column: 1 });
   assert.equal(normalizeTaskAnchor({ file: "a.java", path: "b.java", line: 2 }).file, "a.java");
   assert.match(EVAL_SYSTEM_PROMPT, /simple identifiers/);
+  assert.match(EVAL_SYSTEM_PROMPT, /shortest available route to exact source/);
   assert.match(EVAL_SYSTEM_PROMPT, /specific missing fact/);
   assert.match(EVAL_SYSTEM_PROMPT, /step by step/);
 });
@@ -229,7 +230,8 @@ test("live repair exposes replace success and validates both source versions wit
     let round = 0;
     const requests = [];
     const output = path.join(dir, "run");
-    const run = await runLiveEvalRun({ tasks: [{ id: "R", corpus: "c", kind: "repair", query: "Change initial n to 2." }],
+    const run = await runLiveEvalRun({ tasks: [{ id: "R", corpus: "c", kind: "repair", query: "Change initial n to 2.",
+      budget: { max_lines: 1, max_bytes: 1 } }],
       arms: ["control"], repoRoots: { c: fixture }, outputDir: output, kitRoot: dir,
       repairJudge: async () => ({ state: "VALIDATED_SUCCESS", validatedSuccess: true }),
       chat: async request => {
@@ -245,7 +247,7 @@ test("live repair exposes replace success and validates both source versions wit
     assert.equal(written.replacements, 1);
     const diagnostic = run.runs[0].candidateReceiptValidation;
     assert.equal(diagnostic.status, "VALID");
-    assert.deepEqual(diagnostic.rows.map(row => row.finalCandidateMatches), [false, true]);
+    assert.deepEqual(diagnostic.rows.map(row => row.finalCandidateMatches), [false, true], "legacy repair budgets do not clip source");
     assert.equal(run.runs[0].taskSuccess, true, "success still comes from the external repair judge");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -334,6 +336,29 @@ test("--dataset: a MAC-10 split is scheduled under its dataset identity; tasks o
   assert.equal(pack.identity.goldSha256, createHash("sha256").update(readFileSync(goldFile)).digest("hex"));
   const scheduled = readFileSync(path.join(output, "schedule.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line).taskId);
   assert.deepEqual([...new Set(scheduled)].sort(), readFileSync(tasksFile, "utf8").trim().split("\n").map(line => JSON.parse(line).taskId).sort());
+  const directoryServer = path.join(dir, "out-directory-server");
+  assert.equal(await main([...args, "--require-identity", "--repo-roots", `fixture=${fixture.repoRoot}`,
+    "--server-js", fixture.repoRoot, "--output", directoryServer], {}), 2);
+  assert.equal(existsSync(directoryServer), false, "an invalid server must be rejected before the schedule is written");
+  const serverFile = path.join(dir, "server.js");
+  writeFileSync(serverFile, "// fixture server\n");
+  const strictArgs = ["--require-identity", "--repo-roots", `fixture=${fixture.repoRoot}`, "--server-js", serverFile];
+  const verified = path.join(dir, "out-verified");
+  assert.equal(await main([...args, ...strictArgs, "--output", verified], {}), 0, "MAC-10 corpusId resolves in strict dry-run");
+  const verifiedPack = JSON.parse(readFileSync(path.join(verified, "results-pack.json"), "utf8"));
+  assert.deepEqual(verifiedPack.identity.identityCheck, { status: "VERIFIED", problems: [] });
+  assert.equal(verifiedPack.identity.driver.serverJsSha256, createHash("sha256").update(readFileSync(serverFile)).digest("hex"));
+  const invalidRepeats = path.join(dir, "out-invalid-repeats");
+  for (const repeats of ["NaN", "Infinity", "1.5", "0"]) {
+    assert.equal(await main([...args.map((arg, i) => args[i - 1] === "--repeats" ? repeats : arg), ...strictArgs,
+      "--output", invalidRepeats], {}), 2);
+    assert.equal(existsSync(invalidRepeats), false);
+  }
+  const unsupportedLive = path.join(dir, "out-live");
+  assert.equal(await main([...args.filter(arg => arg !== "--dry-run"), ...strictArgs, "--output", unsupportedLive], {
+    OPENAI_API_KEY: "fixture", OPENAI_BASE_URL: "http://fake.invalid", OPENAI_MODEL: "fixture"
+  }), 2, "native MAC-10 rows require an adapter before live evaluation");
+  assert.equal(existsSync(unsupportedLive), false);
   // A task file that is not a part of the named dataset is refused before anything is scheduled.
   const foreign = path.join(dir, "foreign.jsonl");
   writeFileSync(foreign, readFileSync(tasksFile, "utf8").trim().split("\n").slice(1).join("\n") + "\n");
@@ -550,6 +575,20 @@ test("recorded-run replay: pack invariants hold for a mix of measured and failed
   assert.equal(pack.packs[2].timedOut, true);
 });
 
+test("strict MAC-10 packs expose setup blocks and unjudged slots in their status", () => {
+  const planned = [{ taskId: "T-A", arm: "b0", repeat: 1 }];
+  const common = { status: "MEASURED", arms: ["b0"], repeats: 1, planned, identity: { evalProtocol: "eval-protocol/v1.8" } };
+  for (const [attemptState, status] of [["BLOCKED_SETUP", "BLOCKED_SETUP"], ["COMPLETED", "INCOMPLETE"]]) {
+    const pack = assemblePack({ ...common, runs: [{ ...planned[0], attemptState, taskSuccess: null }] });
+    assert.equal(pack.status, status);
+    assert.equal(pack.taskSuccessRate, null);
+    assert.equal(pack.schedule.endToEndSuccessRate, null);
+  }
+  const measured = assemblePack({ ...common, runs: [{ ...planned[0], attemptState: "COMPLETED", taskSuccess: false }] });
+  assert.equal(measured.status, "MEASURED");
+  assert.equal(measured.taskSuccessRate, 0);
+});
+
 test("task and gold loaders read the frozen jsonl pair", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "eval-load-"));
   try {
@@ -722,4 +761,25 @@ test("all evaluation profiles enforce dispatch contracts, budget bypass and immu
       assert.ok(audit.every(r => r.productProfile === productProfile && r.attempt.productProfile === productProfile));
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Q01 strict QA controls: no type coercion, duplicate keys and unread source are refused by the one scorer", () => {
+  // 06 §6.2 item 2: the existing scorer is the adapter; these controls pin it rather than adding a second comparator.
+  const gold = { nullable: false, count: 2, method: "accept" };
+  assert.equal(scoreQaAnswer(gold, JSON.stringify(gold)).status, "CORRECT");
+  for (const coerced of [{ ...gold, nullable: "false" }, { ...gold, count: "2" }, { ...gold, nullable: 0 }, { ...gold, method: null }]) {
+    assert.equal(scoreQaAnswer(gold, JSON.stringify(coerced)).status, "WRONG_ANSWER", JSON.stringify(coerced));
+  }
+  const duplicate = scoreQaAnswer(gold, '{"nullable":true,"nullable":false,"count":2,"method":"accept"}');
+  assert.equal(duplicate.status, "INVALID_ANSWER", "JSON.parse would keep the last value; the scorer must not");
+  assert.equal(duplicate.reason, "duplicate_keys");
+  assert.equal(scoreQaAnswer(gold, JSON.stringify({ ...gold, note: "" })).status, "EXTRA_KEYS");
+  assert.equal(scoreQaAnswer(gold, { ...gold }).status, "INVALID_ANSWER", "a pre-parsed object is not the raw model answer");
+  // A correct answer is still not a success without the frozen evidence having been received.
+  const unread = scoreRunOutcome({ task: { id: "T-Q", kind: "qa" },
+    goldRow: { answer: gold, required_evidence: [{ path: "A.java", start_line: 1, end_line: 2 }] },
+    run: { stopReason: "MODEL_STOP", finalContent: JSON.stringify(gold),
+      sourceReceived: [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 1, text: "class A {\n", origin: "explicit_read" }] } });
+  assert.equal(unread.taskSuccess, false);
+  assert.equal(unread.answerStatus, "MISSING_REQUIRED_EVIDENCE", "one unread required line fails the answer");
 });

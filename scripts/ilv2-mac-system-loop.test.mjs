@@ -850,7 +850,7 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
   };
   let main, mainRepo;
   const owner = await startRecoveryOwner(t, "mac11", { gcCycleMs: GC_CYCLE_MS,
-    env: { JAVA_LSP_OWNER_TELEMETRY: telemetryFile, ILV2_NATIVE_TEST_HOOKS: "1" },
+    env: { JAVA_LSP_OWNER_TELEMETRY: telemetryFile, ILV2_NATIVE_TEST_HOOKS: "1", JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS: "1" },
     repos: async dir => {
       mainRepo = path.join(dir, "lishu-v2");
       await execute("/bin/cp", ["-c", "-R", record.repoRoot, mainRepo]);

@@ -1,0 +1,45 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q09",
+  "status": "NOT_TRIGGERED",
+  "trigger": {
+    "state": "UNASSESSED",
+    "evidence": [
+      "Three first FRESH waits were observed on cold evaluation clones. The required daily repeated-wait or source I/O sample has not been measured.",
+      "See results/Q02.json and attribution.md."
+    ]
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "Trigger assessment is limited to the recorded evidence. Additional unmeasured stages are not counted as zero failures."
+  ],
+  "rawEvidence": [],
+  "implementation": "NO_CODE",
+  "changes": []
+}

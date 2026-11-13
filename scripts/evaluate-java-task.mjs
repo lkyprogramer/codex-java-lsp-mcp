@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // input: An explicit task file (--tasks), its gold (--gold), the optional MAC-10 dataset manifest
-//         (--dataset) both must belong to,
+//         (--dataset) both must belong to (native MAC-10 rows run LIVE through
+//         eval-mac10-live.mjs only with --inputs and --source-budget),
 //         a model backend (OpenAI-compatible API or codex CLI), and the local
 //         product MCP server for java_symbol. No backend credentials means the
 //         run reports BLOCKED_AUTH and nothing is measured.
@@ -15,12 +16,13 @@
 //      coverage proxy, never the task outcome.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   runLiveAgentTask,
-  openImpactSession
+  openImpactSession,
+  summarizeSchedule
 } from "./run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "./openai-compatible-chat.mjs";
 import { buildToolSet, createAttemptWorkspace, nativeToolNames, validateArguments } from "./eval-native-tools.mjs";
@@ -28,32 +30,50 @@ import { serializeModelToolResult, splitSourceLines } from "./eval-tool-wire.mjs
 import { buildFrozenResultsPack, runProfileFrom } from "./eval-frozen-adapter.mjs";
 import { evaluateRepair } from "./eval-repair-adapter.mjs";
 import { parseStrictAnswer, loadPublicAnswerContract, buildSubmitAnswerTool } from "./eval-answer-contract.mjs";
+import { verifyDataset } from "./ilv2-mac-eval-dataset.mjs";
+import { isMac10TaskRow, parseSourceBudget, prepareMac10Live, selectPilot } from "./eval-mac10-live.mjs";
+import { readBoundedSource, receiptsForSerializedRequest, receiptUnitsFromEvents } from "./ilv2-mac-delivery-receipt.mjs";
 export { MAX_STRICT_ANSWER_CHARS, findDuplicateJsonKeys, parseStrictAnswer } from "./eval-answer-contract.mjs";
 
-/** R03: the native tool surface shared by BOTH arms; the only arm
- * difference is java_symbol on the product arm. */
+/**
+ * 06 §6.4 arms on one server build. control has only the native tools; product follows
+ * --product-profile; b0/b1/b2 pin the plan's profiles (B0 query, B1 + outline, B2 + evidence) so a
+ * B0-vs-B2 pairing runs inside one frozen schedule with the same native tools and budgets.
+ */
+export const ARM_PROFILES = Object.freeze({ control: null, product: undefined, b0: "broad", b1: "outline", b2: "outline-evidence" });
+
+/** The product profile an arm exposes, null for native-only; unknown arms are refused. */
+export function armProfile(arm, productProfile = "broad") {
+  if (!Object.hasOwn(ARM_PROFILES, arm)) throw new Error(`unknown arm: ${arm}`);
+  return arm === "product" ? productProfile : ARM_PROFILES[arm];
+}
+
+/** R03: the native tool surface shared by EVERY arm; arms differ only in the product tools. */
 export function nativeNames(arm) {
-  if (arm && !["product", "control"].includes(arm)) {
-    throw new Error(`unknown arm: ${arm}`);
-  }
+  if (arm) armProfile(arm);
   return nativeToolNames();
 }
 
 export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
 /**
- * Eval protocol v1.4 uses exclusive typed submission and explicit source
- * exhaustion; discovery defaults to locators without source previews.
+ * Eval protocol v1.7 uses the same source-first tool selection prompt across arms.
  * Results from different protocol versions are not comparable.
  */
-export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.5";
+export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.7";
+const MAC10_LIVE_PROTOCOL_VERSION = "eval-protocol/v1.8";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
 // its tools freely - it is never forced to call java_symbol first.
-// R01/W05 + R03: the prompt only references tools actually provided; both
-// arms share the same native tools (list/rg/read; repair adds write_file)
-// and the ONLY arm difference is the product arm's java_symbol.
-export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session, in any order, or none at all. Never assume an unlisted tool. Locate declarations, then read the implementation needed for the question. rg/list and symbol results without source previews are locators only, not source evidence. Before submitting, read the implementation and field declarations supporting every answer, including relevant callees, helpers and XML mappings. Target exact matching lines with rg and short read windows; do not consume the budget by reading a large file from its beginning or by requesting previews for many candidates. After receiving that implementation, continue retrieval only to resolve a specific missing fact or dependency; do not repeat discovery of an already located declaration. For concrete return values, trace the operations in the received source step by step before answering. Source previews and explicit reads both consume the source budget, including repeated lines. Read non-Java evidence such as XML explicitly when the question requires it. Assistant body text is draft only. Finish exclusively with submit_answer as the only tool action in that response. For QA use exactly the task's public keys, field roles, types and representation constraints. Member names must be simple identifiers, without package, owner, signature, call arguments or explanation. Return an enum constant's simple name without its owner. Return an expression only when the question requests an expression; do not add prose inside string values. For repair use {"patchApplied": true|false, "summary": "..."}.`;
+// All arms share the same native tools. The product tools vary by profile.
+export const EVAL_SYSTEM_PROMPT = [
+  "You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session, in any order, or none at all. Never assume an unlisted tool.",
+  "Choose the shortest available route to exact source for each fact. Locate the relevant declarations and linked resources. When an available tool can return the needed Java or linked XML source at a known declaration anchor, it can replace a separate file lookup and read. Otherwise locate the file and read the relevant lines.",
+  "Before submitting, obtain the exact source supporting every answer, including relevant declarations, implementations, callees and XML mappings. Paths, search matches, declaration summaries and reconstructed signatures alone are locators. Continue retrieval only to resolve a specific missing fact or dependency. Avoid broad reads, previews for irrelevant candidates and repeated discovery. All delivered source, including previews, linked evidence and repeated lines, consumes the same source budget.",
+  "For concrete return values, trace the operations in the received source step by step before answering. Assistant body text is draft only. Finish exclusively with submit_answer as the only tool action in that response.",
+  "For QA use exactly the task's public keys, field roles, types and representation constraints. Member names must be simple identifiers, without package, owner, signature, call arguments or explanation. Return an enum constant's simple name without its owner. Return an expression only when the question requests an expression. Do not add prose inside string values.",
+  'For repair use {"patchApplied": true|false, "summary": "..."}.'
+].join(" ");
 
 export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
@@ -80,7 +100,7 @@ export const EVAL_JAVA_EVIDENCE_TOOL = {
   type: "function",
   function: {
     name: "java_evidence",
-    description: "Request byte-exact indexed MyBatis XML source units linked by fully qualified Java names. For resultMap type links use an already located type declaration's 1-based anchor, not its constructor; method anchors return associated mapped XML statements. Unit completeness describes only the XML source range, not task completion. Stale or omitted bindings remain explicit.",
+    description: "Read byte-exact source for a located Java type or method and any linked, indexed MyBatis XML. Use the candidate's relativePath as file and its selection.line/column as the 1-based anchor. A type returns its declaration header and linked result maps. A mapped method returns its Java source and SQL statement even when the XML filename differs from the Java name. For large methods, pass a line inside the relevant body and expect a bounded window. Check partial coverage and read any missing lines.",
     parameters: {
       type: "object", additionalProperties: false,
       properties: { file: { type: "string", minLength: 1 }, line: { type: "integer", minimum: 1 }, column: { type: "integer", minimum: 1 } },
@@ -89,9 +109,30 @@ export const EVAL_JAVA_EVIDENCE_TOOL = {
   }
 };
 
+/** post-ILV2 Q03 outline as a model-facing tool (product: java_symbol operation=outline). */
+export const EVAL_JAVA_OUTLINE_TOOL = {
+  type: "function",
+  function: {
+    name: "java_outline",
+    description: "List the declarations (types, constructors, methods, fields) of one indexed Java file with 1-based line ranges and symbolIds; with nearLine, the declarations containing or nearest that line. Returns no source text: signatures are rebuilt from index facts and are not source evidence, so read the lines you need.",
+    parameters: {
+      type: "object", additionalProperties: false,
+      properties: { file: { type: "string", minLength: 1 }, nearLine: { type: "integer", minimum: 1 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
+      required: ["file"]
+    }
+  }
+};
+
+export const PRODUCT_PROFILES = Object.freeze(["broad", "evidence", "exact-evidence", "outline", "outline-evidence"]);
+
 export function productTools(productProfile = "broad") {
-  if (!["broad", "evidence", "exact-evidence"].includes(productProfile)) throw new Error(`unknown productProfile: ${productProfile}`);
-  if (productProfile !== "exact-evidence") return productProfile === "broad" ? [EVAL_JAVA_SYMBOL_TOOL] : [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_EVIDENCE_TOOL];
+  if (!PRODUCT_PROFILES.includes(productProfile)) throw new Error(`unknown productProfile: ${productProfile}`);
+  if (productProfile !== "exact-evidence") return {
+    broad: [EVAL_JAVA_SYMBOL_TOOL],
+    evidence: [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_EVIDENCE_TOOL],
+    outline: [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_OUTLINE_TOOL],
+    "outline-evidence": [EVAL_JAVA_SYMBOL_TOOL, EVAL_JAVA_OUTLINE_TOOL, EVAL_JAVA_EVIDENCE_TOOL]
+  }[productProfile];
   const { terms: _terms, ...properties } = EVAL_JAVA_SYMBOL_TOOL.function.parameters.properties;
   return [{ type: "function", function: { ...EVAL_JAVA_SYMBOL_TOOL.function,
     description: "Locate Java type or method declarations by exact symbol name, FQN, or owner#method. Returns 1-based declaration anchors. Search is exact only; use native rg and read for text discovery. Source previews are opt-in and consume the shared source budget.",
@@ -197,12 +238,18 @@ export function strictEqualDeep(a, b) {
  * The answer alone is NOT an answer: scoreRunOutcome additionally gates on
  * the frozen required_evidence lines having been received.
  */
-export function scoreQaAnswer(goldAnswer, rawAnswer) {
+export function scoreQaAnswer(goldAnswer, rawAnswer, { setKeys = [] } = {}) {
   const parsed = parseStrictAnswer(rawAnswer);
   if (!parsed.ok) {
     return { status: "INVALID_ANSWER", correct: false, reason: parsed.reason, ...(parsed.duplicates ? { duplicates: parsed.duplicates } : {}) };
   }
-  const value = parsed.value;
+  const value = { ...parsed.value };
+  // MAC-10 string-set slots are order-free: a unique string array is compared sorted (gold is stored sorted).
+  // A duplicate or non-string element is left as submitted and so cannot equal the gold set.
+  for (const key of setKeys) {
+    const items = value[key];
+    if (Array.isArray(items) && items.every(item => typeof item === "string") && new Set(items).size === items.length) value[key] = [...items].sort();
+  }
   if (!goldAnswer || typeof goldAnswer !== "object" || Array.isArray(goldAnswer)) {
     return { status: "NO_GOLD", correct: false };
   }
@@ -222,6 +269,20 @@ export function scoreQaAnswer(goldAnswer, rawAnswer) {
  * output, possibly larger than what the model saw) are never credited. */
 export function receivedSourceEvents(events) {
   return (Array.isArray(events) ? events : []).filter(event => event?.type === "SOURCE_RECEIVED");
+}
+
+/** Required evidence that names the hash of the file it was verified on (MAC-10 gold `file_sha256`) is
+ * credited only from source received from that exact file version; other paths are unaffected. */
+export function hashBoundEvents(requiredEvidence, events) {
+  const expected = new Map();
+  for (const item of Array.isArray(requiredEvidence) ? requiredEvidence : []) {
+    if (typeof item?.file_sha256 === "string") expected.set(String(item.path ?? "").replaceAll("\\", "/"), item.file_sha256);
+  }
+  if (expected.size === 0) return Array.isArray(events) ? events : [];
+  return (Array.isArray(events) ? events : []).filter(event => {
+    const file = String(event?.path ?? "").replaceAll("\\", "/");
+    return !expected.has(file) || event?.fileContentHash === expected.get(file);
+  });
 }
 
 /** Line-set coverage of frozen required_evidence by received source.
@@ -336,7 +397,8 @@ export function extractSourceEvents({ callId, toolName, result }) {
   } else {
     return events;
   }
-  if (toolName === "java_evidence" && payload?.schemaVersion === "java-evidence-unit/v1") {
+  // v2 (post-ILV2 Q04) keeps the v1 unit fields and adds Java declaration units.
+  if (toolName === "java_evidence" && (payload?.schemaVersion === "java-evidence-unit/v1" || payload?.schemaVersion === "java-evidence-unit/v2")) {
     for (const unit of payload.units ?? []) {
       if (typeof unit.text !== "string" || !unit.text || typeof unit.path !== "string"
         || !Number.isInteger(unit.startLine) || unit.startLine < 1 || !Number.isInteger(unit.endLine)
@@ -536,13 +598,16 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     taskOutcome: run.taskOutcome ?? "UNMEASURED",
     taskSuccess: run.taskSuccess === true ? true : (run.taskSuccess === false ? false : null),
     answerStatus: run.answerStatus ?? null,
+    ...(run.armProfile !== undefined ? { armProfile: run.armProfile } : {}),
     ...(run.attemptState ? { attemptState: run.attemptState } : {}),
     ...(run.repairJudge ? { repairJudge: run.repairJudge } : {}),
     ...(run.candidateReceiptValidation ? { candidateReceiptValidation: run.candidateReceiptValidation } : {}),
+    ...(run.requestDelivery ? { requestDelivery: run.requestDelivery } : {}),
+    ...(run.indexTelemetry ? { indexTelemetry: run.indexTelemetry, indexReadyMs: run.indexReadyMs ?? [] } : {}),
     ...(run.frozenScore ? { frozenScore: run.frozenScore, preliminary: run.preliminary } : {}),
     ...(run.partial ? { partial: true } : {}),
     toolCallCount: run.toolCallCount ?? 0,
-    sourceReceived: receivedSourceEvents(run.sourceReceived),
+    sourceReceived: run.verifiedSourceReceived ?? receivedSourceEvents(run.sourceReceived),
     usage: usageOrNull(run.usage),
     timedOut: Boolean(run.timedOut),
     ...(run.stopReason ? { stopReason: run.stopReason } : {}),
@@ -573,8 +638,13 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   const universe = Array.isArray(planned) && planned.length > 0 ? planned : [...byKey.values()];
   const missing = [];
   const packs = [];
+  const slotRuns = [];
+  const fromPlan = universe === planned;
   for (const row of universe) {
-    const run = byKey.get(keyOf(row));
+    // Without a plan the universe is the delivered rows themselves; keyOf's defaults ("" arm, repeat 1)
+    // must not fold a row without arm/repeat onto another row.
+    const run = fromPlan ? byKey.get(keyOf(row)) : row;
+    slotRuns.push(run ?? null);
     if (run) {
       packs.push(packRow(run));
     } else {
@@ -593,12 +663,39 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   }
   const measured = packs.filter(pack => pack.taskSuccess === true || pack.taskSuccess === false);
   const successes = packs.filter(pack => pack.taskSuccess === true).length;
+  // post-ILV2 Q10: the slot summary over the same rows as `packs`. A not-run, blocked or unjudged
+  // slot makes the end-to-end rate null instead of counting as a failure (pack.taskSuccessRate and
+  // byArm keep their historical successes/scheduled reading); usage is summed only when every
+  // attempted slot measured it, reported in the packs' usage field names without raw provider blobs.
+  const slots = packs.map((pack, index) => {
+    const run = slotRuns[index];
+    // Replayed rows from before attemptState existed still carry a judged outcome.
+    const attemptState = run?.attemptState ?? (run && typeof run.taskSuccess === "boolean" ? "COMPLETED" : undefined);
+    const state = !attemptState || attemptState === "MISSING_RESULT" ? "NOT_RUN"
+      : attemptState === "BLOCKED_SETUP" ? "BLOCKED_ENV"
+        : run.timedOut ? "TIMED_OUT"
+          : attemptState === "COMPLETED" ? "COMPLETED" : "FAILED";
+    const passed = state === "COMPLETED" ? (run.taskSuccess === true ? true : run.taskSuccess === false ? false : null)
+      : state === "NOT_RUN" || state === "BLOCKED_ENV" ? null : false;
+    return { slotId: JSON.stringify([pack.taskId, pack.arm ?? null, pack.repeat ?? null]), arm: pack.arm ?? "", state, passed, usage: run?.usage ?? null };
+  });
+  const summarize = list => {
+    const summary = summarizeSchedule(list);
+    if (!summary.providerUsage) return summary;
+    const { rawUsage: _raw, rawUsageHash: _hash, ...usage } = usageOrNull(summary.providerUsage) ?? {};
+    return { ...summary, providerUsage: usage };
+  };
+  const schedule = { ...summarize(slots),
+    byArm: Object.fromEntries([...new Set(slots.map(slot => slot.arm))].map(arm => [arm, summarize(slots.filter(slot => slot.arm === arm))])) };
+  const missingOutcome = status === "MEASURED" && identity?.evalProtocol === MAC10_LIVE_PROTOCOL_VERSION
+    && schedule.endToEndSuccessRate === null;
+  const resultStatus = missingOutcome ? (schedule.attempted === 0 ? "BLOCKED_SETUP" : "INCOMPLETE") : status;
   return {
     schemaVersion: EVAL_PACK_SCHEMA_VERSION,
-    evalProtocol: EVAL_PROTOCOL_VERSION,
+    evalProtocol: identity?.evalProtocol ?? EVAL_PROTOCOL_VERSION,
     productProfile,
     publicAnswerContract: publicAnswerContract ? { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256 } : null,
-    status,
+    status: resultStatus,
     ...(blockedReasons?.length ? { blockedReasons } : {}),
     backend: backend ?? null,
     datasetHash: datasetHash ?? null,
@@ -610,7 +707,8 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     packs,
     // End-to-end rate: successes / scheduled. Never successes / measured. A pack that measured
     // nothing (no backend, dry run) has no rate at all: 0 would read as a measured failure.
-    taskSuccessRate: status === "MEASURED" && packs.length > 0 ? successes / packs.length : null,
+    taskSuccessRate: resultStatus === "MEASURED" && packs.length > 0 ? successes / packs.length : null,
+    schedule,
     conditionalAccuracy: measured.length > 0 ? successes / measured.length : null,
     measuredAttempts: measured.length
   };
@@ -655,6 +753,38 @@ export function attemptStateOf(run) {
   return "COMPLETED";
 }
 
+async function verifyFinalRequest({ body, events, candidateRoot, snapshotRoot, mutable }) {
+  const sources = receivedSourceEvents(events);
+  if (body == null) return { events: [], proof: { status: "NO_COMPLETED_REQUEST", verifiedUnits: 0 } };
+  const { units, refused } = await receiptUnitsFromEvents({
+    body,
+    events: sources,
+    workspaceRoot: candidateRoot,
+    loadSource: event => {
+      const hash = event.fileContentHash;
+      if (mutable && /^[a-f0-9]{64}$/.test(hash ?? "") && existsSync(path.join(snapshotRoot, hash))) {
+        return readBoundedSource(snapshotRoot, hash);
+      }
+      return readBoundedSource(candidateRoot, event.path);
+    }
+  });
+  const workspaceId = createHash("sha256").update(candidateRoot).digest("hex");
+  const contentManifestId = createHash("sha256").update(JSON.stringify(units.map(unit => [unit.relativePath, unit.contentHash]))).digest("hex");
+  const receipts = receiptsForSerializedRequest({ body, workspaceId, contentManifestId, units });
+  const accepted = new Set(receipts.flatMap(receipt => receipt.units.map(unit => unit.id)));
+  const failures = [...refused, ...receipts.flatMap(receipt => receipt.refused)];
+  return {
+    events: sources.filter((_, i) => accepted.has(`u${i + 1}`)),
+    proof: {
+      status: failures.length ? "PARTIAL" : accepted.size ? "VERIFIED" : "NO_SOURCE",
+      requestBodySha256: createHash("sha256").update(body).digest("hex"),
+      verifiedUnits: accepted.size,
+      refused: failures,
+      receipts
+    }
+  };
+}
+
 /**
  * Live eval runner: every planned attempt (task x arm x repeat) gets its own
  * candidate workspace that is the single analysis/read/write/test root; the
@@ -676,13 +806,19 @@ export async function runLiveEvalRun({
   seed = 1984,
   maxRounds = 16,
   chat,
+  fetchImpl,
+  verifyRequestDelivery = false,
   chatRequestConfig = {},
   repairJudge = evaluateRepair,
   openSessionImpl = openImpactSession,
   productProfile = "broad",
-  publicAnswerContract = null
+  publicAnswerContract = null,
+  // When set, every product session waits until its index view is FRESH before the agent (or the next
+  // query after a write) uses it, so B1/B2 measure the tools, not a cold start. Ready time is recorded per row.
+  indexReadyTimeoutMs = null
 }) {
-  const productDeclarations = productTools(productProfile);
+  productTools(productProfile);
+  for (const arm of arms) armProfile(arm, productProfile);
   if (publicAnswerContract) for (const task of tasks.filter(task => task.kind === "qa")) {
     const fields = publicAnswerContract.tasks.get(task.id);
     if (!fields) throw new TypeError(`public answer contract missing task: ${task.id}`);
@@ -694,16 +830,27 @@ export async function runLiveEvalRun({
   if (!chat && (!config.baseUrl || !config.apiKey || !config.model)) {
     throw new Error("OPENAI_BASE_URL, OPENAI_API_KEY, and OPENAI_MODEL are required for a live eval run");
   }
-  const chatImpl = chat ?? (({ messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }) =>
-    openaiCompatibleChat({ ...config, messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }));
+  if (chat && verifyRequestDelivery) throw new Error("request verification requires the default transport");
   mkdirSync(outputDir, { recursive: true });
   const payloadLog = path.join(outputDir, "model-payloads.jsonl");
   const completionLog = path.join(outputDir, "model-completions.jsonl");
   const toolLog = path.join(outputDir, "raw-tool-results.jsonl");
+  const finalRequestLog = path.join(outputDir, "final-requests.jsonl");
+  const progressLog = path.join(outputDir, "attempt-progress.jsonl");
   const recorder = createRecorder();
   const runs = [];
+  const recordRun = row => {
+    runs.push(row);
+    if (!verifyRequestDelivery) return;
+    const { sourceReceived, verifiedSourceReceived, finalAnswer, requestDelivery, ...summary } = row;
+    appendFileSync(progressLog, `${JSON.stringify({
+      ...summary,
+      ...(requestDelivery ? { requestDelivery: requestDelivery.status, requestCount: requestDelivery.requestCount } : {})
+    })}\n`, "utf8");
+  };
   for (const task of tasks) {
     const goldRow = gold?.get(task.id);
+    const sourceBudget = task.kind === "qa" || verifyRequestDelivery ? task.budget : null;
     const fixtureRoot = repoRoots?.[task.corpus]
       ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", task.corpus) : undefined);
     for (let repeat = 1; repeat <= repeats; repeat += 1) {
@@ -712,32 +859,73 @@ export async function runLiveEvalRun({
         const eventsBefore = recorder.events().length;
         const attemptStarted = Date.now();
         const contractIdentity = publicAnswerContract ? { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256, applied: task.kind === "qa" } : null;
-        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind, productProfile, publicAnswerContract: contractIdentity };
+        const profile = armProfile(arm, productProfile);
+        const productDeclarations = profile ? productTools(profile) : [];
+        const productArm = productDeclarations.length > 0;
+        // productProfile stays the run flag (as before for product/control); armProfile is what this arm exposed.
+        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind, productProfile, armProfile: profile, publicAnswerContract: contractIdentity };
         if (!fixtureRoot || !existsSync(fixtureRoot)) {
-          runs.push({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
+          recordRun({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
           continue;
         }
         let candidateRoot;
         let session = null;
         let sessionGeneration = 0;
         const sessions = [];
+        const indexReadyMs = [];
+        const indexTelemetry = [];
+        const telemetryFor = new Map();
+        let finalRequestBody;
+        let requestCount = 0;
+        const chatImpl = chat ?? (async ({ messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs }) => {
+          let body;
+          const completion = await openaiCompatibleChat({
+            ...config, messages, tools, maxTokens, reasoningEffort, chatTemplateKwargs, fetchImpl,
+            ...(verifyRequestDelivery ? { onSerializedBody: serialized => { body = serialized; requestCount += 1; } } : {})
+          });
+          if (verifyRequestDelivery) finalRequestBody = body;
+          return completion;
+        });
         let partial = false;
+        let agentStarted = false;
         const cacheFor = generation => path.join(outputDir, "mcp-cache", createHash("sha256").update(attemptKey).digest("hex").slice(0, 16), `w${generation}`);
         const openSession = async () => {
           const opened = await openSessionImpl({ repoRoot: candidateRoot, serverJs, cacheRoot: cacheFor(sessionGeneration), env });
           sessions.push(opened);
+          if (indexReadyTimeoutMs) {
+            if (typeof opened.waitIndexFresh !== "function") throw new Error("product session cannot report index readiness");
+            indexReadyMs.push(await opened.waitIndexFresh({ timeoutMs: indexReadyTimeoutMs }));
+          }
+          if (verifyRequestDelivery) {
+            const telemetry = { generation: sessionGeneration, before: null, after: null, queryCounterDelta: null };
+            indexTelemetry.push(telemetry);
+            telemetryFor.set(opened, telemetry);
+            try { telemetry.before = await opened.readIndexTelemetry(); }
+            catch (error) { telemetry.error = String(error?.message ?? error); }
+          }
           return opened;
+        };
+        const captureIndexEnd = async opened => {
+          const telemetry = telemetryFor.get(opened);
+          if (!telemetry || telemetry.after || telemetry.error) return;
+          try {
+            telemetry.after = await opened.readIndexTelemetry();
+            telemetry.queryCounterDelta = Object.fromEntries(Object.entries(telemetry.after.queryCounters).flatMap(([key, value]) => {
+              const before = telemetry.before.queryCounters[key];
+              return Number.isFinite(value) && Number.isFinite(before) && value >= before ? [[key, value - before]] : [];
+            }));
+          } catch (error) { telemetry.error = String(error?.message ?? error); }
         };
         try {
           candidateRoot = createAttemptWorkspace(fixtureRoot, attemptKey, outputDir);
-          const toolSet = buildToolSet(arm === "product" ? "product" : "control", task.kind === "repair" ? "repair" : "qa", { candidateRoot });
+          const toolSet = buildToolSet(productArm ? "product" : "control", task.kind === "repair" ? "repair" : "qa", { candidateRoot });
           // The control arm never needs (or pays for) a discovery session.
-          if (arm === "product") session = await openSession();
+          if (productArm) session = await openSession();
           const contract = task.output_contract?.answer_keys
             ? Object.entries(task.output_contract.answer_keys).map(([key, type]) => `${key}: ${type}`).join(", ")
             : "";
-          const budget = task.budget
-            ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${task.budget.max_lines} lines / ${task.budget.max_bytes} bytes; receiving more fails the task.`
+          const budget = sourceBudget
+            ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${sourceBudget.max_lines} lines / ${sourceBudget.max_bytes} bytes; receiving more fails the task.`
             : "";
           let callSeq = 0;
           const snapshotRoot = path.join(outputDir, "source-snapshots", path.basename(candidateRoot));
@@ -754,9 +942,9 @@ export async function runLiveEvalRun({
               if (hash === event.fileContentHash) writeFileSync(path.join(snapshotRoot, hash), bytes);
             }
             const projected = name === "java_symbol" ? projectDiscoveryForModel(raw) : raw;
-            const limited = task.kind === "qa" && task.budget ? boundSourceResult(name, projected, {
-              lines: task.budget.max_lines - sourceSpent.lines,
-              bytes: task.budget.max_bytes - sourceSpent.bytes
+            const limited = sourceBudget ? boundSourceResult(name, projected, {
+              lines: sourceBudget.max_lines - sourceSpent.lines,
+              bytes: sourceBudget.max_bytes - sourceSpent.bytes
             }) : projected;
             // Reserve the serialized slices before dispatch (a conservative
             // upper bound if dispatch fails). Only onChat mints received events.
@@ -766,15 +954,18 @@ export async function runLiveEvalRun({
               sourceSpent.bytes += Buffer.byteLength(slice.text, "utf8");
             }
             const result = JSON.parse(wire.content);
-            appendFileSync(toolLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile }, callSeq,
+            appendFileSync(toolLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile }, callSeq,
               callId, toolName: name, args, rawHash: createHash("sha256").update(JSON.stringify(raw)).digest("hex"),
               rawResult: raw, modelResult: result, sourceSlices: wire.slices ?? [] })}\n`, "utf8");
             return result;
           };
+          // From here on a failure is a runtime failure; before it (workspace, product session) the
+          // attempt never reached the model and is a setup block, not a failed task.
+          agentStarted = true;
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
-              taskText: `${task.query}${contract ? `\nAnswer contract: submit_answer with exactly these keys: ${contract}.` : ""}${task.kind === "qa" && publicAnswerContract ? `\nPublic field roles and representations: ${JSON.stringify(publicAnswerContract.tasks.get(task.id))}` : ""}${task.kind === "qa" ? budget : ""}`,
+              taskText: `${task.query}${contract ? `\nAnswer contract: submit_answer with exactly these keys: ${contract}.` : ""}${task.kind === "qa" && publicAnswerContract ? `\nPublic field roles and representations: ${JSON.stringify(publicAnswerContract.tasks.get(task.id))}` : ""}${budget}`,
               projectId: task.corpus,
               requiredContextFiles: [],
               anchor: normalizeTaskAnchor(task.anchors?.[0])
@@ -783,15 +974,15 @@ export async function runLiveEvalRun({
             systemPrompt: EVAL_SYSTEM_PROMPT,
             submission: { answerKeys: task.kind === "repair" ? { patchApplied: "boolean", summary: "string" } : task.output_contract?.answer_keys,
               ...(task.kind === "qa" && publicAnswerContract ? { fields: publicAnswerContract.tasks.get(task.id), contract: { version: publicAnswerContract.version, sha256: publicAnswerContract.sha256 } } : {}) },
-            tools: arm === "product" ? [...productDeclarations, ...toolSet.tools] : toolSet.tools,
+            tools: productArm ? [...productDeclarations, ...toolSet.tools] : toolSet.tools,
             chat: chatImpl,
             chatRequestConfig: effectiveChatRequestConfig,
             maxRounds,
             // Eval protocol v1.4: the same enforced source budget for every arm.
-            ...(task.kind === "qa" && task.budget ? { sourceBudget: task.budget } : {}),
+            ...(sourceBudget ? { sourceBudget } : {}),
             onChat: request => {
               appendFileSync(payloadLog, `${JSON.stringify({
-                attempt: { taskId: task.id, arm, repeat, productProfile },
+                attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile },
                 requestIndex: request.requestIndex,
                 payloadHash: request.payloadHash,
                 productProfile,
@@ -806,41 +997,44 @@ export async function runLiveEvalRun({
               }
             },
             onCompletion: completion => {
-              appendFileSync(completionLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile }, ...completion })}\n`, "utf8");
+              appendFileSync(completionLog, `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat, productProfile, armProfile: profile }, ...completion })}\n`, "utf8");
             },
             invoke: async (name, args) => {
               callSeq += 1;
               const callId = `eval:${task.id}:${arm}:${repeat}:${callSeq}`;
-              if (name === "java_symbol" || name === "java_evidence") {
-                const declaration = arm === "product" && productDeclarations.find(tool => tool.function.name === name);
+              if (name === "java_symbol" || name === "java_evidence" || name === "java_outline") {
+                const declaration = productArm && productDeclarations.find(tool => tool.function.name === name);
                 if (!declaration) return modelResult(name, args, { error: `tool ${name} is not provided in this session` }, callId);
                 const invalid = validateProductArguments(declaration, args);
                 if (invalid) return modelResult(name, args, { error: invalid, errorClass: "CONTRACT" }, callId);
                 if (!session) return modelResult(name, args, { error: "product session unavailable after a write; results would be stale", errorClass: "PARTIAL" }, callId);
+                // Outline carries declarations and ranges, never source text: it spends no source budget.
+                if (name === "java_outline") return modelResult(name, args, await session.outline(args), callId);
                 if (name === "java_evidence") {
-                  const remaining = task.kind === "qa" && task.budget ? {
-                    lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
-                    bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
+                  const remaining = sourceBudget ? {
+                    lines: Math.max(0, sourceBudget.max_lines - sourceSpent.lines),
+                    bytes: Math.max(0, sourceBudget.max_bytes - sourceSpent.bytes)
                   } : null;
                   if (remaining && (remaining.lines === 0 || remaining.bytes === 0)) return modelResult(name, args,
                     { error: "SOURCE_BUDGET_EXHAUSTED", errorClass: "SOURCE_BUDGET", remainingSourceBudget: remaining, terminal: true }, callId);
                   return modelResult(name, args, await session.evidence(args), callId);
                 }
                 const result = await session.symbol({ ...args,
-                  ...(productProfile === "exact-evidence" ? { searchMode: "exact" } : {}),
+                  ...(profile === "exact-evidence" ? { searchMode: "exact" } : {}),
                   ...(!Object.hasOwn(args, "preview") ? { preview: "none" } : {}) });
                 return modelResult(name, args, result, callId);
               }
-              const remaining = task.kind === "qa" && task.budget ? {
-                lines: Math.max(0, task.budget.max_lines - sourceSpent.lines),
-                bytes: Math.max(0, task.budget.max_bytes - sourceSpent.bytes)
+              const remaining = sourceBudget ? {
+                lines: Math.max(0, sourceBudget.max_lines - sourceSpent.lines),
+                bytes: Math.max(0, sourceBudget.max_bytes - sourceSpent.bytes)
               } : null;
               const result = await invokeWithSourceBudget(toolSet, name, args, remaining);
-              if (result?.written === true && arm === "product") {
+              if (result?.written === true && productArm) {
                 // The candidate changed: the next java_symbol query must see
                 // it, so the session is re-opened on a fresh index.
                 const old = session;
                 session = null;
+                await captureIndexEnd(old);
                 await old?.close().catch(() => undefined);
                 sessionGeneration += 1;
                 try {
@@ -853,8 +1047,10 @@ export async function runLiveEvalRun({
               return modelResult(name, args, result, callId);
             }
           });
+          await captureIndexEnd(session);
           let repairVerdict = null;
-          if (task.kind === "repair" && kitRoot) {
+          // A frozen kit judge needs its kit; an injected judge (MAC-10 oracle) carries its own fixtures.
+          if (task.kind === "repair" && (kitRoot || repairJudge !== evaluateRepair)) {
             repairVerdict = await repairJudge({
               kitRoot,
               taskId: task.id,
@@ -866,14 +1062,22 @@ export async function runLiveEvalRun({
           const events = recorder.events().slice(eventsBefore);
           const candidateReceiptValidation = task.kind === "repair"
             ? diagnoseCandidateReceipts(events, { candidateRoot, snapshotRoot }) : null;
-          const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: events }, repairVerdict });
-          runs.push({
+          let delivery;
+          if (verifyRequestDelivery) {
+            if (finalRequestBody != null) appendFileSync(finalRequestLog, `${JSON.stringify({ attemptKey, requestCount, body: finalRequestBody })}\n`, "utf8");
+            delivery = await verifyFinalRequest({ body: finalRequestBody, events, candidateRoot, snapshotRoot, mutable: task.kind === "repair" });
+          }
+          const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: delivery?.events ?? events }, repairVerdict });
+          recordRun({
             ...base,
             attemptState: attemptStateOf(run),
             taskOutcome: scored.taskOutcome,
             taskSuccess: scored.taskSuccess,
             answerStatus: scored.answerStatus,
             ...(scored.missingEvidence ? { missingEvidence: scored.missingEvidence } : {}),
+            ...(Object.hasOwn(scored, "answerCorrect") ? { answerCorrect: scored.answerCorrect, requiredEvidenceCovered: scored.requiredEvidenceCovered } : {}),
+            ...(indexReadyMs.length ? { indexReadyMs: [...indexReadyMs] } : {}),
+            ...(verifyRequestDelivery ? { indexTelemetry, requestDelivery: { ...delivery.proof, requestCount }, verifiedSourceReceived: delivery.events } : {}),
             stopReason: run.stopReason,
             primaryStopReason: run.primaryStopReason,
             finalAnswerMode: run.finalAnswerMode,
@@ -899,13 +1103,15 @@ export async function runLiveEvalRun({
             ...(run.error ? { error: run.error } : {})
           });
         } catch (error) {
-          runs.push({
+          await captureIndexEnd(session);
+          recordRun({
             ...base,
-            attemptState: "FAILED_RUNTIME",
+            attemptState: agentStarted ? "FAILED_RUNTIME" : "BLOCKED_SETUP",
             taskOutcome: "UNMEASURED",
             taskSuccess: null,
             answerStatus: "ATTEMPT_SETUP_OR_RUNTIME_ERROR",
             ...(candidateRoot ? { candidateRoot } : {}),
+            ...(verifyRequestDelivery ? { indexTelemetry, indexReadyMs, requestDelivery: { status: "UNMEASURED", requestCount }, verifiedSourceReceived: [] } : {}),
             sourceReceived: recorder.events().slice(eventsBefore),
             error: String(error instanceof Error ? error.message : error).slice(0, 500)
           });
@@ -962,23 +1168,28 @@ export function scoreRunOutcome({ task, goldRow, run, repairVerdict }) {
     if (goldRow?.answer === undefined || goldRow?.answer === null) {
       return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_GOLD" };
     }
-    const score = scoreQaAnswer(goldRow.answer, run.finalContent);
-    if (!score.correct) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: score.status };
-    }
+    const setKeys = Object.entries(task.answerSlots ?? {}).filter(([, type]) => type === "string-set").map(([key]) => key);
+    const score = scoreQaAnswer(goldRow.answer, run.finalContent, { setKeys });
     const required = Array.isArray(goldRow.required_evidence) ? goldRow.required_evidence : [];
-    if (required.length === 0) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "NO_REQUIRED_EVIDENCE" };
+    // Path coverage and task success stay separate facts (06 §6.5); taskSuccess still needs both.
+    const coverage = required.length > 0 ? receivedLineCoverage(required, hashBoundEvents(required, run.sourceReceived ?? [])) : null;
+    const facets = { answerCorrect: score.correct, requiredEvidenceCovered: coverage ? coverage.missing.length === 0 : null };
+    if (!score.correct) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: score.status, ...facets };
     }
-    const coverage = receivedLineCoverage(required, run.sourceReceived ?? []);
+    if (!coverage) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "NO_REQUIRED_EVIDENCE", ...facets };
+    }
     if (coverage.missing.length > 0) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "MISSING_REQUIRED_EVIDENCE", missingEvidence: coverage.missing };
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "MISSING_REQUIRED_EVIDENCE", missingEvidence: coverage.missing, ...facets };
     }
+    // The over-budget check counts all received source, including source from other file versions.
+    const all = receivedLineCoverage(required, run.sourceReceived ?? []);
     const budget = task.budget;
-    if (budget && (coverage.receivedLines > budget.max_lines || coverage.receivedBytes > budget.max_bytes)) {
-      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "RECEIVED_OVER_BUDGET" };
+    if (budget && (all.receivedLines > budget.max_lines || all.receivedBytes > budget.max_bytes)) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "RECEIVED_OVER_BUDGET", ...facets };
     }
-    return { taskOutcome: "MEASURED", taskSuccess: true, answerStatus: score.status };
+    return { taskOutcome: "MEASURED", taskSuccess: true, answerStatus: score.status, ...facets };
   }
   return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: task.kind };
 }
@@ -999,7 +1210,8 @@ function runPython(argv, { cwd, timeoutMs = 300_000 }) {
  * become a java-specialist-results/v1 pack (eval-frozen-adapter) and are
  * scored by `python -m harness score` against the kit's own corpora. QA
  * taskSuccess is replaced by the kit's qa_contract_pass; the JS outcome is
- * kept only as `preliminary`. Repair rows keep the frozen judge verdict.
+ * kept only as `preliminary`. Blocked or missing slots keep their unmeasured
+ * outcome. Repair rows keep the frozen judge verdict.
  */
 export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, outputDir, model, productProfile = "broad", python = process.env.JSB_PYTHON ?? "python3" }) {
   const kit = path.resolve(kitRoot);
@@ -1038,7 +1250,8 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
       arm,
       datasetHash: hashes.dataset,
       runProfile: { ...runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats, model }),
-        eval_protocol: EVAL_PROTOCOL_VERSION, product_profile: productProfile },
+        // The profile this arm actually exposed (b0/b1/b2 pin theirs); product/control keep the run flag as before.
+        eval_protocol: EVAL_PROTOCOL_VERSION, product_profile: ["b0", "b1", "b2"].includes(arm) ? armProfile(arm) : productProfile },
       model
     });
     const packPath = path.join(scoreDir, `${arm}-results.json`);
@@ -1053,7 +1266,7 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
   for (const run of runs) {
     if (run.kind !== "qa" || !reports[run.arm]) continue;
     const row = reports[run.arm].report.rows.find(r => r.task_id === run.taskId && r.variant === "primary" && r.repeat === run.repeat - 1);
-    if (!row) continue;
+    if (!row || row.status === "BLOCKED" || row.status === "MISSING") continue;
     run.preliminary = { taskSuccess: run.taskSuccess, answerStatus: run.answerStatus };
     run.frozenScore = {
       qaContractPass: row.qa_contract_pass,
@@ -1078,7 +1291,46 @@ export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, output
   };
 }
 
-export async function main(argv = process.argv.slice(2), env = process.env) {
+/**
+ * post-ILV2 Q10 dry-run identity: every scheduled task, arm, corpus, the named dataset/split and the
+ * product server must resolve before anything is frozen or sent. With --require-identity a problem
+ * fails closed (exit 2); without it the check is still recorded in the pack identity.
+ */
+export function checkRunIdentity({ tasks, allTaskIds, filter = [], arms, productProfile, dataset, repoRoots = {}, kitRoot, serverJs }) {
+  const problems = [];
+  if (tasks.length === 0) problems.push("NO_TASKS");
+  for (const id of filter) if (!allTaskIds.has(id)) problems.push(`UNKNOWN_FILTER_TASK:${id}`);
+  if (arms.length === 0) problems.push("NO_ARMS");
+  if (new Set(arms).size !== arms.length) problems.push("DUPLICATE_ARM");
+  let productArm = false;
+  for (const arm of arms) {
+    try { if (armProfile(arm, productProfile)) productArm = true; }
+    catch { problems.push(`UNKNOWN_ARM:${arm}`); }
+  }
+  if (!dataset?.datasetId || !dataset?.split) problems.push("DATASET_UNNAMED");
+  for (const task of tasks) {
+    const corpus = task.corpus ?? task.corpusId;
+    if (typeof corpus !== "string" || corpus === "") { problems.push(`TASK_WITHOUT_CORPUS:${task.id}`); continue; }
+    const root = repoRoots[corpus] ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", corpus) : undefined);
+    let isDirectory = false;
+    try { isDirectory = root !== undefined && statSync(root).isDirectory(); } catch { isDirectory = false; }
+    if (!isDirectory) problems.push(`CORPUS_UNRESOLVED:${corpus}`);
+  }
+  let serverJsSha256 = null;
+  let serverProblem = "PRODUCT_SERVER_INVALID";
+  try {
+    const server = statSync(serverJs, { throwIfNoEntry: false });
+    if (!server) serverProblem = "PRODUCT_SERVER_MISSING";
+    else if (server.isFile()) serverJsSha256 = createHash("sha256").update(readFileSync(serverJs)).digest("hex");
+  } catch {
+    // The selected server cannot be read and hashed.
+  }
+  if (productArm && serverJsSha256 === null) problems.push(serverProblem);
+  const unique = [...new Set(problems)];
+  return { status: unique.length === 0 ? "VERIFIED" : "FAILED", problems: unique, serverJsSha256 };
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env, deps = {}) {
   const flag = (name) => {
     const index = argv.indexOf(name);
     return index >= 0 ? argv[index + 1] : undefined;
@@ -1087,17 +1339,28 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const goldFile = flag("--gold");
   const output = flag("--output");
   const arms = (flag("--arms") ?? "product,control").split(",").filter(Boolean);
-  const repeats = Math.max(1, Number(flag("--repeats") ?? 1));
+  const repeats = argv.includes("--repeats") ? Number(flag("--repeats")) : 1;
   const seed = Number(flag("--seed") ?? 1984);
   const maxRounds = Math.max(1, Number(flag("--max-rounds") ?? 16));
   const kitRoot = flag("--kit-root");
-  const publicAnswerContract = flag("--public-answer-contract") ? loadPublicAnswerContract(flag("--public-answer-contract")) : null;
+  let publicAnswerContract = flag("--public-answer-contract") ? loadPublicAnswerContract(flag("--public-answer-contract")) : null;
   const productProfile = flag("--product-profile") ?? "broad";
   productTools(productProfile);
   const dryRun = argv.includes("--dry-run");
+  const requireIdentity = argv.includes("--require-identity");
   const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json>] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--product-profile broad|evidence|exact-evidence] [--dry-run]");
+    console.error("usage: evaluate-java-task.mjs --tasks <tasks.jsonl> [--gold <gold.jsonl>] [--dataset <dataset-manifest.json> [--inputs <frozen inputs.json> --source-budget none|LINES:BYTES (repair: ILV2_TOOLCHAINS)]] [--kit-root <frozen kit>] [--public-answer-contract <versioned.json>] [--filter <id,id..>] [--pilot N --pilot-seed S] [--repo-roots <corpus=path,..>] --output <dir> [--repeats N] [--seed N] [--max-rounds N] [--index-ready-timeout-ms N] [--server-js dist/server.js] [--arms product,control|b0,b2|...] [--product-profile broad|evidence|exact-evidence|outline|outline-evidence] [--dry-run] [--require-identity]");
+    return 2;
+  }
+  // Default: wait for a FRESH index (900 s) only on MAC-10 adapter runs; kit runs keep their v1.5 timing unless asked.
+  let indexReadyTimeoutMs = argv.includes("--index-ready-timeout-ms") ? Number(flag("--index-ready-timeout-ms")) : null;
+  if (indexReadyTimeoutMs !== null && (!Number.isSafeInteger(indexReadyTimeoutMs) || indexReadyTimeoutMs < 0)) {
+    console.error("--index-ready-timeout-ms must be a non-negative safe integer (0 disables the readiness wait)");
+    return 2;
+  }
+  if (!Number.isSafeInteger(repeats) || repeats < 1) {
+    console.error("--repeats must be a positive safe integer");
     return 2;
   }
   const datasetHash = goldFile
@@ -1107,8 +1370,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   // MAC-10: the dataset is named, never implied. --tasks is one split's tasks part and --gold that same split's gold.
   let dataset = null;
   if (flag("--dataset")) {
-    const { verifyDataset } = await import("./ilv2-mac-eval-dataset.mjs");
-    const { manifest } = await verifyDataset(path.resolve(flag("--dataset")));
+    let manifest;
+    try { ({ manifest } = await verifyDataset(path.resolve(flag("--dataset")))); }
+    catch (error) {
+      console.error(`--dataset verification failed: ${error.message}`);
+      return 2;
+    }
     const split = ["dev", "holdout"].find(name => manifest.parts[`tasks-${name}`]?.sha256 === tasksSha256);
     if (!split || (datasetHash && manifest.parts[`gold-${split}`]?.sha256 !== datasetHash)) {
       console.error("--tasks is not a tasks part of --dataset, or --gold is not the gold of the same split");
@@ -1117,17 +1384,76 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     dataset = { datasetId: manifest.datasetId, datasetDigest: manifest.datasetDigest, split };
   }
   const allTasks = loadTaskFile(tasksFile);
-  const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
+  let tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
+  let pilot = null;
+  if (argv.includes("--pilot")) {
+    try { ({ tasks, identity: pilot } = selectPilot(tasks, { count: Number(flag("--pilot")), seed: flag("--pilot-seed") })); }
+    catch (error) {
+      console.error(error.message);
+      return 2;
+    }
+  }
+  let repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
+    .filter(Boolean)
+    .map(pair => {
+      const index = pair.indexOf("=");
+      return index > 0 ? [pair.slice(0, index), pair.slice(index + 1)] : [pair, pair];
+    }));
+  const mac10 = allTasks.some(isMac10TaskRow);
+  if (mac10 && (!allTasks.every(isMac10TaskRow) || !dataset)) {
+    console.error("MAC-10 task rows need --dataset, and cannot be mixed with other task rows");
+    return 2;
+  }
+  if (!mac10 && (flag("--inputs") || flag("--source-budget"))) {
+    console.error("--inputs and --source-budget apply to MAC-10 task rows only");
+    return 2;
+  }
+  // MAC-10 LIVE adapter: corpora, answer contract, gold and repair judge all come from the verified dataset.
+  let adapter = null;
+  if (mac10 && flag("--inputs")) {
+    if (flag("--repo-roots") || kitRoot || publicAnswerContract) {
+      console.error("the MAC-10 adapter materializes its own corpora and contract: --repo-roots, --kit-root and --public-answer-contract are refused");
+      return 2;
+    }
+    try {
+      const sourceBudget = parseSourceBudget(flag("--source-budget"));
+      // The oracle's JDK is the frozen toolchain only (hash-checked); there is no override flag.
+      adapter = await prepareMac10Live({ datasetFile: path.resolve(flag("--dataset")), tasksFile, goldFile, inputsFile: path.resolve(flag("--inputs")),
+        outputDir: output, taskIds: tasks.map(task => task.id), toolchainsFile: env.ILV2_TOOLCHAINS ?? null, sourceBudget,
+        ...(deps.materialize ? { materialize: deps.materialize } : {}), ...(deps.checkInput ? { checkInput: deps.checkInput } : {}),
+        ...(deps.javaIdentityOf ? { javaIdentityOf: deps.javaIdentityOf } : {}), ...(deps.evaluateOracle ? { evaluate: deps.evaluateOracle } : {}) });
+    } catch (error) {
+      console.error(`MAC-10 adapter: ${error.message}`);
+      return 2;
+    }
+    tasks = adapter.tasks;
+    repoRoots = adapter.repoRoots;
+    indexReadyTimeoutMs ??= 900_000;
+    publicAnswerContract = adapter.publicAnswerContract;
+  }
+  const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
+  const { serverJsSha256, ...identityCheck } = checkRunIdentity({ tasks, allTaskIds: new Set(allTasks.map(task => task.id)), filter, arms, productProfile, dataset, repoRoots, kitRoot, serverJs });
+  if (requireIdentity && identityCheck.status !== "VERIFIED") {
+    // Fail closed before a schedule is frozen or any request is sent.
+    console.error(`run identity is incomplete: ${identityCheck.problems.join(", ")}`);
+    return 2;
+  }
+  indexReadyTimeoutMs ??= 0;
+  const backend = detectBackend(env);
+  if (!dryRun && backend && mac10 && !adapter) {
+    console.error("native MAC-10 rows need the live adapter: pass --inputs <frozen inputs.json> and --source-budget (and ILV2_TOOLCHAINS for repair); use --dry-run for schedule validation only");
+    return 2;
+  }
   // The full schedule is frozen before anything runs; every row stays in the
   // denominator whatever happens to it.
   const planned = buildPlannedAttempts(tasks, arms, repeats);
   mkdirSync(output, { recursive: true });
   const scheduleText = planned.map(row => JSON.stringify(row)).join("\n") + (planned.length ? "\n" : "");
   writeFileSync(path.join(output, "schedule.jsonl"), scheduleText, "utf8");
-  const serverJs = flag("--server-js") ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "dist", "server.js");
   const identity = { datasetId: dataset?.datasetId ?? null, datasetDigest: dataset?.datasetDigest ?? null, split: dataset?.split ?? null, tasksSha256, goldSha256: datasetHash, scheduleSha256: createHash("sha256").update(scheduleText).digest("hex"),
-    filter, seed, arms, repeats, productProfile, driver: { serverJs: path.resolve(serverJs), serverJsSha256: existsSync(serverJs) ? createHash("sha256").update(readFileSync(serverJs)).digest("hex") : null } };
-  const backend = detectBackend(env);
+    filter, seed, arms, armProfiles: Object.fromEntries(arms.map(arm => [arm, Object.hasOwn(ARM_PROFILES, arm) ? armProfile(arm, productProfile) : "UNKNOWN"])),
+    repeats, productProfile, identityCheck, driver: { serverJs: path.resolve(serverJs), serverJsSha256 },
+    evalProtocol: adapter ? MAC10_LIVE_PROTOCOL_VERSION : EVAL_PROTOCOL_VERSION, indexReadyTimeoutMs, pilot, mac10: adapter ? adapter.identity : null };
   if (!backend || dryRun) {
     const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
     const pack = assemblePack({
@@ -1148,19 +1474,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     // A dry run did what it was asked (froze the schedule); a missing backend measured nothing.
     return dryRun ? 0 : 2;
   }
-  const repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
-    .filter(Boolean)
-    .map(pair => {
-      const index = pair.indexOf("=");
-      return index > 0 ? [pair.slice(0, index), pair.slice(index + 1)] : [pair, pair];
-    }));
   if (!goldFile) {
     console.error("live run requires --gold <gold.jsonl> (frozen evaluator-side labels)");
     return 2;
   }
   const live = await runLiveEvalRun({
     tasks,
-    gold: loadGoldFile(goldFile),
+    gold: adapter ? adapter.gold : loadGoldFile(goldFile),
     arms,
     repeats,
     repoRoots,
@@ -1171,11 +1491,16 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     maxRounds,
     productProfile,
     publicAnswerContract,
-    serverJs
+    serverJs,
+    indexReadyTimeoutMs: indexReadyTimeoutMs || null,
+    ...(adapter ? { repairJudge: adapter.repairJudge, verifyRequestDelivery: true } : {}),
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {})
   });
-  const scorer = kitRoot
-    ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null, productProfile })
-    : { kind: "preliminary-js", reason: "--kit-root not given: QA uses the preliminary JS scorer and repair is UNMEASURED" };
+  const scorer = adapter
+    ? { kind: "mac10-adapter", adapter: adapter.identity.adapter, ...adapter.identity.scoring }
+    : kitRoot
+      ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null, productProfile })
+      : { kind: "preliminary-js", reason: "--kit-root not given: QA uses the preliminary JS scorer and repair is UNMEASURED" };
   const pack = assemblePack({
     status: "MEASURED",
     productProfile,

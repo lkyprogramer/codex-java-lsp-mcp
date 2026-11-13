@@ -4,6 +4,8 @@
 
 ## 5. 验证工具与输入规格
 
+预计超过 5 分钟的验收，按 [Mac 长时间测试验证规范](long-running-validation.md) 准备后台脚本、阶段日志和终态交接。
+
 ### 5.1 当前可用命令与新增 CLI 的边界
 
 MAC-02A已将native builder和runtime manifest校验接入普通构建、隔离/当前三仓候选、v4及K入口，并让安装预检使用同一冻结Node。shell入口显式使用绝对Node并清宿主加载/输出环境及测试IPC上下文。正式证据记录实际`process.execPath`、binary digest和完整`process.versions`；缺manifest或运行时不匹配均阻断门。完整产品门和生产安装仍需其后续任务验收。

@@ -4,8 +4,9 @@
 // pos: V5R live agent-trace execute path. 112K context cap. Golden mustHit is never sent to the model.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createHash } from "node:crypto";
-import { mkdir, realpath } from "node:fs/promises";
+import { mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildSubmitAnswerTool, validateSubmission } from "./eval-answer-contract.mjs";
@@ -122,6 +123,45 @@ export function armPromptFingerprint(arm) {
   return {
     text,
     sha256: createHash("sha256").update(text).digest("hex")
+  };
+}
+
+/** Slot execution states (05 §5.7); acceptance and benefit are judged elsewhere. */
+export const SLOT_STATES = Object.freeze(["COMPLETED", "FAILED", "TIMED_OUT", "NOT_RUN", "BLOCKED_ENV"]);
+
+/**
+ * post-ILV2 Q10: one summary over every scheduled slot. Errors, refusals and timeouts keep their slot,
+ * so the success rate is over the schedule, not over the runs that happened to finish. A slot that
+ * never ran (NOT_RUN/BLOCKED_ENV) or a completed one not yet judged (passed null) is missing data,
+ * not a failure: the rate is then null (05 §5.7). Provider usage is summed only when every attempted
+ * slot reported MEASURED usage; otherwise it is null, never 0, and usageCoverage says how much was seen.
+ */
+export function summarizeSchedule(slots) {
+  if (!Array.isArray(slots)) throw new Error("summarizeSchedule needs the full slot list");
+  const ids = new Set();
+  for (const slot of slots) {
+    if (!slot || typeof slot.slotId !== "string" || slot.slotId === "" || ids.has(slot.slotId)) throw new Error("every slot needs a unique slotId");
+    ids.add(slot.slotId);
+    if (!SLOT_STATES.includes(slot.state)) throw new Error(`${slot.slotId}: unknown slot state ${slot.state}`);
+    if (slot.passed !== true && slot.passed !== false && slot.passed !== null) throw new Error(`${slot.slotId}: passed must be true, false or null`);
+  }
+  const attempted = slots.filter(slot => slot.state !== "NOT_RUN" && slot.state !== "BLOCKED_ENV");
+  const completed = slots.filter(slot => slot.state === "COMPLETED");
+  const successful = completed.filter(slot => slot.passed === true).length;
+  const missing = slots.length - attempted.length;
+  const unjudged = completed.filter(slot => slot.passed === null).length;
+  const measuredSlots = attempted.filter(slot => slot.usage?.status === "MEASURED");
+  const measured = attempted.length > 0 && measuredSlots.length === attempted.length;
+  return {
+    scheduled: slots.length,
+    attempted: attempted.length,
+    completed: completed.length,
+    successful,
+    missing,
+    unjudged,
+    endToEndSuccessRate: slots.length === 0 || missing > 0 || unjudged > 0 ? null : successful / slots.length,
+    providerUsage: measured ? measuredSlots.map(slot => ({ ...slot.usage })).reduce(mergeUsage) : null,
+    usageCoverage: { measuredSlots: measuredSlots.length, attemptedSlots: attempted.length }
   };
 }
 
@@ -1074,20 +1114,24 @@ function runtimeFailure(task, message) {
 }
 
 export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
+  const serverEntry = path.resolve(serverJs);
   const childEnv = { ...env };
   for (const name of ["OPENAI_API_KEY", "JAVA_LSP_AGENT_API_KEY", "ANTHROPIC_API_KEY"]) {
     delete childEnv[name];
   }
   // stdio only relays (MAC-08B): the session runs its own isolated owner for this cache.
-  const owner = await startOwnerDaemon({ serverJs, cacheRoot, ephemeralCache: true, env: {
+  const owner = await startOwnerDaemon({ serverJs: serverEntry, cacheRoot, ephemeralCache: true, env: {
     ...childEnv,
     PATH: withHomebrewPathFirst(childEnv.PATH),
-    JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false"
+    JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false",
+    // Eval arms reach outline/evidence through their own model-facing tools (productTools), so the
+    // owner registers them for every arm; the model never sees the server's tools/list.
+    JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS: "1"
   } });
   let session;
   try {
     // The relay resolves selector-free calls against its cwd: the repository under test.
-    const transport = new StdioClientTransport({ command: process.execPath, args: [serverJs], cwd: repoRoot, env: owner.relayEnv, stderr: "inherit" });
+    const transport = new StdioClientTransport({ command: process.execPath, args: [serverEntry], cwd: repoRoot, env: owner.relayEnv, stderr: "inherit" });
     const client = new Client({ name: "v5r-live-agent-trace", version: "0.1.0" });
     await client.connect(transport);
     session = impactSessionFromClient({ repoRoot, client });
@@ -1095,7 +1139,40 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
     await owner.stop();
     throw error;
   }
-  return { ...session, async close() { try { await session.close(); } finally { await owner.stop(); } } };
+  let telemetryClient;
+  return {
+    ...session,
+    async readIndexTelemetry() {
+      if (!telemetryClient) {
+        telemetryClient = new Client({ name: "mac10-index-telemetry", version: "1.0.0" });
+        await telemetryClient.connect(new StreamableHTTPClientTransport(new URL(owner.url)), { timeout: 10000 });
+      }
+      // The stdio relay supplies a workspace selector, so ask this run's owner directly.
+      const reply = await telemetryClient.callTool({ name: "java_status", arguments: {} }, undefined, { timeout: 10000 });
+      if (reply.isError) throw new Error("owner java_status failed");
+      const { index } = JSON.parse(reply.content.map(part => part.text).join(""));
+      const canonicalRoot = await realpath(repoRoot);
+      const workspace = index?.workspaces?.find(row => row.canonicalRoot === canonicalRoot);
+      const history = await readFile(path.join(owner.cacheRoot, "mac1", "snapshot-publications.jsonl"), "utf8");
+      const published = history.trim().split("\n").map(line => JSON.parse(line))
+        .findLast(row => row.snapshotId === workspace?.snapshotId);
+      if (!workspace || !published || !index.queryCounters) throw new Error("index publication or query counters unavailable");
+      return {
+        snapshotId: workspace.snapshotId,
+        plannedMode: published.plannedMode,
+        actualBuildMode: published.actualBuildMode,
+        fullReason: published.fullReason ?? null,
+        queryCounters: index.queryCounters
+      };
+    },
+    async close() {
+      try { await session.close(); }
+      finally {
+        try { await telemetryClient?.close(); }
+        finally { await owner.stop(); }
+      }
+    }
+  };
 }
 
 /** MCP mapping shared by the live session and capture-client contract tests. */
@@ -1134,6 +1211,25 @@ export function impactSessionFromClient({ repoRoot, client }) {
     },
     async evidence(args) {
       return callNamed("java_symbol", { repoRoot, operation: "evidence", file: args.file, line: args.line, column: args.column });
+    },
+    // post-ILV2 Q03/Q10: the eval's java_outline tool is java_symbol operation=outline on the product.
+    async outline(args) {
+      return callNamed("java_symbol", { repoRoot, operation: "outline", file: args.file,
+        ...(args.nearLine !== undefined ? { nearLine: args.nearLine } : {}), ...(args.limit !== undefined ? { limit: args.limit } : {}) });
+    },
+    // Q10: start the repository and poll java_status until its index view is FRESH (as the MAC-10 retrieval
+    // driver does), so a measured attempt never starts on a cold index. Returns the wait in ms.
+    async waitIndexFresh({ timeoutMs = 900_000, pollMs = 1000 } = {}) {
+      const started = performance.now();
+      const first = await callNamed("java_status", { repoRoot, start: true });
+      if (first?.error) throw new Error(`java_status failed: ${String(first.error).slice(0, 300)}`);
+      for (;;) {
+        const status = await callNamed("java_status", { repoRoot });
+        if (status?.error) throw new Error(`java_status failed: ${String(status.error).slice(0, 300)}`);
+        if (status?.indexView?.state === "FRESH") return Math.round(performance.now() - started);
+        if (performance.now() - started >= timeoutMs) throw new Error(`product index not FRESH within ${timeoutMs} ms (state ${status?.indexView?.state ?? "unknown"})`);
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+      }
     },
     async impact(args) {
       return callNamed("java_impact", {

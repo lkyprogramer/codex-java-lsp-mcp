@@ -4,6 +4,7 @@ import path from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { javaDiagnostics } from "./diagnostics.js";
 import { javaImpact } from "./impact.js";
 import { javaRuntime } from "./runtime.js";
@@ -431,3 +432,84 @@ function sessionStatus(started: boolean) {
     }
   };
 }
+
+test("java_symbol operation=outline: the public wire is the documented envelope within 4096 bytes", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "outline-shape-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const relativePath = "src/main/java/com/example/billing/settlement/OrderSettlementService.java";
+  const methodCount = 60;
+  const generic = "java.util.Map<java.lang.String, java.util.List<com.example.billing.settlement.SettlementLine>>";
+  const source = ["package com.example.billing.settlement;", "", "public class OrderSettlementService {",
+    ...Array.from({ length: methodCount }, (_, i) => `    void settle${i}(${generic} lines, long id) {}`), "}", ""].join("\n");
+  await mkdir(path.join(root, path.dirname(relativePath)), { recursive: true });
+  await writeFile(path.join(root, relativePath), source, "utf8");
+  const range = (start: number, end: number, column = 5) => ({ start: { line: start, column }, end: { line: end, column: 2 } });
+  const owner = "com.example.billing.settlement.OrderSettlementService";
+  const bundle = {
+    file: { fileId: "f", relativePath, sourceRoot: "src/main/java", module: "", sourceSet: "main", packageName: "com.example.billing.settlement",
+      imports: [], topLevelTypeIds: [], allTypeIds: [], contentHash: createHash("sha256").update(source).digest("hex"), size: source.length,
+      parseState: "COMPLETE", parseErrorCount: 0, generation: 4 },
+    types: [{ typeId: `type:v2:${owner}`, simpleName: "OrderSettlementService", kind: "class", fileId: "f", range: range(3, methodCount + 4, 1),
+      nameRange: range(3, 3, 14), modifiers: [], annotations: [], typeParameters: [], extends: [], implements: [], permits: [], fieldIds: [], methodIds: [], confidence: 1 }],
+    fields: [],
+    methods: Array.from({ length: methodCount }, (_, i) => ({ methodId: `method:v3:${relativePath}#${owner}#settle${i}(java.util.Map,long)`, name: `settle${i}`,
+      constructor: false, range: range(4 + i, 4 + i), nameRange: range(4 + i, 4 + i, 10),
+      parameters: [{ type: { text: generic }, varargs: false }, { type: { text: "long" }, varargs: false }] })),
+    edges: []
+  };
+  const status = { state: "READY", indexedGeneration: 4, files: 1, types: 1, methods: methodCount, edges: 0, snapshotBytes: 0, pendingForeground: 0, pendingBackground: 0,
+    coverage: [{ root: "src/main/java", generation: 4, state: "COMPLETE", discoveredFiles: 1, indexedFiles: 1, failedFiles: 0, recoveredFiles: 0, extractorVersion: "x" }],
+    resourceCoverage: [] };
+  const indexView = { state: "FRESH", workspaceId: "workspace-outline-shape", snapshotId: "snapshot-outline-shape", bindingVersion: 3, coveredThroughSeq: 3 };
+  const context = {
+    repoRoot: root,
+    session: { status() { throw new Error("outline must not consult JDT"); } },
+    javaIndexClient: { queryFiles: async () => [bundle], status: async () => status },
+    indexView
+  } as unknown as ToolContext;
+  const request = { budget: DeadlineBudget.fromTimeout(5000) };
+  const allowedEntryKeys = new Set(["kind", "name", "signature", "signatureOmitted", "startLine", "endLine", "selection", "stability", "symbolId", "evidenceHandle", "containsNearLine"]);
+  for (const call of [
+    { operation: "outline", file: relativePath },
+    { operation: "outline", file: relativePath, nearLine: methodCount + 3, limit: 20 },
+    { operation: "outline", file: relativePath, nearLine: 30, limit: 20, detail: "diagnostic" },
+    { operation: "outline", file: relativePath, limit: 1, detail: "diagnostic" }
+  ]) {
+    const out = record(await javaSymbol(context, call as unknown as Parameters<typeof javaSymbol>[1], request));
+    const wire = JSON.stringify(out);
+    assert.ok(Buffer.byteLength(wire, "utf8") <= 4096, `outline wire ${Buffer.byteLength(wire, "utf8")} B exceeds 4096 for ${JSON.stringify(call)}`);
+    const envelope = ["contentHash", "entries", "generation", "indexView", "omittedSymbols", "reasons", "relativePath", "schemaVersion", "scopeState"];
+    if ("detail" in call) assert.deepEqual(Object.keys(out).sort(), [...envelope, "diagnostic"].sort());
+    else assert.deepEqual(Object.keys(out).sort(), envelope);
+    assert.equal(out.schemaVersion, "java-outline/v1");
+    assert.equal(out.relativePath, relativePath);
+    assert.equal(out.generation, 4);
+    assert.deepEqual(out.indexView, indexView);
+    assert.equal(wire.includes("declarationKey"), false);
+    assert.equal(/"(?:type:v2|method:v3|field):/.test(wire), false, "no raw declaration key on the wire");
+    const entries = out.entries as Array<Record<string, unknown>>;
+    assert.ok(entries.length > 0);
+    assert.equal(Number(out.omittedSymbols) + entries.length, methodCount + 1, "every declaration is either listed or counted as omitted");
+    if ("detail" in call) {
+      assert.ok(call.limit !== undefined);
+      const diagnostic = record(out.diagnostic);
+      assert.ok(typeof diagnostic.elapsedMs === "number" && Number.isFinite(diagnostic.elapsedMs) && diagnostic.elapsedMs >= 0);
+      assert.deepEqual(diagnostic.omissions, {
+        limitEntries: methodCount + 1 - call.limit,
+        wireEntries: call.limit - entries.length,
+        wireSignatures: entries.filter(entry => entry.signatureOmitted === true).length
+      });
+      assert.deepEqual(Object.keys(diagnostic).sort(), ["elapsedMs", "omissions"]);
+      if (call.limit === 1) assert.deepEqual(out.reasons, [], "limit omission does not mark scope partial");
+      else assert.ok((out.reasons as string[]).includes("SOURCE_BUDGET"));
+    }
+    for (const entry of entries) {
+      assert.deepEqual(Object.keys(entry).filter(key => !allowedEntryKeys.has(key)), []);
+      assert.equal(entry.stability, "STABLE");
+      assert.ok(String(entry.symbolId).startsWith("jsym:mac1:workspace-outline-shape:"));
+      assert.ok(entry.signature !== undefined || entry.signatureOmitted === true);
+    }
+    if (out.scopeState !== "READY") assert.ok((out.reasons as string[]).includes("SOURCE_BUDGET"), "only the wire fit may make this complete file PARTIAL");
+    if ("nearLine" in call) assert.ok(entries.some(entry => entry.containsNearLine === true), "the declaration containing nearLine survives the wire fit");
+  }
+});

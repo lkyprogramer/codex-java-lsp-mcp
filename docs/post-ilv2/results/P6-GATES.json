@@ -1,0 +1,229 @@
+{
+  "schema": "post-ilv2/p6-gates-result/v1",
+  "taskId": "P6-GATES",
+  "status": "PASS",
+  "identity": {
+    "sourceHead": "f3ab2cc8e4f64db66025b59f693ce2ffc5c29556",
+    "buildStampSha256": "32ba6eb1b48af7fed03899528d31b5f1b49aac011e2ab91def6137b35fc2024e",
+    "compiledFilesVerified": 455
+  },
+  "npmCi": {
+    "status": "PASS",
+    "exitCode": 0
+  },
+  "build": {
+    "status": "PASS",
+    "exitCode": 0,
+    "buildStampSha256": "32ba6eb1b48af7fed03899528d31b5f1b49aac011e2ab91def6137b35fc2024e",
+    "compiledFilesVerified": 455
+  },
+  "engineeringGates": {
+    "npmTest": {
+      "status": "PASS",
+      "exitCode": 0,
+      "buildStampSha256": "32ba6eb1b48af7fed03899528d31b5f1b49aac011e2ab91def6137b35fc2024e",
+      "tap": {
+        "tests": 2415,
+        "pass": 2405,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 10,
+        "todo": 0
+      },
+      "tapBySuite": [
+        {
+          "tests": 1659,
+          "pass": 1658,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 1,
+          "todo": 0
+        },
+        {
+          "tests": 756,
+          "pass": 747,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 9,
+          "todo": 0
+        }
+      ],
+      "skips": {
+        "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot": 1,
+        "MAC12 actual seal worker task timeline": 1,
+        "MAC12 facts decoder allocation costs on a registered database": 1,
+        "MAC12 bounded verification compares actual complete seal publication": 1,
+        "MAC12 complete integrity partition costs on a registered database": 1,
+        "MAC12 posting reference validation alternatives": 1,
+        "MAC12 remaining seal validation check costs": 1,
+        "MAC12 seal validation preserves data checks without an unused logical manifest": 1,
+        "G11 recorded evidence completes the gate only after verified supplementation": 1,
+        "G11 system loop on isolated lishu-v2 run copies": 1
+      },
+      "stdioSmoke": {
+        "status": "PASS",
+        "exitCode": 0
+      },
+      "compiledFilesVerified": 455
+    },
+    "gatePr": {
+      "status": "PASS",
+      "exitCode": 0,
+      "buildStampSha256": "e83ab3c00ea7d3f2ad3da36dedf85023638b7fcc7501340ee59a95c37736b7c6",
+      "tap": {
+        "tests": 1659,
+        "pass": 1658,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "tapBySuite": [
+        {
+          "tests": 1659,
+          "pass": 1658,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 1,
+          "todo": 0
+        }
+      ],
+      "skips": {
+        "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot": 1
+      },
+      "compiledFilesVerified": 455
+    }
+  },
+  "schemaMeasurements": {
+    "default": {
+      "status": "PASS",
+      "exitCode": 0,
+      "buildStampSha256": "9d45b4deee0454b43f161d95353032eff04bcc8fd72b49cf6616cdb5ca2bb4d0",
+      "output": {
+        "experimentalSymbolOps": false,
+        "tools": 5,
+        "jsonBytes": 8228,
+        "estimatedTokens": 2057,
+        "perTool": [
+          {
+            "name": "java_diagnostics",
+            "jsonBytes": 591,
+            "estimatedTokens": 148
+          },
+          {
+            "name": "java_impact",
+            "jsonBytes": 3783,
+            "estimatedTokens": 946
+          },
+          {
+            "name": "java_runtime",
+            "jsonBytes": 648,
+            "estimatedTokens": 162
+          },
+          {
+            "name": "java_status",
+            "jsonBytes": 526,
+            "estimatedTokens": 132
+          },
+          {
+            "name": "java_symbol",
+            "jsonBytes": 2674,
+            "estimatedTokens": 669
+          }
+        ]
+      },
+      "compiledFilesVerified": 455
+    },
+    "experimental": {
+      "status": "PASS",
+      "exitCode": 0,
+      "buildStampSha256": "01813248627c0260a2cb184fe726fc8b6b7c8d993fa8e5ad5bdf947fd56db213",
+      "output": {
+        "experimentalSymbolOps": true,
+        "tools": 5,
+        "jsonBytes": 9086,
+        "estimatedTokens": 2272,
+        "perTool": [
+          {
+            "name": "java_diagnostics",
+            "jsonBytes": 591,
+            "estimatedTokens": 148
+          },
+          {
+            "name": "java_impact",
+            "jsonBytes": 3783,
+            "estimatedTokens": 946
+          },
+          {
+            "name": "java_runtime",
+            "jsonBytes": 648,
+            "estimatedTokens": 162
+          },
+          {
+            "name": "java_status",
+            "jsonBytes": 526,
+            "estimatedTokens": 132
+          },
+          {
+            "name": "java_symbol",
+            "jsonBytes": 3532,
+            "estimatedTokens": 883
+          }
+        ]
+      },
+      "compiledFilesVerified": 455
+    }
+  },
+  "skipBaseline": {
+    "candidate": "13f9dc9a",
+    "status": "MATCH_D14",
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/npm-test.log",
+        "sha256": "17149d03fb363d7b0993572b29d1ffd5a149e5b1c2ca4c35b503cab5e0db88ec"
+      },
+      {
+        "path": "post-ilv2-final-13f9dc9a.CBMtDg/gate-pr.log",
+        "sha256": "a1d6c4905b96f3d035650f90aa8441bfe85d8537594c71a94c73e477911e1ccc"
+      }
+    ]
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/progress.log",
+      "sha256": "4d56635dbb94a3efb743c811ba50d8d8cf798b8b4ef98a7ba78d28201f48c5ed"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/validation-index.jsonl",
+      "sha256": "d33ab730fd826b65687b9c6468b64943689ed9cf9cbc6cbb257b49119e3c48ed"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/tmp/codex-java-lsp-isolated-validation-4Eqhj8/candidate/dist/build-stamp.json",
+      "sha256": "32ba6eb1b48af7fed03899528d31b5f1b49aac011e2ab91def6137b35fc2024e"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/npm-ci.log",
+      "sha256": "c0f434c1297c1e09d2c63164ef2711c29b1c4aa337a028460592e908a9c21b69"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/compile.log",
+      "sha256": "02d81cb4fe5a1488dc553c969f1487ecc2008f761012b330e368515fe154d40c"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/npm-test.log",
+      "sha256": "c78bff2a5a934d271555de5bf5d0002d107724dab15834a5514286fb5a9983eb"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/gate-pr.log",
+      "sha256": "8b2042a795045e3e255559fadd08605700220fdc002852f090c22dac7fcba784"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/schema-default.log",
+      "sha256": "c568eb935a32235af4ba715f2c8aa55b3a9df4a26159ae8591ea0eee5156ffc2"
+    },
+    {
+      "path": "post-ilv2-p6-gates-f3ab2cc.LfYtuq/schema-experimental.log",
+      "sha256": "d92941c53d61e5e7dd81221feca21d5f598285494913ad0b975d2f2c73f0480e"
+    }
+  ]
+}

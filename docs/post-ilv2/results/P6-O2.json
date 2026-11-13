@@ -1,0 +1,146 @@
+{
+  "schema": "post-ilv2/p6-o2-result/v1",
+  "taskId": "P6-O2",
+  "status": "PASS",
+  "identity": {
+    "sourceHead": "bb34f73ed3a7b593eba310dd87e4d0fd8cea6f8c",
+    "buildStampSha256": "daad5ad03f6b8cced1f5895ce70ff18209531eca3551f6bc448c329a5f9cb3f4",
+    "runtimeManifestSha256": "c50ad85a8a20557345ef28072f4658234f65a190779c2d2f4deb68a130c0570d",
+    "compiledFilesVerified": 455
+  },
+  "targeted": {
+    "exitCode": 0,
+    "tap": {
+      "tests": 86,
+      "pass": 86,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "realMcpEvidenceE2E": "PASS",
+    "supplementalRerun": "NOT_NEEDED"
+  },
+  "schemaMeasurements": {
+    "default": {
+      "exitCode": 0,
+      "buildStampSha256": "02094e277f6da2a5b5ba1d4368295352194d87796cab40b9086464fb0ab9f38c",
+      "output": {
+        "experimentalSymbolOps": false,
+        "tools": 5,
+        "jsonBytes": 8228,
+        "estimatedTokens": 2057,
+        "perTool": [
+          {
+            "name": "java_diagnostics",
+            "jsonBytes": 591,
+            "estimatedTokens": 148
+          },
+          {
+            "name": "java_impact",
+            "jsonBytes": 3783,
+            "estimatedTokens": 946
+          },
+          {
+            "name": "java_runtime",
+            "jsonBytes": 648,
+            "estimatedTokens": 162
+          },
+          {
+            "name": "java_status",
+            "jsonBytes": 526,
+            "estimatedTokens": 132
+          },
+          {
+            "name": "java_symbol",
+            "jsonBytes": 2674,
+            "estimatedTokens": 669
+          }
+        ]
+      }
+    },
+    "experimental": {
+      "exitCode": 0,
+      "buildStampSha256": "80496584a8e63eefc40023b69f609cbdf22a3a2fb6be12cbdf49d44ab09b12f5",
+      "output": {
+        "experimentalSymbolOps": true,
+        "tools": 5,
+        "jsonBytes": 9086,
+        "estimatedTokens": 2272,
+        "perTool": [
+          {
+            "name": "java_diagnostics",
+            "jsonBytes": 591,
+            "estimatedTokens": 148
+          },
+          {
+            "name": "java_impact",
+            "jsonBytes": 3783,
+            "estimatedTokens": 946
+          },
+          {
+            "name": "java_runtime",
+            "jsonBytes": 648,
+            "estimatedTokens": 162
+          },
+          {
+            "name": "java_status",
+            "jsonBytes": 526,
+            "estimatedTokens": 132
+          },
+          {
+            "name": "java_symbol",
+            "jsonBytes": 3532,
+            "estimatedTokens": 883
+          }
+        ]
+      }
+    }
+  },
+  "experimentalSchemaGate": {
+    "status": "PASS",
+    "expected": {
+      "tools": 5,
+      "jsonBytes": 9086,
+      "javaSymbolBytes": 3532
+    }
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/targeted.log",
+      "sha256": "bcaa9285f6e88e11298077459359c8172ec9f701872327d332de07d1d0ac22cf"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/raw/validation/targeted/result.json",
+      "sha256": "e9c1d3f336debef3c0eeca18055ce7bcd16e07e57d2d5983f12215c763c356ac"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/tmp/codex-java-lsp-isolated-validation-XtxhWK/candidate/dist/build-stamp.json",
+      "sha256": "daad5ad03f6b8cced1f5895ce70ff18209531eca3551f6bc448c329a5f9cb3f4"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/schema-default.log",
+      "sha256": "5deec5ff499957123c764594cc7f5ca7456011f78d5ba41eb962b90e7b0d9219"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/raw/validation/1794535472431-eeea7d57-2406-4dd6-abb5-eabfe2901d30/result.json",
+      "sha256": "4292c1655fa0319a9f870af81f1389ff87117ced4b70c5ce7c03fa93516e3963"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/tmp/codex-java-lsp-isolated-validation-CNYnP8/candidate/dist/build-stamp.json",
+      "sha256": "02094e277f6da2a5b5ba1d4368295352194d87796cab40b9086464fb0ab9f38c"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/schema-experimental.log",
+      "sha256": "1a6b4508e51a0ccb9dfc0449721f5f387874ee0b30a1618fc2d2314e1a7e7617"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/raw/validation/schema-experimental/result.json",
+      "sha256": "68ec7b9ab69d9965dbe1e3fc7785feaed6774949f632e5308f5a637c37a72b8a"
+    },
+    {
+      "path": "post-ilv2-p6-o2-bb34f73.h9FwhH/tmp/codex-java-lsp-isolated-validation-OFXt2t/candidate/dist/build-stamp.json",
+      "sha256": "80496584a8e63eefc40023b69f609cbdf22a3a2fb6be12cbdf49d44ab09b12f5"
+    }
+  ]
+}

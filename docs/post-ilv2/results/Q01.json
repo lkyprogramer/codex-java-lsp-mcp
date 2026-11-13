@@ -1,0 +1,92 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q01",
+  "status": "PASS",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "d7a295e49287bc8e68d8861330b5d2b18d0b0f8a",
+    "productBuildDigest": "5263b59138ee8f06a227fcd5aea9e1da46954e4b9dbfae6ba6042626715e98e5",
+    "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "Mac D11 targeted delivery, strict QA and repair oracle controls",
+      "state": "PASS",
+      "suiteTests": 201
+    },
+    {
+      "name": "Frozen MAC-10 known-good and known-bad oracle replay",
+      "state": "PASS",
+      "oracles": 5,
+      "repeatsPerCondition": 3
+    },
+    {
+      "name": "Default serialized path through fake fetch on real B0 and B2 MCP sessions",
+      "state": "PASS",
+      "arms": [
+        "b0",
+        "b2"
+      ]
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "The completion receipt checks normal oracle return. Code sharing its execution privileges can forge it, so this is not a security sandbox.",
+    "The frozen Python kit judge remains unchanged. The MAC-10 v1.8 scorer verifies the exact final serialized request before it credits QA source.",
+    "Delivery proof binds tool call, path, line range and file bytes; model use is not inferred."
+  ],
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/raw/validation/scripts/0.command.json",
+      "sha256": "c65c03cd41bb2273dc7fcf560af5505cf34473b562a54bb1f793385e61caea12"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/raw/validation/mac10-chains/0.evidence/mac10-chain.json",
+      "sha256": "7529645bd66cc6029b2669c74373cff324eabcdd16366c8b21b041b15fa40b16"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/relative-entry-control/verification.json",
+      "sha256": "4bcc39799aa513f639512e8eb8c70b03aa4ef79e9f9860f51de77f725a5ee1fd"
+    },
+    {
+      "path": "post-ilv2-q10-v18.MiUPr3/raw/validation/q10-fixed-tests/0.command.json",
+      "sha256": "cb3fbac1994233bc7a59357f929334899a6aaf9e57de48252ec881f36bad4cdd"
+    }
+  ],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "scripts/ilv2-mac-delivery-receipt.mjs/.test.mjs (new)",
+    "scripts/ilv2-mac-repair-oracle.mjs: OracleCompletionWrapper + judgeCompletion; PASS needs COMPLETE and the marker",
+    "scripts/ilv2-mac-repair-oracle.test.mjs: early-exit-zero, known-good, known-bad, judgeCompletion",
+    "scripts/openai-compatible-chat.mjs: onSerializedBody hook, body serialized once",
+    "scripts/ilv2-mac-delivery-receipt.mjs: findTextPointer + receiptUnitsFromEvents (events -> receipt units)",
+    "scripts/ilv2-mac-delivery-receipt.test.mjs: full fake-model chain",
+    "scripts/evaluate-java-task.test.mjs: strict QA controls",
+    "scripts/eval-repair-adapter.test.mjs (new): disallowed edit controls",
+    "docs/post-ilv2/baseline.md (new)",
+    "Q10 MAC-10 v1.8 wires the actual default transport body into the existing QA scorer"
+  ]
+}

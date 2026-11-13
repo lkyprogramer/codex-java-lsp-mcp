@@ -1,0 +1,116 @@
+{
+  "schema": "post-ilv2/d15-mybatis-census-result/v1",
+  "taskId": "D15-MYBATIS-CENSUS",
+  "status": "PASS",
+  "sourceHead": "cc10733574650f92613cd2ada9fd0f4d0409b05a",
+  "targetedTap": {
+    "tests": 3,
+    "pass": 3,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "datasetProvenance": {
+    "originalDatasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "devViewDatasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+    "reusedOverlays": 5
+  },
+  "summary": {
+    "schema": "post-ilv2/mybatis-census/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+      "split": "dev",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6"
+    },
+    "corpora": {
+      "exam-parent-v3": {
+        "xmlFiles": 26,
+        "mapperXmlFiles": 0,
+        "mapperStatements": 0,
+        "javaFiles": 1295,
+        "mapperAnnotation": 0,
+        "plusBaseMapper": 0,
+        "plusService": 0,
+        "plusWrapper": 0,
+        "sqlAnnotation": 0,
+        "devTasks": 11,
+        "devGold": {
+          "ranges": 31,
+          "mapperXml": 0,
+          "mapperJava": 0,
+          "otherXml": 4,
+          "tasksTouchingMyBatis": 0
+        }
+      },
+      "lishu-v2": {
+        "xmlFiles": 89,
+        "mapperXmlFiles": 0,
+        "mapperStatements": 0,
+        "javaFiles": 4382,
+        "mapperAnnotation": 289,
+        "plusBaseMapper": 11,
+        "plusService": 0,
+        "plusWrapper": 1,
+        "sqlAnnotation": 310,
+        "devTasks": 11,
+        "devGold": {
+          "ranges": 38,
+          "mapperXml": 0,
+          "mapperJava": 0,
+          "otherXml": 7,
+          "tasksTouchingMyBatis": 0
+        }
+      },
+      "lishuedu": {
+        "xmlFiles": 3,
+        "mapperXmlFiles": 0,
+        "mapperStatements": 0,
+        "javaFiles": 4335,
+        "mapperAnnotation": 262,
+        "plusBaseMapper": 182,
+        "plusService": 0,
+        "plusWrapper": 161,
+        "sqlAnnotation": 78,
+        "devTasks": 11,
+        "devGold": {
+          "ranges": 35,
+          "mapperXml": 0,
+          "mapperJava": 2,
+          "otherXml": 4,
+          "tasksTouchingMyBatis": 2
+        }
+      }
+    },
+    "notClaimed": "Text counts over corpus main sources (src/test excluded). Mapper XML uses the index's root-tag rule; Java signals are regex heuristics. No product call, no holdout gold."
+  },
+  "decision": {
+    "status": "ARCHIVE",
+    "rule": "D15 §11.6",
+    "totals": {
+      "mapperXmlFiles": 0,
+      "mapperStatements": 0,
+      "plusBaseMapper": 193,
+      "devTasks": 33,
+      "devGold": {
+        "ranges": 104,
+        "mapperXml": 0,
+        "mapperJava": 2,
+        "otherXml": 15,
+        "tasksTouchingMyBatis": 2
+      }
+    }
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-d15-xml3-a62c2d5.34hmtI/d15-mybatis-census/summary.json",
+      "sha256": "6f9ffd880aec6d3904cfa48639f6c4aca637ba58fba0f710e9356cd350143604"
+    },
+    {
+      "path": "post-ilv2-d15-xml3-a62c2d5.34hmtI/mybatis-census-targeted.tap",
+      "sha256": "bd8f6a18685cf7b2a55384a284f7b4b81386470f33ca6db2656bed318a59159b"
+    }
+  ]
+}

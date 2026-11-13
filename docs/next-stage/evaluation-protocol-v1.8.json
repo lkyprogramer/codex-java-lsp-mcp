@@ -1,0 +1,27 @@
+{
+  "protocol": "eval-protocol/v1.8",
+  "scope": "MAC-10 adapter dry-runs and live task evaluation",
+  "parent": "eval-protocol/v1.7",
+  "model": "openclaw/Qwen3.8-next",
+  "matrix": {
+    "split": "dev",
+    "arms": ["b0", "b2"],
+    "tasks": 12,
+    "repeats": 3,
+    "selectionSeed": "20261105",
+    "armOrderSeed": 20261105,
+    "sourceBudget": { "lines": 80, "bytes": 16000 },
+    "maxRounds": 16,
+    "requestConcurrency": 1
+  },
+  "changes": [
+    "QA credits source only after byte verification against the last completed request's exact serialized body, tool call, path, source range and file version.",
+    "Repair keeps the frozen oracle as its verdict and applies the same source budget to both arms. A receipt for a previous version is checked against the captured version from the attempt.",
+    "Every product session records its FRESH wait, published build mode and reason, and the before/after delta of owner query counters. A rebind creates a separate session sample."
+  ],
+  "interpretation": [
+    "The source budget covers source slices. Outline structure and rg navigation are recorded separately.",
+    "The Q10 matrix estimates historical dev regression performance. It does not establish generalization.",
+    "Request receipts verify source attachment to the dispatched body, not whether the model used the source."
+  ]
+}

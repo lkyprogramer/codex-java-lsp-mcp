@@ -1,0 +1,436 @@
+{
+  "schema": "post-ilv2/d15-nr-result/v1",
+  "taskId": "D15-NR",
+  "status": "PASS",
+  "execution": {
+    "sourceHead": "ac67c872b27229e225049313eceadee0d7f02780",
+    "buildStampSha256": "bf09f8ddf3b9913f1ee44285999d396abb1c21d0b4ebd7224f736a79b3c3a183",
+    "targetedTap": {
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "diagnosisExitCode": 0,
+    "diagnosisPatchSha256": "bb24fbd00276636868ab9e1f734e63863c70994053445d3c9b3f1b4d7b57f976"
+  },
+  "datasetProvenance": {
+    "originalDatasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "devViewDatasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+    "reusedOverlays": 5
+  },
+  "replayCheck": {
+    "status": "PASS",
+    "expected": {
+      "targets": 104,
+      "missedTargets": 79,
+      "replayByMechanism": {
+        "TOP1": 19,
+        "TEXT_MERGE": 6,
+        "FILE_ONLY": 1,
+        "NOT_RETURNED": 78
+      }
+    },
+    "observed": {
+      "targets": 104,
+      "missedTargets": 79,
+      "replayByMechanism": {
+        "NOT_RETURNED": 78,
+        "TOP1": 19,
+        "TEXT_MERGE": 6,
+        "FILE_ONLY": 1
+      }
+    }
+  },
+  "summary": {
+    "schema": "post-ilv2/not-returned-diagnosis/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+      "split": "dev",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "serverBuildStampSha256": "bf09f8ddf3b9913f1ee44285999d396abb1c21d0b4ebd7224f736a79b3c3a183",
+      "limit": 20,
+      "outlineLimit": 20,
+      "planner": "planQueries"
+    },
+    "sessions": {
+      "exam-parent-v3": {
+        "readyMs": 14187
+      },
+      "lishuedu": {
+        "readyMs": 53440
+      },
+      "lishu-v2": {
+        "readyMs": 135758
+      }
+    },
+    "targets": 104,
+    "replayByMechanism": {
+      "NOT_RETURNED": 78,
+      "TOP1": 19,
+      "TEXT_MERGE": 6,
+      "FILE_ONLY": 1
+    },
+    "missedTargets": 79,
+    "byLabel": {
+      "NON_JAVA": 16,
+      "NO_PLAN_TERMS": 3,
+      "OUTLINE_UNAVAILABLE": 0,
+      "OUTLINE_BUDGET_INSUFFICIENT": 0,
+      "WINDOW_UNREACHABLE": 0,
+      "ORACLE_MISS": 0,
+      "NO_VOCAB_OVERLAP": 1,
+      "RANKED_OUT": 59
+    },
+    "byLabelAndMechanism": {
+      "NOT_RETURNED": {
+        "NON_JAVA": 16,
+        "NO_PLAN_TERMS": 3,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 59
+      },
+      "FILE_ONLY": {
+        "NON_JAVA": 0,
+        "NO_PLAN_TERMS": 0,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 1,
+        "RANKED_OUT": 0
+      }
+    },
+    "byCategory": {
+      "callers": {
+        "NON_JAVA": 0,
+        "NO_PLAN_TERMS": 0,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 15
+      },
+      "dto-impact": {
+        "NON_JAVA": 0,
+        "NO_PLAN_TERMS": 0,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 14
+      },
+      "implementations": {
+        "NON_JAVA": 0,
+        "NO_PLAN_TERMS": 0,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 21
+      },
+      "repair": {
+        "NON_JAVA": 0,
+        "NO_PLAN_TERMS": 3,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 0
+      },
+      "spring": {
+        "NON_JAVA": 0,
+        "NO_PLAN_TERMS": 0,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 1,
+        "RANKED_OUT": 9
+      },
+      "xml": {
+        "NON_JAVA": 16,
+        "NO_PLAN_TERMS": 0,
+        "OUTLINE_UNAVAILABLE": 0,
+        "OUTLINE_BUDGET_INSUFFICIENT": 0,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 0
+      }
+    },
+    "coveringKind": {
+      "method": 43,
+      "type": 8,
+      "constructor": "function Object() { [native code] }111111111"
+    },
+    "oracleExact": {},
+    "outlineState": {},
+    "outlineReasonsByLabel": {
+      "NO_VOCAB_OVERLAP": {
+        "SOURCE_BUDGET": 1
+      },
+      "RANKED_OUT": {
+        "SOURCE_BUDGET": 46
+      }
+    },
+    "notClaimed": "First failing layer per missed target. Vocabulary overlap is a lexical approximation of the indexed text (declaration head, leading comments, type name, file stem), not the index itself. No reads, recall or task success are measured."
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-d15-nr-budget.8bnciM/d15-nr-dev/rows.jsonl",
+      "sha256": "6dbd9a22b29098ed28b3b44804096cfc76ff3cf15b34b69ef4b8a895e19604dc"
+    },
+    {
+      "path": "post-ilv2-d15-nr-budget.8bnciM/d15-nr-dev/summary.json",
+      "sha256": "9620bda0c14745cb84d48d8041d382fcd0968864fc53fc5152ecfeac558d0115"
+    },
+    {
+      "path": "post-ilv2-d15-nr-budget.8bnciM/targeted.tap",
+      "sha256": "b69070c8e3125ca814e5b376766476c7f0f96ca33836bcf2397e3b0d5d44ffc4"
+    },
+    {
+      "path": "post-ilv2-d15-nr-budget.8bnciM/diagnosis.patch",
+      "sha256": "bb24fbd00276636868ab9e1f734e63863c70994053445d3c9b3f1b4d7b57f976"
+    },
+    {
+      "path": "post-ilv2-d15-nr-ac67c87.W392lA/tmp/codex-java-lsp-isolated-validation-jNIahw/candidate/dist/build-stamp.json",
+      "sha256": "bf09f8ddf3b9913f1ee44285999d396abb1c21d0b4ebd7224f736a79b3c3a183"
+    }
+  ],
+  "previousRun": {
+    "execution": {
+      "sourceHead": "ac67c872b27229e225049313eceadee0d7f02780",
+      "buildStampSha256": "bf09f8ddf3b9913f1ee44285999d396abb1c21d0b4ebd7224f736a79b3c3a183",
+      "targetedTap": {
+        "tests": 14,
+        "pass": 14,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "diagnosisExitCode": 0
+    },
+    "replayCheck": {
+      "status": "PASS",
+      "expected": {
+        "targets": 104,
+        "missedTargets": 79,
+        "replayByMechanism": {
+          "TOP1": 19,
+          "TEXT_MERGE": 6,
+          "FILE_ONLY": 1,
+          "NOT_RETURNED": 78
+        }
+      },
+      "observed": {
+        "targets": 104,
+        "missedTargets": 79,
+        "replayByMechanism": {
+          "NOT_RETURNED": 78,
+          "TOP1": 19,
+          "TEXT_MERGE": 6,
+          "FILE_ONLY": 1
+        }
+      }
+    },
+    "summary": {
+      "schema": "post-ilv2/not-returned-diagnosis/v1",
+      "identity": {
+        "datasetId": "mac10-v3",
+        "datasetDigest": "080176b792bf144da4977e685275ec7152c6f781a2360e439ef6975716b544d7",
+        "split": "dev",
+        "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+        "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+        "serverBuildStampSha256": "bf09f8ddf3b9913f1ee44285999d396abb1c21d0b4ebd7224f736a79b3c3a183",
+        "limit": 20,
+        "outlineLimit": 20,
+        "planner": "planQueries"
+      },
+      "sessions": {
+        "exam-parent-v3": {
+          "readyMs": 13191
+        },
+        "lishuedu": {
+          "readyMs": 52457
+        },
+        "lishu-v2": {
+          "readyMs": 129709
+        }
+      },
+      "targets": 104,
+      "replayByMechanism": {
+        "NOT_RETURNED": 78,
+        "TOP1": 19,
+        "TEXT_MERGE": 6,
+        "FILE_ONLY": 1
+      },
+      "missedTargets": 79,
+      "byLabel": {
+        "NON_JAVA": 16,
+        "NO_PLAN_TERMS": 3,
+        "OUTLINE_UNAVAILABLE": 47,
+        "WINDOW_UNREACHABLE": 0,
+        "ORACLE_MISS": 0,
+        "NO_VOCAB_OVERLAP": 0,
+        "RANKED_OUT": 13
+      },
+      "byLabelAndMechanism": {
+        "NOT_RETURNED": {
+          "NON_JAVA": 16,
+          "NO_PLAN_TERMS": 3,
+          "OUTLINE_UNAVAILABLE": 46,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 13
+        },
+        "FILE_ONLY": {
+          "NON_JAVA": 0,
+          "NO_PLAN_TERMS": 0,
+          "OUTLINE_UNAVAILABLE": 1,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 0
+        }
+      },
+      "byCategory": {
+        "callers": {
+          "NON_JAVA": 0,
+          "NO_PLAN_TERMS": 0,
+          "OUTLINE_UNAVAILABLE": 13,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 2
+        },
+        "dto-impact": {
+          "NON_JAVA": 0,
+          "NO_PLAN_TERMS": 0,
+          "OUTLINE_UNAVAILABLE": 14,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 0
+        },
+        "implementations": {
+          "NON_JAVA": 0,
+          "NO_PLAN_TERMS": 0,
+          "OUTLINE_UNAVAILABLE": 16,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 5
+        },
+        "repair": {
+          "NON_JAVA": 0,
+          "NO_PLAN_TERMS": 3,
+          "OUTLINE_UNAVAILABLE": 0,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 0
+        },
+        "spring": {
+          "NON_JAVA": 0,
+          "NO_PLAN_TERMS": 0,
+          "OUTLINE_UNAVAILABLE": 4,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 6
+        },
+        "xml": {
+          "NON_JAVA": 16,
+          "NO_PLAN_TERMS": 0,
+          "OUTLINE_UNAVAILABLE": 0,
+          "WINDOW_UNREACHABLE": 0,
+          "ORACLE_MISS": 0,
+          "NO_VOCAB_OVERLAP": 0,
+          "RANKED_OUT": 0
+        }
+      },
+      "coveringKind": {
+        "method": 10,
+        "constructor": "function Object() { [native code] }111"
+      },
+      "oracleExact": {},
+      "outlineState": {
+        "PARTIAL": 47
+      },
+      "notClaimed": "First failing layer per missed target. Vocabulary overlap is a lexical approximation of the indexed text (declaration head, leading comments, type name, file stem), not the index itself. No reads, recall or task success are measured."
+    },
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-nr-ac67c87.W392lA/d15-nr-dev/rows.jsonl",
+        "sha256": "682bc63c87f1752b441971448cbce80d3fdce727924a1335fff40baff63b4235"
+      },
+      {
+        "path": "post-ilv2-d15-nr-ac67c87.W392lA/d15-nr-dev/summary.json",
+        "sha256": "6e6a3270c36c26b82aeb9dddd8a4e47101851755188743d85c10dcfdbd3d1ce4"
+      },
+      {
+        "path": "post-ilv2-d15-nr-ac67c87.W392lA/targeted.log",
+        "sha256": "b2c91aedfeb813264051a6be034e0ac115ccea934b7cd23ab3eb84e217f0ad3a"
+      },
+      {
+        "path": "post-ilv2-d15-nr-ac67c87.W392lA/tmp/codex-java-lsp-isolated-validation-jNIahw/candidate/dist/build-stamp.json",
+        "sha256": "bf09f8ddf3b9913f1ee44285999d396abb1c21d0b4ebd7224f736a79b3c3a183"
+      }
+    ]
+  },
+  "previousOutlineUnavailable": {
+    "targets": 47,
+    "rerunByLabel": {
+      "RANKED_OUT": 46,
+      "NO_VOCAB_OVERLAP": 1
+    },
+    "rerunReasons": {
+      "SOURCE_BUDGET": 47
+    }
+  },
+  "rankedOutOfflineBreakdown": {
+    "targets": 59,
+    "byBestAlternativeRank": {
+      "top8": 20,
+      "ranks9To20": 14,
+      "notReturnedByEither": 25
+    },
+    "alternativeTop8ByRoute": {
+      "textTop8": 20,
+      "withTermsTop8": 7
+    },
+    "joinKeys": [
+      "taskId",
+      "path",
+      "startLine",
+      "endLine"
+    ],
+    "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+    "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-nr-budget.8bnciM/d15-nr-dev/rows.jsonl",
+        "sha256": "6dbd9a22b29098ed28b3b44804096cfc76ff3cf15b34b69ef4b8a895e19604dc"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-dev/rows.jsonl",
+        "sha256": "2c6f351982a089655f238fa6897049a419649d276a5f845dcf7e500481c71dad"
+      }
+    ],
+    "interpretation": "Best saved W1 rank across textRoute and withTerms. An absent probe supplies no rank. The no-return group does not distinguish missing candidates from ranks beyond 20. The original D15-NR diagnosis is retained."
+  }
+}

@@ -20,6 +20,26 @@ const xml = "src/main/resources/mapper/ReceiptMapper.xml";
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const call = (name, args, id) => ({ choices: [{ message: { tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] }, finish_reason: "tool_calls" }] });
 
+test("frozen QA scoring preserves blocked and missing slots across B0/B1/B2", t => {
+  try { execFileSync("python3", ["--version"], { stdio: "ignore" }); }
+  catch { t.skip("BLOCKED_ENV: python3 unavailable"); return; }
+  const outputDir = mkdtempSync(path.join(os.tmpdir(), "eval-frozen-slots-"));
+  t.after(() => rmSync(outputDir, { recursive: true, force: true }));
+  const task = loadTaskFile(path.join(dataset, "prompts/dev.jsonl")).find(row => row.id === "JSB-PAYMENTS-01");
+  assert.ok(task);
+  const arms = ["b0", "b1", "b2"];
+  const runs = ["COMPLETED", "BLOCKED_SETUP", "MISSING_RESULT"].map((attemptState, index) => ({
+    arm: arms[index], taskId: task.id, repeat: 1, kind: "qa", attemptState, taskOutcome: "UNMEASURED", taskSuccess: null
+  }));
+  const result = scoreWithFrozenKit({ kitRoot, tasks: [task], runs, arms, repeats: 1, outputDir });
+  assert.equal(result.kind, "frozen-kit", JSON.stringify(result));
+  assert.deepEqual(runs.map(row => [row.taskOutcome, row.taskSuccess]), [["MEASURED", false], ["UNMEASURED", null], ["UNMEASURED", null]]);
+  assert.deepEqual(arms.map(arm => {
+    const report = JSON.parse(readFileSync(result.reports[arm].reportPath, "utf8"));
+    return [report.arm, report.run_profile.product_profile, report.rows.find(row => row.task_id === task.id).status];
+  }), [["b0", "broad", "OK"], ["b1", "outline", "BLOCKED"], ["b2", "outline-evidence", "MISSING"]]);
+});
+
 test("PAYMENTS-02 real MCP type evidence -> exact XML dispatch -> unchanged frozen judge", { timeout: 180_000 }, async t => {
   if (!existsSync(serverJs)) { t.skip("BLOCKED_ENV: compiled candidate server unavailable"); return; }
   try { execFileSync("python3", ["--version"], { stdio: "ignore" }); }
@@ -56,17 +76,19 @@ test("PAYMENTS-02 real MCP type evidence -> exact XML dispatch -> unchanged froz
     const wire = requests.flatMap(request => request.messages.filter(message => message.role === "tool" && message.tool_call_id === "get-xml"));
     assert.ok(wire.length > 0);
     const evidence = JSON.parse(wire[0].content);
-    assert.equal(evidence.schemaVersion, "java-evidence-unit/v1");
+    assert.equal(evidence.schemaVersion, "java-evidence-unit/v2");
     assert.equal(evidence.scopeState, "READY");
-    assert.equal(evidence.supportedScope, "indexed-mybatis-xml-fqn-links");
+    assert.equal(evidence.supportedScope, "java-declaration-and-indexed-resource-links");
+    // v2 delivers the anchor's own declaration as a Java unit next to the XML link.
+    assert.ok(evidence.units.some(unit => unit.path === receipt && unit.relation === "java-declaration" && unit.proof === "SOURCE_FACT"));
     assert.equal(evidence.anchor.relativePath, receipt);
     const unit = evidence.units.find(unit => unit.path === xml);
-    assert.equal(unit.relation, "result-map-type"); assert.equal(unit.complete, true);
+    assert.equal(unit.relation, "result-map-type"); assert.equal(unit.role, "resource"); assert.equal(unit.complete, true);
     assert.equal(unit.startLine, 2); assert.equal(unit.endLine, 4);
     const xmlBytes = readFileSync(path.join(fixture, xml));
     const exact = xmlBytes.toString("utf8").split(/(?<=\n)/).slice(1, 4).join("");
     assert.equal(unit.text, exact); assert.equal(unit.contentHash, hash(xmlBytes));
-    const received = run.sourceReceived.filter(event => event.type === "SOURCE_RECEIVED" && event.toolName === "java_evidence");
+    const received = run.sourceReceived.filter(event => event.type === "SOURCE_RECEIVED" && event.toolName === "java_evidence" && event.path === xml);
     assert.equal(received.length, 1); assert.equal(received[0].text, exact);
     assert.equal(received[0].fileContentHash, hash(xmlBytes));
     assert.equal(received[0].contentHash, hash(exact));
@@ -77,7 +99,7 @@ test("PAYMENTS-02 real MCP type evidence -> exact XML dispatch -> unchanged froz
     assert.equal(run.frozenScore.budgetPass, true);
     const frozenPack = JSON.parse(readFileSync(scored.reports.product.packPath, "utf8"));
     assert.equal(frozenPack.run_profile.product_profile, "evidence");
-    assert.equal(frozenPack.run_profile.eval_protocol, "eval-protocol/v1.5");
+    assert.equal(frozenPack.run_profile.eval_protocol, "eval-protocol/v1.7");
     assert.deepEqual(protectedFiles.map(file => hash(readFileSync(file))), before);
   } finally { rmSync(outputDir, { recursive: true, force: true }); }
 });

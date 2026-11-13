@@ -31,7 +31,7 @@
 ## 核心能力
 
 - 注册一个 Codex MCP server：`codex-java-lsp`。
-- 提供 5 个 public tools：`java_status`、`java_impact`、`java_symbol`（operation=query\|position\|references，另有显式实验 operation=evidence）、`java_diagnostics`、`java_runtime`（action=restart\|shutdown）。
+- 提供 5 个 public tools：`java_status`、`java_impact`、`java_symbol`（operation=query\|position\|references；outline、evidence 默认关闭，见下文实验开关）、`java_diagnostics`、`java_runtime`（action=restart\|shutdown）。
 - 默认推荐入口是 `java_impact`，用于生成影响面、候选文件、`readPlan`、证据缺口和指标。
 - 未启用 LSP 的 Java repo 仍可走 fast path：repo/layout/JDK 探测、Tree-sitter JavaIndex、增量 watcher 和有界 streaming `rg`。
 - 启用 LSP 后，JDT LS 为 symbol、references、hierarchy、diagnostics 和精确位置语义提供增强结果；同键请求由 SemanticGateway singleflight 合并。
@@ -71,7 +71,7 @@
 - JDT LS 的 `READY` 要等待当前连接的初始工程导入完成通知；`initialize` 返回和进度静默均不代表就绪。冷态 `java_symbol` 精确查询会报告 `JDT_NOT_READY`，可用 `java_status(start=false)` 等待 `READY` 后重试；导入在后台继续，按需启动保持不变。初始导入完成不保证后续全部 build/index 或注解处理成功。
 - JDT LS 的 Gradle 导入使用 `-Dorg.gradle.parallel=false`，覆盖导入和 APT tooling model；保留注解处理与 Lombok agent。普通命令行构建仍使用业务仓库的并行设置。
 - JDT LS 的 Gradle 导入不预下载外部依赖的源码附件。受管 init 脚本位于 JDT workspace，不预填私有 Gradle home；项目源码目录和二进制 classpath 保留。外部依赖源码跳转没有预下载附件。
-- 共享 JDT 启动达到原 120 秒上限时，返回 `JDT_SERVER_ERROR` 并进入现有退避期；`java_status` 的 `restartBackoff.lastErrorMessage` 保留阶段与原因。调用方请求超时仍独立于共享启动。
+- 共享 JDT 启动分两段计时：初始工程导入受 `JDTLS_START_TIMEOUT_MS`（默认 120 秒）限制，导入完成后等待只读搜索索引屏障另有 `JDTLS_INDEX_TIMEOUT_MS`（默认 600 秒，`07c6ccf` 起）。导入达到上限时，返回 `JDT_SERVER_ERROR` 并进入现有退避期；`java_status` 的 `restartBackoff.lastErrorMessage` 保留阶段与原因。调用方请求超时仍独立于共享启动。
 - JDT LS runtime JDK 与项目 JDK 分开处理，避免把语言服务器运行环境误当成项目编译环境。
 - resource 默认值按本机内存保守计算；多 repo 并行时优先保住可用性，而不是抢占更多 JDT LS。
 - `warm-required` 仍是 precision/recall 可选增强，不是默认路径；profile-aware/default warm 需要先解决首触 `textDocument/references` P95。
@@ -99,7 +99,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile co
 
 ### MAC-17 安装合同
 
-最新[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
+最新[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY（历史验收口径；`07c6ccf` 起索引屏障改为导入后独立的 600 秒预算，见上文设计边界）。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
 
 此前隔离失败见 [安装期恢复与准备后语义验收](docs/index-lifecycle-v2/mac/mac-17/install-prepared-acceptance.md)。依赖恢复通过。JDT 在原 120 秒内 READY。精确定义通过，首次引用超时，完整验收仍失败。
 
@@ -197,7 +197,13 @@ hook 行为：
 
 方法声明键现为 `method:v3:<owner>#signature`（`identityVersion=3`、`factsRevision=6`），外层 `jsym:mac1` 不变，type/field ID 保留。旧 method key（含 mac1 包裹）返回 `REJECTED` 并提示重新定位；mac1 包裹的旧键为 `reason=MALFORMED`，不自动绑定到新方法。请重新执行 `java_symbol(operation=query)` 获取当前 `symbolId`；旧库和缓存按现有版本机制重建。
 
-实验操作 `java_symbol(operation=evidence, file, line, column)` 按已定位的 Java 类型或方法读取关联 XML 源码，不启动 JDT。类型路径使用现有 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源；每次最多 8 个片段、80 行、16000 源码字节。`complete` 只说明该 XML 元素范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
+推荐用法：先用 `operation=query` 找到声明，再读源码；只有需要精确 references、hover 或 implementation 时，才走 JDT（position/references）。都不要求先调 `java_status`。
+
+**实验开关。** `operation=outline` 和 `operation=evidence` 默认不注册：不在 `tools/list` 的 operation 枚举和描述里，调用会在输入校验阶段被拒绝。Q10 对它们的收益判定为 INCONCLUSIVE，默认不为它们付 schema 成本（见 [post-ilv2 决策](docs/post-ilv2/decisions.md)）。在 owner 进程的环境里设置 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1` 并重启 owner 后开启；开关作用于整个 owner，不按会话区分，stdio 入口只转发，不读这个变量。开启后可先用 `operation=outline` 看同一文件的结构，或用 `operation=evidence` 取声明可核对的源码。
+
+`java_symbol(operation=outline, file, nearLine?, limit?)`（需开启实验开关）从静态索引投影单个文件的类型、构造器、方法和字段（`java-outline/v1`），不启动 JDT。默认 8 条、最多 20 条，超出直接拒绝。给了 nearLine 时，先取包含该行的声明，其余按距离选，输出恢复源码顺序。每条带 `symbolId`、行范围和紧凑签名，整个响应不超过 4096 字节，放不下时先省略签名、再省略整条，并标 `SOURCE_BUDGET`。文件解析不完整或源码已变时为 `PARTIAL`；不在快照中时为 `PARTIAL`（索引未就绪时为 `NOT_READY`），不会显示成"没有声明"。
+
+`java_symbol(operation=evidence, file, line, column | symbolId)`（`java-evidence-unit/v2`，需开启实验开关；默认配置下 main 曾有的 v1 实验操作也不再暴露）对已定位的 Java 类型或方法，先给声明本身的源码：方法放得下就整段给，放不下就给签名头加请求行附近的窗口，并标 `BODY_PARTIAL`；类型只给声明头。之后再给已有的 MyBatis XML 关联：类型路径用 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源。不启动 JDT，所有片段都是 `proof=SOURCE_FACT`，即源码读取属实，但不代表调用目标已精确绑定。每次最多 8 个片段、80 行、16000 源码字节；Java 片段先计费：整段方法最多 40 行 / 8000 字节；放不下时窗口按剩余行数选，字节和签名头只受全局上限约束。`complete` 只说明该片段范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
 
 生产 daemon 的静态查询由最多 2 个共享只读 worker 承担（`MAX_QUERY_WORKERS`，所有仓库共用），等待队列上限 32，满时请求返回 `INDEX_PARTIAL`；HTTP daemon 无选择器的 `java_status` 在 `index.queryCounters` 里给出启动以来的 `queueFull` 与因 deadline/取消被杀的查询数。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 1|2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
 
@@ -301,7 +307,6 @@ npm run cache:harvest -- --apply
 - `JAVA_LSP_MAX_ACTIVE_REPOS=3`
 - `JAVA_LSP_JDTLS_XMX=2g`
 - `JAVA_LSP_IDLE_TTL_MS=2700000`
-- `JAVA_LSP_RUNTIME_ENTRY_TTL_MS=3600000`
 - `JAVA_LSP_MAX_RUNTIME_ENTRIES=16`
 - `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS=2`
 - `JAVA_LSP_CACHE_UNPINNED_MAX_DIRS=48`

@@ -1,0 +1,55 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q00",
+  "status": "NOT_RUN",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+    "productBuildDigest": null,
+    "datasetDigest": null,
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "git rev-parse HEAD && git status --short && node --version (only git identity was read)",
+      "state": "NOT_RUN",
+      "reason": "user directed no compile/test/verification this round (decisions.md D0)"
+    }
+  ],
+  "counts": {
+    "scheduled": null,
+    "attempted": null,
+    "completed": null,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "installedDigest null: no install receipt read",
+    "ILV2 ledger closure is a proposal awaiting the user (decisions.md D2)",
+    "base-fix Mac verification is user-reported, no raw logs",
+    "card RED field `deployment` and baseline.md not produced; deployment recorded as USER_REPORTED in baseline.json"
+  ],
+  "rawEvidence": [],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "README.md: JDT time contract (import 120 s + index barrier 600 s) and MAC-17 historical note",
+    "docs/post-ilv2/baseline.json",
+    "docs/post-ilv2/decisions.md"
+  ]
+}

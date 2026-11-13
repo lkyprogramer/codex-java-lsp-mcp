@@ -285,7 +285,7 @@ owner 是单线程，服务所有仓库的请求，默认请求 deadline 只有 
 
 ## 9. 处置记录（分支 `fix/architecture-review`）
 
-本轮只改代码，**没有编译，也没有运行任何测试**。下表中的"已修"均指代码已改、未验证。重大项（F1、F2、F3 中的 `assertOwnerLock`、F6、第 5 节）各自经过一次独立 review，其余项修完后统一 review 一次。
+修复提交（`2e13277`）时没有编译和测试；合入 main 前已由用户在本机 Mac 完成构建与测试验证（2026-11-11），后续修正见 `0524695`。重大项（F1、F2、F3 中的 `assertOwnerLock`、F6、第 5 节）各自经过一次独立 review，其余项修完后统一 review 一次。
 
 | 项 | 处置 | 变更位置 / 理由 |
 |---|---|---|
@@ -296,7 +296,7 @@ owner 是单线程，服务所有仓库的请求，默认请求 deadline 只有 
 | F4 | 只加测量 | • query pool 新增 `counters()`，统计 `queueFull` 和 `runKills`，通过 HTTP 无选择器的 `java_status` 的 `index.queryCounters` 暴露。<br>• 协作退出窗口、内部读取独立配额、请求层准入，等有数据后再决定。 |
 | F5 | 只记录 + 澄清 | • 周期 full hash 到期时，`requireDueFullHash` 会推进 seq，因此到期期间到达的请求**会**在 1 s 上限内等待。已把 `index-owner.ts` 中"不被等待"的注释改为与代码一致。<br>• 按需 hash、全局读并发上限、verifier 改为按血缘深度触发，都需要先测量。round 事件里已经带有 mode 和耗时，可以直接统计。 |
 | F6 鉴权 | 不做 | daemon 只监听 loopback，浏览器侧已有 Host/Origin 校验。单用户 Mac 上，能连 loopback 的本地进程本来就以同一用户身份运行，可以直接读源码和 cache，token 挡不住它。直连 URL 注册的 `streamable_http` 客户端也带不上每次启动都会变的 token。曾实现为可选开关，经确认后撤掉。多用户共享机器时再考虑（需要持久化 token）。 |
-| F6 entry 上限 | 已修 | • `JAVA_LSP_MAX_RUNTIME_ENTRIES`（默认 16）：新建 entry 后若超出上限，按 LRU 退役一个空闲且未 pin 的 entry。<br>• 选中的 victim 同步打标，防止并发 create 重复选同一个；某个 entry 转为空闲时会再检查一次。 |
+| F6 entry 上限 | 已修 | • `JAVA_LSP_MAX_RUNTIME_ENTRIES`（默认 16）：新建 entry 后若超出上限，按 LRU 退役一个空闲且未 pin 的 entry。<br>• 退役通过 `beginRetirement` 同步发布 `entry.retiring`，并发 create 不会重复选中同一个，退役期间到达的请求等待退役完成（`0524695`）；某个 entry 转为空闲时会再检查一次。 |
 | F6 workspace 数 | 只记录 | 没有给 owner 的 workspace 单独设上限。推断（未核对）：entry 退役时会停止它的 workspace tracker，因此 workspace 数受 entry 上限间接约束；需在 Mac 上确认。 |
 | F7 | 已修 | • subtree 前缀先去掉被覆盖的子前缀，再按祖先路径查集合，复杂度从 O(文件 × 前缀) 降为 O(文件 × 路径深度)。<br>• 一轮的 subtree 数超过 256 时直接走 full-stat。 |
 | F8 | 只记录 | 是否删除图谱取决于 post-ILV2 计划是否使用它。建议先在 Mac 上测量图谱在构建时间和文件体积中的占比。 |
@@ -321,10 +321,10 @@ owner 是单线程，服务所有仓库的请求，默认请求 deadline 只有 
 - **F9**：撤销结论到复查完成之间，`failed()` 会顺着血缘查到父节点；若父节点恰好被判 FAILED，该 snapshot 在这段时间内也被当作 failed（不再作为 seed/base）。窗口短，结果偏保守。
 - **F12**：没有 base 的首次全量构建仍只检查 512 MiB 下限；必须做的全量（no-base、input-limit 等）空间不足时仍按退避重试并保持 STALE，这是原有语义。
 - **批量 review 已修**：
-  - overflow 退役不再连锁多退：已选中的 victim 不计入存活数，`shutdownAll` 期间不触发。
+  - overflow 退役不再连锁多退：victim 的 `retiring` 在选中时同步设置，不再计入存活数（`0524695` 以 `beginRetirement` 取代了最初的 `overflowRetiring` 集合）；`shutdownAll` 期间不触发。
   - seed 候选顺序的注释已修正。
 
-**建议在 Mac 上运行**：
+**合入前在 Mac 上运行的验证**（用户已在本机完成）：
 1. 先执行 `npm run build:isolated`。
 2. 测试：
    - `src/worktree-cache-cleanup.test.ts`

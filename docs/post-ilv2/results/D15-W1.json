@@ -1,0 +1,1340 @@
+{
+  "schema": "post-ilv2/d15-w1-result/v1",
+  "taskId": "D15-W1",
+  "status": "PASS",
+  "identity": {
+    "sourceHead": "192b182c7b45ec577b17b66962a024e59ba03206",
+    "productBuildDigest": "ae71dc8410ca1981c09758743360d851f9648c095ab6ee82d759aea79cc51f32",
+    "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "split": "dev",
+    "q02ScheduleSha256": "88c16748de43f32a9546576d1fae43913132ddf0a462972087a87a9a848a9945",
+    "inputsSha256": "b445989ec23008bf9a627db16fb48b39c81a45f06275d36cfe2a767aa02d1b8a"
+  },
+  "preparation": {
+    "status": "PASS",
+    "frozenCheckoutsClean": 4,
+    "modelRequests": 0,
+    "holdoutSlots": 0
+  },
+  "targetedTests": {
+    "status": "PASS",
+    "tap": {
+      "tests": 21,
+      "suites": 0,
+      "pass": 21,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  },
+  "w1Q02": {
+    "status": "PASS",
+    "exitCode": 0,
+    "summary": {
+      "schema": "post-ilv2/ranking-diagnosis/v1",
+      "identity": {
+        "datasetId": "mac10-v3",
+        "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+        "split": "dev",
+        "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+        "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+        "serverBuildStampSha256": "ae71dc8410ca1981c09758743360d851f9648c095ab6ee82d759aea79cc51f32",
+        "limit": 20,
+        "window": {
+          "before": 20,
+          "after": 60,
+          "maxLines": 80
+        },
+        "planner": "planQueries"
+      },
+      "sessions": {
+        "exam-parent-v3": {
+          "readyMs": 12185
+        },
+        "lishuedu": {
+          "readyMs": 52416
+        },
+        "lishu-v2": {
+          "readyMs": 131711
+        }
+      },
+      "tasks": 20,
+      "emptyPlanTasks": 3,
+      "targets": 57,
+      "javaTargets": 49,
+      "byMechanism": {
+        "TOP1": 10,
+        "EXACT_AMBIGUOUS": 0,
+        "EXACT_OTHER": 0,
+        "TEXT_MERGE": 5,
+        "FILE_ONLY": 0,
+        "NOT_RETURNED": 42
+      },
+      "hitAt": {
+        "observed": {
+          "1": 10,
+          "3": 10,
+          "8": 12,
+          "20": 15
+        },
+        "mainFirst": {
+          "1": 10,
+          "3": 10,
+          "8": 12,
+          "20": 15
+        },
+        "coAnchor": {
+          "1": 10,
+          "3": 11,
+          "8": 12,
+          "20": 15
+        },
+        "mainFirstCoAnchor": {
+          "1": 10,
+          "3": 11,
+          "8": 12,
+          "20": 15
+        },
+        "orTextRoute": {
+          "1": 12,
+          "3": 17,
+          "8": 24,
+          "20": 33
+        },
+        "orWithTerms": {
+          "1": 11,
+          "3": 13,
+          "8": 17,
+          "20": 22
+        }
+      },
+      "exactRoute": {
+        "targets": 40,
+        "textRouteHitAt": {
+          "1": 10,
+          "3": 15,
+          "8": 20,
+          "20": 26
+        }
+      },
+      "ambiguous": {
+        "targets": 0,
+        "identityOrdered": 0,
+        "selectionLimited": 0,
+        "sameNameAheadTotal": 0,
+        "testAheadTotal": 0
+      },
+      "testAheadOfTarget": 1,
+      "notCovered": {
+        "targets": 42,
+        "afterExactRoute": 31,
+        "recoveredByTextRoute": 18,
+        "recoveredByWithTerms": 7
+      },
+      "intentMismatchTerms": 0,
+      "notClaimed": "Candidate order only. mainFirst/coAnchor re-order the returned top-20 and do not measure a changed product; textRoute/withTerms are real calls of the current product. No reads or task success are measured."
+    },
+    "intentRouteLabelsTrusted": true
+  },
+  "calibration": {
+    "status": "PASS",
+    "expectedRanks": [
+      8,
+      8,
+      9,
+      11
+    ],
+    "ranks": [
+      8,
+      8,
+      9,
+      11
+    ],
+    "expectedVisibleByLimit": {
+      "3": 0,
+      "8": 2,
+      "20": 4
+    },
+    "visibleByLimit": {
+      "3": 0,
+      "8": 2,
+      "20": 4
+    },
+    "exactRankMatch": true,
+    "intentMismatchTerms": 0
+  },
+  "w1Dev": {
+    "status": "PASS",
+    "exitCode": 0,
+    "summary": {
+      "schema": "post-ilv2/ranking-diagnosis/v1",
+      "identity": {
+        "datasetId": "mac10-v3",
+        "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+        "split": "dev",
+        "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+        "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+        "serverBuildStampSha256": "ae71dc8410ca1981c09758743360d851f9648c095ab6ee82d759aea79cc51f32",
+        "limit": 20,
+        "window": {
+          "before": 20,
+          "after": 60,
+          "maxLines": 80
+        },
+        "planner": "planQueries"
+      },
+      "sessions": {
+        "exam-parent-v3": {
+          "readyMs": 12188
+        },
+        "lishuedu": {
+          "readyMs": 49383
+        },
+        "lishu-v2": {
+          "readyMs": 125651
+        }
+      },
+      "tasks": 33,
+      "emptyPlanTasks": 3,
+      "targets": 104,
+      "javaTargets": 88,
+      "byMechanism": {
+        "TOP1": 19,
+        "EXACT_AMBIGUOUS": 0,
+        "EXACT_OTHER": 0,
+        "TEXT_MERGE": 6,
+        "FILE_ONLY": 1,
+        "NOT_RETURNED": 78
+      },
+      "hitAt": {
+        "observed": {
+          "1": 19,
+          "3": 19,
+          "8": 22,
+          "20": 25
+        },
+        "mainFirst": {
+          "1": 19,
+          "3": 19,
+          "8": 22,
+          "20": 25
+        },
+        "coAnchor": {
+          "1": 19,
+          "3": 20,
+          "8": 22,
+          "20": 25
+        },
+        "mainFirstCoAnchor": {
+          "1": 19,
+          "3": 20,
+          "8": 22,
+          "20": 25
+        },
+        "orTextRoute": {
+          "1": 21,
+          "3": 29,
+          "8": 42,
+          "20": 59
+        },
+        "orWithTerms": {
+          "1": 20,
+          "3": 24,
+          "8": 29,
+          "20": 37
+        }
+      },
+      "exactRoute": {
+        "targets": 78,
+        "textRouteHitAt": {
+          "1": 19,
+          "3": 27,
+          "8": 37,
+          "20": 51
+        }
+      },
+      "ambiguous": {
+        "targets": 0,
+        "identityOrdered": 0,
+        "selectionLimited": 0,
+        "sameNameAheadTotal": 0,
+        "testAheadTotal": 0
+      },
+      "testAheadOfTarget": 1,
+      "notCovered": {
+        "targets": 79,
+        "afterExactRoute": 60,
+        "recoveredByTextRoute": 34,
+        "recoveredByWithTerms": 12
+      },
+      "intentMismatchTerms": 0,
+      "notClaimed": "Candidate order only. mainFirst/coAnchor re-order the returned top-20 and do not measure a changed product; textRoute/withTerms are real calls of the current product. No reads or task success are measured."
+    },
+    "intentRouteLabelsTrusted": true
+  },
+  "w2": {
+    "status": "MEASURED",
+    "exitCode": 0,
+    "productLimit": 8,
+    "slots": 40,
+    "compiledJsMatchesQ02": true,
+    "byDriver": {
+      "product": {
+        "planned": 20,
+        "emptyPlanSlots": 3,
+        "status": {
+          "COMPLETE": 20
+        },
+        "meanRecall": 0.38916666666666666,
+        "fullRecallSlots": 3,
+        "firstCorrect": {
+          "n": 11,
+          "p50Ms": 123.04949999999371,
+          "p95Ms": 980.4087089999994,
+          "maxMs": 980.4087089999994,
+          "p50Bytes": 2990
+        },
+        "receivedBytes": {
+          "p50": 15154,
+          "p95": 46044,
+          "max": 47202
+        },
+        "duplicates": 53,
+        "wrongHash": 0,
+        "partial": 1
+      },
+      "native": {
+        "planned": 20,
+        "emptyPlanSlots": 3,
+        "status": {
+          "COMPLETE": 20
+        },
+        "meanRecall": 0.42833333333333334,
+        "fullRecallSlots": 4,
+        "firstCorrect": {
+          "n": 12,
+          "p50Ms": 193.7135830000043,
+          "p95Ms": 637.0249579999982,
+          "maxMs": 637.0249579999982,
+          "p50Bytes": 5780
+        },
+        "receivedBytes": {
+          "p50": 10443,
+          "p95": 32344,
+          "max": 42639
+        },
+        "duplicates": 7,
+        "wrongHash": 0,
+        "partial": 1
+      }
+    },
+    "pairedProduct8VsNative": {
+      "taskGroups": 20,
+      "rangeRecallComparison": {
+        "leftHigher": 4,
+        "rightHigher": 4,
+        "tied": 12
+      },
+      "fullRecallComparison": {
+        "leftOnly": 2,
+        "rightOnly": 3,
+        "both": 1,
+        "neither": 14
+      },
+      "meanRecallDelta": -0.03916666666666667
+    },
+    "pairedProduct8VsProduct3": {
+      "taskGroups": 20,
+      "rangeRecallComparison": {
+        "leftHigher": 2,
+        "rightHigher": 0,
+        "tied": 18
+      },
+      "fullRecallComparison": {
+        "leftOnly": 0,
+        "rightOnly": 0,
+        "both": 3,
+        "neither": 17
+      },
+      "meanRecallDelta": 0.026666666666666665
+    },
+    "pairedNativeVsOriginalNative": {
+      "taskGroups": 20,
+      "rangeRecallComparison": {
+        "leftHigher": 0,
+        "rightHigher": 0,
+        "tied": 20
+      },
+      "fullRecallComparison": {
+        "leftOnly": 0,
+        "rightOnly": 0,
+        "both": 4,
+        "neither": 16
+      },
+      "meanRecallDelta": 0.0
+    },
+    "ledger": {
+      "labels": {
+        "CANDIDATE_EVICTED": 3,
+        "NOT_PLANNED": 3,
+        "UNMEASURED": 12,
+        "NOT_DISCOVERED": 1,
+        "RANGE_MISS": 1
+      },
+      "unmeasured": 12,
+      "cards": {
+        "Q05": {
+          "status": "NOT_TRIGGERED",
+          "provenTaskGroups": 0
+        },
+        "Q06": {
+          "status": "NOT_TRIGGERED",
+          "provenTaskGroups": 1
+        },
+        "Q07": {
+          "status": "TRIGGERED",
+          "provenTaskGroups": 4
+        },
+        "Q08": {
+          "status": "NOT_TRIGGERED",
+          "provenTaskGroups": 0
+        }
+      },
+      "q09": "UNASSESSED_DAILY_REPEAT",
+      "replayedGroups": 17,
+      "originalUnmeasured": {
+        "replayed": 14,
+        "outcomes": {
+          "CANDIDATE_EVICTED": 2,
+          "INCOMPLETE_STILL_UNMEASURED": 8,
+          "RANGE_MISS": 1,
+          "FULL_RETRIEVAL_NO_FAILURE_TO_ATTRIBUTE": 3
+        }
+      },
+      "impactDiagnostics": {
+        "supplementalGroups": 11,
+        "groupsWithImpactCalls": 11,
+        "sameAnchorPairs": 23,
+        "newlyAttributedGroups": 3,
+        "proofCounts": {
+          "SAME_IMPACT_ANCHOR_RANGE_RECOVERED_AT_FILE_CAP_20": 5,
+          "VERIFIED_IMPLEMENTATION_READ_WINDOW_MISSES_GOLD": 1
+        }
+      },
+      "witnessesByProof": {
+        "STABLE_8_TO_20_DIRECT_WINDOW": 2,
+        "SAME_IMPACT_ANCHOR_RANGE_RECOVERED_AT_FILE_CAP_20": 5,
+        "ALL_FRESH_PLANNED_QUERIES_EMPTY": 1,
+        "VERIFIED_IMPLEMENTATION_READ_WINDOW_MISSES_GOLD": 1
+      },
+      "modelDeliveryAndTaskOutcome": "NOT_MEASURED"
+    }
+  },
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/tmp/codex-java-lsp-isolated-validation-3usIXr/candidate/dist/build-stamp.json",
+      "sha256": "ae71dc8410ca1981c09758743360d851f9648c095ab6ee82d759aea79cc51f32"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/tmp/codex-java-lsp-isolated-validation-3usIXr/candidate/dist/server.js",
+      "sha256": "a51b04eb0fa9db257770043d42dace2b4a462860353e51946c8e97e7a990529f"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/npm-ci.log",
+      "sha256": "c0f434c1297c1e09d2c63164ef2711c29b1c4aa337a028460592e908a9c21b69"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/build.log",
+      "sha256": "c2fa6a95bd741b16ea6ec329a7c4aed066eaa395c84b65c3c21735f3073f2ffa"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/targeted.log",
+      "sha256": "eef8c1e4945c33a63a41df829e57125bdbb8b6ba51d007b506baf46792ae4408"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/preflight.json",
+      "sha256": "2a9b2dcd7bc846d203456f4175885205764ed11ae272ba7a6c8d60f9159a0afc"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/run-w1.sh",
+      "sha256": "27acfae6fbee43e654e0d8d5832443f6541abce917a9e1c2c8bc37b9d55d9300"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w1-q02-direct.log",
+      "sha256": "116b54a929c9e76857d030072c0a29ad3c9693a854c952f899f581c6cb5c5d13"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w1-q02.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/calibrate.py",
+      "sha256": "8f0586523ee003a9293cbd211b5e15fd61d8006596070eb901dbbb0f2a631cd9"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/calibration.json",
+      "sha256": "73a6766632ba222aa6ac5171c3b2843e71db1ed1ca2e06da3f78e88574878147"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-inputs/schedule.jsonl",
+      "sha256": "88c16748de43f32a9546576d1fae43913132ddf0a462972087a87a9a848a9945"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-rows.json",
+      "sha256": "967ae302e09d50683f9840ab572d5625d51f0dd6f1c764b73b41f42873cf0bfc"
+    },
+    {
+      "path": "post-ilv2-final-13f9dc9a.CBMtDg/q07-summary.json",
+      "sha256": "136e53f5e9b3288b7a0a342336c622c261531ae0fe5b2bb086c98da8c4d21b12"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-q02/summary.json",
+      "sha256": "d70208214e44254573761b9fd70f9146a5a09049f9e8f82ee5542a9ce9ffca5e"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-q02/rows.jsonl",
+      "sha256": "af654622f2656608a59e20608fcff1868044aa8960697da4a8f6e1dbfa40addf"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-q02/responses.jsonl",
+      "sha256": "a6d75f24847ff1f1326aaaf83418ec17812246c1860e99daf5c16f6f37ef006e"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-dev/summary.json",
+      "sha256": "5ed8229d1bac3cc2c45b3ca02df40c2de4f440bfcac3b8419bf559b034cb69ff"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-dev/rows.jsonl",
+      "sha256": "2c6f351982a089655f238fa6897049a419649d276a5f845dcf7e500481c71dad"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w1-dev/responses.jsonl",
+      "sha256": "c700032e16b33037c260ab8dfe05a19f3373ba96ed9ce43ca1d28cf9ed0ad148"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w1-dev-direct.log",
+      "sha256": "ac7b5be977f64db88937f28e354088bf46d53cc72cb5b4245099d8bbc5d38846"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w1-dev.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-final-closeout.json",
+      "sha256": "fa3ff79d8f16626132414dbc6799ae78a19c9338ff44e7a08e7a220d172c1441"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-retrieval/report.json",
+      "sha256": "aba209cf1e74e5561c8b5796b5711b9f3e708938b802329959f29202eef48a17"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-attribution-ledger.json",
+      "sha256": "7333a49414564852e249a2b8740a86386580e973822f9a2e54b7b7a693adb0e4"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/run-w2.sh",
+      "sha256": "4c6f1e98b9dd7dfd9e7156c9e7baea713a1595a0666b22832d2bce9c76f32789"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-drivers.json",
+      "sha256": "19987729f2761df08104ed2918ca87b4e69d22b082053c8cf0693d3ff1b7991f"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2.log",
+      "sha256": "eec84faf5ceab191f69fdeaed759537d4fe740793b6e20a8229e4b0716f05ed8"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w2/identity.json",
+      "sha256": "30591c3a0d943a47f1743941426c8f7ef91d09077ddda5f138b181cc3ad63c41"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w2/report.json",
+      "sha256": "59e35b05fdde56a7f75879e5c762e99bdc61479523c69c16752455e26c291995"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w2/calls.jsonl",
+      "sha256": "42048ab0213e9536dba33c599e8cd933bfcedd585988e6aedc627d3a3a8deca4"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w2/query-plan.jsonl",
+      "sha256": "88045fe0e56e96e6e2f3b4948a9ec2095ebc79e4d2b4e7aa87956a692dcb2ff5"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/run-w2-attribution.sh",
+      "sha256": "8172b8a8e1cf623272f7a722feeb4d5af4153ed6a485b2f7519f241538c6cf71"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-stage-replay.mjs",
+      "sha256": "feaeb7dfce6677dd4bd506dc0e331d3cb54a678c1dfcd9a908a92a5e7829c758"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w2-stage-replay/observations.jsonl",
+      "sha256": "4c026ffd502cdd1258c71f01c214bcac2444205521ac146106e83d6e10d45600"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution.log",
+      "sha256": "94c018f3b72944436889519ae3b94da6e912e67049500f3356c6d6cb61f9f5bf"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/build-w2-ledger.py",
+      "sha256": "db1aae308ad321282f3141050ceac10931f16aa9cb126b9d1e8d4556d064fb2e"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution-rows.json",
+      "sha256": "677e611cb9846b2bf62c6de2d4ee2a34551cd70afb1e9e4d4148a1742c636fd4"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution-observations.json",
+      "sha256": "2c860b000ddb29b745ee0eabd2ca0c0eebd1e5c077f0c1762f221fdba24c9653"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution-ledger.json",
+      "sha256": "727c5ad834daefbbee0b213e83a94f85c0ac8da4dd8c6403edec4b6bf32a42ec"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/summarize-w2.py",
+      "sha256": "7493399f42d85585aef1b86004eaeeec8b88b895f24776c3e23a0257c81a6992"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-impact-diagnostics.mjs",
+      "sha256": "458e641a9748e10e9d5224bfb37aaf3d4f2836d9a17c922fc5af09a2626bfe24"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-impact-diagnostics.log",
+      "sha256": "2115b61c514b87288c6fbb371eefc86173c1c5e66dae5b69dcc1c5aef2c32405"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/d15-w2-impact-diagnostics/observations.jsonl",
+      "sha256": "6cc604faaa85b3b58a58a2d22d49f173a33906833e7e578fa166d7ca646e79e0"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/apply-impact-witnesses.py",
+      "sha256": "af1d9720bb09d654e06560b7ce011c7e3214b9a398d483b6c741e482f432a8c2"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-impact-diagnostics-counts.json",
+      "sha256": "a098b9ad8cb1df1960da005bdd008fcd24ae7ae0f94847d9d83a541e229fd8d7"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution-final-rows.json",
+      "sha256": "c26bfc125151d37128e18f0f15d571aefff49facdf798bfd4f7544ede763cc69"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution-final-observations.json",
+      "sha256": "19508b331ee31105eb26328e2823e41b8d6ada27526e682eeceff4098efa7854"
+    },
+    {
+      "path": "post-ilv2-d15-192b182.rXREEa/w2-attribution-final-ledger.json",
+      "sha256": "54085f4e447af6e0dc74ced29bdc3e36e150d5035b8638a661098247fcd540d4"
+    }
+  ],
+  "limitations": [
+    "MAC-10 dev only; no model requests, holdout tasks, product-source changes or release claims.",
+    "W1 measures candidate order and declaration-centered window coverage, not actual source delivery or task success.",
+    "W2 baseline changed only the product query limit; the supplemental impact diagnostic varied the read-plan file cap from 6 to 20 at 14336 bytes for attribution only.",
+    "Three original UNMEASURED groups have complete retrieval and no observed retrieval failure. Eight still have an incomplete retrieval without evidence to identify the earliest failed stage; unobserved stages remain null."
+  ],
+  "stepA": {
+    "dev": {
+      "byCategoryAndKind": {
+        "callers/java": {
+          "targets": 16,
+          "TOP1": 1,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 15,
+          "other": 0,
+          "missedAfterExact": 15,
+          "textRecovers": 8,
+          "textRecoversAt8": 3,
+          "withTermsRecovers": 4
+        },
+        "dto-impact/java": {
+          "targets": 22,
+          "TOP1": 7,
+          "TEXT_MERGE": 1,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 14,
+          "other": 0,
+          "missedAfterExact": 14,
+          "textRecovers": 12,
+          "textRecoversAt8": 11,
+          "withTermsRecovers": 7
+        },
+        "implementations/java": {
+          "targets": 21,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 21,
+          "other": 0,
+          "missedAfterExact": 21,
+          "textRecovers": 11,
+          "textRecoversAt8": 4,
+          "withTermsRecovers": 1
+        },
+        "repair/java": {
+          "targets": 3,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 3,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        },
+        "spring/java": {
+          "targets": 26,
+          "TOP1": 11,
+          "TEXT_MERGE": 5,
+          "FILE_ONLY": 1,
+          "NOT_RETURNED": 9,
+          "other": 0,
+          "missedAfterExact": 10,
+          "textRecovers": 3,
+          "textRecoversAt8": 2,
+          "withTermsRecovers": 0
+        },
+        "xml/other": {
+          "targets": 16,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 16,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        }
+      },
+      "responseSize": {
+        "exactTermsAutoBytes": {
+          "n": 45,
+          "p50": 1554,
+          "p95": 8610
+        },
+        "exactTermsTextBytes": {
+          "n": 45,
+          "p50": 20651,
+          "p95": 21924
+        },
+        "textTermsAutoBytes": {
+          "n": 16,
+          "p50": 19963,
+          "p95": 22345
+        },
+        "exactAutoCandidates": {
+          "n": 45,
+          "p50": 1,
+          "p95": 8
+        },
+        "exactTextCandidates": {
+          "n": 45,
+          "p50": 20,
+          "p95": 20
+        }
+      }
+    },
+    "q02": {
+      "byCategoryAndKind": {
+        "callers/java": {
+          "targets": 11,
+          "TOP1": 1,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 10,
+          "other": 0,
+          "missedAfterExact": 10,
+          "textRecovers": 6,
+          "textRecoversAt8": 3,
+          "withTermsRecovers": 4
+        },
+        "dto-impact/java": {
+          "targets": 10,
+          "TOP1": 3,
+          "TEXT_MERGE": 1,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 6,
+          "other": 0,
+          "missedAfterExact": 6,
+          "textRecovers": 6,
+          "textRecoversAt8": 5,
+          "withTermsRecovers": 2
+        },
+        "implementations/java": {
+          "targets": 7,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 7,
+          "other": 0,
+          "missedAfterExact": 7,
+          "textRecovers": 3,
+          "textRecoversAt8": 2,
+          "withTermsRecovers": 1
+        },
+        "repair/java": {
+          "targets": 3,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 3,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        },
+        "spring/java": {
+          "targets": 18,
+          "TOP1": 6,
+          "TEXT_MERGE": 4,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 8,
+          "other": 0,
+          "missedAfterExact": 8,
+          "textRecovers": 3,
+          "textRecoversAt8": 2,
+          "withTermsRecovers": 0
+        },
+        "xml/other": {
+          "targets": 8,
+          "TOP1": 0,
+          "TEXT_MERGE": 0,
+          "FILE_ONLY": 0,
+          "NOT_RETURNED": 8,
+          "other": 0,
+          "missedAfterExact": 0,
+          "textRecovers": 0,
+          "textRecoversAt8": 0,
+          "withTermsRecovers": 0
+        }
+      },
+      "responseSize": {
+        "exactTermsAutoBytes": {
+          "n": 26,
+          "p50": 1552,
+          "p95": 3621
+        },
+        "exactTermsTextBytes": {
+          "n": 26,
+          "p50": 20651,
+          "p95": 21924
+        },
+        "textTermsAutoBytes": {
+          "n": 7,
+          "p50": 21172,
+          "p95": 22345
+        },
+        "exactAutoCandidates": {
+          "n": 26,
+          "p50": 1,
+          "p95": 3
+        },
+        "exactTextCandidates": {
+          "n": 26,
+          "p50": 20,
+          "p95": 20
+        }
+      }
+    }
+  },
+  "stepB": {
+    "status": "MEASURED_OFFLINE",
+    "limits": [
+      3,
+      5,
+      8
+    ],
+    "method": {
+      "auto": "Slice the captured auto response to the requested limit.",
+      "exactFirstFill": "Keep the ordered exact list first and fill remaining slots from the text probe.",
+      "interleave": "Alternate exact then text, keeping each route's order.",
+      "nonExactTerms": "Keep auto order for all policies.",
+      "deduplication": "First occurrence of declaration.symbolId wins.",
+      "hit": "Best rank across the original plan terms whose W1 declaration window covers the entire required evidence range.",
+      "wire": "Compact UTF-8 JSON of one auto envelope containing the simulated candidates; update selectionLimited and remove emptyReason on nonempty results. No transport, source preview, or new schema fields.",
+      "sensitivity": "Keep all tasks, but do not merge incomplete text responses.",
+      "limitations": "Saved responses used limit=20 and preview=none. This is a prefix simulation on exposed dev tasks, not a product rerun or a retrieval or latency measurement. Q02 is a subset of dev."
+    },
+    "cohorts": {
+      "dev": {
+        "tasks": 33,
+        "targets": 104,
+        "plannedQueries": 61,
+        "exactTextPairs": 45,
+        "partialTextProbes": 17,
+        "comparison": {
+          "3": {
+            "auto": {
+              "hitAt": {
+                "1": 19,
+                "3": 19
+              },
+              "wireBytes": {
+                "p50": 1590,
+                "p95": 3634
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 20,
+                "3": 28
+              },
+              "wireBytes": {
+                "p50": 3502,
+                "p95": 3711
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 20,
+                "3": 28
+              },
+              "wireBytes": {
+                "p50": 3484,
+                "p95": 3696
+              },
+              "exactCandidatesDisplaced": 4
+            }
+          },
+          "5": {
+            "auto": {
+              "hitAt": {
+                "1": 19,
+                "3": 19,
+                "5": 20
+              },
+              "wireBytes": {
+                "p50": 1590,
+                "p95": 5692
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36
+              },
+              "wireBytes": {
+                "p50": 5495,
+                "p95": 5814
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36
+              },
+              "wireBytes": {
+                "p50": 5495,
+                "p95": 5814
+              },
+              "exactCandidatesDisplaced": 4
+            }
+          },
+          "8": {
+            "auto": {
+              "hitAt": {
+                "1": 19,
+                "3": 19,
+                "5": 20,
+                "8": 22
+              },
+              "wireBytes": {
+                "p50": 1590,
+                "p95": 8785
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36,
+                "8": 42
+              },
+              "wireBytes": {
+                "p50": 8478,
+                "p95": 9137
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 20,
+                "3": 28,
+                "5": 36,
+                "8": 42
+              },
+              "wireBytes": {
+                "p50": 8478,
+                "p95": 9137
+              },
+              "exactCandidatesDisplaced": 4
+            }
+          }
+        },
+        "hitAt8WithoutPartialTextProbes": {
+          "exactFirstFill": 40,
+          "interleave": 40
+        }
+      },
+      "q02": {
+        "tasks": 20,
+        "targets": 57,
+        "plannedQueries": 33,
+        "exactTextPairs": 26,
+        "partialTextProbes": 9,
+        "comparison": {
+          "3": {
+            "auto": {
+              "hitAt": {
+                "1": 10,
+                "3": 10
+              },
+              "wireBytes": {
+                "p50": 1583,
+                "p95": 3634
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 11,
+                "3": 16
+              },
+              "wireBytes": {
+                "p50": 3505,
+                "p95": 3793
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 11,
+                "3": 16
+              },
+              "wireBytes": {
+                "p50": 3505,
+                "p95": 3793
+              },
+              "exactCandidatesDisplaced": 1
+            }
+          },
+          "5": {
+            "auto": {
+              "hitAt": {
+                "1": 10,
+                "3": 10,
+                "5": 10
+              },
+              "wireBytes": {
+                "p50": 1583,
+                "p95": 5710
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22
+              },
+              "wireBytes": {
+                "p50": 5508,
+                "p95": 5907
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22
+              },
+              "wireBytes": {
+                "p50": 5508,
+                "p95": 5907
+              },
+              "exactCandidatesDisplaced": 0
+            }
+          },
+          "8": {
+            "auto": {
+              "hitAt": {
+                "1": 10,
+                "3": 10,
+                "5": 10,
+                "8": 12
+              },
+              "wireBytes": {
+                "p50": 1583,
+                "p95": 8980
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "exactFirstFill": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22,
+                "8": 24
+              },
+              "wireBytes": {
+                "p50": 8490,
+                "p95": 9344
+              },
+              "exactCandidatesDisplaced": 0
+            },
+            "interleave": {
+              "hitAt": {
+                "1": 11,
+                "3": 16,
+                "5": 22,
+                "8": 24
+              },
+              "wireBytes": {
+                "p50": 8490,
+                "p95": 9344
+              },
+              "exactCandidatesDisplaced": 0
+            }
+          }
+        },
+        "hitAt8WithoutPartialTextProbes": {
+          "exactFirstFill": 22,
+          "interleave": 22
+        }
+      }
+    },
+    "mergePoliciesHitSameTargetsAtEveryMeasuredCutoff": true,
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b/merge-simulation.mjs",
+        "sha256": "7e6111b3c1610490eb5de057a9e37eb6e1f3300eb7b17ec2b496b7cab17fca65"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b/summary.json",
+        "sha256": "2b4316d684bf5b50bf9a31243e8bcf178e3f14de78a3b88345d9e74f746b5272"
+      }
+    ]
+  },
+  "stepBByteBudget": {
+    "status": "MEASURED_OFFLINE",
+    "limit": 8,
+    "wireP50IncreaseLimitPct": 10,
+    "medianGuardBytes": 1749,
+    "counts": {
+      "policies": 289,
+      "devPassing": 213,
+      "bothPassing": 212
+    },
+    "design": {
+      "selection": "Evaluate 9 query/response conditions, 8 extra-byte caps, a fixed low-response guard, and two probe-completeness rules. The 10% relative per-response cap is a separate control.",
+      "scoring": "Gold is used for scoring and selecting among runs, never to decide the response for any query.",
+      "caps": "Keep all original top-8 auto candidates. Append in text order with symbolId deduplication. Stop at the first unique candidate that would exceed the extra-byte cap or limit. With guard enabled, responses originally at or below the calibrated threshold may not cross it.",
+      "bytes": "Estimate compact UTF-8 JSON as in Step B. No transport, source preview, new schema fields, or search latency.",
+      "scope": "Existing W1 dev artifacts only. Q02 is a subset. The calibrated byte threshold and ranking among policies are dev evidence."
+    },
+    "baseline": {
+      "dev": {
+        "hitAt": {
+          "1": {
+            "hits": 19,
+            "gained": 0,
+            "lost": 0
+          },
+          "3": {
+            "hits": 19,
+            "gained": 0,
+            "lost": 0
+          },
+          "8": {
+            "hits": 22,
+            "gained": 0,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 61,
+          "p50": 1590,
+          "p95": 8785,
+          "mean": 3609.245901639344
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 0,
+        "expandedQueries": 0,
+        "appendedCandidates": 0,
+        "maxAddedBytes": 0
+      },
+      "q02": {
+        "hitAt": {
+          "1": {
+            "hits": 10,
+            "gained": 0,
+            "lost": 0
+          },
+          "3": {
+            "hits": 10,
+            "gained": 0,
+            "lost": 0
+          },
+          "8": {
+            "hits": 12,
+            "gained": 0,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 33,
+          "p50": 1583,
+          "p95": 8980,
+          "mean": 3228.030303030303
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 0,
+        "expandedQueries": 0,
+        "appendedCandidates": 0,
+        "maxAddedBytes": 0
+      }
+    },
+    "bestPassing": {
+      "policy": {
+        "trigger": "bare",
+        "addedBytes": 8192,
+        "guard": true,
+        "includePartial": false
+      },
+      "dev": {
+        "hitAt": {
+          "1": {
+            "hits": 20,
+            "gained": 1,
+            "lost": 0
+          },
+          "3": {
+            "hits": 20,
+            "gained": 1,
+            "lost": 0
+          },
+          "8": {
+            "hits": 25,
+            "gained": 3,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 61,
+          "p50": 1590,
+          "p95": 8785,
+          "mean": 3925.622950819672
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 25,
+        "expandedQueries": 7,
+        "appendedCandidates": 20,
+        "maxAddedBytes": 6155
+      },
+      "q02": {
+        "hitAt": {
+          "1": {
+            "hits": 11,
+            "gained": 1,
+            "lost": 0
+          },
+          "3": {
+            "hits": 11,
+            "gained": 1,
+            "lost": 0
+          },
+          "8": {
+            "hits": 15,
+            "gained": 3,
+            "lost": 0
+          }
+        },
+        "wireBytes": {
+          "n": 33,
+          "p50": 1583,
+          "p95": 8980,
+          "mean": 3765.6666666666665
+        },
+        "wireP50IncreasePct": 0,
+        "eligibleQueries": 14,
+        "expandedQueries": 5,
+        "appendedCandidates": 18,
+        "maxAddedBytes": 6155
+      },
+      "audit": {
+        "dev": {
+          "gainedTaskGroups": 3,
+          "gainedByCategory": {
+            "implementations": 2,
+            "callers": 1
+          },
+          "meanBytesIncreasePct": 8.76573826783671,
+          "maxAddedBytes": 6155
+        },
+        "q02": {
+          "gainedTaskGroups": 3,
+          "gainedByCategory": {
+            "implementations": 2,
+            "callers": 1
+          },
+          "meanBytesIncreasePct": 16.65524524759445,
+          "maxAddedBytes": 6155
+        }
+      }
+    },
+    "additionalControls": {
+      "maxDevGainWithUpTo4096AddedBytesAndCompleteProbes": 1,
+      "relativePerResponse10Pct": {
+        "devGainAt8": 0,
+        "devAppendedCandidates": 0
+      }
+    },
+    "rawEvidence": [
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b-budget/budget-simulation.mjs",
+        "sha256": "48ab1b5eac066b4884a4bba8e3c4d06b95d0777888604a32a2b8a43f29127195"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b-budget/summary.json",
+        "sha256": "727fca7c4770ab51d3f8451b93873274489afe2e937a34b20919a2ffff54433a"
+      },
+      {
+        "path": "post-ilv2-d15-192b182.rXREEa/d15-step-b-budget/selected-policy-audit.json",
+        "sha256": "49f695ced2d711603231720b9f1880a59b45f35124aa9e0afc1a2258617bbc92"
+      }
+    ]
+  },
+  "w3Assessment": {
+    "recommendation": "STOP_CURRENT_W3",
+    "scope": "The original candidate reranking work and the tested exact-to-text supplementation strategy.",
+    "basis": [
+      "W1 returned a covering candidate for 25/104 dev targets at limit 20. It recorded 78 NOT_RETURNED and 1 FILE_ONLY target. Main-first and co-anchor reordering did not improve hit@8.",
+      "At limit 8, unconditional exact-first text fill raised hit@3 from 19 to 28 and hit@8 from 22 to 42, but estimated response p50 rose from 1590 to 8478 bytes, above the 10% allowance.",
+      "The best passing budgeted policy raised hit@3 by 1 and hit@8 by 3 across 3 task groups. Estimated p50 and p95 stayed constant on dev while mean response bytes rose by 8.8%. The guard was calibrated on this same dev sample."
+    ],
+    "adoptionVerdict": "NOT_RUN",
+    "limitations": [
+      "The tested policies were selected on exposed dev data. Q02 is a subset and provides no independent confirmation.",
+      "The simulations measure declaration-window hits and estimated response bytes. Product runtime, latency, end-to-end retrieval, and sealed evaluation of these policies were not run."
+    ],
+    "revisitWhen": "A new discovery mechanism shows a material hit@3 gain under the existing byte budget on an independently selected development sample."
+  }
+}

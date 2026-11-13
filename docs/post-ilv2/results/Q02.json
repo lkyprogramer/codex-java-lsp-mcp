@@ -1,0 +1,181 @@
+{
+  "schema": "post-ilv2/task-result/v1",
+  "taskId": "Q02",
+  "status": "PASS",
+  "trigger": {
+    "state": "MAINLINE",
+    "evidence": []
+  },
+  "identity": {
+    "sourceHead": "d7a295e49287bc8e68d8861330b5d2b18d0b0f8a",
+    "productBuildDigest": "5263b59138ee8f06a227fcd5aea9e1da46954e4b9dbfae6ba6042626715e98e5",
+    "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+    "installedDigest": null
+  },
+  "checks": [
+    {
+      "name": "node --test scripts/ilv2-quality-attribution.test.mjs (Mac targeted script suite)",
+      "state": "PASS",
+      "suiteTap": {
+        "tests": 201,
+        "pass": 201,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "name": "node scripts/ilv2-mac-retrieval-eval.mjs (mac10-v3 dev, native + product)",
+      "state": "PASS",
+      "exitCode": 0,
+      "slots": 40
+    },
+    {
+      "name": "Read-only MCP replay and ilv2-quality-attribution.mjs ledger generation",
+      "state": "PASS",
+      "replayedGroups": 14
+    }
+  ],
+  "counts": {
+    "scheduled": 40,
+    "attempted": 40,
+    "completed": 40,
+    "successful": null
+  },
+  "quality": {
+    "criticalRegressions": null,
+    "requiredEvidenceRecall": null,
+    "validatedTaskOutcome": "UNMEASURED"
+  },
+  "cost": {
+    "providerUsage": null,
+    "wireBytes": null,
+    "sourceBytes": null,
+    "plannedBytes": null
+  },
+  "engineeringEligibility": "NOT_ASSESSED",
+  "benefit": "UNMEASURED",
+  "deployAuthorized": false,
+  "limitations": [
+    "All 40 slots are offline retrieval, with 20 distinct dev task groups and no model dispatch or task outcome.",
+    "The default product retrieval driver limits java_symbol results to 3. The paired limit-20 replay diagnoses two direct-declaration evictions in that driver; it does not measure a fixed-budget product ReadUnit change.",
+    "A null earlier stage prevents a downstream failure label. Unmeasured groups cannot be counted as absence of a defect. The raw stage rows, gold and source artifacts remain local."
+  ],
+  "rawEvidence": [
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-inputs/sample.json",
+      "sha256": "42db387064cdc8f17c97227a7898ff876fd6817df64bc3bb6a8bf878b76ad0e9"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-inputs/drivers.json",
+      "sha256": "3bec123713c37d0d19c9f808ddd30876a990e15488777fa555bda1dca9876374"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-inputs/schedule.jsonl",
+      "sha256": "88c16748de43f32a9546576d1fae43913132ddf0a462972087a87a9a848a9945"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-retrieval/identity.json",
+      "sha256": "a1b36dda3d9282c0663341764f645fc3e5624e6702ede69cdc7e00c3b558b4ff"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-retrieval/query-plan.jsonl",
+      "sha256": "88045fe0e56e96e6e2f3b4948a9ec2095ebc79e4d2b4e7aa87956a692dcb2ff5"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-retrieval/calls.jsonl",
+      "sha256": "f82cd0c551c71374239746bd58e7922ce064403237990b0f705327cf3a78ae09"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-retrieval/report.json",
+      "sha256": "aba209cf1e74e5561c8b5796b5711b9f3e708938b802329959f29202eef48a17"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-stage-replay/observations.jsonl",
+      "sha256": "fee40f03155ccde0b72b768f915365c778275ab2104783ec4c761ef3048924d6"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-rows.json",
+      "sha256": "967ae302e09d50683f9840ab572d5625d51f0dd6f1c764b73b41f42873cf0bfc"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-attribution-ledger.json",
+      "sha256": "7333a49414564852e249a2b8740a86386580e973822f9a2e54b7b7a693adb0e4"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-stage-observations.json",
+      "sha256": "e3913987b13d08c236c0517524582d10fecfed73bf7a681af9446574b348f715"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-replay.mjs",
+      "sha256": "7b16a46b2ece31cb87ea2f1d348bdc18eda69789961e4026cad8c5e4a51ff80d"
+    },
+    {
+      "path": "post-ilv2-mac10-d7a295e4.TkiuRL/q02-build-rows.py",
+      "sha256": "4d6c4eeeab84889c10beb7d24387b0e1e9a734d503fb167083df397e1c9c5660"
+    }
+  ],
+  "implementation": "CODE_WRITTEN",
+  "changes": [
+    "scripts/ilv2-quality-attribution.mjs/.test.mjs (new)",
+    "docs/post-ilv2/attribution.md"
+  ],
+  "ledger": "MEASURED_PARTIAL",
+  "retrieval": {
+    "split": "dev",
+    "taskGroups": 20,
+    "qa": 17,
+    "repair": 3,
+    "deadlineMs": 120000,
+    "seed": "20261105",
+    "byDriver": {
+      "product": {
+        "completed": 20,
+        "meanRequiredRangeRecall": 0.3625,
+        "fullRangeRecallSlots": 3,
+        "emptyPlanSlots": 3,
+        "wrongHash": 0
+      },
+      "native": {
+        "completed": 20,
+        "meanRequiredRangeRecall": 0.42833333333333334,
+        "fullRangeRecallSlots": 4,
+        "emptyPlanSlots": 3,
+        "wrongHash": 0
+      }
+    },
+    "productInitialFreshWaitMs": {
+      "exam-parent-v3": 13188,
+      "lishu-v2": 142833,
+      "lishuedu": 53416
+    }
+  },
+  "attribution": {
+    "labels": {
+      "UNMEASURED": 14,
+      "CANDIDATE_EVICTED": 2,
+      "NOT_PLANNED": 3,
+      "NOT_DISCOVERED": 1
+    },
+    "cards": {
+      "Q05": {
+        "status": "NOT_TRIGGERED",
+        "provenTaskGroups": 0
+      },
+      "Q06": {
+        "status": "NOT_TRIGGERED",
+        "provenTaskGroups": 1
+      },
+      "Q07": {
+        "status": "TRIGGERED",
+        "provenTaskGroups": 2
+      },
+      "Q08": {
+        "status": "NOT_TRIGGERED",
+        "provenTaskGroups": 0
+      }
+    },
+    "q09": "UNASSESSED_DAILY_REPEAT"
+  }
+}

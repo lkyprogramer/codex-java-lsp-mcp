@@ -1,0 +1,34 @@
+{
+  "schema": "post-ilv2-baseline/v1",
+  "planVersion": "POST-ILV2/1.2",
+  "recordedAt": "2026-11-11",
+  "sourceHead": "665d66e1e0695368bf2f5f1d843583b59bdd1e09",
+  "sourceHeadNote": "main after PR #2/#3 and 0524695; the plan revision 1837e22 (docs only) sits on top",
+  "sourceDigest": null,
+  "dirtyDiffHash": null,
+  "installedDigest": null,
+  "installedEvidence": "USER_REPORTED_DEPLOYED / NOT_INDEPENDENTLY_VERIFIED: no install receipt was read in this run",
+  "measuredDigest": null,
+  "macVerificationOfBaseFixes": "USER_REPORTED_VERIFIED: the user reports build:isolated and tests passed on their Mac before merging cc5db6b..665d66e (2026-11-11); no raw logs are in this repository",
+  "actualJdtImportMs": 120000,
+  "actualJdtImportMsSource": "source default JDTLS_START_TIMEOUT_MS (src/jdtls-session.ts startHardCapMs); installed override UNKNOWN",
+  "actualJdtIndexMs": 600000,
+  "actualJdtIndexMsSource": "source default JDTLS_INDEX_TIMEOUT_MS (src/jdtls-session.ts indexBarrierTimeoutMs, introduced by 07c6ccf); installed override UNKNOWN",
+  "toolchain": {
+    "node": "UNKNOWN on the user's Mac (not read)",
+    "jdt": "jdt-1.56.0 per docs/index-lifecycle-v2/mac/status.json toolchains path; installed UNKNOWN",
+    "jdk": "UNKNOWN",
+    "native": "UNKNOWN"
+  },
+  "acceptedExceptions": [
+    "G12 D1-a: query paired p95 <= max(1.1 x baseline, baseline + 10 ms)",
+    "G14 absolute floors: user-accepted no-regression release contract; original floor FAILs stay disclosed"
+  ],
+  "authorization": {
+    "modelCalls": false,
+    "productionInstall": false,
+    "productionRestart": false,
+    "sourceEgress": false,
+    "compileOrTestInThisRun": false
+  }
+}

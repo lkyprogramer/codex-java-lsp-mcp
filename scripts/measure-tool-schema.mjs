@@ -18,9 +18,12 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 const BYTES_PER_TOKEN = 4;
 const serverJs = path.join(projectDir, "dist", "server.js");
+// --experimental-symbol-ops measures the owner with java_symbol outline/evidence registered; the default measures what agents get.
+const experimentalSymbolOps = process.argv.includes("--experimental-symbol-ops");
 
 // stdio only relays: tools/list is served by an isolated owner on a throwaway cache.
-const owner = await startOwnerDaemon({ serverJs, cacheRoot: mkdtempSync(path.join(os.tmpdir(), "java-lsp-schema-cache-")), ephemeralCache: true });
+const owner = await startOwnerDaemon({ serverJs, cacheRoot: mkdtempSync(path.join(os.tmpdir(), "java-lsp-schema-cache-")), ephemeralCache: true,
+  env: { ...process.env, JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS: experimentalSymbolOps ? "1" : "0" } });
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [serverJs],
@@ -42,6 +45,7 @@ try {
     .sort((left, right) => left.name.localeCompare(right.name));
   const jsonBytes = Buffer.byteLength(JSON.stringify(response.tools), "utf8");
   console.log(JSON.stringify({
+    experimentalSymbolOps,
     tools: response.tools.length,
     jsonBytes,
     estimatedTokens: Math.ceil(jsonBytes / BYTES_PER_TOKEN),

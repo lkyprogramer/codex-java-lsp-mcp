@@ -22,7 +22,7 @@ type BuildImpactResultInput = {
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
   readonly ranked: readonly CandidateFile[];
-  readonly readPlan: ReadPlanItem[];
+  readonly readPlan: { readonly items: readonly ReadPlanItem[]; readonly selectedPaths: readonly string[] };
   readonly rgExecution: RgExecutionResult;
   readonly suppressed: Record<string, number>;
   readonly evidenceGaps: string[];
@@ -48,6 +48,12 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult |
   const verbosity = input.options.verbosity || "standard";
   // Both public projections need provider reasons before stripping diagnostic fields.
   const formattedFiles = input.ranked.map((file, index) => buildImpactFileV6(file, `F${index + 1}`, "diagnostic"));
+  const ids = new Map(input.ranked.map((file, index) => [file.absolutePath, formattedFiles[index]!.id]));
+  const readPlan = input.readPlan.items.map((item, index) => {
+    const fileId = ids.get(input.readPlan.selectedPaths[index]!);
+    if (!fileId) throw new Error("Selected read-plan file is missing from the impact result");
+    return { ...item, fileId };
+  });
   const framework = input.metrics.framework;
   const generatedCode = framework?.generatedCode as Record<string, unknown> | undefined;
   const generatedSemantics = generatedCode?.semantics as "OK" | "INCOMPLETE" | "NOT_DETECTED" | undefined;
@@ -63,11 +69,11 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult |
       readiness: input.semanticReadiness
     },
     files: formattedFiles,
-    readPlan: input.readPlan,
+    readPlan,
     evidenceGaps: unique(input.evidenceGaps),
     cost: {
       resultBytes: 0,
-      readBytes: readPlanBytes(input.readPlan),
+      readBytes: readPlanBytes(readPlan),
       estimatedTokens: 0,
       suppressedRawBytes: input.rgExecution.rawBytes
     },
