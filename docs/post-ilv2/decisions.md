@@ -175,6 +175,10 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 - **结果 JSON 刷新。** Q00、Q03、Q04、Q12 的结果是 D0 不验证轮的快照，`status`/`checks` 保留原值，新增 `followUp` 字段记录之后的验证与当前状态。
 - **未覆盖的主线。** 15 号文档第三条（异常/状态排查）没有专门的评测类别，Q09 的日常重复等待也没有 ≥10 次记录。两者都只能靠日常使用中的失败案例和等待记录积累，暂不立项。
 
+## D16 java_impact 未命中拆表（2026-11-13 批准）
+
+离线重读 D15-F 的私有产物，把 implementations/callers 的未命中按预注册原因拆开，判读规则在 Mac 运行前固定。无模型、不调用产品。见 [D16](d16-impact-miss-breakdown.md)。Mac 未运行。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -187,3 +191,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
 | P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |
 | P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。D15 §12 发现层诊断已收尾，无产品缺陷。开关按 A 保留。Mac 全量 `npm test`（2405 通过、0 失败、10 个白名单跳过，含 stdio smoke）与 `gate:pr`（1658 通过、0 失败、1 个既有跳过）已通过，见 [P6-GATES](results/P6-GATES.json)。合入前评审无默认路径阻断缺陷，实验功能问题已登记（见上）。2026-11-13 经 PR #4 以 merge commit `88e6f4a` 合入 main。Mac 全量门禁基于 `f3ab2cc`，其后到 `2c8919a` 只有文档提交；代码评审范围是 `origin/main...2c8919a` 的 `src`。随后合入的 `3f48c1d`（仅文档）和 `ea14c2f`（仅 eval 脚本，不涉及 `src`）未经代码评审和 Mac 全量门禁；`ea14c2f` 涉及的 `ilv2-mac-delivery-receipt.test.mjs` 与 `eval-mac10-live.test.mjs` 在 Linux 开发机上通过（23/23），Mac 未运行 |
+| P7 | D16 未命中拆表 | 脚本与判读规则已提交，Mac 未运行 |
