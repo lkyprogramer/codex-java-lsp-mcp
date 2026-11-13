@@ -424,3 +424,30 @@ D15 以现有 dev 证据收尾。W6 未追加真实 Agent 配对。outline、evi
 
 15 个 XML 范围中，2 个来自 Maven POM，13 个来自日志配置。MyBatis 语句目标为 0，全部记录在 `NOT_STATEMENT` 阶段结束。绑定、文档检索、排名和 mapper 锚点读取计划均未测到。这批 dev 无法验证 MyBatis 发现，XML-3 以样本口径校正收尾。若后续重开该验证，需另选含真实 mapper 语句的 dev 样本。
 
+### 11.6 C：MyBatis 普查（2026-11-13，Mac 运行之前提交）
+
+XML-3 的样本里没有 MyBatis 语句目标。普查用来判断有没有必要另选样本、重开 MyBatis 发现验证。脚本是 `scripts/ilv2-mybatis-census.mjs`，只做文本计数，不调用产品，不调用模型，也不读 holdout gold。
+
+- 语料侧（每个语料，排除 `src/test` 和构建产物）：
+  - XML 文件数；
+  - mapper XML 文件数，判定规则与索引相同，即根元素为 `<mapper>`；
+  - 语句数（select/insert/update/delete）；
+  - Java 侧信号的文件数：`@Mapper`、`extends BaseMapper<`、`ServiceImpl`/`IService`、`QueryWrapper`/`UpdateWrapper`、`@Select` 等 SQL 注解。
+- dev gold 侧：落在 mapper XML 的范围数，落在 mapper 接口的范围数，其他 XML 的范围数，以及涉及 MyBatis 的题数。
+
+判读规则（看数字之前固定）：
+
+| 条件 | 结论 |
+|---|---|
+| 三个语料的 mapper 语句合计 < 50，或 `plusBaseMapper` 合计大于 mapper XML 文件合计 | 这些仓库以 MyBatis-Plus 或其他方式为主，XML 发现价值低，归档 |
+| 不满足上一条，且 dev gold 中 mapper XML 范围 ≥ 5 或涉及 MyBatis 的题 ≥ 3 | 用这些 dev 题预注册 MyBatis 发现验证，复用 XML-3 的阶梯 |
+| 不满足上两条（XML 很多，但 dev gold 很少用到） | 交用户决定：另抽样本，或者归档 |
+
+Mac 执行：
+```bash
+node --test scripts/ilv2-mybatis-census.test.mjs
+node scripts/ilv2-mybatis-census.mjs --dataset "$ILV2_MAC10_DATASET" --tasks "$DS/tasks-dev.jsonl" \
+  --gold "$DS/private/gold-dev.jsonl" --inputs "$ILV2_MAC10_INPUTS" --out "$RUN/d15-mybatis-census"
+```
+回传：新建 `results/D15-MYBATIS-CENSUS.json`，包含 `summary.json` 全文和定向测试 TAP 计数。
+
