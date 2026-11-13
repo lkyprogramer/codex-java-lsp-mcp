@@ -13,7 +13,7 @@ import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, javaStatusFromMemory, statusSchema, summarizeResourceStatus } from "./tools/status.js";
-import { javaSymbol, STATIC_QUERY_LIMIT_DESCRIPTION, symbolNeedsJdt, symbolSchema } from "./tools/symbol.js";
+import { experimentalSymbolOpsFromEnvironment, javaSymbol, STATIC_QUERY_LIMIT_DESCRIPTION, symbolNeedsJdt, symbolSchemaFor } from "./tools/symbol.js";
 import { logToolFailure } from "./log.js";
 import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
 
@@ -32,7 +32,18 @@ export type PublicJavaTool = (typeof PUBLIC_JAVA_TOOLS)[number];
 
 export type McpServerFactoryOptions = {
   transportMode: McpTransportMode;
+  /** java_symbol operation=outline|evidence; defaults to JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1 in the owner's env. */
+  experimentalSymbolOps: boolean;
 };
+
+const SYMBOL_DESCRIPTION_HEAD = "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: " + STATIC_QUERY_LIMIT_DESCRIPTION + ", terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). Matching is lexical over code identifiers, comments and framework keys: write the query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. preview=head (default: short declaration heads, small per-request cap) | window (12-line windows) | none; read the code for evidence. Static results name each declaration by symbolId (pass it back as symbolId instead of file/line/column, or as java_impact symbol) and carry indexView (workspaceId; state = index freshness); with scopeState PARTIAL or NOT_READY a miss is not proof of absence. ";
+const SYMBOL_DESCRIPTION_EXPERIMENTAL = "operation=evidence (explicit): hash-verified source units for a located Java type/method (file/line/column or symbolId): its declaration (whole method, or head plus a window around the line when large) and linked MyBatis XML, max 8 units/80 lines/16000 bytes; complete describes a source unit, not task coverage; no JDT. operation=outline: file (+ optional nearLine, limit 1..20 default 8) returns type/constructor/method/field declarations with public identities, line ranges and compact signatures. Selects nearest to nearLine, then returns in source order. detail=diagnostic adds preparation time and omission counts; no JDT. ";
+const SYMBOL_DESCRIPTION_TAIL = "operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and query with backend=jdt use live JDT.";
+
+/** java_symbol tools/list text: outline/evidence are described only when they are registered. */
+export function javaSymbolDescription(experimentalOps: boolean): string {
+  return SYMBOL_DESCRIPTION_HEAD + (experimentalOps ? SYMBOL_DESCRIPTION_EXPERIMENTAL : "") + SYMBOL_DESCRIPTION_TAIL;
+}
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -44,6 +55,7 @@ export function createMcpServer(
   options: Partial<McpServerFactoryOptions> = {}
 ): McpServer {
   const transportMode = options.transportMode ?? application.transportMode;
+  const experimentalSymbolOps = options.experimentalSymbolOps ?? experimentalSymbolOpsFromEnvironment();
   if (transportMode !== application.transportMode) {
     throw new Error(`MCP transport (${transportMode}) does not match application ownership mode (${application.transportMode}).`);
   }
@@ -87,8 +99,8 @@ export function createMcpServer(
 
   register(track("java_symbol"), {
     title: "Java Symbol",
-    description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: " + STATIC_QUERY_LIMIT_DESCRIPTION + ", terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). Matching is lexical over code identifiers, comments and framework keys: write the query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. preview=head (default: short declaration heads, small per-request cap) | window (12-line windows) | none; read the code for evidence. Static results name each declaration by symbolId (pass it back as symbolId instead of file/line/column, or as java_impact symbol) and carry indexView (workspaceId; state = index freshness); with scopeState PARTIAL or NOT_READY a miss is not proof of absence. operation=evidence (explicit): hash-verified source units for a located Java type/method (file/line/column or symbolId): its declaration (whole method, or head plus a window around the line when large) and linked MyBatis XML, max 8 units/80 lines/16000 bytes; complete describes a source unit, not task coverage; no JDT. operation=outline: file (+ optional nearLine, limit 1..20 default 8) returns type/constructor/method/field declarations with public identities, line ranges and compact signatures. Selects nearest to nearLine, then returns in source order. detail=diagnostic adds preparation time and omission counts; no JDT. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and query with backend=jdt use live JDT.",
-    inputSchema: symbolSchema
+    description: javaSymbolDescription(experimentalSymbolOps),
+    inputSchema: symbolSchemaFor(experimentalSymbolOps)
   }, (args, signal) => withContext(args, (context, request) => javaSymbol(context, args, request), {
     observeStaticRead: true,
     // T06: the JDT admission predicate is computed per request and must match

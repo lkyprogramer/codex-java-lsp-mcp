@@ -131,6 +131,18 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 - **XML-3 已收尾。** 6 道 dev 题的 16 个证据范围包含 15 个 XML 和 1 个 YAML，MyBatis 语句目标为 0。现有样本无法验证 MyBatis 发现。[D15-XML3.json](results/D15-XML3.json)
 - **MyBatis 发现方向归档。** 三个冻结语料识别到 0 条 mapper XML 语句，达到 §11.6 的归档条件。MyBatis 发现验证仍为 `NOT_RUN`。[普查报告](results/D15-MYBATIS-CENSUS.json)
 
+## 分支收尾：outline/evidence 默认隐藏（O2，2026-11-13）
+
+用户于 2026-11-13 选择 O2：两个 impact 修复（`828f8a3`、`504a5d6`）照常合入；outline 和 evidence v2 的代码保留，默认不注册。
+
+- 开关：owner 环境变量 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1`，只认字面值 `1`，作用于整个 owner。stdio 入口只转发，不读这个变量。
+- 关闭时（默认）：`java_symbol` 的 operation 枚举只有 query/position/references，没有 `nearLine`，描述里没有 outline/evidence。调用被隐藏的操作会在输入校验阶段被拒绝，handler 不变。main 上原有的 evidence v1 实验操作也不再默认暴露，因为 v2 无法廉价投影回 v1（用户确认）。
+- 开启时：描述文本已离线核对，与 D14 候选 `13f9dc9a` 一致；tools/list 字节数待 Mac 测量确认。
+- 评测：`openImpactSession` 启动的 owner 一律开启。模型可见工具仍由 `productTools()` 决定，b0 不受影响。MAC11 系统回路测试同样开启。
+- 测量：`measure-tool-schema.mjs` 默认测关闭状态，加 `--experimental-symbol-ops` 测开启状态。
+
+Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的测试：`dist/mcp-server-factory.test.js`、`dist/tools/symbol-static.test.js`、`dist/tools/output-shape.test.js`、`scripts/eval-evidence-e2e.test.mjs`、`scripts/run-agent-trace-live.test.mjs`。`measure:tool-schema` 两种状态各测一次。全量 `npm test`（含 stdio smoke）和 `npm run gate:pr` 在合入 main 前跑一次。硬门是开启状态：5 个工具、9,086 B，`java_symbol` 3,532 B，与 D14 一致。关闭状态只记录不设门；预期 `java_symbol` 小于 main 的 2,883 B，粗估约 2,670 B（main 减去 evidence 说明、枚举项和 `symbolId` 描述里的 evidence 字样）。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -142,3 +154,4 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
 | P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |
+| P6 | 分支收尾 | O2：outline/evidence 默认隐藏，开关已实现，Mac 工程门未运行 |

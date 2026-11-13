@@ -1123,7 +1123,10 @@ export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) 
   const owner = await startOwnerDaemon({ serverJs: serverEntry, cacheRoot, ephemeralCache: true, env: {
     ...childEnv,
     PATH: withHomebrewPathFirst(childEnv.PATH),
-    JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false"
+    JDTLS_BIN: env.JDTLS_BIN || "/usr/bin/false",
+    // Eval arms reach outline/evidence through their own model-facing tools (productTools), so the
+    // owner registers them for every arm; the model never sees the server's tools/list.
+    JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS: "1"
   } });
   let session;
   try {

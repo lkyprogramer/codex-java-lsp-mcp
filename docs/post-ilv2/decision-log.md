@@ -41,3 +41,4 @@ Q10 最终为 INCONCLUSIVE，按上一条规则，outline/evidence 路线停止�
 | 封存集 | v1 归档，v2 延后 | v1 衡量锚点声明自身的排序，与当前证据覆盖问题不匹配。新候选改动进入评估时，先冻结与该改动相符的指标、预算、采样规则和数据，再执行一次封存评估。[D15 封存集处置](d15-discovery-ranking.md#10-w6-收尾决策2026-11-12) |
 | XML-3（2026-11-13） | 对账后收尾，MyBatis 发现为 `NOT_RUN` | 16 个证据范围中有 15 个 XML 和 1 个 YAML。15 个 XML 范围均来自 Maven POM 或日志配置，MyBatis 语句目标为 0。[D15-XML3.json](results/D15-XML3.json) |
 | MyBatis 发现（2026-11-13） | 按 §11.6 归档本批语料的发现方向 | 三个冻结语料识别到 0 条 mapper XML 语句，低于 50 条的门槛。MyBatis 发现验证仍为 `NOT_RUN`。[普查报告](results/D15-MYBATIS-CENSUS.json) |
+| outline/evidence 去留（2026-11-13） | O2：代码保留，默认不注册，owner 开关 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1` 开启；main 原有的 evidence v1 实验操作默认也不再暴露 | Q10 为 INCONCLUSIVE，不让默认会话为未证实的收益付 schema 成本；v2 无法廉价投影回 v1。[分支收尾](decisions.md#分支收尾outlineevidence-默认隐藏o22026-11-13) |

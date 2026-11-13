@@ -57,6 +57,29 @@ export const symbolSchema = {
   detail: detailSchema
 };
 
+/** Owner env switch for operation=outline and operation=evidence (java-evidence-unit/v2); off by default. */
+export const EXPERIMENTAL_SYMBOL_OPS_ENV = "JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS";
+export function experimentalSymbolOpsFromEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[EXPERIMENTAL_SYMBOL_OPS_ENV] === "1";
+}
+
+/**
+ * The registered java_symbol input. With the switch off (default) outline/evidence are not in the
+ * operation enum and nearLine is not a field, so a hidden operation fails input validation before
+ * the handler. The handler itself is unchanged.
+ */
+export function symbolSchemaFor(experimentalOps: boolean): typeof symbolSchema {
+  if (experimentalOps) return symbolSchema;
+  const { nearLine: _nearLine, ...shape } = symbolSchema;
+  // Registration-only narrowing: the handler accepts the wider type, the wire only the narrower one.
+  return {
+    ...shape,
+    operation: z.enum(["query", "position", "references"]).optional(),
+    symbolId: z.string().min(1).max(4096).optional()
+      .describe("Instead of file/line/column for references/position: a declaration.symbolId from an earlier java_symbol query.")
+  } as unknown as typeof symbolSchema;
+}
+
 type SymbolArgs = z.infer<z.ZodObject<typeof symbolSchema>>;
 type SymbolRequest = Pick<RequestContext, "budget"> & Partial<Pick<RequestContext, "negativeLookupAllowed">>;
 
@@ -83,7 +106,7 @@ export async function javaSymbol(
   if (args.symbolId !== undefined) {
     if (operation === "query" || args.file !== undefined || args.line !== undefined || args.column !== undefined) {
       throw new JavaIntelligenceError("INVALID_INPUT",
-        'symbolId replaces file/line/column for operation=evidence|references|position, e.g. {"operation":"evidence","symbolId":"jsym:mac1:..."}; it does not combine with query or a position.');
+        'symbolId replaces file/line/column for operation=references|position (and evidence when enabled), e.g. {"operation":"references","symbolId":"jsym:mac1:..."}; it does not combine with query or a position.');
     }
     if (!isSymbolIdLike(args.symbolId)) {
       throw new JavaIntelligenceError("INVALID_INPUT", 'symbolId takes an id from java_symbol results; to look a name up use {"operation":"query","query":"OrderService#create"}.');

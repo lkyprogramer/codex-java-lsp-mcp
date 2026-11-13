@@ -10,7 +10,8 @@ import { JavaLspApplication } from "./application.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { JAVA_IMPACT_TOOL_DESCRIPTION } from "./tools/impact.js";
-import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
+import { createMcpServer, javaSymbolDescription, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
+import { experimentalSymbolOpsFromEnvironment } from "./tools/symbol.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
 import { resetImpactTelemetryForTests } from "./telemetry/impact-telemetry.js";
@@ -88,6 +89,52 @@ test("java_impact tools/list teaches auto-skip and the required/java_symbol retr
   } finally {
     await session.client.close();
     await application.close();
+  }
+});
+
+test("java_symbol hides outline/evidence by default and exposes them only behind the owner switch", async () => {
+  assert.equal(experimentalSymbolOpsFromEnvironment({}), false);
+  assert.equal(experimentalSymbolOpsFromEnvironment({ JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS: "true" }), false, "only the literal 1 enables");
+  assert.equal(experimentalSymbolOpsFromEnvironment({ JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS: "1" }), true);
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-factory-symbol-ops-"));
+  await mkdir(path.join(root, "src", "main", "java"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  const configPath = path.join(root, "projects.json");
+  await writeFile(configPath, JSON.stringify({ aliases: [] }));
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: configPath,
+    resolverOptions: { cwdFallback: "reject" },
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] })
+  });
+  await application.initialize();
+  const symbolTool = async (experimentalSymbolOps: boolean) => {
+    const { client } = await connect(application, `symbol-ops-${experimentalSymbolOps}`, { experimentalSymbolOps });
+    const tool = (await client.listTools()).tools.find(entry => entry.name === "java_symbol");
+    return { client, tool };
+  };
+  try {
+    const off = await symbolTool(false);
+    const offOps = (off.tool?.inputSchema?.properties?.operation as { enum?: string[] } | undefined)?.enum;
+    assert.deepEqual(offOps, ["query", "position", "references"]);
+    assert.equal(off.tool?.inputSchema?.properties?.nearLine, undefined);
+    assert.equal(off.tool?.description, javaSymbolDescription(false));
+    assert.doesNotMatch(off.tool?.description ?? "", /operation=(outline|evidence)/);
+    assert.doesNotMatch(JSON.stringify(off.tool?.inputSchema ?? {}), /outline|evidence\/references/);
+    for (const operation of ["outline", "evidence"]) {
+      const rejected = await off.client.callTool({ name: "java_symbol", arguments: { repoRoot: root, operation, file: "A.java", line: 1, column: 1 } });
+      assert.equal(rejected.isError, true, `${operation} is not callable while hidden`);
+      assert.match(toolText(rejected), /Input validation error/, `${operation} is rejected by the registered schema, not by the handler`);
+    }
+    const on = await symbolTool(true);
+    const onOps = (on.tool?.inputSchema?.properties?.operation as { enum?: string[] } | undefined)?.enum;
+    assert.deepEqual(onOps, ["query", "position", "references", "evidence", "outline"]);
+    assert.ok(on.tool?.inputSchema?.properties?.nearLine, "nearLine is registered with outline");
+    assert.equal(on.tool?.description, javaSymbolDescription(true));
+    assert.match(on.tool?.description ?? "", /operation=evidence \(explicit\)[\s\S]*operation=outline/);
+  } finally {
+    await application.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 
@@ -285,7 +332,7 @@ test("MAC11 public symbol freezes STALE labels, suppresses misses, then converge
   };
   try {
     await application.initialize();
-    client = (await connect(application, "mac11-stale")).client;
+    client = (await connect(application, "mac11-stale", { experimentalSymbolOps: true })).client;
     const workspace = await owner.workspace(root);
     await until(() => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight, "initial FRESH");
     const before = owner.store.binding(workspace.workspaceId)!;
@@ -413,7 +460,7 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
   type Declaration = { symbolId?: string; stability?: string; evidenceHandle?: string; sourceRoot?: string; [key: string]: unknown };
   try {
     await application.initialize();
-    client = (await connect(application, "mac13-identity")).client;
+    client = (await connect(application, "mac13-identity", { experimentalSymbolOps: true })).client;
     const workspace = await owner.workspace(root);
     const settled = () => workspace.trackerStatus() === "FRESH" && !workspace.status().roundInFlight;
     await until(settled, "initial FRESH");
@@ -577,8 +624,8 @@ test("MAC13 public symbolId survives an unrelated publish, misses after a signat
   }
 });
 
-async function connect(application: JavaLspApplication, name: string): Promise<{ client: Client }> {
-  const server = createMcpServer(application, { transportMode: "streamable_http" });
+async function connect(application: JavaLspApplication, name: string, options: { experimentalSymbolOps?: boolean } = {}): Promise<{ client: Client }> {
+  const server = createMcpServer(application, { transportMode: "streamable_http", experimentalSymbolOps: options.experimentalSymbolOps ?? false });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name, version: "0.1.0" });
   await server.connect(serverTransport);
