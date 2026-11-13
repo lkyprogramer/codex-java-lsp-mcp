@@ -31,7 +31,7 @@ outline 的定向覆盖包括 STALE/NOT_READY 持有视图、FRESH 下覆盖不�
 评测协议 v1.7 在各臂使用同一份按证据需求选工具的提示词。`java_evidence` 的工具声明说明如何从查询结果传入 Java 锚点，并取得 Java 源码与关联 MyBatis XML。对仓库内置开发题，使用 `--public-answer-contract docs/next-stage/public-answer-contract-v1.0.json` 把字段角色和元素类型发给所有臂。
 
 ```bash
-git checkout feat/post-ilv2-quality
+git checkout main  # feat/post-ilv2-quality merged via PR #4 (88e6f4a) and deleted
 npm ci && npm run build
 node scripts/check-facts-revision.mjs --ack 'EvidenceSource only adds the java-declaration string literal to its TypeScript relation union. It does not change persisted index facts.'
 sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test \
