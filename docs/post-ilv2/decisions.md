@@ -179,6 +179,10 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 
 离线重读 D15-F 的私有产物，把 implementations/callers 的未命中按预注册原因拆开，判读规则在 Mac 运行前固定。无模型、不调用产品。见 [D16](d16-impact-miss-breakdown.md)。Mac 未运行。用户 2026-11-13 决定：§3.3 重放暂不做；本分支等 D16 Mac 结果和判读完成后再合入 main。判读见 [D16 §5](d16-impact-miss-breakdown.md#5-结果与判读2026-11-13)。
 
+## D17 关系缺失逐目标文本核查（2026-11-13 批准）
+
+对 D16 中静态路径没有证明关系的 16 个焦点未命中，读冻结语料源码判断目标与锚点的文本联系：直接关系（缺陷）、间接关系（Q05 范围）、无文本联系（gold 或题目问题）。离线、无模型、不调用产品，判读规则在 Mac 运行前固定。同时检验 D16 §6 的锚点粒度结论。见 [D17](d17-relation-text-check.md)。Mac 未运行。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -192,3 +196,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |
 | P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。D15 §12 发现层诊断已收尾，无产品缺陷。开关按 A 保留。Mac 全量 `npm test`（2405 通过、0 失败、10 个白名单跳过，含 stdio smoke）与 `gate:pr`（1658 通过、0 失败、1 个既有跳过）已通过，见 [P6-GATES](results/P6-GATES.json)。合入前评审无默认路径阻断缺陷，实验功能问题已登记（见上）。2026-11-13 经 PR #4 以 merge commit `88e6f4a` 合入 main。Mac 全量门禁基于 `f3ab2cc`，其后到 `2c8919a` 只有文档提交；代码评审范围是 `origin/main...2c8919a` 的 `src`。随后合入的 `3f48c1d`（仅文档）和 `ea14c2f`（仅 eval 脚本，不涉及 `src`）未经代码评审和 Mac 全量门禁；`ea14c2f` 涉及的 `ilv2-mac-delivery-receipt.test.mjs` 与 `eval-mac10-live.test.mjs` 在 Linux 开发机上通过（23/23），Mac 未运行 |
 | P7 | D16 未命中拆表 | Mac 已运行（[D16-MISS](results/D16-MISS.json)）。R2 未触发、R3 触发：选择策略不改。16/22 焦点未命中在 F 的调用里没有受保护关系 reason，原因未定（见 D16 §5、§6）。更正：评测 owner 未启用 JDT，D15 与 D16 只测了静态路径；三策略重放在现有框架里跑不了，锚点粒度已大体排除，首调用规则待 Mac 离线补跑。Q05 静态路径触发，Q08 仍 UNASSESSED。用户决定不做 JDT 对照（日常几乎不用 JDT，静态路径即实际路径）。首调用补跑 `protectedInAnotherCall`=0，R3 不扣减，D16 收尾（[D16 §7](d16-impact-miss-breakdown.md#7-首调用补跑结果2026-11-13)） |
+| P8 | D17 关系文本核查 | 脚本与判读规则已提交，Mac 未运行 |
