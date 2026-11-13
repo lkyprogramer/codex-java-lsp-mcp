@@ -151,6 +151,7 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 - 理由：开关不只用于对照。评测 b1/b2 臂、`eval-evidence-e2e`、MAC11/MAC13 测试和 D15 §12 诊断（outline 作 oracle）都依赖它；删除约 +415 行生产代码，且与 `b96a9c1` 的修复交织。
 - 成本：两套注册面（关闭/开启）都要测。`mcp-server-factory.test` 覆盖两种状态，`measure-tool-schema` 两种状态各测一次。
 - 复查条件：下一次真实 Agent 评测中，outline 或 evidence 仍为 INCONCLUSIVE 或 NO_GAIN 时，删除对应代码和开关。
+- 复查期限（2026-11-13 补充）：上一条依赖的评测可能不会发生。到 2027-02-13 仍没有新的真实 Agent 评测时，按 NO_GAIN 处理，删除 outline/evidence 代码和开关；例外是届时已有至少 2 个不同任务组的日常失败案例需要它们（口径同 [attribution.md](attribution.md) 的触发规则）。
 
 ## 合入前代码评审（2026-11-13）
 
@@ -166,6 +167,13 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
   6. `evidence-unit.ts`：请求行落在过长签名头内时，该行重复发送、重复计入预算。
   7. `symbol.ts`：outline 空信封超过 4096 B 时返回 `INVALID_INPUT`，应为带预算原因的 PARTIAL。
   8. `outline.ts` 与 `evidence-unit.ts`：覆盖范围查找和路径包含逻辑重复，应移入 `evidence-source-reader.ts`。
+
+## 合入后收口（2026-11-13）
+
+- **`java_impact` 与 references 的 Agent 收益：UNMEASURED。** Q10 中模型可见的产品工具只有 `java_symbol` query（b2 另加 outline、evidence），没有 `java_impact`、position、references（`scripts/evaluate-java-task.mjs` 的 `productTools`）。"Q10 为 INCONCLUSIVE 即停止路线"只覆盖 outline/evidence，不能当作 `java_impact` 已评估。D15 §12 把 59 个 `RANKED_OUT` 关系目标归给 `java_impact`，这一归属在 Agent 层面没有测量。本轮不跑评测；离线拆表（见 D16）显示关系缺口集中时再议。
+- **路由说明作废。** [15 号文档](../java-specialist-post-ilv2-v1/docs/15-java-workflow-priorities.md)的"给使用者的简短路由说明"以 Q10 验证为安装前提。Q10 为 INCONCLUSIVE，outline/evidence 已默认隐藏，原说明中的 outline、evidence 两行不再成立；默认用法以 README 的"query → 读源码 → 按需 JDT"为准。不安装，也不改用户全局 AGENTS。
+- **结果 JSON 刷新。** Q00、Q03、Q04、Q12 的结果是 D0 不验证轮的快照，`status`/`checks` 保留原值，新增 `followUp` 字段记录之后的验证与当前状态。
+- **未覆盖的主线。** 15 号文档第三条（异常/状态排查）没有专门的评测类别，Q09 的日常重复等待也没有 ≥10 次记录。两者都只能靠日常使用中的失败案例和等待记录积累，暂不立项。
 
 ## 阶段进度
 

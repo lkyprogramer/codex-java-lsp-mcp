@@ -51,5 +51,14 @@
     "README.md: JDT time contract (import 120 s + index barrier 600 s) and MAC-17 historical note",
     "docs/post-ilv2/baseline.json",
     "docs/post-ilv2/decisions.md"
-  ]
+  ],
+  "followUp": {
+    "asOf": "2026-11-13",
+    "state": "CLOSED",
+    "note": "Snapshot above is the D0 no-verification round. Baseline identity is recorded in baseline.json; the ILV2 ledger closure proposal was accepted by the user on 2026-11-11 (decisions.md D2). installedDigest remains null: deployment is still USER_REPORTED.",
+    "evidence": [
+      "decisions.md#d1-基线身份q00",
+      "decisions.md#d2-ilv2-状态账本收口q00用户-2026-11-11-已确认"
+    ]
+  }
 }
