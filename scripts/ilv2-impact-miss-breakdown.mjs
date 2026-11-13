@@ -12,7 +12,8 @@ import { CORE_EXCEEDED_GAP, PROTECTED_CORE_KINDS } from "./ilv2-impact-budget-di
 export const MISS_BREAKDOWN_SCHEMA = "post-ilv2/impact-miss-breakdown/v1";
 export const CONFIGS = Object.freeze(["C0", "C3"]);
 export const FOCUS = Object.freeze(["implementations", "callers"]);
-// First matching cause wins, in this order (d16 §2).
+// First matching cause wins, in this order (d16 §2). An exact `match` anchor only means a plan term matched one
+// declaration exactly; it does not prove that declaration is the symbol the task asks about.
 export const CAUSES = Object.freeze(["NO_IMPACT_CALL", "SELECTED_RANGE_MISS", "ANCHOR_CONFOUND", "RELATION_MISSING", "CORE_CAPPED", "PROTECTED_UNSELECTED", "WEAK_RELATION"]);
 export const GATE = 5; // d16 §3, the same size as D15 W3's implementation gate
 
@@ -42,18 +43,26 @@ export function classifyMiss({ item, label, calls }) {
   return { cause: detail.coreExceeded ? "CORE_CAPPED" : "PROTECTED_UNSELECTED", ...detail };
 }
 
-/** Pool files whose reasons carry a protected-core kind but whose output role is `related` (output-v6 roleOf). */
+/** Pool files carrying a protected-core reason, by the output role the diagnostic projection gave them. */
 export function roleAudit(observations, config) {
-  let files = 0, relatedProtected = 0;
-  const kinds = {};
+  let files = 0, protectedFiles = 0;
+  const byRole = {};
+  const relatedKinds = {};
   for (const observation of observations) for (const call of callsOf(observation, config)) for (const file of call.diagnostic.files) {
     files += 1;
-    if (file.role !== "related" || !hasProtectedReason(file)) continue;
-    relatedProtected += 1;
-    for (const reason of file.reasons.filter(entry => PROTECTED_CORE_KINDS.has(entry))) kinds[reason] = (kinds[reason] ?? 0) + 1;
+    if (!hasProtectedReason(file)) continue;
+    protectedFiles += 1;
+    const role = file.role ?? "?";
+    if (!Object.hasOwn(byRole, role)) byRole[role] = 0;
+    byRole[role] += 1;
+    if (role !== "related") continue;
+    for (const reason of file.reasons.filter(entry => PROTECTED_CORE_KINDS.has(entry))) relatedKinds[reason] = (relatedKinds[reason] ?? 0) + 1;
   }
-  return { poolFiles: files, relatedWithProtectedReason: relatedProtected, protectedKinds: kinds };
+  return { poolFiles: files, withProtectedReason: protectedFiles, protectedByRole: byRole, relatedWithProtectedReason: byRole.related ?? 0, relatedProtectedKinds: relatedKinds };
 }
+
+/** Whether the call that decided a miss was anchored on an exact match (pool misses: any call). */
+export const anchorExactOf = row => (row.poolRank ? row.presentAnchorExact === true : row.anchorExactCalls > 0);
 
 const tally = (rows, key) => rows.reduce((acc, row) => { const value = row[key] ?? "?"; if (!Object.hasOwn(acc, value)) acc[value] = 0; acc[value] += 1; return acc; }, {});
 const zeroed = () => Object.fromEntries(CAUSES.map(cause => [cause, 0]));
@@ -74,21 +83,31 @@ export function summarize(missRows, audit) {
   const focus = config => missRows.filter(row => row.config === config && FOCUS.includes(row.category));
   const count = (rows, causes) => rows.filter(row => causes.includes(row.cause)).length;
   const c0 = focus("C0");
-  const selection = c0.filter(row => ["CORE_CAPPED", "PROTECTED_UNSELECTED"].includes(row.cause));
-  const persistsInC3 = selection.filter(row => missRows.some(other => other.config === "C3" && other.taskId === row.taskId && other.index === row.index)).length;
-  const weak = count(c0, ["WEAK_RELATION"]);
+  const exact = c0.filter(anchorExactOf);
+  const inC3 = row => missRows.some(other => other.config === "C3" && other.taskId === row.taskId && other.index === row.index);
+  // Focus table: category x cause x whether the deciding anchor was an exact match.
+  const focusTable = {};
+  for (const row of c0) {
+    const key = `${row.category}/${row.cause}`;
+    focusTable[key] ??= { exactAnchor: 0, inexactAnchor: 0 };
+    focusTable[key][anchorExactOf(row) ? "exactAnchor" : "inexactAnchor"] += 1;
+  }
+  const selectionCauses = ["CORE_CAPPED", "PROTECTED_UNSELECTED"];
+  const selectionAll = c0.filter(row => selectionCauses.includes(row.cause));
+  const selectionExact = exact.filter(row => selectionCauses.includes(row.cause));
+  const persistsInC3 = selectionExact.filter(inC3).length;
   const rules = {
     focusMissesC0: c0.length,
-    R1_replay: { value: count(c0, ["RELATION_MISSING", "ANCHOR_CONFOUND"]), gate: GATE },
-    R2_selection: { value: selection.length, persistsInC3, gate: GATE },
-    R3_weak: { value: weak, half: c0.length / 2 },
-    R4_range: { value: count(c0, ["SELECTED_RANGE_MISS"]), gate: 3 }
+    focusExactAnchorC0: exact.length,
+    // Bounded by D15-F before this run (d16 §3.1): reported, not gated.
+    R1_poolAbsent: { value: count(c0, ["RELATION_MISSING", "ANCHOR_CONFOUND"]), relationMissing: count(c0, ["RELATION_MISSING"]) },
+    R2_selection: { exactAnchor: selectionExact.length, all: selectionAll.length, persistsInC3, gate: GATE },
+    R3_weak: { exactAnchor: count(exact, ["WEAK_RELATION"]), all: count(c0, ["WEAK_RELATION"]), half: exact.length / 2 },
+    R4_range: { value: count(c0, ["SELECTED_RANGE_MISS"]) }
   };
-  rules.R1_replay.triggered = rules.R1_replay.value >= GATE;
-  rules.R2_selection.triggered = selection.length >= GATE && persistsInC3 * 2 >= selection.length;
-  rules.R3_weak.triggered = c0.length > 0 && weak * 2 >= c0.length;
-  rules.R4_range.triggered = rules.R4_range.value >= 3;
-  return { byConfig, rules, roleAudit: audit };
+  rules.R2_selection.triggered = selectionExact.length >= GATE && persistsInC3 * 2 >= selectionExact.length;
+  rules.R3_weak.triggered = exact.length > 0 && rules.R3_weak.exactAnchor * 2 >= exact.length;
+  return { byConfig, focusTable, rules, roleAudit: audit };
 }
 
 export function breakdown({ rows, observations, gold }) {
@@ -115,8 +134,8 @@ export function breakdown({ rows, observations, gold }) {
 
 const jsonl = bytes => bytes.toString("utf8").split("\n").filter(Boolean).map(line => JSON.parse(line));
 
-export async function runMissBreakdown({ datasetFile, goldFile, responsesFile, rowsFile, expect, out }) {
-  const { manifest } = await verifyDataset(datasetFile);
+export async function runMissBreakdown({ datasetFile, goldFile, responsesFile, rowsFile, expect, out, verify = verifyDataset }) {
+  const { manifest } = await verify(datasetFile);
   const goldBytes = await readFile(goldFile);
   requireValue(manifest.parts["gold-dev"]?.sha256 === sha256(goldBytes), "gold file is not this dataset's dev gold");
   const responsesBytes = await readFile(responsesFile);
