@@ -1,0 +1,628 @@
+{
+  "taskId": "D18-SHAPE",
+  "status": "PASS",
+  "sourceHead": "440e307323d59c4db5938b671621dd80cd850dd7",
+  "build": {
+    "command": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile --keep --name d18-compile",
+    "exitCode": 0,
+    "sourceHead": "440e307323d59c4db5938b671621dd80cd850dd7",
+    "buildStampSha256": "9345fef69db981ea01fdca04deccc2e2e728c08b7505e643f57b0b0cf9be68ff",
+    "serverJsSha256": "a51b04eb0fa9db257770043d42dace2b4a462860353e51946c8e97e7a990529f"
+  },
+  "targetedTest": {
+    "command": "node --test scripts/ilv2-relation-defect-shape.test.mjs scripts/ilv2-relation-text-check.test.mjs",
+    "nodeVersion": "v22.16.0",
+    "exitCode": 0,
+    "tap": {
+      "tests": 14,
+      "suites": 0,
+      "pass": 14,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  },
+  "relationDefectShape": {
+    "exitCode": 0,
+    "summaryArtifact": {
+      "path": "post-ilv2-d18-shape-440e3073.kotnPK/d18-relation-defect-shape/summary.json",
+      "sha256": "7559a7f676927139bccaa3bff8eb1bcde5b5ab99a2bbd00bb3d86d5db54049f4"
+    },
+    "executorFinalization": "核查退出 0 后，执行器因读取不存在的 rules 字段写出失败终态。已根据阶段退出码和原始产物核对并修正终态，未重跑。"
+  },
+  "summary": {
+    "schema": "post-ilv2/relation-defect-shape/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "responsesSha256": "206fe3e0e403e4c586b23310793ff80d3469df29bc0e211af5324fe0afc18a5b",
+      "rowsSha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a",
+      "serverBuildStampSha256": "9345fef69db981ea01fdca04deccc2e2e728c08b7505e643f57b0b0cf9be68ff",
+      "impactArgs": {
+        "semanticPolicy": "fast",
+        "mode": "balanced",
+        "verbosity": "diagnostic",
+        "deadlineMs": 15000
+      }
+    },
+    "sessions": {
+      "exam-parent-v3": {
+        "readyMs": 12183
+      },
+      "lishu-v2": {
+        "readyMs": 131795
+      },
+      "lishuedu": {
+        "readyMs": 48367
+      }
+    },
+    "targets": 13,
+    "callFailed": 0,
+    "reproduced": 13,
+    "reproGate": {
+      "closeIfZero": true,
+      "passed": true
+    },
+    "byHypothesis": {
+      "H3_ONE_HOP": 7,
+      "H0_UNEXPLAINED": 2,
+      "C_OWNER_BOUND": 4
+    },
+    "byOutcome": {
+      "user": {
+        "H3_ONE_HOP": 7
+      },
+      "defect": {
+        "H0_UNEXPLAINED": 2,
+        "C_OWNER_BOUND": 4
+      }
+    },
+    "shapes": [
+      {
+        "category": "implementations",
+        "cause": "WEAK_RELATION",
+        "linkClass": "INDIRECT",
+        "depth": 2,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 1,
+          "transitiveSubtypes": 6,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "abstract-class",
+          "viaSameModuleAsAnchor": true
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": false,
+          "poolSize": 11,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "WEAK_RELATION",
+        "linkClass": "INDIRECT",
+        "depth": 2,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 1,
+          "transitiveSubtypes": 6,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "abstract-class",
+          "viaSameModuleAsAnchor": true
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": false,
+          "poolSize": 11,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "WEAK_RELATION",
+        "linkClass": "INDIRECT",
+        "depth": 3,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 1,
+          "transitiveSubtypes": 6,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "class",
+          "viaSameModuleAsAnchor": true
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": false,
+          "poolSize": 11,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "WEAK_RELATION",
+        "linkClass": "INDIRECT",
+        "depth": 2,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 1,
+          "transitiveSubtypes": 6,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "abstract-class",
+          "viaSameModuleAsAnchor": true
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": false,
+          "poolSize": 11,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "WEAK_RELATION",
+        "linkClass": "INDIRECT",
+        "depth": 2,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 1,
+          "transitiveSubtypes": 6,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "abstract-class",
+          "viaSameModuleAsAnchor": true
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": false,
+          "poolSize": 11,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "RELATION_MISSING",
+        "linkClass": "INDIRECT",
+        "depth": 2,
+        "sameModule": false,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 3,
+          "transitiveSubtypes": 5,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "abstract-class",
+          "viaSameModuleAsAnchor": false
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 20,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 3,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": false,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 0,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "RELATION_MISSING",
+        "linkClass": "INDIRECT",
+        "depth": 2,
+        "sameModule": false,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 3,
+          "transitiveSubtypes": 5,
+          "overImplementerLimit": false,
+          "clause": "extends",
+          "genericArgs": false,
+          "viaKind": "abstract-class",
+          "viaSameModuleAsAnchor": false
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 20,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 3,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": false,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 0,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H3_ONE_HOP"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "RELATION_MISSING",
+        "linkClass": "DIRECT",
+        "depth": 1,
+        "sameModule": false,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 3,
+          "transitiveSubtypes": 3,
+          "overImplementerLimit": false,
+          "clause": "implements",
+          "genericArgs": false
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 20,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": false,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 0,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H0_UNEXPLAINED"
+        ]
+      },
+      {
+        "category": "implementations",
+        "cause": "RELATION_MISSING",
+        "linkClass": "DIRECT",
+        "depth": 1,
+        "sameModule": false,
+        "testSource": false,
+        "shape": {
+          "anchorKind": "interface",
+          "anchorDeclaredIn": "corpus",
+          "directSubtypes": 3,
+          "transitiveSubtypes": 3,
+          "overImplementerLimit": false,
+          "clause": "implements",
+          "genericArgs": false
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "port",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 20,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 1,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": false,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 0,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "H0_UNEXPLAINED"
+        ]
+      },
+      {
+        "category": "callers",
+        "cause": "WEAK_RELATION",
+        "linkClass": "DIRECT",
+        "depth": null,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "ownerKind": "class",
+          "receiver": "static-owner",
+          "receiverType": null
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "service",
+          "coverage": "COMPLETE",
+          "coreExceeded": false,
+          "poolSize": 4,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 0,
+            "IMPLEMENTS": 0,
+            "CALLS": 0,
+            "METHOD_RELATION": 0
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "C_OWNER_BOUND"
+        ]
+      },
+      {
+        "category": "callers",
+        "cause": "WEAK_RELATION",
+        "linkClass": "DIRECT",
+        "depth": null,
+        "sameModule": false,
+        "testSource": false,
+        "shape": {
+          "ownerKind": "class",
+          "receiver": "variable",
+          "receiverType": "owner"
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "service",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 26,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 6,
+            "IMPLEMENTS": 0,
+            "CALLS": 6,
+            "METHOD_RELATION": 2
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [
+            "ANNOTATION_COLLABORATION",
+            "typeReference"
+          ],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "C_OWNER_BOUND"
+        ]
+      },
+      {
+        "category": "callers",
+        "cause": "WEAK_RELATION",
+        "linkClass": "DIRECT",
+        "depth": null,
+        "sameModule": false,
+        "testSource": false,
+        "shape": {
+          "ownerKind": "class",
+          "receiver": "variable",
+          "receiverType": "owner"
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "service",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 26,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 6,
+            "IMPLEMENTS": 0,
+            "CALLS": 6,
+            "METHOD_RELATION": 2
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [
+            "ANNOTATION_COLLABORATION",
+            "typeReference"
+          ],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "C_OWNER_BOUND"
+        ]
+      },
+      {
+        "category": "callers",
+        "cause": "WEAK_RELATION",
+        "linkClass": "DIRECT",
+        "depth": null,
+        "sameModule": true,
+        "testSource": false,
+        "shape": {
+          "ownerKind": "class",
+          "receiver": "variable",
+          "receiverType": "owner"
+        },
+        "repro": {
+          "status": null,
+          "anchorProfile": "service",
+          "coverage": "COMPLETE",
+          "coreExceeded": true,
+          "poolSize": 26,
+          "poolWith": {
+            "typeGraph": 0,
+            "typeGraph:implementation-lookup": 6,
+            "IMPLEMENTS": 0,
+            "CALLS": 6,
+            "METHOD_RELATION": 2
+          },
+          "inPool": true,
+          "selected": false,
+          "protectedReason": false,
+          "reasonKinds": [
+            "ANNOTATION_COLLABORATION",
+            "PACKAGE_PROXIMITY",
+            "typeReference"
+          ],
+          "otherReasons": 1,
+          "reproduced": true
+        },
+        "hypotheses": [
+          "C_OWNER_BOUND"
+        ]
+      }
+    ],
+    "notClaimed": "Shapes are text heuristics over the frozen source (simple names, no binding). Reproduction is one diagnostic java_impact call per target on the current build without JDT, as D15-F ran."
+  },
+  "interpretation": {
+    "reproduction": "13/13 个目标仍无受保护关系 reason，调用失败 0。此处复现指关系未获证明。",
+    "defect": {
+      "triggered": true,
+      "H0_UNEXPLAINED": "2 个直接 implements 目标不在候选池。锚点为 interface，profile 为 port，直接子类型数为 3，低于 20 的截断上限。",
+      "C_OWNER_BOUND": "4 个直接调用目标已在候选池，均无受保护关系 reason。1 个为 owner 静态调用，3 个接收变量的声明类型为 owner。接收者分类基于文本，实际绑定待合成回归验证。"
+    },
+    "designDecision": {
+      "H3_ONE_HOP": "7 个间接实现目标符合当前仅查一跳的设计。6 个经抽象类，1 个经普通类。是否扩展传递关系留待决策。",
+      "otherHypotheses": "其余预注册假设未出现。"
+    },
+    "scope": "仅运行隔离构建和静态 java_impact 核查。未启动 JDT 或调用模型，未实施产品修复，未重放完整 D15-F。"
+  }
+}
