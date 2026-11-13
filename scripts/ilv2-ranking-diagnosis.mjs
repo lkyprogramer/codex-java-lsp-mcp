@@ -215,11 +215,11 @@ export async function diagnoseTask({ task, call, limit = DIAGNOSIS_LIMIT }) {
   return { plan, responses, intentMismatchTerms };
 }
 
-export async function openProductSession({ serverJs, corpusRoot, workDir, readyTimeoutMs }) {
+export async function openProductSession({ serverJs, corpusRoot, workDir, readyTimeoutMs, extraEnv = {} }) {
   const { startOwnerDaemon } = await import("./owner-daemon.mjs");
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
   const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
-  const env = { PATH: `/opt/homebrew/bin:${process.env.PATH ?? "/usr/bin:/bin"}`, TMPDIR: workDir, JDTLS_BIN: "/usr/bin/false" };
+  const env = { PATH: `/opt/homebrew/bin:${process.env.PATH ?? "/usr/bin:/bin"}`, TMPDIR: workDir, JDTLS_BIN: "/usr/bin/false", ...extraEnv };
   const owner = await startOwnerDaemon({ serverJs, cacheRoot: path.join(workDir, "cache"), env, ephemeralCache: false });
   const client = new Client({ name: "ilv2-ranking-diagnosis", version: "1.0.0" });
   try {

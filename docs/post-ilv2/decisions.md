@@ -154,4 +154,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
 | P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |
-| P6 | 分支收尾 | O2：outline/evidence 默认隐藏，开关已实现，Mac 工程门未运行 |
+| P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。最后一轮发现层诊断见 D15 §12，脚本已完成，Mac 未运行；之后进入收尾与合入决策 |

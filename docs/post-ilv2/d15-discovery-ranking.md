@@ -457,3 +457,54 @@ Mac 上 `cc107335` 的定向测试 3/3 通过、0 跳过，普查退出 0。三�
 
 按 §11.6 第一条归档本批语料的 MyBatis 发现方向。MyBatis 语句检索、排序和 mapper 锚点读取计划仍为 `NOT_RUN`。本阶段结束于普查，不另抽样、不重开 XML-3。
 
+## 12. NOT_RETURNED 拆解（2026-11-13，Mac 运行之前提交）
+
+用户于 2026-11-13 批准。这是 post-ilv2 最后一轮发现层工作：本节判读完成后，无论是否修复，都进入分支收尾（开关去留、文档修正、全量门、合入决策）。
+
+### 12.1 背景
+
+W1 dev 104 个目标中，79 个在 limit 20 下没有任何计划词返回覆盖它的候选：`NOT_RETURNED` 78，`FILE_ONLY` 1（[D15-W1.json](results/D15-W1.json) 的 `w1Dev`）。W1 只记录了"没返回"，没有区分原因。
+
+### 12.2 诊断（`scripts/ilv2-not-returned-diagnosis.mjs`）
+
+第一阶段原样重放 W1：`planQueries` + `diagnoseTask` + `classifyTarget`，读 gold 之前完成全部查询。第二阶段对每个未返回目标做 oracle 探测，记第一个失败的层：
+
+| 层 | 含义 |
+|---|---|
+| `NON_JAVA` | 目标不在 `.java` 文件里，java_symbol 按设计不返回 |
+| `NO_PLAN_TERMS` | 题面没有可用的计划词 |
+| `OUTLINE_UNAVAILABLE` | 目标文件的 outline 不是 READY 或没有声明（索引覆盖或解析问题） |
+| `WINDOW_UNREACHABLE` | 文件里没有任何声明的名字行能让 runner 的读取窗口（前 20 行、后 60 行、最多 80 行）覆盖目标：即使排第 1 也读不到，属于读取窗口问题，不是发现问题 |
+| `ORACLE_MISS` | 用覆盖声明的精确名（`Type#member` 或 `Type`）做 exact 查询，limit 20 内仍没有覆盖候选：索引或 exact 查找丢了它 |
+| `NO_VOCAB_OVERLAP` | 计划词与覆盖声明的声明头、紧邻的注释/注解块、外层类型名、文件名没有共享的标识符或中文词元：词法检索够不着 |
+| `RANKED_OUT` | 有词汇交集，但默认、text、带 terms 三种查询都没把它排进前 20 |
+
+outline 在这里只作 oracle，诊断会话的 owner 开启 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1`；重放只调 `operation=query`，不受开关影响。词汇交集是对索引文本的近似，不读索引本身。
+
+### 12.3 判读规则（看数字之前固定）
+
+先核对重放：`replayByMechanism` 应与 W1 dev 一致（TOP1 19、TEXT_MERGE 6、FILE_ONLY 1、NOT_RETURNED 78）。不一致时先报告差异，诊断结论只对当前构建成立。
+
+`NON_JAVA`、`NO_PLAN_TERMS` 属于范围问题，只记录。在其余五层中：
+
+| 条件 | 结论 | 下一步 |
+|---|---|---|
+| `ORACLE_MISS` ≥ 5 | 索引或 exact 查找缺陷 | 不论其他层，先按产品缺陷修复并补回归 |
+| `OUTLINE_UNAVAILABLE` ≥ 5 | 索引覆盖或解析缺口 | 查对应文件的覆盖与解析状态 |
+| `RANKED_OUT` 最多且 ≥ 10 | 排序或召回截断 | 预注册一个候选改动，沿用 W3 门槛：hit@8 至少 +5，响应字节 p50 增幅 ≤ 10% |
+| `NO_VOCAB_OVERLAP` 最多 | 题面与代码没有共同词汇（Q06 范畴） | 发现层本轮结束，不做改动 |
+| `WINDOW_UNREACHABLE` 最多 | 读取窗口或交付问题，不是发现 | 发现层本轮结束；是否另做读取侧改动交用户决定 |
+| 以上都不满足 | 没有集中的可修原因 | 发现层本轮结束 |
+
+### 12.4 Mac 执行
+
+1. `git pull --ff-only`；`npm ci && npm run build:isolated`（HEAD 须包含本节的提交）。
+2. `node --test scripts/ilv2-not-returned-diagnosis.test.mjs scripts/ilv2-ranking-diagnosis.test.mjs`，期望 0 失败。
+3. 运行：
+   ```bash
+   node scripts/ilv2-not-returned-diagnosis.mjs --dataset "$ILV2_MAC10_DATASET" --tasks "$DS/tasks-dev.jsonl" \
+     --gold "$DS/private/gold-dev.jsonl" --inputs "$ILV2_MAC10_INPUTS" --server-js "$PWD/dist/server.js" --out "$RUN/d15-nr-dev"
+   ```
+   期望 `targets = 104`、`missedTargets = 79`（与 W1 一致时）。
+4. 回传：新建 `results/D15-NR.json`，包含 `summary.json` 全文、定向测试 TAP 计数、build-stamp 的 SHA-256 和私有 `rows.jsonl` 的路径与 SHA-256。不读 holdout，不改 `src/`，不在本批 dev 上追加探针。
+
