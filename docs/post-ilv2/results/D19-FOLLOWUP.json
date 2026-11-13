@@ -1,0 +1,142 @@
+{
+  "taskId": "D19-FOLLOWUP",
+  "status": "PASS",
+  "sourceHead": "66a5380fc3c7bda087e884b2579417a2e0f6782b",
+  "targetedTest": {
+    "command": "node --test scripts/ilv2-relation-followup-check.test.mjs scripts/ilv2-relation-text-check.test.mjs",
+    "nodeVersion": "v22.16.0",
+    "exitCode": 0,
+    "tap": {
+      "tests": 13,
+      "suites": 0,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    }
+  },
+  "relationFollowupCheck": {
+    "exitCode": 0,
+    "summaryArtifact": {
+      "path": "post-ilv2-d19-followup-66a5380f.Blq2GN/d19-relation-followup/summary.json",
+      "sha256": "6c560016e1816d043dd2aaa10b3d2fb1a9774bfe99726ba76b858ebbe0211b36"
+    }
+  },
+  "summary": {
+    "schema": "post-ilv2/relation-followup-check/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "responsesSha256": "206fe3e0e403e4c586b23310793ff80d3469df29bc0e211af5324fe0afc18a5b",
+      "rowsSha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a"
+    },
+    "h0": {
+      "targets": 2,
+      "byVerdict": {
+        "SAME_NAME_OTHER_TYPE": 0,
+        "PRIMARY_FILTER": 2,
+        "EDGE_MISSING": 0,
+        "UNDETERMINED": 0
+      },
+      "rows": [
+        {
+          "cause": "RELATION_MISSING",
+          "resolution": "anchor",
+          "sameNameDeclarations": 1,
+          "verdict": "PRIMARY_FILTER",
+          "subtypes": [
+            {
+              "isTarget": false,
+              "primary": true,
+              "inPool": true,
+              "implLookup": true,
+              "testSource": false,
+              "sameModuleAsAnchor": false,
+              "resolvesToAnchor": true
+            },
+            {
+              "isTarget": true,
+              "primary": false,
+              "inPool": false,
+              "implLookup": false,
+              "testSource": false,
+              "sameModuleAsAnchor": false,
+              "resolvesToAnchor": true
+            },
+            {
+              "isTarget": false,
+              "primary": false,
+              "inPool": false,
+              "implLookup": false,
+              "testSource": false,
+              "sameModuleAsAnchor": false,
+              "resolvesToAnchor": true
+            }
+          ]
+        },
+        {
+          "cause": "RELATION_MISSING",
+          "resolution": "anchor",
+          "sameNameDeclarations": 1,
+          "verdict": "PRIMARY_FILTER",
+          "subtypes": [
+            {
+              "isTarget": false,
+              "primary": true,
+              "inPool": true,
+              "implLookup": true,
+              "testSource": false,
+              "sameModuleAsAnchor": false,
+              "resolvesToAnchor": true
+            },
+            {
+              "isTarget": false,
+              "primary": false,
+              "inPool": false,
+              "implLookup": false,
+              "testSource": false,
+              "sameModuleAsAnchor": false,
+              "resolvesToAnchor": true
+            },
+            {
+              "isTarget": true,
+              "primary": false,
+              "inPool": false,
+              "implLookup": false,
+              "testSource": false,
+              "sameModuleAsAnchor": false,
+              "resolvesToAnchor": true
+            }
+          ]
+        }
+      ]
+    },
+    "creditedCallers": {
+      "targets": 7,
+      "byLabel": {
+        "IMPACT_SPAN": 7
+      },
+      "withProtectedReason": 0,
+      "impactSpanNotInPlan": 0,
+      "reasonKinds": {
+        "typeReference": 3,
+        "PACKAGE_PROXIMITY": 2
+      }
+    },
+    "notClaimed": "Text resolution of package, imports and written supertypes; no compiler binding. Pool facts are D15-F's recorded C0 calls, not a new product run."
+  },
+  "interpretation": {
+    "H0": {
+      "verdict": "PRIMARY_FILTER",
+      "conclusion": "2/2 个目标的文本超类型均解析到锚点。两者都未标注 @Primary 且未进池，解析到同一锚点的 @Primary 子类型在池中并带 typeGraph:implementation-lookup。按 §3.1 并入 Q05 的过滤设计决策。EDGE_MISSING、SAME_NAME_OTHER_TYPE 和 UNDETERMINED 均为 0。",
+      "moduleObservation": "两行记录里的全部直接子类型都与锚点跨模块，包括留在池中的 @Primary 子类型。"
+    },
+    "creditedCallers": {
+      "conclusion": "7 个已计分 Java 目标全部是 IMPACT_SPAN，并且都在 F C0 的读取计划中。受保护 reason 为 0/7，按 §3.2 支持 D18 §5 对这批静态样本的判读。白名单 reason 中 typeReference 有 3 个目标，PACKAGE_PROXIMITY 有 2 个目标。"
+    },
+    "scope": "仅复核 D15-F 已记录的 C0 结果和冻结语料。未构建 dist，未启动产品、JDT 或模型。"
+  }
+}
