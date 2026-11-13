@@ -1,6 +1,6 @@
 # S1 接口锚点列出全部实现类（2026-11-13，Mac 运行之前提交）
 
-用户于 2026-11-13 批准 S1 及其三项范围决定（A、1b、2a）。来源：D19 判定 H0 为 `PRIMARY_FILTER`（`feat/d17-relation-text-check` 上的 D18 §5.4、D19 §6）。本分支从 main 拉出，诊断分支可以先合入；`decisions.md` 的进度行等两个分支都合入后再补，避免冲突。
+用户于 2026-11-13 批准 S1 及其三项范围决定（A、1b、2a）。来源：D19 判定 H0 为 `PRIMARY_FILTER`（`feat/d17-relation-text-check` 上的 D18 §5.4、D19 §6）。本分支从 main 拉出；诊断分支（PR #6）合入后已把 main 合入本分支，进度见 `decisions.md` P11。
 
 ## 1. 改动
 
@@ -48,20 +48,53 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
 
 重放脚本的校准（C0 在 Q02 上复现 W2）在 S1 上可能失败，因为 S1 本身改变产品；失败时脚本以非 0 退出，但 `rows.jsonl` 已在校准前写出，门比较照常进行，校准结果如实记录。投影不一致（compact 与 diagnostic 选的范围不同）则停下报告。
 
-## 4. Mac 执行
+## 4. Mac 执行（单分支、一次后台运行）
 
-1. 检出 `feat/s1-implementation-listing`，按 D18 的方式构建：`sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile --keep --name s1-compile`。
-2. 定向测试（`--profile targeted`）：`dist/agent-router/` 下 `candidate-collectors`、`candidate-helpers`、`providers/static-provider`、`providers/relationship-provider`、`read-plan`、`materialize-candidates`、`evidence-normalizer` 的测试，`dist/java-index/router-integration.test.js` 与 `router-java-index.test.js`（Linux 上因缺 `owner-lock.js` 无法运行，其中 "complete JavaIndex resolves implementation relations…" 与 "production ranking observer…" 直接经过本路径），以及 `scripts/ilv2-s1-gate.test.mjs`。期望 0 失败。
-3. 机制确认：在 `feat/d17-relation-text-check` 的检出（或 worktree）里运行 D18 §4 的命令，`--server-js` 指向第 1 步的 S1 `dist/server.js`，`--out "$RUN/s1-d18"`。按 3.1 核对。
-4. 基线核对（§3.2 第 0 步）：在 main（`8f18ea7`）的检出上构建，按 D15 §9.4 第 3 步的命令重放，`--out "$RUN/main-replay"`；再运行下面第 6 步的门命令，`--rows` 换成 `"$RUN/main-replay/rows.jsonl"`、`--out "$RUN/main-gate"`。不符合预期就停下报告。
-5. 重放：同一命令，`--server-js` 指向 S1 构建，`--out "$RUN/s1-replay"`。
-6. 门：
+全部在 `feat/s1-implementation-listing` 上完成：本分支已合入 main（含 D18 脚本、D15-F 重放脚本、门脚本），不需要切换分支。基线构建也在本分支上做：`scripts/ilv2-s1-mac-run.mjs` 在工作区临时把 `src` 反向打成 main（`3d9a8d6`）的样子，构建后立即恢复。
+
+`scripts/ilv2-s1-mac-run.mjs` 按[长时间验证规范](../deep/ilv2-mac-manual/long-running-validation.md)运行：每阶段独立日志、退出码、超时和检查；`status.json` 每 30 秒心跳；终态写 `result.json`。
+
+| 阶段 | 内容 | 超时 | 失败后 |
+|---|---|---|---|
+| `preflight` | 工作区干净；HEAD 含 `63a2257` 与 `3d9a8d6`；F 产物哈希 | 2 分 | 停止 |
+| `baseline-build` | 工作区 `src` 临时改为 main 后 compile（`--keep`），然后恢复 | 40 分 | 停止 |
+| `s1-build-targeted` | S1 构建（`--keep`）并跑脚本中 `TARGETED_TESTS` 的 9 个 dist 测试文件（含 Linux 跑不了的 router-integration、router-java-index） | 60 分 | 继续（构建不在则后续停止） |
+| `script-tests` | 5 个脚本测试文件 | 10 分 | 继续 |
+| `mechanism` | S1 构建上重跑 D18，按 §3.1 逐行比对 `results/D18-SHAPE.json` | 45 分 | 停止 |
+| `main-replay` | main 构建按 D15-F 重放，校准须 PASS | 240 分 | 停止 |
+| `main-gate` | 门脚本比较 F 与 main：丢失 0、新命中 0、字节增幅 0（§3.2 第 0 步） | 5 分 | 停止 |
+| `s1-replay` | S1 构建重放；校准失败（非 0 退出）属预期，但须完成评分 | 240 分 | 停止 |
+| `s1-gate` | 门脚本比较 F 与 S1（§3.2） | 5 分 | — |
+
+终态 `PASS` 要求每个阶段都通过且 S1 门 `status` 为 PASS。
+
+**步骤：**
+
+1. 准备：
    ```bash
-   node scripts/ilv2-s1-gate.mjs --baseline-rows "$F_RUN/rows.jsonl" \
-     --expect-baseline-rows-sha256 37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a \
-     --rows "$RUN/s1-replay/rows.jsonl" --out "$RUN/s1-gate"
+   cd <Mac 上的仓库>
+   git fetch origin && git checkout feat/s1-implementation-listing && git pull --ff-only
+   git status --porcelain            # 必须为空
+   # 沿用 D15/D16 的环境变量：ILV2_NODE_BIN、ILV2_RUNTIME_MANIFEST、ILV2_MAC10_DATASET、ILV2_MAC10_INPUTS、
+   # DS、F_RUN（D15-F 运行目录）、Q02_IDS（Q02 的 20 个 taskId，逗号分隔）
+   RUN=<Mac 运行根>/post-ilv2-s1-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M)
+   mkdir -p "$RUN"                   # 必须在仓库外
    ```
-7. 回传：新建 `results/S1-GATE.json`，包含构建来源提交、定向测试 TAP 计数、3.1 的逐项核对、基线核对的门 `summary.json`、两次重放的 `calibration` 块与退出码、S1 门 `summary.json` 全文。门脚本 FAIL 时也退出 0，以 `status` 为准。`target-changes.json` 和 `s1-d18/shape-rows.jsonl` 含任务 ID 或路径，留在 Mac 私有目录。
+2. 后台启动（运行期间不要在这个仓库里切分支或改文件）：
+   ```bash
+   nohup "$ILV2_NODE_BIN" scripts/ilv2-s1-mac-run.mjs --run-dir "$RUN" > "$RUN/runner.log" 2>&1 < /dev/null &
+   echo $! > "$RUN/runner.pid"
+   sleep 5 && cat "$RUN/status.json"  # 确认首条状态已落盘
+   ```
+3. 查看进度：`cat "$RUN/status.json"`（当前阶段、心跳）；`tail "$RUN/<阶段>.log"`。`result.json` 出现即结束。
+4. 生成回传文件并提交：
+   ```bash
+   "$ILV2_NODE_BIN" scripts/ilv2-s1-mac-run.mjs --report "$RUN" > docs/post-ilv2/results/S1-GATE.json
+   git add docs/post-ilv2/results/S1-GATE.json && git commit -m "docs(eval): record S1 gate results" && git push
+   ```
+   `S1-GATE.json` 只含计数、状态和哈希。`$RUN` 下的 `s1-d18/shape-rows.jsonl`、`*-gate/target-changes.json`、各重放目录含路径或任务 ID，留在 Mac。
+
+中断恢复：如果运行在 `baseline-build` 阶段被强行终止，`src` 可能停在 main 的样子，先执行 `git checkout HEAD -- src` 再重跑（换一个新的 `$RUN`）。
 
 门通过后、合入前，另跑 Mac 全量 `npm test` 与 `gate:pr`（同 P6）。
 

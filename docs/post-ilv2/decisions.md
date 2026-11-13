@@ -207,3 +207,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P8 | D17 关系文本核查 | Mac 已运行（[D17-LINK](results/D17-LINK.json)）。13 个可判定目标：直接关系 6、间接关系 7、无文本联系 0；R_defect、R_q05 触发 |
 | P9 | D18 缺陷复现与形态 | Mac 已运行（[D18-SHAPE](results/D18-SHAPE.json)）。13/13 复现：H3 7、H0 2、C_OWNER_BOUND 4。C_OWNER_BOUND 改判为缺少能力（Q05），H0 待 D19 |
 | P10 | D19 关系后续核查 | Mac 已运行（[D19-FOLLOWUP](results/D19-FOLLOWUP.json)）。H0 2/2 为 `PRIMARY_FILTER`；已命中 callers 受保护 reason 0/7。诊断链收尾，S1 另开分支 |
+| P11 | S1 接口锚点列出全部实现类 | 实现与门槛已提交（[S1](s1-implementation-listing.md)，分支 `feat/s1-implementation-listing`），Linux 定向测试通过，Mac 未运行 |
