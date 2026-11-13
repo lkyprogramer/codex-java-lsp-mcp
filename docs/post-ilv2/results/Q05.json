@@ -41,5 +41,14 @@
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",
-  "changes": []
+  "changes": [],
+  "followUp": {
+    "asOf": "2026-11-13",
+    "state": "STATIC_PATH_TRIGGERED",
+    "note": "D16: 4 exact-anchor RELATION_MISSING implementations targets from 2 task groups under semanticPolicy fast (task-group count reported by the Mac run from private rows). Not representative of auto/required; the D16 §3.3 replay is NOT_RUN. No implementation started. This state records trigger evidence only; it does not authorize implementation.",
+    "evidence": [
+      "D16-MISS.json",
+      "d16-impact-miss-breakdown.md#5-结果与判读2026-11-13"
+    ]
+  }
 }

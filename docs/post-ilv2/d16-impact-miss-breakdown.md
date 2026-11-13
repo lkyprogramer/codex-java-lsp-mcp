@@ -67,7 +67,7 @@ D15-F 在 C0 下，implementations 命中 8/21，callers 7/16（[D15-F.json](res
 
 ## 4. Mac 执行
 
-检出分支 `docs/post-ilv2-merge-record`，HEAD 须包含提交 `a849d46`（D16 脚本首版）及其后的 D16 修订。`F_RUN` 指 D15-F 的运行目录 `post-ilv2-d15-f-projection.AutSUN/d15-f-dev`（在 Mac 运行根下）。若目录或文件哈希对不上，停下报告，不要重跑 F。
+检出包含提交 `34a51a5`（D16 规则修订）的分支：合入前是 `docs/post-ilv2-merge-record`，合入后是 `main`。`F_RUN` 指 D15-F 的运行目录 `post-ilv2-d15-f-projection.AutSUN/d15-f-dev`（在 Mac 运行根下）。若目录或文件哈希对不上，停下报告，不要重跑 F。
 
 ```bash
 node --test scripts/ilv2-impact-miss-breakdown.test.mjs
@@ -79,3 +79,36 @@ node scripts/ilv2-impact-miss-breakdown.mjs --dataset "$ILV2_MAC10_DATASET" --go
 ```
 
 回传：新建 `results/D16-MISS.json`，包含 `summary.json` 全文和定向测试 TAP 计数；按 §3 写判读，不改 §2、§3；R2、R3 报告两种口径。
+
+## 5. 结果与判读（2026-11-13）
+
+Mac 在 `4eb2de33` 上定向测试 5/5 通过，拆表退出 0；输入哈希与 D15-F.json `rawEvidence` 一致。[D16-MISS.json](results/D16-MISS.json)
+
+**对账。**C0 焦点未命中 22 个，等于 D15-F 的 (16−7)+(21−8)。implementations 的 4 个 `POOL_ABSENT` 全部是 `RELATION_MISSING`，7 个 `UNSELECTED` 拆为 `WEAK_RELATION` 5、`CORE_CAPPED` 2；callers 的 7 个 `UNSELECTED` 全部是 `WEAK_RELATION`。与 §3.1 的已知量一致。
+
+**按 §3.2：**
+
+| 规则 | 结果 | 结论 |
+|---|---|---|
+| R2 选择候选 | 锚点精确 2 个（全部口径也是 2），都在 C3 下仍未命中；门槛 5 | 未触发，不写选择策略设计卡 |
+| R3 弱关系 | 锚点精确 12/21（全部口径 12/22） | 触发：选择策略不改，F 的 C0 结论维持 |
+| 锚点 | 不精确 1/22（唯一一个是没有 impact 调用的题） | 未触发。只排除了 ambiguous/text 锚点：精确 `match` 不保证锚点是题目所问的声明（例如命中类型而题目问成员） |
+| 角色审计 | 696 个池中文件里 166 个带受保护 reason，其中输出为 `related` 的 1 个（`typeGraph:implementation-lookup`） | 登记 1 处输出角色标注不一致。建议不单独修（只影响输出标注），由用户决定 |
+| R1、R4（只报告） | 池外 4 个全部 `RELATION_MISSING`；行范围未覆盖 3 个 | — |
+
+**角色混杂排除（事实）。**§1 第 3 点担心 `related` 掩盖了实现关系。判据是 12 行 `WEAK_RELATION` 本身：它们在 F 保留的 `reasons` 里没有任何受保护项，与输出角色无关。
+
+**规则之外的观察（假设，未验证）。**16 个焦点未命中（`WEAK_RELATION` 12 + `RELATION_MISSING` 4）的共同点是：在 F 记录的那次调用里，产品没有给目标文件任何受保护关系 reason。一种解释是 `fast` 策略下产品没有识别出调用或实现关系。至少还有三种替代解释，本拆表区分不了：
+
+1. 锚点粒度：精确 `match` 可能命中了类型，而题目问的是成员，关系本就不该从这个锚点出发。
+2. 首调用规则：一题有多个计划词时，脚本只看第一个池中有该文件的调用。
+3. 受保护判定是近似：F 没有保留 `plannerEvidence`。
+
+还要注意：目标属于 callers/implementations 类别的题，但每个证据范围是否就是锚点的调用方或实现类，没有逐个对 gold 核实。C3 下 callers 的 `WEAK_RELATION` 从 7 降到 2、命中多 3 个，说明预算能挪动其中一部分。implementations 在 C3 下 `RELATION_MISSING` 从 4 降到 0、`WEAK_RELATION` 从 5 升到 9，只是计数吻合，没有逐目标核对是否同一批目标。
+
+**Q05：静态路径触发。**4 个锚点精确的 `RELATION_MISSING` 来自 2 个不同任务组（任务组数由 Mac 从私有行统计，summary 未携带），达到 §3.4 的条件，记为 `STATIC_PATH_TRIGGERED`。`fast` 的结果不代表 `auto` 或 `required`。
+
+**Q08：**保持 UNASSESSED。
+
+**收尾。**按 R3，选择策略不改，implementations 的选择策略方向收尾。上面的假设与三种替代解释，只有 §3.3 的重放能同时区分：它用题面 `anchors` 解析的唯一声明定锚（排除锚点粒度和首调用），并比较 `fast`、`auto`、`required`。重放仍为 NOT_RUN，是否做由用户决定。
+

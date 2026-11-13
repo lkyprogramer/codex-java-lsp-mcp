@@ -41,5 +41,13 @@
   ],
   "rawEvidence": [],
   "implementation": "NO_CODE",
-  "changes": []
+  "changes": [],
+  "followUp": {
+    "asOf": "2026-11-13",
+    "state": "UNASSESSED",
+    "note": "D16 cannot assess binding fidelity: D15-F ran semanticPolicy fast and kept no JDT binding results.",
+    "evidence": [
+      "D16-MISS.json"
+    ]
+  }
 }
