@@ -129,6 +129,7 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 - **F 保持 C0。** Q02 校准通过。C3 在全量 dev 上提升平均召回 3.79 pp，但每题接收源码字节 p50 增加 45.82%，超出 20% 门槛。C1、C2 未达到召回门槛。用户确认按 O2 保持默认 6 个文件、14 KiB，保留投影一致性修复 `828f8a3d`。[D15-F.json](results/D15-F.json)
 - **封存集延后。** v1 规则和工具保留供追溯，v2 尚未冻结。本阶段 W4、W5 与正式采纳判定均为 `NOT_RUN`。有新的候选改动时再确定指标和预算，并冻结新规则与数据。[D15 W6](d15-discovery-ranking.md#10-w6-收尾决策2026-11-12)
 - **XML-3 已收尾。** 6 道 dev 题的 16 个证据范围包含 15 个 XML 和 1 个 YAML，MyBatis 语句目标为 0。现有样本无法验证 MyBatis 发现。[D15-XML3.json](results/D15-XML3.json)
+- **MyBatis 发现方向归档。** 三个冻结语料识别到 0 条 mapper XML 语句，达到 §11.6 的归档条件。MyBatis 发现验证仍为 `NOT_RUN`。[普查报告](results/D15-MYBATIS-CENSUS.json)
 
 ## 阶段进度
 
@@ -140,4 +141,4 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 | P3 | Q10 | 72 个正式 slot 完成，收益判定 INCONCLUSIVE |
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
-| P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已离线对账收尾，MyBatis 发现为 `NOT_RUN`。见 [D15 收尾决策](decision-log.md#d15-收尾) |
+| P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |

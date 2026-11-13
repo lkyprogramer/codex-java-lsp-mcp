@@ -40,3 +40,4 @@ Q10 最终为 INCONCLUSIVE，按上一条规则，outline/evidence 路线停止�
 | F 读取预算 | O2，保持 C0（6 个文件、14 KiB） | C1、C2 未达到召回门槛。C3 平均召回增加 3.79 pp，每题接收源码字节 p50 增加 45.82%，超出 20% 门槛。用户确认保持 C0，保留文件 ID 与投影一致性修复。[D15-F.json](results/D15-F.json) |
 | 封存集 | v1 归档，v2 延后 | v1 衡量锚点声明自身的排序，与当前证据覆盖问题不匹配。新候选改动进入评估时，先冻结与该改动相符的指标、预算、采样规则和数据，再执行一次封存评估。[D15 封存集处置](d15-discovery-ranking.md#10-w6-收尾决策2026-11-12) |
 | XML-3（2026-11-13） | 对账后收尾，MyBatis 发现为 `NOT_RUN` | 16 个证据范围中有 15 个 XML 和 1 个 YAML。15 个 XML 范围均来自 Maven POM 或日志配置，MyBatis 语句目标为 0。[D15-XML3.json](results/D15-XML3.json) |
+| MyBatis 发现（2026-11-13） | 按 §11.6 归档本批语料的发现方向 | 三个冻结语料识别到 0 条 mapper XML 语句，低于 50 条的门槛。MyBatis 发现验证仍为 `NOT_RUN`。[普查报告](results/D15-MYBATIS-CENSUS.json) |

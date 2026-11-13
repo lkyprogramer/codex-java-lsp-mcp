@@ -451,3 +451,9 @@ node scripts/ilv2-mybatis-census.mjs --dataset "$ILV2_MAC10_DATASET" --tasks "$D
 ```
 回传：新建 `results/D15-MYBATIS-CENSUS.json`，包含 `summary.json` 全文和定向测试 TAP 计数。
 
+### 11.7 普查结果与归档（2026-11-13）
+
+Mac 上 `cc107335` 的定向测试 3/3 通过、0 跳过，普查退出 0。三个冻结语料中识别到 0 个 mapper XML、0 条 mapper 语句，有 193 个 Java 文件匹配 `extends BaseMapper<`。33 道 dev 题的 104 个证据范围中，0 个落在 mapper XML，2 个落在 mapper Java 文件，分属 2 道题。[普查报告](results/D15-MYBATIS-CENSUS.json)
+
+按 §11.6 第一条归档本批语料的 MyBatis 发现方向。MyBatis 语句检索、排序和 mapper 锚点读取计划仍为 `NOT_RUN`。本阶段结束于普查，不另抽样、不重开 XML-3。
+
