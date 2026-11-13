@@ -110,5 +110,21 @@ Mac 在 `4eb2de33` 上定向测试 5/5 通过，拆表退出 0；输入哈希与
 
 **Q08：**保持 UNASSESSED。
 
-**收尾。**按 R3，选择策略不改，implementations 的选择策略方向收尾。上面的假设与三种替代解释，只有 §3.3 的重放能同时区分：它用题面 `anchors` 解析的唯一声明定锚（排除锚点粒度和首调用），并比较 `fast`、`auto`、`required`。重放仍为 NOT_RUN，是否做由用户决定。
+**收尾。**按 R3，选择策略不改，implementations 的选择策略方向收尾。（本段的重放设想已由 §6 更正。）上面的假设与三种替代解释，只有 §3.3 的重放能同时区分：它用题面 `anchors` 解析的唯一声明定锚（排除锚点粒度和首调用），并比较 `fast`、`auto`、`required`。重放仍为 NOT_RUN，是否做由用户决定。
+
+## 6. 更正：重放前提与替代解释（2026-11-13，用户批准重放之后）
+
+**前提更正（事实，读代码得出）。**§1 第 2 点、§3.3 和 §5 把 `semanticPolicy: "fast"` 当作 F 的混杂，这是错的。F 的会话由 `openProductSession`（`scripts/ilv2-ranking-diagnosis.mjs`）启动：`JDTLS_BIN=/usr/bin/false`，owner 的 `projects.json` 没有 alias，仓库未启用 LSP。`src/tools/impact.ts` 在 LSP 未启用时把策略强制为 `fast`，`required` 直接报错。所以真实条件是"评测 owner 没有 JDT"，`auto` 在 D15 全程等同 `fast`；W1、W2、F、D16 都只测了静态路径。
+
+**§3.3 的三策略重放在现有评测框架里跑不了。**要比较 `auto`/`required`，必须给每个语料注册 `lspEnabled: true` 的 alias，并从 `ILV2_TOOLCHAINS` 取 `JDTLS_BIN`、`JAVA_HOME`；三个冻结语料在冻结工具链下有没有成功的 JDT 导入，现有记录里没有找到。`auto` 只在 service 类锚点或 `precision`/`recall` 模式下才启用 JDT（`src/agent-router/semantic.ts` 的 `shouldUseSemantic`），所以有意义的对照只有 `required`。
+
+**替代解释的重新评估：**
+
+1. **锚点粒度：大体排除（事实）。**计划词的第一个就是题面 `anchors`（`planQueries`），`exact: "match"` 表示该词作为精确选择器只命中一个声明（`src/discovery/query.ts`）。21/22 个焦点未命中的锚点就是题面点名的那个声明。题面点名类型、而 gold 关心某个成员的情况仍可能存在，但那是题目本身的写法，不是 driver 的伪影。
+2. **首调用规则：可离线回答。**脚本新增 `protectedInAnyCall` 和 `R3_weak.protectedInAnotherCall`：弱关系目标在同一题的其他调用里是否带受保护 reason。重读 F 产物即可，不调用产品。若该数 ≥ 3，R3 的 12 需要相应扣减后重报。
+3. **受保护判定近似：本轮无法回答。**诊断输出不暴露 `plannerEvidence`。
+
+**结论。**锚点重放（不带 JDT）能增加的信息只有第 2 点，而第 2 点离线就能得到，因此不再单独写锚点重放脚本。剩下真正的问题是"有 JDT 时关系能否被证明"，需要新的 JDT 评测接线和语料导入可行性探针，成本与风险都高于用户批准重放时听到的描述，交用户重新决定。
+
+Mac 补跑（只重读 F 产物，几秒钟）：按 §4 同样的命令重跑一次，回传时在 `results/D16-MISS.json` 增补 `rules.R3_weak.protectedInAnotherCall`。
 

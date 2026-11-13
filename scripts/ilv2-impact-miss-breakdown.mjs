@@ -38,7 +38,9 @@ export function classifyMiss({ item, label, calls }) {
   const { call, file } = present[0];
   const files = call.diagnostic.files;
   const detail = { ...base, inPoolCalls: present.length, presentAnchorExact: call.exact === EXACT, poolRank: files.indexOf(file) + 1, poolSize: files.length,
-    role: file.role ?? null, protectedReasons: (file.reasons ?? []).filter(reason => PROTECTED_CORE_KINDS.has(reason)), coreExceeded: coreExceeded(call.diagnostic) };
+    role: file.role ?? null, protectedReasons: (file.reasons ?? []).filter(reason => PROTECTED_CORE_KINDS.has(reason)), coreExceeded: coreExceeded(call.diagnostic),
+    // d16 §6: does any other call of the task give the file a protected reason? (the first-call rule's blind spot)
+    protectedInAnyCall: present.some(entry => hasProtectedReason(entry.file)) };
   if (!hasProtectedReason(file)) return { cause: "WEAK_RELATION", ...detail };
   return { cause: detail.coreExceeded ? "CORE_CAPPED" : "PROTECTED_UNSELECTED", ...detail };
 }
@@ -102,7 +104,8 @@ export function summarize(missRows, audit) {
     // Bounded by D15-F before this run (d16 §3.1): reported, not gated.
     R1_poolAbsent: { value: count(c0, ["RELATION_MISSING", "ANCHOR_CONFOUND"]), relationMissing: count(c0, ["RELATION_MISSING"]) },
     R2_selection: { exactAnchor: selectionExact.length, all: selectionAll.length, persistsInC3, gate: GATE },
-    R3_weak: { exactAnchor: count(exact, ["WEAK_RELATION"]), all: count(c0, ["WEAK_RELATION"]), half: exact.length / 2 },
+    R3_weak: { exactAnchor: count(exact, ["WEAK_RELATION"]), all: count(c0, ["WEAK_RELATION"]), half: exact.length / 2,
+      protectedInAnotherCall: c0.filter(row => row.cause === "WEAK_RELATION" && row.protectedInAnyCall).length },
     R4_range: { value: count(c0, ["SELECTED_RANGE_MISS"]) }
   };
   rules.R2_selection.triggered = selectionExact.length >= GATE && persistsInC3 * 2 >= selectionExact.length;

@@ -27,7 +27,8 @@ test("causes follow the pre-registered order", () => {
 test("the first call holding the file decides, as in F's own label", () => {
   const calls = [call("text", []), call("match", [{ id: "f1", path: T, reasons: ["typeGraph"] }]), call("match", [{ id: "f9", path: T, reasons: ["IMPLEMENTS"] }], [CORE_GAP])];
   const row = classifyMiss({ item, label: "UNSELECTED", calls });
-  assert.deepEqual([row.cause, row.inPoolCalls, row.calls, row.anchorExactCalls], ["WEAK_RELATION", 2, 3, 2]);
+  assert.deepEqual([row.cause, row.inPoolCalls, row.calls, row.anchorExactCalls, row.protectedInAnyCall], ["WEAK_RELATION", 2, 3, 2, true]);
+  assert.equal(summarize([{ taskId: "t", index: 0, config: "C0", category: "callers", ...row }], {}).rules.R3_weak.protectedInAnotherCall, 1);
 });
 
 const observation = (taskId, rows) => ({ taskId, terms: rows });
