@@ -71,3 +71,31 @@ node scripts/ilv2-relation-text-check.mjs --dataset "$ILV2_MAC10_DATASET" --task
 ```
 
 回传：新建 `results/D17-LINK.json`，包含 `summary.json` 全文和定向测试 TAP 计数；按 §3 写判读，不改 §2、§3。`link-rows.jsonl` 含路径和名称，留在 Mac 私有目录。若触发 R_defect，另附这些目标的私有清单路径，供写回归测试时使用。
+
+## 5. 结果与判读（2026-11-13）
+
+Mac 在 `8c7a5d0` 上定向测试 7/7 通过，核查退出 0，输入哈希与 D15-F.json `rawEvidence` 一致。[D17-LINK.json](results/D17-LINK.json)
+
+**分类（事实）。**16 个目标：`DIRECT` 6（callers 4、implementations 2）、`INDIRECT` 7（全是 implementations，深度 2 的 6 个、3 的 1 个）、`TYPE_ANCHOR_ONLY` 3（callers），`SAME_FILE`、`MENTION_ONLY`、`NO_TEXT_LINK`、`NO_ANCHOR` 都是 0。可判定 13 个。按 D16 原因：`RELATION_MISSING` 4 个里 `DIRECT` 2、`INDIRECT` 2。
+
+**按 §3.2：**
+
+| 规则 | 结果 | 结论 |
+|---|---|---|
+| R_defect | 有类型证据的 `DIRECT` 6（全部 `DIRECT` 也是 6），门槛 3 | 触发：按缺陷处理，先做 D18 复现与形态，再写回归测试 |
+| R_q05 | `INDIRECT` 7/13，"2 个任务组" | 触发，但见下面的限制；Q05 设计卡等 D18 之后再定 |
+| R_gold | `NO_TEXT_LINK` 0/13 | 未触发：gold 或题目问题的解释排除 |
+| 锚点粒度 | callers 中 `TYPE_ANCHOR_ONLY` 3/7 | 未触发，D16 §6 不更正；这 3 个不进分母 |
+
+**限制。**数据集没有 `taskGroup` 字段，按 `taskId` 计数，"2 个任务组"即 2 道题，7 个 `INDIRECT` 集中在这 2 道题里。分类是文本启发式，不是编译器绑定。9 个 implementations 目标的锚点都是类型锚点。
+
+**最强的信号。**2 个 implementations 目标源码直接 `extends`/`implements` 锚点类型，却不在候选池里；锚点是 exact 唯一声明，同名冲突的可能性低。
+
+**原因推断（读代码，未验证）。**`src/agent-router/candidate-collectors.ts` 的 `collectTypeGraphCandidates`：
+
+1. `shouldUseTypeGraph` 只对接口锚点或 profile 为 port/repository/service 的锚点查实现类；抽象基类等锚点完全不查，能解释直接关系却不在池中。
+2. 只有接口锚点才把实现类标为受保护的 `typeGraph:implementation-lookup`，其余只有弱 reason `typeGraph`，能解释子类进池却落选。
+3. `findImplementers` 看起来只返回直接实现者，能解释 2 跳以上的 `INDIRECT`。若成立，`INDIRECT` 应随缺陷修复处理，Q05 的范围会缩小甚至取消。
+
+callers 的 4 个 `DIRECT` 没有代码层面的推断，要看调用写法。下一步见 [D18](d18-relation-defect-shape.md)。
+

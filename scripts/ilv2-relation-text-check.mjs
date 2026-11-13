@@ -54,11 +54,20 @@ export function typeHeaders(stripped) {
     }
     if (match[1] === "record") tail = tail.replace(/^\s*\([^)]*\)/, "");
     const supers = [];
-    for (const part of tail.split(/\b(extends|implements|permits)\b/).reduce((acc, token, i, all) => {
-      if ((token === "extends" || token === "implements") && i + 1 < all.length) acc.push(all[i + 1]);
-      return acc;
-    }, [])) supers.push(...typeList(part));
-    headers.push({ name: match[2], supers, line: stripped.slice(0, match.index).split("\n").length });
+    // relations keep the clause keyword and whether the supertype carries type arguments (D18 shape features).
+    const relations = [];
+    const tokens = tail.split(/\b(extends|implements|permits)\b/);
+    tokens.forEach((token, i) => {
+      if ((token !== "extends" && token !== "implements") || i + 1 >= tokens.length) return;
+      const names = typeList(tokens[i + 1]);
+      supers.push(...names);
+      const raw = tokens[i + 1];
+      for (const name of names) relations.push({ keyword: token, name, generic: new RegExp(`${name.replace(/[$]/g, "\\$")}\\s*<`).test(raw) });
+    });
+    const before = stripped.slice(0, match.index);
+    const statementStart = Math.max(before.lastIndexOf(";"), before.lastIndexOf("{"), before.lastIndexOf("}"));
+    headers.push({ name: match[2], keyword: match[1], abstract: /\babstract\b/.test(before.slice(statementStart + 1)), supers, relations,
+      line: before.split("\n").length });
   }
   return headers;
 }
@@ -139,7 +148,7 @@ export function linkForTarget({ category, item, anchors, lines, graph }) {
   if (same) return { ...base, linkClass: "SAME_FILE" };
   if (category === "callers" && !hasMethodAnchor) return { ...base, linkClass: "TYPE_ANCHOR_ONLY" };
   const usable = category === "callers" ? anchors.filter(anchor => anchor.kind === "method") : anchors;
-  return { ...base, ...bestLink(usable.map(anchor => ({ ...classifyLink({ category, item, anchor, lines, graph }), anchorKind: anchor.kind }))) };
+  return { ...base, ...bestLink(usable.map(anchor => ({ ...classifyLink({ category, item, anchor, lines, graph }), anchorKind: anchor.kind, anchorIndex: anchors.indexOf(anchor) }))) };
 }
 
 const rank = linkClass => CLASSES.indexOf(linkClass);
