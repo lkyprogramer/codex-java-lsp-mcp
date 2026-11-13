@@ -77,3 +77,45 @@ node scripts/ilv2-relation-defect-shape.mjs --dataset "$ILV2_MAC10_DATASET" --ta
 `ilv2-relation-text-check.mjs` 在 D17 运行之后只新增了 `keyword`、`abstract`、`relations`、`anchorIndex` 字段，分类逻辑不变，D17 结果不受影响；两个测试文件一起跑以确认。
 
 回传：新建 `results/D18-SHAPE.json`，包含 `summary.json` 全文（含脱敏的 `shapes`）、定向测试 TAP 计数、`dist` 的构建来源提交；按 §3 写判读，不改 §2、§3。`shape-rows.jsonl` 含路径和名称，留在 Mac 私有目录。
+
+## 5. 结果与判读（2026-11-13）
+
+Mac 在 `440e307` 的隔离构建上运行（[D18-SHAPE](results/D18-SHAPE.json)）：定向测试 14/14 通过，13 个目标调用失败 0，**13/13 复现**（关系仍未被证明），复现门通过。
+
+| 假设 | 数量 | 形态 |
+|---|---|---|
+| H3_ONE_HOP | 7 | 锚点均为接口（profile `port`），经抽象类 6、经普通类 1，集中在 2 道题 |
+| H0_UNEXPLAINED | 2 | 直接 `implements` 接口，profile `port`，锚点直接子类型 3（低于上限 20），目标与锚点跨模块，不在池中；池中只有 1 个带 `typeGraph:implementation-lookup` |
+| C_OWNER_BOUND | 4 | 已在池中，无受保护 reason。owner 静态调用 1，接收变量声明为 owner 3；其中 3 个核心超限 |
+
+H1、H2、H_CAP、C_OVERRIDE_FAMILY、C_OTHER 未出现：类型图在所有 implementations 目标上都运行了。
+
+### 5.1 更正（读代码后）
+
+**更正 1：C_OWNER_BOUND 不按缺陷处理。**§3.3 把它定为"缺陷，直接修"，是在读清调用方向之前写的，规则写错了。
+
+- `relationship-provider.ts` 的 `CALLS` 证据（`resolvedDirectCallCandidates`、`resolvedAnchorCallTargets`）是锚点方法**调用了谁**，即下游。
+- 索引里有调用方数据（`facts-store` 的 `callers` → `router.queryCallers`），但 `src` 中没有任何地方调用 `router.queryCallers`。
+- 类型级入向引用由 `type-reference.ts` 调 `findTypeReferences`（`java-index-router.ts`，按 FIELD_TYPE、PARAM_TYPE、RETURN_TYPE、THROWS_TYPE、LOCAL_TYPE 等边查引用方）提供，reason 为 `typeReference`，不在受保护集合内。4 个目标正是在池中只带这类弱 reason。
+
+所以这是缺一项能力（静态的方法级调用方查询），不是缺陷。它正是 Q05 卡的内容：复用 `queryCallers`/`queryCallees`，经 `projectLocalRelations` 输出有上限（8 个目标、默认一跳）的调用位置列表（[05 §5.5](../java-specialist-post-ilv2-v1/docs/05-contracts.md)）。
+
+**更正 2：表述收窄。**此前"静态路径没有任何调用方查询"说过头了。准确的说法：方法级入向调用方没有接线；类型级入向引用存在，但只给弱 reason。该说法待 D19 §3.2 检验。
+
+**更正 3：H0 的"直接修"暂停。**直接子类型 3 而池中只有 1，有三种解释（`@Primary` 过滤、跨模块边缺失、同名类型误合并），只有第二种是缺陷。由 [D19](d19-relation-followup-check.md) 区分。
+
+### 5.2 价值基线与限制
+
+- D15-F `xmlAttribution2.w2RecallByCategoryAndDriver` 中，两个固定驱动（不是模型自选工具）在这两类上的召回和（`recallSum`，各 slot 召回之和，不是召回率）：callers 原生 1.75 对产品 1.17（4 slot，均值约 0.44 对 0.29）；implementations 原生 2.0 对产品 1.4（3 slot，均值约 0.67 对 0.47）。原生驱动是 `native-rg/v1`：按词固定串匹配 Java/XML，按命中数排序文件，取首个命中处的窗口；产品驱动是 `product-mcp/v1`。样本很小，但它给出门槛：新方案至少要赢过这个 rg 脚本。Q10 结果没有按类别的答案正确率。
+- 4 个 callers 目标中 3 个核心超限，池中已有 6 个 `CALLS` 文件。即使给调用方加受保护 reason，在 C0 预算（6 文件、14 KiB，[decision-log](decision-log.md)）内也未必进读取计划；收益更可能来自调用位置列表这种输出形态。这是推断，未验证。
+- 这 13 个目标是已看过的 dev 数据，只来自少数几道题，只能作为触发证据，不能再作为验收数据。按 decision-log 的封存集条款，有新的候选改动时，先冻结指标、预算、采样和数据，再评估一次。
+
+### 5.3 去向
+
+不写回归测试、不改 `src`。先跑 D19；之后由用户对 Q05 一次决定范围：
+
+| 选项 | 内容 |
+|---|---|
+| a | 不写代码，给"找调用方/实现类"写路由说明：这两类问题用原生搜索（新决定，与已作废的路由说明无关） |
+| b | Q05 一跳调用方：无 JDT 时用静态索引返回调用位置列表；先按封存集条款冻结评估方案 |
+| c | b 加上实现类传递查找（H3），并视 D19 结果处理 `@Primary` 过滤 |

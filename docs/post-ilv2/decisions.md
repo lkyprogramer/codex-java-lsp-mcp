@@ -185,7 +185,11 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 
 ## D18 关系缺陷复现与形态（2026-11-13 批准）
 
-对 D17 的 13 个有文本关系的目标，在当前构建上用同一锚点复现 `java_impact`（无 JDT，同 D15-F），并输出脱敏的代码形态，按预注册假设（类型图门控、非接口弱 reason、只查一跳）决定写哪些回归测试。Q05 设计卡等 D18 之后再定。见 [D18](d18-relation-defect-shape.md)。Mac 未运行。
+对 D17 的 13 个有文本关系的目标，在当前构建上用同一锚点复现 `java_impact`（无 JDT，同 D15-F），并输出脱敏的代码形态，按预注册假设（类型图门控、非接口弱 reason、只查一跳）决定写哪些回归测试。Q05 设计卡等 D18 之后再定。见 [D18](d18-relation-defect-shape.md)。Mac 已运行，判读见 [D18 §5](d18-relation-defect-shape.md#5-结果与判读2026-11-13)：13/13 复现。更正：C_OWNER_BOUND 是缺少静态方法级调用方查询（Q05 范围），不是缺陷；H0 的修复暂停，待 D19 区分。不写回归测试、不改 `src`。
+
+## D19 关系后续核查（2026-11-13 批准）
+
+离线区分 H0 的三种解释（`@Primary` 过滤、跨模块边缺失、同名类型误合并），并统计 D15-F C0 下已命中的 callers 靠什么 label 和 reason 进入读取计划。无模型、不调用产品，判读规则在 Mac 运行前固定。之后由用户对 Q05 的范围一次决定。见 [D19](d19-relation-followup-check.md)。Mac 未运行。
 
 ## 阶段进度
 
@@ -201,4 +205,5 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。D15 §12 发现层诊断已收尾，无产品缺陷。开关按 A 保留。Mac 全量 `npm test`（2405 通过、0 失败、10 个白名单跳过，含 stdio smoke）与 `gate:pr`（1658 通过、0 失败、1 个既有跳过）已通过，见 [P6-GATES](results/P6-GATES.json)。合入前评审无默认路径阻断缺陷，实验功能问题已登记（见上）。2026-11-13 经 PR #4 以 merge commit `88e6f4a` 合入 main。Mac 全量门禁基于 `f3ab2cc`，其后到 `2c8919a` 只有文档提交；代码评审范围是 `origin/main...2c8919a` 的 `src`。随后合入的 `3f48c1d`（仅文档）和 `ea14c2f`（仅 eval 脚本，不涉及 `src`）未经代码评审和 Mac 全量门禁；`ea14c2f` 涉及的 `ilv2-mac-delivery-receipt.test.mjs` 与 `eval-mac10-live.test.mjs` 在 Linux 开发机上通过（23/23），Mac 未运行 |
 | P7 | D16 未命中拆表 | Mac 已运行（[D16-MISS](results/D16-MISS.json)）。R2 未触发、R3 触发：选择策略不改。16/22 焦点未命中在 F 的调用里没有受保护关系 reason，原因未定（见 D16 §5、§6）。更正：评测 owner 未启用 JDT，D15 与 D16 只测了静态路径；三策略重放在现有框架里跑不了，锚点粒度已大体排除，首调用规则待 Mac 离线补跑。Q05 静态路径触发，Q08 仍 UNASSESSED。用户决定不做 JDT 对照（日常几乎不用 JDT，静态路径即实际路径）。首调用补跑 `protectedInAnotherCall`=0，R3 不扣减，D16 收尾（[D16 §7](d16-impact-miss-breakdown.md#7-首调用补跑结果2026-11-13)） |
 | P8 | D17 关系文本核查 | Mac 已运行（[D17-LINK](results/D17-LINK.json)）。13 个可判定目标：直接关系 6、间接关系 7、无文本联系 0；R_defect、R_q05 触发 |
-| P9 | D18 缺陷复现与形态 | 脚本与判读规则已提交，Mac 未运行 |
+| P9 | D18 缺陷复现与形态 | Mac 已运行（[D18-SHAPE](results/D18-SHAPE.json)）。13/13 复现：H3 7、H0 2、C_OWNER_BOUND 4。C_OWNER_BOUND 改判为缺少能力（Q05），H0 待 D19 |
+| P10 | D19 关系后续核查 | 脚本与判读规则已提交，Mac 未运行 |
