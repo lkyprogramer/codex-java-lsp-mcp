@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LADDER, coveringDeclaration, declarationVocabulary, diagnoseMissedTarget, enclosingType, lexicalTokens, oracleQuery, summarizeMissed } from "./ilv2-not-returned-diagnosis.mjs";
+import { LADDER, bestRank, coveringDeclaration, declarationVocabulary, diagnoseMissedTarget, enclosingType, lexicalTokens, oracleQuery, summarizeMissed } from "./ilv2-not-returned-diagnosis.mjs";
 
 const FILE = "app/src/main/java/demo/OrderService.java";
 const sel = line => ({ line, column: 5 });
@@ -100,4 +100,16 @@ test("budget truncation without a usable declaration is distinct from other part
     assert.deepEqual(row.outlineReasons, reasons);
     assert.equal(calls.length, 1);
   }
+});
+
+test("tallies survive prototype-named keys and ranked-out targets are split by the best alternative probe rank", () => {
+  assert.deepEqual([bestRank(null, 12), bestRank(3, 12), bestRank(undefined, null)], [12, 3, null]);
+  const rows = [
+    { label: "RANKED_OUT", mechanism: "NOT_RETURNED", category: "callers", coveringKind: "constructor", altRank: 2 },
+    { label: "RANKED_OUT", mechanism: "NOT_RETURNED", category: "callers", coveringKind: "constructor", altRank: 15 },
+    { label: "RANKED_OUT", mechanism: "NOT_RETURNED", category: "callers", coveringKind: "toString", altRank: null }
+  ];
+  const summary = summarizeMissed(rows, { total: 3, byMechanism: { NOT_RETURNED: 3 } });
+  assert.deepEqual(summary.coveringKind, { constructor: 2, toString: 1 });
+  assert.deepEqual(summary.rankedOutByAltRank, { top8: 1, ranks9To20: 1, notReturnedByEither: 1 });
 });

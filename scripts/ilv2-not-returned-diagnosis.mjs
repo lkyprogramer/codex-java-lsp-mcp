@@ -11,7 +11,8 @@
 //                       candidate at limit 20: the index or the exact lookup loses it
 //   NO_VOCAB_OVERLAP    the planned terms share no identifier/CJK token with the covering declaration's head, leading
 //                       comments, enclosing type name or file stem: lexical discovery cannot reach it
-//   RANKED_OUT          vocabulary overlaps but no planned term (default, text or with-terms) ranked it within 20
+//   RANKED_OUT          the default query misses it, the exact oracle finds it and the vocabulary overlaps; the best
+//                       rank of the W1 text / with-terms probes is kept beside it (altRank), never as a label
 // Private rows stay under --out; summary.json carries counts only.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -105,9 +106,21 @@ export async function diagnoseMissedTarget({ target, plan, lines, call }) {
   return { ...row, label: "RANKED_OUT" };
 }
 
+/** Best of the W1 text-route and with-terms probe ranks; an absent probe gives no rank. */
+export function bestRank(...ranks) {
+  const present = ranks.filter(rank => Number.isInteger(rank));
+  return present.length ? Math.min(...present) : null;
+}
+
 export function summarizeMissed(rows, mechanisms) {
   const count = (values, keys) => Object.fromEntries(keys.map(key => [key, values.filter(value => value === key).length]));
-  const tally = values => values.reduce((acc, value) => ({ ...acc, [value ?? "none"]: (acc[value ?? "none"] ?? 0) + 1 }), {});
+  // Own-property counting: a kind named "constructor" must not read Object.prototype.constructor.
+  const tally = values => values.reduce((acc, value) => {
+    const key = value ?? "none";
+    acc[key] = (Object.hasOwn(acc, key) ? acc[key] : 0) + 1;
+    return acc;
+  }, {});
+  const ranked = rows.filter(row => row.label === "RANKED_OUT");
   return {
     targets: mechanisms.total,
     replayByMechanism: mechanisms.byMechanism,
@@ -120,6 +133,11 @@ export function summarizeMissed(rows, mechanisms) {
     coveringKind: tally(rows.filter(row => row.coveringKind).map(row => row.coveringKind)),
     oracleExact: tally(rows.filter(row => row.label === "ORACLE_MISS").map(row => row.oracleExact)),
     outlineState: tally(rows.filter(row => row.label === "OUTLINE_UNAVAILABLE").map(row => row.outlineState)),
+    rankedOutByAltRank: {
+      top8: ranked.filter(row => row.altRank !== null && row.altRank !== undefined && row.altRank <= 8).length,
+      ranks9To20: ranked.filter(row => row.altRank > 8).length,
+      notReturnedByEither: ranked.filter(row => row.altRank === null || row.altRank === undefined).length
+    },
     outlineReasonsByLabel: Object.fromEntries(LADDER.filter(label => rows.some(row => row.label === label && row.outlineState)).map(label =>
       [label, tally(rows.filter(row => row.label === label && row.outlineState).flatMap(row => row.outlineReasons ?? []))]))
   };
@@ -169,7 +187,8 @@ export async function runNotReturned({ datasetFile, tasksFile, goldFile, inputsF
           mechanisms.byMechanism[classified.mechanism] = (mechanisms.byMechanism[classified.mechanism] ?? 0) + 1;
           if (classified.rank !== null) continue;
           const result = await diagnoseMissedTarget({ target, plan, lines: await lines(target.path), call: session.call });
-          rows.push({ taskId: task.taskId, category: task.category, path: target.path, startLine: target.startLine, endLine: target.endLine, mechanism: classified.mechanism, ...result });
+          rows.push({ taskId: task.taskId, category: task.category, path: target.path, startLine: target.startLine, endLine: target.endLine, mechanism: classified.mechanism,
+            altRank: bestRank(classified.counterfactual.textRoute, classified.counterfactual.withTerms), ...result });
         }
       }
     } finally { await session.close(); }

@@ -143,6 +143,14 @@ Q07 的四个目标在 `limit=3/8/20` 下分别有 0/2/4 个可见，默认查�
 
 Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的测试：`dist/mcp-server-factory.test.js`、`dist/tools/symbol-static.test.js`、`dist/tools/output-shape.test.js`、`scripts/eval-evidence-e2e.test.mjs`、`scripts/run-agent-trace-live.test.mjs`。`measure:tool-schema` 两种状态各测一次。全量 `npm test`（含 stdio smoke）和 `npm run gate:pr` 在合入 main 前跑一次。硬门是开启状态：5 个工具、9,086 B，`java_symbol` 3,532 B，与 D14 一致。关闭状态只记录不设门；预期 `java_symbol` 小于 main 的 2,883 B，粗估约 2,670 B（main 减去 evidence 说明、枚举项和 `symbolId` 描述里的 evidence 字样）。
 
+## 开关保留：维护预算的例外（2026-11-13）
+
+用户选择 A：保留 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS` 开关及 outline/evidence v2 代码。这是对 [15 维护预算](../java-specialist-post-ilv2-v1/docs/15-java-workflow-priorities.md)"新开关若只用于对照，试验结束后删除一边"的例外。
+
+- 理由：开关不只用于对照。评测 b1/b2 臂、`eval-evidence-e2e`、MAC11/MAC13 测试和 D15 §12 诊断（outline 作 oracle）都依赖它；删除约 +415 行生产代码，且与 `b96a9c1` 的修复交织。
+- 成本：两套注册面（关闭/开启）都要测。`mcp-server-factory.test` 覆盖两种状态，`measure-tool-schema` 两种状态各测一次。
+- 复查条件：下一次真实 Agent 评测中，outline 或 evidence 仍为 INCONCLUSIVE 或 NO_GAIN 时，删除对应代码和开关。
+
 ## 阶段进度
 
 | 阶段 | 卡 | 状态 |
@@ -154,4 +162,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P4 | Q11、Q12 | `b96a9c1` 的 Q11 工程资格已确认，`13f9dc9a` 的工程门已通过，Q12 决策见 decision-log.md |
 | P3+ | Q10 MAC-10 LIVE 适配（D11） | Mac 无模型验收及 72-slot dry-run 通过 |
 | P5 | D15 发现与排序 | W6 已收尾。W3 停止，F 判为 O2 并保持 C0，封存集延后。XML-3 已对账，MyBatis 发现方向按普查结果归档。见 [D15 收尾决策](decision-log.md#d15-收尾) |
-| P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。最后一轮发现层诊断见 D15 §12，脚本已完成，Mac 未运行；之后进入收尾与合入决策 |
+| P6 | 分支收尾 | O2 已在 Mac 定向验证通过（[P6-O2](results/P6-O2.json)）。D15 §12 发现层诊断已收尾，无产品缺陷。开关按 A 保留。待 Mac 全量 `npm test` 与 `gate:pr`，之后由用户决定合入方式 |

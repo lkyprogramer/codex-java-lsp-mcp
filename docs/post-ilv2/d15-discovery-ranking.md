@@ -477,7 +477,7 @@ W1 dev 104 个目标中，79 个在 limit 20 下没有任何计划词返回覆�
 | `WINDOW_UNREACHABLE` | 文件里没有任何声明的名字行能让 runner 的读取窗口（前 20 行、后 60 行、最多 80 行）覆盖目标：即使排第 1 也读不到，属于读取窗口问题，不是发现问题 |
 | `ORACLE_MISS` | 用覆盖声明的精确名（`Type#member` 或 `Type`）做 exact 查询，limit 20 内仍没有覆盖候选：索引或 exact 查找丢了它 |
 | `NO_VOCAB_OVERLAP` | 计划词与覆盖声明的声明头、紧邻的注释/注解块、外层类型名、文件名没有共享的标识符或中文词元：词法检索够不着 |
-| `RANKED_OUT` | 有词汇交集，但默认、text、带 terms 三种查询都没把它排进前 20 |
+| `RANKED_OUT` | 默认查询漏掉，但精确 oracle 能找到且有词汇交集。（首版此处写成"三种查询都没排进前 20"，与代码不符：代码只看默认查询。W1 text 与 with-terms 探针的最好名次自 2026-11-13 起另记为 `altRank`，汇总为 `rankedOutByAltRank`，不改变标签。） |
 
 outline 在这里只作 oracle，诊断会话的 owner 开启 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1`；重放只调 `operation=query`，不受开关影响。词汇交集是对索引文本的近似，不读索引本身。
 
@@ -496,6 +496,8 @@ outline 在这里只作 oracle，诊断会话的 owner 开启 `JAVA_LSP_EXPERIME
 | 两者均未返回 | 25 | 已保存的探针没有命中，无法区分候选生成遗漏与排在第 20 名之后 |
 
 后续按下表判断，排序候选只从有明确截断证据的分组考虑。
+
+> 注：本节第一行以下的说明、上表以及下表最后一个条件行（"有明确截断证据的目标 ≥ 10"），是 2026-11-13 Mac 看到 D15-NR 数据之后改写的（`aead624`）。事前登记的原文为："`RANKED_OUT` 最多且 ≥ 10 → 排序或召回截断 → 预注册一个候选改动，沿用 W3 门槛：hit@8 至少 +5，响应字节 p50 增幅 ≤ 10%"。按原文与改写后的文本，结论相同，见 §12.5。
 
 | 条件 | 结论 | 下一步 |
 |---|---|---|
@@ -518,3 +520,15 @@ outline 在这里只作 oracle，诊断会话的 owner 开启 `JAVA_LSP_EXPERIME
    期望 `targets = 104`、`missedTargets = 79`（与 W1 一致时）。
 4. 回传：新建 `results/D15-NR.json`，包含 `summary.json` 全文、定向测试 TAP 计数、build-stamp 的 SHA-256 和私有 `rows.jsonl` 的路径与 SHA-256。不读 holdout，不改 `src/`，不在本批 dev 上追加探针。
 
+### 12.5 结果与收尾（2026-11-13）
+
+[D15-NR.json](results/D15-NR.json)：重放与 W1 一致（104 个目标，79 个未返回）。修正 outline 预算误判（`e16d614`）后：`NON_JAVA` 16、`NO_PLAN_TERMS` 3、`OUTLINE_*` 0、`WINDOW_UNREACHABLE` 0、`ORACLE_MISS` 0、`NO_VOCAB_OVERLAP` 1、`RANKED_OUT` 59。`RANKED_OUT` 按题型为 implementations 21、callers 15、dto-impact 14、spring 9；替代探针最好名次为前 8 名 20 个（全部来自 text 路径）、第 9–20 名 14 个、均未返回 25 个。
+
+判读：
+
+- 索引、精确查找、读取窗口均无缺口，没有产品缺陷可修。
+- `RANKED_OUT` 主要是关系目标（调用方、实现类、字段影响）。题面锚点是被调用或被实现的类型名，默认查询走 exact 路径只返回该声明本身；关系目标由 `java_impact` 负责，F 已测并保持 C0。
+- text 路径可在前 8 名找回的 20 个，即 W3 步骤 B 的收益来源。W3 已测：10% 响应字节 p50 预算内最多 +3 个 hit@8，低于 +5 门槛。按原文规则需要预注册的候选改动就是这一个，现有数据已判它不达标，不再重复。
+- 发现层本轮结束，进入分支收尾。
+
+脚本修正（`ilv2-not-returned-diagnosis.mjs`）：计数改为只数自有属性，修复 `coveringKind` 中 `constructor` 键读到原型的问题（D15-NR.json 里该值显示为乱码，是这个缺陷造成的）；`RANKED_OUT` 行另记 `altRank`，汇总为 `rankedOutByAltRank`，把 Mac 的离线分层收进脚本。

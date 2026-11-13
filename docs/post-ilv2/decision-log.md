@@ -19,7 +19,7 @@ D0 记录首次开发交付时的未运行状态。下表纳入后续 Mac 实测
 
 ## 文档入口
 
-当前状态的唯一入口是 [decisions.md](decisions.md)。产品 README 已经说明 query → outline/evidence → 按需 JDT 这三步用法，以及 outline 和 evidence v2 的边界。README 里其余历史章节本轮没有精简（NOT_DONE），原因是精简会牵动大量与本轮无关的已验收描述。
+当前状态的唯一入口是 [decisions.md](decisions.md)。产品 README 的默认推荐用法是 query → 读源码 → 按需 JDT；outline 和 evidence v2 默认不注册，README 说明了开启开关后的用法和边界（O2，2026-11-13）。README 里其余历史章节本轮没有精简（NOT_DONE），原因是精简会牵动大量与本轮无关的已验收描述。
 
 ## 是否继续
 
@@ -42,3 +42,5 @@ Q10 最终为 INCONCLUSIVE，按上一条规则，outline/evidence 路线停止�
 | XML-3（2026-11-13） | 对账后收尾，MyBatis 发现为 `NOT_RUN` | 16 个证据范围中有 15 个 XML 和 1 个 YAML。15 个 XML 范围均来自 Maven POM 或日志配置，MyBatis 语句目标为 0。[D15-XML3.json](results/D15-XML3.json) |
 | MyBatis 发现（2026-11-13） | 按 §11.6 归档本批语料的发现方向 | 三个冻结语料识别到 0 条 mapper XML 语句，低于 50 条的门槛。MyBatis 发现验证仍为 `NOT_RUN`。[普查报告](results/D15-MYBATIS-CENSUS.json) |
 | outline/evidence 去留（2026-11-13） | O2：代码保留，默认不注册，owner 开关 `JAVA_LSP_EXPERIMENTAL_SYMBOL_OPS=1` 开启；main 原有的 evidence v1 实验操作默认也不再暴露 | Q10 为 INCONCLUSIVE，不让默认会话为未证实的收益付 schema 成本；v2 无法廉价投影回 v1。[分支收尾](decisions.md#分支收尾outlineevidence-默认隐藏o22026-11-13) |
+| NOT_RETURNED 拆解（2026-11-13） | 发现层本轮结束，无产品缺陷 | 79 个未返回目标中索引、精确查找、读取窗口缺口均为 0；59 个 `RANKED_OUT` 主要是关系目标，text 路径可找回的部分即 W3 已判不达标的候选。[D15 §12.5](d15-discovery-ranking.md#125-结果与收尾2026-11-13) |
+| 开关去留（2026-11-13） | A：保留开关，作为维护预算的例外，附复查条件 | 评测臂、测试和诊断依赖 outline/evidence；删除牵涉约 +415 行且与修复交织。[开关保留](decisions.md#开关保留维护预算的例外2026-11-13) |
