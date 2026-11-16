@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -30,6 +30,23 @@ test("ownership is exclusive per root and independent across roots", async () =>
   const transferred = second.acquire(rootA);
   transferred.release();
   leaseB.release();
+});
+
+test("JDT state updates replace owner.json atomically, owner-only, with no staged file left", async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), "java-lsp-ownership-"));
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-owner-root-"));
+  const lease = manager(baseDir, "atomic", 303, () => "alive").acquire(root);
+  try {
+    lease.markJdtlsStarting();
+    assert.deepEqual(await readdir(lease.lockPath), ["owner.json"]);
+    assert.equal((await stat(path.join(lease.lockPath, "owner.json"))).mode & 0o777, 0o600);
+    assert.equal(JSON.parse(await readFile(path.join(lease.lockPath, "owner.json"), "utf8")).jdtls.state, "starting");
+    lease.clearJdtlsState();
+    assert.deepEqual(await readdir(lease.lockPath), ["owner.json"]);
+    assert.equal(JSON.parse(await readFile(path.join(lease.lockPath, "owner.json"), "utf8")).jdtls, undefined);
+  } finally {
+    lease.release();
+  }
 });
 
 test("ownership rejects a relative base that would vary by process cwd", () => {

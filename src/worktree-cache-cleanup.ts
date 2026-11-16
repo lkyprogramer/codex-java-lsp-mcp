@@ -1,20 +1,18 @@
 // input: codex-java-lsp cache directories, pin roots, and cross-process ownership state.
 // output: L0 retired-format GC, L1 dead-path / non-pin TTL reclaim, L2 unpinned LRU caps.
 // pos: Startup and periodic cache janitor; never deletes a pin or concurrently owned runtime.
-import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
-  statSync,
-  writeFileSync
+  statSync
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { writeFileAtomicSync } from "./atomic-file.js";
 import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
 import { killOwnedProcessTree, listProcesses } from "./jdt-process-tree.js";
 import { canonicalPath } from "./path-utils.js";
@@ -171,10 +169,7 @@ export function touchRepoCache(repoRoot: string, extra: RepoCacheTouch = {}): vo
     if (extra.jdtlsProcessStartIdentity === null) {
       delete meta.jdtlsProcessStartIdentity;
     }
-    const metaPath = path.join(cacheRoot, META_FILE);
-    const temporary = `${metaPath}.tmp-${randomUUID()}`;
-    writeFileSync(temporary, `${JSON.stringify(meta, null, 2)}\n`, { mode: 0o600 });
-    renameSync(temporary, metaPath);
+    writeFileAtomicSync(path.join(cacheRoot, META_FILE), `${JSON.stringify(meta, null, 2)}\n`, 0o600);
   } catch {
     // Best-effort cache metadata only; Java navigation must not depend on it.
   }
