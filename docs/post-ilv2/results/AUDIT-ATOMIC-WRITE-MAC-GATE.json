@@ -1,0 +1,86 @@
+{
+  "schema": "post-ilv2/audit-atomic-write-mac-gate/v1",
+  "sourceHead": "0c92257b3e59d0dc1de1da5d745439efa3b5e16b",
+  "platform": "macOS",
+  "status": "PASS",
+  "dependencyInstall": {
+    "command": "npm ci",
+    "status": "NOT_RUN",
+    "reason": "No dependency changes; reused the installed dependencies."
+  },
+  "engineeringGates": {
+    "gatePr": {
+      "command": "npm run gate:pr",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T12:15:18.400Z",
+      "endedAt": "2026-11-16T12:20:55.899Z",
+      "hygiene": {
+        "command": "node scripts/check-repo-hygiene.mjs",
+        "exitCode": 0,
+        "output": {
+          "status": "PASS",
+          "violations": [],
+          "debt": {
+            "ignoredTracked": 742,
+            "untestedProduction": 49,
+            "unreferencedScripts": 54,
+            "testTimerFiles": 46
+          }
+        }
+      },
+      "lint": {
+        "command": "node node_modules/eslint/bin/eslint.js src",
+        "status": "PASS",
+        "exitCode": 0,
+        "output": ""
+      },
+      "tap": {
+        "tests": 1683,
+        "pass": 1682,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "skips": [
+        "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+      ],
+      "logSha256": "d785aa372309b44a17db080cffd87f4efe57f5662909455e75f3f65217f0b26d"
+    },
+    "task36Multiprocess": {
+      "command": "npm run test:task36-multiprocess",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T12:20:55.899Z",
+      "endedAt": "2026-11-16T12:21:19.108Z",
+      "tap": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "skips": [],
+      "logSha256": "344c21a053fce1682b89fd38f0317fce10629e8123c8b0c66f6f3db8b54059cb"
+    },
+    "task36Fault": {
+      "command": "npm run test:task36-fault",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T12:21:19.109Z",
+      "endedAt": "2026-11-16T12:21:44.720Z",
+      "tap": {
+        "tests": 2,
+        "pass": 2,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "skips": [],
+      "logSha256": "1d15abcc4e6e5621b5211b8465147cfb1005f3db88e7d02c061d3e3fcd295de6"
+    }
+  }
+}
