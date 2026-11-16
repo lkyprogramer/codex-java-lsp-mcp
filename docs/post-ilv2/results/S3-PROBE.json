@@ -1,0 +1,144 @@
+{
+  "taskId": "S3-PROBE",
+  "status": "PASS",
+  "sourceHead": "e33f744b1952d0c4f432c5329e2a5d9a4efbf8ed",
+  "failedStage": null,
+  "notRun": [],
+  "firstError": null,
+  "stages": [
+    {
+      "name": "preflight",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T08:30:08.037Z",
+      "endedAt": "2026-11-16T08:30:08.079Z",
+      "problems": []
+    },
+    {
+      "name": "probe-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T08:30:08.079Z",
+      "endedAt": "2026-11-16T08:30:08.388Z",
+      "problems": []
+    },
+    {
+      "name": "build",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T08:30:08.389Z",
+      "endedAt": "2026-11-16T08:30:25.338Z",
+      "problems": []
+    },
+    {
+      "name": "probe",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T08:30:25.339Z",
+      "endedAt": "2026-11-16T08:34:07.412Z",
+      "problems": []
+    }
+  ],
+  "buildStampSha256": "52012df51e912a14fa0d91e5afe8ada8432023fd3457802bbaddfbb180815f4f",
+  "probe": {
+    "schema": "post-ilv2/s3-callers-probe/v1",
+    "identity": {
+      "datasetId": "mac10-v3",
+      "datasetDigest": "097e662836eeb34f826470befa2bda80b7d361ebff6b2d79615095b99f34508e",
+      "tasksSha256": "a0d74577d20e10c44e50f8220ac355bc1c3ff5689e826dbab279584d8bae39aa",
+      "goldSha256": "d5d9416eb67737afc4152ddff90f6feffc87b296abbd8266be444edf5f37c7e6",
+      "rowsSha256": "18b61c2afd61bbdeed64b3995b370c03847585096ca12bc9f1589367adf51b40",
+      "responsesSha256": "018f9174333d0a0c7321c5b0a2e44edcd867dd84d2d7852c7cd1f68522876739",
+      "distBuildStampSha256": "52012df51e912a14fa0d91e5afe8ada8432023fd3457802bbaddfbb180815f4f"
+    },
+    "limits": {
+      "C0": {
+        "maxFiles": 6,
+        "maxReadBytes": 14336,
+        "coreMax": 4
+      },
+      "READER_MAX_LINES": 80,
+      "CALLER_FILE_CAP": 8,
+      "DESIGN_EDGE_LIMIT": 16,
+      "PROBE_EDGE_LIMIT": 80
+    },
+    "calls": {
+      "total": 16,
+      "anchorKinds": {
+        "TYPE": 6,
+        "METHOD": 10
+      },
+      "queried": 10,
+      "truncatedAtDesignLimit": 1,
+      "truncatedAtProbeLimit": 0,
+      "directEdges": {
+        "n": 10,
+        "p50": 1,
+        "p95": 18,
+        "max": 18
+      },
+      "callerFiles": {
+        "n": 10,
+        "p50": 0,
+        "p95": 3,
+        "max": 3
+      },
+      "viaSupertypeFiles": {
+        "n": 10,
+        "p50": 0,
+        "p95": 4,
+        "max": 4
+      },
+      "coreExceeded": 2,
+      "selectedFiles": {
+        "n": 16,
+        "p50": 4,
+        "p95": 6,
+        "max": 6
+      },
+      "planBytes": {
+        "n": 16,
+        "p50": 5289,
+        "p95": 13366,
+        "max": 13366
+      },
+      "poolSize": {
+        "n": 16,
+        "p50": 8,
+        "p95": 26,
+        "max": 26
+      }
+    },
+    "targets": {
+      "total": 16,
+      "credited": 7,
+      "uncredited": 9,
+      "uncreditedByAnchorKind": {
+        "METHOD": 8,
+        "TYPE": 1
+      },
+      "returned": {
+        "none": 4,
+        "no-method-call": 1,
+        "direct": 4
+      },
+      "returnedSpanCredits": 4,
+      "blockedByCore": 3,
+      "blockedByBytes": 0,
+      "reachable": 1,
+      "reachableViaSupertype": 0,
+      "reachableTaskGroups": 1,
+      "creditedReturned": 2,
+      "creditedAtRisk": 0
+    },
+    "stopRule": {
+      "stop": true,
+      "reasons": [
+        "reachable<2",
+        "taskGroups<2"
+      ],
+      "lockedCoreShapeExcluded": false
+    },
+    "notClaimed": "Mechanism counts on the seen dev split. Reachable is computed from the recorded S1 C0 plans with UTF-8 line bytes and reason-based protection (may overcount the core), not by re-running the planner with a CALLER reason; the supertype count uses one-hop same-name-and-arity overrides; no product change is measured."
+  }
+}
