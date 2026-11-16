@@ -47,3 +47,30 @@ test("uncaughtException logs a crash marker then exits", () => {
   assert.equal(payload.pid, 42);
   assert.equal(payload.message, "boom");
 });
+
+test("unhandledRejection logs a counted marker and keeps the process running", () => {
+  const fake = new EventEmitter() as EventEmitter & { pid: number; exit: (code: number) => void };
+  fake.pid = 43;
+  let exited: number | undefined;
+  fake.exit = (code: number) => {
+    exited = code;
+  };
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(String(args[0]));
+  };
+  try {
+    installProcessCrashMarkers("http-daemon", fake);
+    fake.emit("unhandledRejection", new Error("first"));
+    fake.emit("unhandledRejection", "second");
+  } finally {
+    console.error = original;
+  }
+  assert.equal(exited, undefined);
+  const payloads = lines.map(line => JSON.parse(line) as { event: string; message: string; count: number });
+  assert.deepEqual(payloads.map(payload => [payload.event, payload.message, payload.count]), [
+    ["unhandledRejection", "first", 1],
+    ["unhandledRejection", "second", 2]
+  ]);
+});

@@ -16,6 +16,8 @@ export type CrashMarkerPayload = {
   message?: string;
   heapLimitBytes?: number;
   heapUsedBytes?: number;
+  /** unhandledRejection only: how many this process has seen, since it keeps running after each. */
+  count?: number;
 };
 
 export type MarkerProcess = {
@@ -56,10 +58,14 @@ export function installProcessCrashMarkers(
     // A listener would otherwise swallow the default crash. Keep the process dying.
     target.exit?.(1);
   });
+  // Deliberately not fatal (user decision 2026-11-16): the promise lint rules keep new ones out, and a
+  // restart would cut every in-flight request. Each one is still logged and counted.
+  let unhandledRejections = 0;
   target.on("unhandledRejection", (...args: unknown[]) => {
     const reason = args[0];
     const err = reason instanceof Error ? reason : new Error(String(reason));
-    emit("unhandledRejection", { name: err.name, message: err.message.slice(0, 500) });
+    unhandledRejections += 1;
+    emit("unhandledRejection", { name: err.name, message: err.message.slice(0, 500), count: unhandledRejections });
   });
   target.on("exit", (...args: unknown[]) => {
     emit("exit", { code: typeof args[0] === "number" ? args[0] : undefined });
