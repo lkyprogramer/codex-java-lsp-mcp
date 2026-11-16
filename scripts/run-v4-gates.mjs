@@ -17,8 +17,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  */
 export const GATE_PROFILES = {
   pr: {
-    description: "PR-fast: isolated compile + dist unit tests (no script suite, no smoke)",
+    description: "PR-fast: repo hygiene + lint, then isolated compile + dist unit tests (no script suite, no smoke)",
     steps: [
+      // Cheap static checks first: each freezes existing debt in a committed baseline and fails only on new debt.
+      { args: ["scripts/check-repo-hygiene.mjs"] },
+      { args: ["node_modules/eslint/bin/eslint.js", "src"] },
       {
         args: [
           "scripts/run-isolated-validation.mjs",
