@@ -1,0 +1,91 @@
+{
+  "schema": "post-ilv2/s1-mac-gates/v1",
+  "taskId": "S1-MAC-GATES",
+  "status": "PASS",
+  "sourceHead": "7f27667c27273d32a72ec4748f50949cabbfbc1b",
+  "s1GateSourceHead": "d5843ae7691fb7b657927e5ecc410399989100a4",
+  "skipPolicy": {
+    "reference": "P6-GATES.json",
+    "status": "MATCH_ALLOWLIST"
+  },
+  "engineeringGates": {
+    "npmTest": {
+      "command": "npm test",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T03:31:12.398Z",
+      "endedAt": "2026-11-16T04:01:00.325Z",
+      "tap": {
+        "tests": 2471,
+        "pass": 2461,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 10,
+        "todo": 0
+      },
+      "tapBySuite": [
+        {
+          "suite": "dist",
+          "tests": 1665,
+          "pass": 1664,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 1,
+          "todo": 0
+        },
+        {
+          "suite": "scripts",
+          "tests": 806,
+          "pass": 797,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 9,
+          "todo": 0
+        }
+      ],
+      "skips": [
+        "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot",
+        "MAC12 actual seal worker task timeline",
+        "MAC12 facts decoder allocation costs on a registered database",
+        "MAC12 bounded verification compares actual complete seal publication",
+        "MAC12 complete integrity partition costs on a registered database",
+        "MAC12 posting reference validation alternatives",
+        "MAC12 remaining seal validation check costs",
+        "MAC12 seal validation preserves data checks without an unused logical manifest",
+        "G11 recorded evidence completes the gate only after verified supplementation",
+        "G11 system loop on isolated lishu-v2 run copies"
+      ],
+      "logSha256": "eb3c8e9846a5fda5ad03a64a0a759dd8f5f133e027d9eee48c3e717192d39060"
+    },
+    "gatePr": {
+      "command": "npm run gate:pr",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T04:01:00.325Z",
+      "endedAt": "2026-11-16T04:05:39.285Z",
+      "tap": {
+        "tests": 1665,
+        "pass": 1664,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "tapBySuite": [
+        {
+          "suite": "dist",
+          "tests": 1665,
+          "pass": 1664,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 1,
+          "todo": 0
+        }
+      ],
+      "skips": [
+        "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+      ],
+      "logSha256": "7b8df864085422ccf7e3eebd8e82a2ed1386cf508a5b600351922d7774791df0"
+    }
+  }
+}
