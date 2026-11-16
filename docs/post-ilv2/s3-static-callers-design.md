@@ -121,7 +121,7 @@ callers 的 gold 需要类型解析，这是 v1 排除 callers 的原因。可�
 
 ## 7. 独立评审后的更正（2026-11-16）
 
-评审为只读，未运行代码。下面的事实项我已抽查代码确认；标"推断"的未运行验证。
+评审为只读，未运行代码。我自己核对过的是：F1 的桶锁定（`read-plan.ts:852-855`）与优先级兜底值（`:704`）、F7 的 `methodAt` 回退、F2 引用的 D16/D17 计数，以及 F2、F5 中"同包静态调用没有边"（本机冒烟复现）。F5 其余部分、F6、F8、F9、F11 是评审的说法，未复核。标"推断"的均未运行验证。
 
 ### 7.1 更正
 
@@ -169,29 +169,57 @@ callers 的 gold 需要类型解析，这是 v1 排除 callers 的原因。可�
 | `reachableTaskGroups` | `reachable` 涉及的任务组数 |
 | `creditedAtRisk` | 已命中、被返回、在该次调用中入选且无受保护 reason、而 core 超限或已满的目标数，即 F1 的预计丢失 |
 
-**停止规则（运行前固定）：**`reachable < 2`、或 `reachableTaskGroups < 2`、或 `creditedAtRisk > 0`，任一成立即停止 S3，结论记为"找调用方用原生搜索"。都不成立时，按 F1 选定方案 A 的形态，再定封存评估方案（样本量由 `reachable` 反推）。
+**停止规则（运行前固定）：**`reachable < 2` 或 `reachableTaskGroups < 2`，任一成立即停止 S3，结论记为"找调用方用原生搜索"。`creditedAtRisk > 0` 不单独停止，只排除 F1 中"进 core 且不回落"的形态（`stopRule.lockedCoreShapeExcluded`）。都不成立时，按 F1 在剩余形态中选定方案 A，再定封存评估方案（样本量由 `reachable` 反推）。
 
-限制：可达性由记录的计划近似（行的 UTF-8 字节，非产品精确切片），未用 `CALLER` reason 重跑规划器；评估驱动等索引 FRESH 才查询，冷索引缺边在此观察不到，不计。
+限制：
+- 可达性由记录的计划近似（行的 UTF-8 字节，非产品精确切片），未用 `CALLER` reason 重跑规划器。
+- 受保护按 reasons 判定；规划器的 `isProtectedCore` 还要求 `CALLS` 深度 ≤ 1 等条件，所以 core 可能多算，只会让探针更倾向停止。
+- 锚点按诊断输出的 `role: "target"`（或 reason `anchor`）识别，不计入 core。
+- 评估驱动等索引 FRESH 才查询，冷索引缺边在此观察不到，不计。
 
 ### 8.1 Mac 步骤
+
+按[长时间验证规范](../deep/ilv2-mac-manual/long-running-validation.md)由后台运行器 `scripts/ilv2-s3-probe-mac-run.mjs` 执行（复用 S1 运行器的阶段引擎）：
+
+| 阶段 | 内容 | 超时 | 失败后 |
+|---|---|---|---|
+| `preflight` | 工作区干净；5 个环境变量；`$S1RUN/s1-replay` 的 rows 哈希等于 S1 记录值，responses 存在 | 2 分 | 停止 |
+| `probe-tests` | 探针单元测试 | 10 分 | 停止 |
+| `build` | `run-isolated-validation --profile compile --keep`，按内容取 `validationRoot` | 40 分 | 停止 |
+| `probe` | 探针，输出到 `$RUN/probe` | 60 分 | 停止 |
+
+运行器写 `status.json`（30 秒心跳）、`events.jsonl`、各阶段日志和终态 `result.json`，终态后由它自己发一次 Mac 通知。运行器若没写出终态就退出（如被 `kill -9`），外层 shell 补发 `INCOMPLETE` 通知。
+
+预计耗时：构建约 20 秒（S1 运行的 `baseline-build`），探针以冷建索引为主。D18 的产品索引就绪时间为 12 秒、48 秒、132 秒（三个语料），探针的进程内冷建量级相近，合计预计 5 分钟以内，这是推断。
 
 ```bash
 cd <Mac 上的仓库>
 git fetch origin && git checkout docs/s3-design && git pull --ff-only
-sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile --keep --name s3-probe | tail -1
-DIST=<上一行 JSON 的 validationRoot>/candidate/dist   # 本分支 src 与 main 相同
-S1RUN=<S1 那次运行的 $RUN>         # 其中有 s1-replay/responses.jsonl 与 rows.jsonl
-OUT=<Mac 运行根>/post-ilv2-s3-probe-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M)
-"$ILV2_NODE_BIN" --test scripts/ilv2-s3-callers-probe.test.mjs
-"$ILV2_NODE_BIN" scripts/ilv2-s3-callers-probe.mjs --dataset "$ILV2_MAC10_DATASET" \
-  --tasks "$DS/tasks-dev.jsonl" --gold "$DS/private/gold-dev.jsonl" --inputs "$ILV2_MAC10_INPUTS" \
-  --dist "$DIST" --responses "$S1RUN/s1-replay/responses.jsonl" --rows "$S1RUN/s1-replay/rows.jsonl" --out "$OUT"
+git status --porcelain            # 必须为空
+export ILV2_NODE_BIN=... ILV2_MAC10_DATASET=... ILV2_MAC10_INPUTS=... DS=...   # 同 S1
+export S1RUN=<S1 那次运行的 $RUN>  # 其中须有 s1-replay/responses.jsonl 与 rows.jsonl
+export RUN=<Mac 运行根>/post-ilv2-s3-probe-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M)   # 须 export：下面的 sh -c 要读到它
+mkdir -p "$RUN"                   # 仓库外，启动时只能有 runner.log
+nohup sh -c '"$ILV2_NODE_BIN" scripts/ilv2-s3-probe-mac-run.mjs --run-dir "$RUN"; c=$?;
+  [ -f "$RUN/result.json" ] || /usr/bin/osascript -e "display notification \"exit $c\" with title \"Codex · Mac 验收\" subtitle \"S3-PROBE · INCOMPLETE\""' \
+  > "$RUN/runner.log" 2>&1 < /dev/null &
+sleep 5 && cat "$RUN/status.json"  # state: RUNNING
 ```
 
-`$OUT/summary.json` 只含计数，回传为 `docs/post-ilv2/results/S3-PROBE.json`；`probe-rows.jsonl` 含路径与任务 ID，留在 Mac。预计数分钟（每个语料一次冷建索引）。
+进度：`cat "$RUN/status.json"`、`cat "$RUN/events.jsonl"`、`tail "$RUN/<阶段>.log"`；`result.json` 出现即结束。中止：`kill <status.json 里的 pid>`。
+
+回传：
+
+```bash
+"$ILV2_NODE_BIN" scripts/ilv2-s3-probe-mac-run.mjs --report "$RUN" > docs/post-ilv2/results/S3-PROBE.json
+git add docs/post-ilv2/results/S3-PROBE.json && git commit -m "docs(eval): record S3 probe results" && git push
+```
+
+`S3-PROBE.json` 只含计数、状态和哈希；`$RUN/probe/probe-rows.jsonl` 含路径与任务 ID，留在 Mac。
 
 ### 8.2 验证状态（提交时）
 
-- 单元测试 10/10：已运行并通过（计划状态、调用方聚合与截取、80 行上限、可达与预计丢失判定、停止规则、类型 id 解析、带假索引的端到端汇总与脱敏）。
-- 真实索引冒烟：用 `src` 加载器对一个 4 文件小工程冷建索引后调用 `callersOf`，已运行并通过：字段类型为实现类的调用是直接调用方；经接口变量的调用只出现在 via-supertype；同包静态调用 `Impl.util(1)` 没有边；类型锚点不查询。
+- 探针单元测试 12 个：已运行并通过（计划状态与锚点识别、调用方聚合与截取、80 行上限、可达与预计丢失判定、停止规则、非 Java 文件字节、类型 id 解析、带假索引的端到端汇总与脱敏）。
+- 运行器测试 5 个：已运行并通过（阶段表、preflight 失败的终态与单次通知、运行目录检查、无 osascript 时不致命、报告去路径）；与 S1 运行器测试一起回归，共 30/30 通过。
+- 真实索引冒烟：用 `src` 加载器对一个 4 文件小工程冷建索引后调用 `callersOf`，已运行并通过：字段类型为实现类的调用是直接调用方；经接口变量的调用只出现在 via-supertype；同包静态调用 `Impl.util(1)` 没有边；类型锚点不查询。只覆盖 `callersOf`，计划判定部分只有单元测试。
 - 对真实语料运行：无法在 Linux 运行（语料只在 Mac）。Mac：未运行。

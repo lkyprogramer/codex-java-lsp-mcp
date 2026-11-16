@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { C0, CALLER_FILE_CAP, PROBE_EDGE_LIMIT, callerFiles, callersOf, judgeTarget, planState, probeTasks, spanCredits, stopRule, summarize, typePath } from "./ilv2-s3-callers-probe.mjs";
+import { C0, CALLER_FILE_CAP, corpusLines, PROBE_EDGE_LIMIT, callerFiles, callersOf, judgeTarget, planState, probeTasks, spanCredits, stopRule, summarize, typePath } from "./ilv2-s3-callers-probe.mjs";
 
 const CORE_GAP = "Protected core exceeded read-plan limits; lower-value core files were omitted.";
 const lines = n => Array.from({ length: n }, (_, i) => `line ${i + 1}`);
@@ -9,7 +9,7 @@ const linesOf = file => source[file];
 
 /** A recorded C0 diagnostic: the anchor, protected core files, and plain files, all selected unless listed in `unselected`. */
 function diagnostic({ core = 0, plain = [], unselected = [], exceeded = false }) {
-  const files = [{ id: "f0", path: "A.java", role: "anchor", reasons: ["anchor"] }];
+  const files = [{ id: "f0", path: "A.java", role: "target", reasons: ["anchor", "DEFINITION"] }];
   for (let i = 0; i < core; i += 1) files.push({ id: `c${i}`, path: `A.java`, role: "candidate", reasons: ["CALLS"] });
   plain.forEach((file, i) => files.push({ id: `p${i}`, path: file, role: "candidate", reasons: ["typeReference"] }));
   unselected.forEach((file, i) => files.push({ id: `u${i}`, path: file, role: "candidate", reasons: ["typeReference"] }));
@@ -77,9 +77,28 @@ test("a credited, selected, unprotected target returned as a caller is at risk w
   assert.equal(judgeTarget({ item: hit, credited: true, plan: full, direct: [], via: [], lines: linesOf }).atRisk, false, "not returned, not touched");
 });
 
-test("stop rule: fewer than 2 reachable, fewer than 2 task groups, or any credited target at risk", () => {
-  assert.deepEqual(stopRule({ reachable: 2, groups: 2, atRisk: 0 }), { stop: false, reasons: [] });
-  assert.deepEqual(stopRule({ reachable: 1, groups: 1, atRisk: 1 }).reasons, ["reachable<2", "taskGroups<2", "creditedAtRisk>0"]);
+test("stop rule: fewer than 2 reachable or fewer than 2 task groups; targets at risk only exclude the locked-core shape", () => {
+  assert.deepEqual(stopRule({ reachable: 2, groups: 2, atRisk: 0 }), { stop: false, reasons: [], lockedCoreShapeExcluded: false });
+  assert.deepEqual(stopRule({ reachable: 2, groups: 2, atRisk: 1 }), { stop: false, reasons: [], lockedCoreShapeExcluded: true });
+  assert.deepEqual(stopRule({ reachable: 1, groups: 1, atRisk: 0 }).reasons, ["reachable<2", "taskGroups<2"]);
+});
+
+test("the anchor (role target, even with a protected reason) is not counted as core", () => {
+  assert.equal(planState(diagnostic({ core: 0 }), linesOf).coreSelected, 0);
+});
+
+test("corpus lines read any file kind once and refuse paths outside the corpus", async () => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "s3-lines-"));
+  try {
+    await writeFile(path.join(dir, "m.xml"), "<a>\n</a>\n");
+    const read = corpusLines(dir);
+    assert.deepEqual(read("m.xml"), ["<a>", "</a>", ""]);
+    assert.equal(read("../etc/passwd"), undefined);
+    assert.equal(read("missing.java"), undefined);
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test("named type ids map back to their file; local types do not", () => {
@@ -149,6 +168,6 @@ test("probeTasks + summarize: reachable and at-risk counts per task group, with 
   assert.equal(summary.targets.reachableTaskGroups, 2);
   assert.deepEqual(summary.targets.uncreditedByAnchorKind, { METHOD: 2, TYPE: 1 });
   assert.equal(summary.targets.creditedAtRisk, 0);
-  assert.deepEqual(summary.stopRule, { stop: false, reasons: [] });
+  assert.deepEqual(summary.stopRule, { stop: false, reasons: [], lockedCoreShapeExcluded: false });
   assert.doesNotMatch(JSON.stringify(summary), /Caller|Hit|A\.java|t1|g1/);
 });

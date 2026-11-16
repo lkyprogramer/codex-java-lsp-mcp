@@ -3,7 +3,8 @@
 // replay recorded, ask the current build's static index who calls each call's anchor (queryCallers), and count whether a
 // pooled CALLER file could be credited under the C0 read budget, and how many already-credited targets it would put at
 // risk (docs/post-ilv2/s3-static-callers-design.md §4.1). The summary carries counts only; per-target rows stay private.
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { cliOptions, isMain, readJson, requireValue, runCli, sha256 } from "./ilv2-mac-contracts.mjs";
@@ -33,7 +34,9 @@ export const typePath = typeId => (typeId.startsWith("type:v2:") ? decodeURIComp
 /**
  * The C0 call's read plan as the probe needs it: which files are selected, how many of them are protected core,
  * and the bytes the anchor plus the protected core already take (UTF-8 of the planned line ranges, an approximation
- * of the product's exact slices). `lines(path)` returns a corpus file's lines.
+ * of the product's exact slices). `lines(path)` returns a corpus file's lines. Protected is read from the reasons; the
+ * planner's own isProtectedCore also needs CALLS depth <= 1 and some Spring conditions, so this can overcount the core
+ * and only makes the probe more likely to stop.
  */
 export function planState(diagnostic, lines) {
   const byId = new Map((diagnostic?.files ?? []).map(file => [file.id, file]));
@@ -43,7 +46,9 @@ export function planState(diagnostic, lines) {
     if (!file) continue;
     const source = lines(file.path);
     const bytes = source ? (entry.ranges ?? []).reduce((sum, range) => sum + utf8Bytes(source, range.startLine, range.endLine), 0) : 0;
-    selected.push({ path: file.path, anchor: file.role === "anchor", core: file.role !== "anchor" && isProtected(file.reasons), bytes });
+    // The diagnostic projection names the anchor's role "target" (src/agent-router/output-v6.ts ROLE_PRECEDENCE).
+    const anchor = file.role === "target" || (file.reasons ?? []).includes("anchor");
+    selected.push({ path: file.path, anchor, core: !anchor && isProtected(file.reasons), bytes });
   }
   return {
     coreExceeded: (diagnostic?.evidenceGaps ?? []).some(gap => String(gap).startsWith(CORE_EXCEEDED_GAP)),
@@ -149,13 +154,15 @@ export function summarize({ rows, calls }) {
   };
 }
 
-/** Design §4.1 (revised after review): stop when fewer than 2 reachable targets, fewer than 2 task groups, or any credited target at risk. */
+/**
+ * Design §8 (fixed before the run): stop when fewer than 2 reachable targets or fewer than 2 task groups. Credited targets
+ * at risk do not stop S3 on their own: they rule out the "locked into core" shape of review F1, leaving the other two.
+ */
 export function stopRule({ reachable, groups, atRisk }) {
   const reasons = [];
   if (reachable < 2) reasons.push("reachable<2");
   if (groups < 2) reasons.push("taskGroups<2");
-  if (atRisk > 0) reasons.push("creditedAtRisk>0");
-  return { stop: reasons.length > 0, reasons };
+  return { stop: reasons.length > 0, reasons, lockedCoreShapeExcluded: atRisk > 0 };
 }
 
 function spread(values) {
@@ -236,18 +243,18 @@ export async function probeTasks({ tasks, gold, rows, observations, indexFor, li
   return { rows: outRows, calls: outCalls };
 }
 
-async function javaLines(root) {
-  const out = new Map();
-  const walk = async dir => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      if (entry.name === ".git") continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.isFile() && entry.name.endsWith(".java")) out.set(path.relative(root, full).split(path.sep).join("/"), (await readFile(full, "utf8")).split("\n"));
+/** Lines of any corpus file (Java or not, e.g. MyBatis XML in the plan), read once; undefined outside the corpus or when missing. */
+export function corpusLines(root) {
+  const cache = new Map();
+  return relativePath => {
+    if (!cache.has(relativePath)) {
+      const full = path.resolve(root, relativePath);
+      let lines;
+      if (full.startsWith(root + path.sep)) { try { lines = readFileSync(full, "utf8").split("\n"); } catch { lines = undefined; } }
+      cache.set(relativePath, lines);
     }
+    return cache.get(relativePath);
   };
-  await walk(root);
-  return out;
 }
 
 export async function runProbe({ datasetFile, tasksFile, goldFile, inputsFile, distRoot, responsesFile, rowsFile, out, verify = verifyDataset, materialize = materializeCorpus }) {
@@ -263,8 +270,9 @@ export async function runProbe({ datasetFile, tasksFile, goldFile, inputsFile, d
   const gold = new Map(jsonl(goldBytes).map(row => [row.taskId, row]));
   const rows = jsonl(rowsBytes);
   const observations = jsonl(responsesBytes);
-  requireValue(observations.length === rows.length && observations.every((observation, i) => observation.taskId === rows[i].taskId),
-    "responses.jsonl is not the replay that wrote rows.jsonl");
+  // The replay appends responses per corpus and writes rows in task order, so only the task sets must agree.
+  const ids = list => JSON.stringify(list.map(entry => entry.taskId).sort());
+  requireValue(ids(observations) === ids(rows), "responses.jsonl is not the replay that wrote rows.jsonl");
   await mkdir(out, { recursive: true });
   const dist = file => import(pathToFileURL(path.join(distRoot, file)).href);
   const [{ runSqlColdBuild }, { close, openIndexDb }, { ensureSchema }, { SqlJavaIndexClient }] = await Promise.all([
@@ -279,7 +287,7 @@ export async function runProbe({ datasetFile, tasksFile, goldFile, inputsFile, d
     const corpus = corpusManifest.corpora.find(entry => entry.corpusId === corpusId);
     requireValue(record && corpus && record.head === corpus.head && record.manifestSha256 === corpus.inputManifestSha256, `corpus ${corpusId} does not match its frozen input`);
     const corpusRoot = await materialize({ record, corpus, oraclesRoot: path.join(root, "private/oracles"), target: path.join(out, "corpora", corpusId) });
-    sources.set(corpusId, await javaLines(corpusRoot));
+    sources.set(corpusId, corpusLines(path.resolve(corpusRoot)));
     const dbPath = path.join(out, "index", `${corpusId}.db`);
     await mkdir(path.dirname(dbPath), { recursive: true });
     const db = openIndexDb(dbPath);
@@ -294,7 +302,7 @@ export async function runProbe({ datasetFile, tasksFile, goldFile, inputsFile, d
     return view;
   };
   // Corpora are opened before their tasks are probed, so linesFor is always called after indexFor for the same corpus.
-  const linesFor = corpusId => filePath => sources.get(corpusId)?.get(filePath);
+  const linesFor = corpusId => filePath => sources.get(corpusId)?.(filePath);
   let result;
   try {
     result = await probeTasks({ tasks, gold, rows, observations, indexFor, linesFor });
@@ -308,7 +316,7 @@ export async function runProbe({ datasetFile, tasksFile, goldFile, inputsFile, d
       rowsSha256: S1_ROWS_SHA256, responsesSha256: sha256(responsesBytes), distBuildStampSha256: sha256(await readFile(path.join(distRoot, "build-stamp.json"))) },
     limits: { C0, READER_MAX_LINES, CALLER_FILE_CAP, DESIGN_EDGE_LIMIT, PROBE_EDGE_LIMIT },
     ...summarize(result),
-    notClaimed: "Mechanism counts on the seen dev split. Reachable is computed from the recorded S1 C0 plans with UTF-8 line bytes, not by re-running the planner with a CALLER reason; the supertype count uses one-hop same-name-and-arity overrides; no product change is measured."
+    notClaimed: "Mechanism counts on the seen dev split. Reachable is computed from the recorded S1 C0 plans with UTF-8 line bytes and reason-based protection (may overcount the core), not by re-running the planner with a CALLER reason; the supertype count uses one-hop same-name-and-arity overrides; no product change is measured."
   };
   await writeFile(path.join(out, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
   return summary;
