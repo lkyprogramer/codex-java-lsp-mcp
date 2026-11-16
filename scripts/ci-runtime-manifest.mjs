@@ -18,6 +18,8 @@ const manifest = {
   nodeSha256: createHash("sha256").update(await readFile(process.execPath)).digest("hex"),
   arch: process.arch,
   versions: { ...process.versions },
-  os: (await exec("/usr/bin/sw_vers", [])).stdout
+  os: (await exec("/usr/bin/sw_vers", [])).stdout,
+  // build-macos-native.mjs refuses a compiler whose --version differs from the frozen one.
+  clang: (await exec("/usr/bin/clang", ["--version"])).stdout
 };
 process.stdout.write(`${JSON.stringify(manifest, null, 2)}\n`);

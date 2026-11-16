@@ -53,6 +53,10 @@ jobs:
           "$node_bin" scripts/ci-runtime-manifest.mjs > "$RUNNER_TEMP/runtime.json"
           echo "ILV2_NODE_BIN=$node_bin" >> "$GITHUB_ENV"
           echo "ILV2_RUNTIME_MANIFEST=$RUNNER_TEMP/runtime.json" >> "$GITHUB_ENV"
+          # The default TMPDIR is under /var, a symlink to /private/var. Scripts in the isolated clone compare
+          # argv[1] with their symlink-resolved module URL (isMain), so they would silently no-op there.
+          mkdir -p "$RUNNER_TEMP/tmp"
+          echo "TMPDIR=$(cd "$RUNNER_TEMP/tmp" && pwd -P)" >> "$GITHUB_ENV"
 
       - name: gate:${{ env.GATE_PROFILE }}
         run: npm run "gate:$GATE_PROFILE" -- --output "$RUNNER_TEMP/gate-summary.json"
