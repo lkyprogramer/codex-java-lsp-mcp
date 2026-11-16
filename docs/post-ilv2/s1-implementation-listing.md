@@ -111,4 +111,24 @@ D18 §3.4：缺陷修复合入前，用修复后的构建按 D15-F 的方式重�
 - 路由层（`rankCandidatePool` 到读取计划）：无 Linux 测试覆盖，待 Mac。§3 点名的两个用例（"complete JavaIndex resolves implementation relations…"、"production ranking observer…"）都在 `router-integration.test.js` 里。
 - 运行器（`scripts/ilv2-s1-mac-run.mjs`）：纯函数与引擎测试已运行并通过（prepare 失败、超时、后代进程占管道、不可运行阶段、报告脱敏）；按 §4 第 2 步原样在 Linux 冒烟运行（`F_RUN` 不存在），得到 preflight FAIL、其余 9 个阶段 notRun、`--report` 正常输出。基线补丁的应用与恢复在临时 worktree 中演练通过。真实构建与重放阶段未在 Linux 执行。
 - 类型检查：未运行（本机内存不足以跑 tsc），由第 1 步的编译覆盖。
-- Mac：未运行。
+- Mac：提交时未运行，结果见 §6。上面"待 Mac"的两项（router-integration 断言失败、路由层用例）已由 Mac 结果关闭。
+
+## 6. Mac 结果与判读（2026-11-16）
+
+S1 门在 `d5843ae` 上运行（[S1-GATE](results/S1-GATE.json)），10 个阶段全部 PASS，`baselineMatchesF` 为 true。全量工程门在 `7f27667` 上运行（[S1-MAC-GATES](results/S1-MAC-GATES.json)），两者之间 `src` 只改了 `http-server.test.ts`（`43e1c5c`，按别名固定 fixture JDK，断言不变）。分支（头 `7f27667`）以快进方式进入 main，没有 merge commit；之后 main 上另有两个只改文档的提交（`1400341` 记录本表的全量门结果，`785ea4e`）。
+
+| 项 | 结果 |
+|---|---|
+| §3.1 机制 | PASS：H0 的 2 个目标带受保护 reason 进池，其余 11 行不变，H0 锚点的 `CALLS` 未扩 |
+| 第 0 步基线 | main 复现 F：丢失 0、新命中 0、接收字节 p50 增幅 0；main 与 S1 的 Q02 校准都复现 W2（0.38917，全召回 3 题）。main 的 compact 负载比 F 合计多约 145 字节，不在门内 |
+| §3.2 门（F 对 S1） | PASS。平均召回 0.4242 → 0.4444，全召回题 5 → 6，已命中目标 52 → 54（新增 2 个都在 implementations），丢失 0，接收字节 p50 15154 不变 |
+| 只报告项 | `coreExceededCalls` 11 → 11，`partialCalls` 0 → 0。相对 main，33 题接收源码合计多约 1.1KB，56 次 impact 调用的 compact 响应合计多约 140 字节 |
+| Mac `npm test` | PASS：2471 个，通过 2461，失败 0，跳过 10（与 P6 白名单一致） |
+| Mac `gate:pr` | PASS：1665 个，通过 1664，失败 0，跳过 1（既有的 48 小时 GC 用例） |
+
+判读：
+
+- §1 预判的"新命中 0 个"和 §3.2 担心的"main 对不上 F"都没有发生；§3.2 的修订规则未触发。
+- (推断) 新命中的 2 个就是 D18 的两个 H0 目标：召回和增加 2/3、全召回多 1 题，符合同一道 3 目标题从 1/3 到 3/3，且机制检查已证明 H0 目标进池。目标身份只在 Mac 私有的 `target-changes.json` 里，这里未核对。
+- PASS 的含义是"已知缺口补上，其他行为没变"。新命中的正是促成本改动的那批 dev 目标，不能当作召回收益；§1 的最坏情况（有 `@Primary`、实现类很多的接口）dev 没有覆盖，这次的成本数据不能外推到那种情况。
+- §5 里 Linux 上失败的 router-integration 用例在 Mac 上通过（dist 0 失败、唯一跳过是 48 小时 GC 用例），(推断) 属本机环境原因（缺 JDK17 等），Linux 上未进一步定位。
