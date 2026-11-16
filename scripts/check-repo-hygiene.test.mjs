@@ -39,6 +39,14 @@ test("only a new production module must be imported by a test", () => {
   assert.deepEqual(rules({ ...clean(), untestedProduction: ["src/untested-old.ts", "src/small.ts"] }), [], "an existing module losing its test is not this rule");
 });
 
+test("frozen artifacts stay frozen: a new tracked file under artifacts/ fails, removing one does not", () => {
+  const frozen = { ...baseline, trackedArtifacts: ["artifacts/v3-final/a.json"] };
+  assert.deepEqual(check(frozen, { ...clean(), trackedArtifacts: ["artifacts/v3-final/a.json"] }), []);
+  assert.deepEqual(check(frozen, { ...clean(), trackedArtifacts: [] }), []);
+  assert.deepEqual(check(frozen, { ...clean(), trackedArtifacts: ["artifacts/v3-final/a.json", "artifacts/v3-final/b.json"] }),
+    [{ rule: "new-tracked-artifact", file: "artifacts/v3-final/b.json" }]);
+});
+
 test("a new unreferenced script fails", () => {
   assert.deepEqual(rules({ ...clean(), unreferencedScripts: ["scripts/legacy.mjs", "scripts/new.mjs"] }), ["unreferenced-script"]);
 });
