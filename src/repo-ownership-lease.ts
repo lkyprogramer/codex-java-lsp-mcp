@@ -13,6 +13,7 @@ import {
   writeFileSync
 } from "node:fs";
 import path from "node:path";
+import { writeFileAtomicSync } from "./atomic-file.js";
 import { readRuntimeBuild } from "./build-info.js";
 import { canonicalPath } from "./path-utils.js";
 import { repoCacheBase, repoCacheRoot, resolveConfiguredBase } from "./repo-layout.js";
@@ -343,20 +344,7 @@ function isJdtlsState(value: unknown): value is RepoOwnershipJdtlsState {
 }
 
 function writeOwnerAtomically(lockPath: string, metadata: RepoOwnershipMetadata): void {
-  const ownerPath = path.join(lockPath, OWNER_FILE);
-  const stagedPath = path.join(lockPath, `.${OWNER_FILE}.next-${randomUUID()}`);
-  try {
-    writeFileSync(stagedPath, `${JSON.stringify(metadata, null, 2)}\n`, {
-      encoding: "utf8",
-      mode: 0o600,
-      flag: "wx"
-    });
-    renameSync(stagedPath, ownerPath);
-  } finally {
-    if (existsSync(stagedPath)) {
-      rmSync(stagedPath, { force: true });
-    }
-  }
+  writeFileAtomicSync(path.join(lockPath, OWNER_FILE), `${JSON.stringify(metadata, null, 2)}\n`, 0o600);
 }
 
 function quarantineStaleLock(lockPath: string): boolean {

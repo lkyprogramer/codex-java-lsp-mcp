@@ -5,8 +5,9 @@
 //      step; metadata is written afterward via temp-write + rename, so every
 //      reader must tolerate a directory that exists with no metadata yet.
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
+import { writeFileAtomicSync } from "./atomic-file.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
 import { leaseFamilyKey } from "./worktree-identity.js";
@@ -571,10 +572,7 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
   }
 
   private writeMetadataAtomic(dir: string, owner: LeaseOwner): void {
-    const target = path.join(dir, "metadata.json");
-    const tmp = path.join(dir, `.metadata.json.${process.pid}.${randomUUID()}.tmp`);
-    writeFileSync(tmp, JSON.stringify(owner));
-    renameSync(tmp, target);
+    writeFileAtomicSync(path.join(dir, "metadata.json"), JSON.stringify(owner));
   }
 
   private makeOwner(identity?: WorktreeIdentity): LeaseOwner {
@@ -663,10 +661,7 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
       sweepSlots: requested.sweepSlots,
       updatedAt: new Date(this.deps.now()).toISOString()
     };
-    const target = path.join(this.root, "capacity.json");
-    const tmp = path.join(this.root, `.capacity.json.${process.pid}.${randomUUID()}.tmp`);
-    writeFileSync(tmp, JSON.stringify(file));
-    renameSync(tmp, target);
+    writeFileAtomicSync(path.join(this.root, "capacity.json"), JSON.stringify(file));
     this.jdtSlots = requested.jdtSlots;
     this.sweepSlots = requested.sweepSlots;
   }
