@@ -11,7 +11,12 @@ import type { ParseArgs } from "./parse-pool.js";
 const backend = createJavaParserBackend();
 const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
 
-parentPort!.on("message", async (input: { id: number; args: ParseArgs }) => {
+// The listener stays synchronous; a failure to report an error must not become an unhandled rejection.
+parentPort!.on("message", (input: { id: number; args: ParseArgs }) => {
+  handle(input).catch(error => console.error("[parse-worker] could not report a parse result", error));
+});
+
+async function handle(input: { id: number; args: ParseArgs }): Promise<void> {
   try {
     const { capture } = input.args;
     // Structured clone delivers a Buffer as a plain Uint8Array.
@@ -22,4 +27,4 @@ parentPort!.on("message", async (input: { id: number; args: ParseArgs }) => {
   } catch (error) {
     parentPort!.postMessage({ id: input.id, error: error instanceof Error ? error.message : String(error), code: (error as NodeJS.ErrnoException).code });
   }
-});
+}

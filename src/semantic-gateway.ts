@@ -268,7 +268,8 @@ export class SemanticGateway implements SemanticGatewayApi {
     const promise = this.runBackend(key, backendCapMs, controller.signal);
     const entry: InflightEntry = { controller, promise, waiters: 0 };
     this.inflight.set(cacheKey, entry);
-    promise.then(settled => {
+    // runBackend maps every failure to a settled result, so this chain cannot reject.
+    void promise.then(settled => {
       if (this.inflight.get(cacheKey) !== entry) return;
       this.inflight.delete(cacheKey);
       this.writeCache(cacheKey, settled);
