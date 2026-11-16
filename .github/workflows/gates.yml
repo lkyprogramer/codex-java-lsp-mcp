@@ -1,34 +1,25 @@
 name: gates
 
-# Push-triggered validation on a GitHub-hosted macOS runner (free for public repositories).
-# Every branch push runs gate:pr; pushes to main, the nightly schedule and a manual "release" dispatch
-# run gate:release (isolated full profile plus the HTTP smoke). Production install, the launchd canary,
-# TCC and private-corpus evaluation stay on the owner's Mac.
+# Push-triggered gate:pr (hygiene, lint, isolated compile, dist unit tests) on a GitHub-hosted macOS runner,
+# free for public repositories. gate:release stays on the owner's Mac: its script suite needs the frozen
+# JDT/Gradle/JDK toolchain INPUT and the private launchd work root under ~/Developer/ilv2-work, which a hosted
+# runner does not have. Production install, the launchd canary, TCC and private-corpus evaluation stay there too.
 on:
   push:
-  schedule:
-    - cron: "0 18 * * *" # 02:00 Asia/Shanghai
   workflow_dispatch:
-    inputs:
-      profile:
-        description: Gate profile
-        type: choice
-        options: [pr, release]
-        default: pr
 
 permissions:
   contents: read
 
 concurrency:
-  group: gates-${{ github.ref }}-${{ github.event_name }}
+  group: gates-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   gate:
     runs-on: macos-15
-    timeout-minutes: 150
+    timeout-minutes: 45
     env:
-      GATE_PROFILE: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'release' || inputs.profile || 'pr' }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
@@ -63,14 +54,14 @@ jobs:
           echo "ILV2_RUN_ROOT=$run_root" >> "$GITHUB_ENV"
           echo "TMPDIR=$run_root/tmp" >> "$GITHUB_ENV"
 
-      - name: gate:${{ env.GATE_PROFILE }}
-        run: npm run "gate:$GATE_PROFILE" -- --output "$RUNNER_TEMP/gate-summary.json"
+      - name: gate:pr
+        run: npm run gate:pr -- --output "$RUNNER_TEMP/gate-summary.json"
 
       - name: Upload gate summary
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gate-summary-${{ env.GATE_PROFILE }}
+          name: gate-summary-pr
           path: |
             ${{ runner.temp }}/gate-summary.json
             ${{ runner.temp }}/ilv2-run/raw/validation/*/result.json
