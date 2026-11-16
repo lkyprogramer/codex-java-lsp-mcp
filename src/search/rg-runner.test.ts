@@ -243,3 +243,46 @@ test("positions per file are bounded while matchCount keeps counting", async () 
   assert.equal(result.files[0].positions.length, 2);
   assert.deepEqual(result.files[0].positions[0], { line: 1, column: 7 });
 });
+
+test("columns are 1-based UTF-16 code units, not rg's byte offsets, after Chinese text and an emoji", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "rg-utf16-"));
+  const relative = "src/main/java/demo/Orders.java";
+  const line = "    // 订单😀 Target target = new Target();";
+  mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+  writeFileSync(path.join(root, relative), `package demo;\n${line}\n`, "utf8");
+  const result = await new RgRunner().run(query(root, "Target"), DeadlineBudget.fromTimeout(10_000));
+
+  assert.equal(result.completion, "COMPLETE");
+  const [position] = result.files[0].positions;
+  // The index and java_symbol(file,line,column) use 1-based UTF-16 columns (runtime/source-range.ts).
+  assert.deepEqual(position, { line: 2, column: line.indexOf("Target") + 1 });
+  assert.equal(line.slice(position.column - 1).startsWith("Target"), true);
+});
+
+test("a match without a line number keeps its count but contributes no guessed position", async () => {
+  const root = repoWithFile("src/main/java/demo/A.java");
+  const noLine = JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/main/java/demo/A.java" },
+      lines: { text: "class A {}\n" },
+      submatches: [{ start: 6, end: 7, match: { text: "A" } }]
+    }
+  });
+  const base64Line = JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/main/java/demo/A.java" },
+      // rg base64-encodes a line that is not valid UTF-8; "é" before the match is two bytes.
+      lines: { bytes: Buffer.from("/*é*/ class A {}\n", "utf8").toString("base64") },
+      line_number: 3,
+      submatches: [{ start: 13, end: 14, match: { text: "A" } }]
+    }
+  });
+  const script = await writeFakeRgScript([noLine, base64Line]);
+  const result = await fakeRunner(script).run(query(root), DeadlineBudget.fromTimeout(10_000));
+
+  assert.equal(result.completion, "COMPLETE");
+  assert.equal(result.files[0].matchCount, 2);
+  assert.deepEqual(result.files[0].positions, [{ line: 3, column: 13 }]);
+});
