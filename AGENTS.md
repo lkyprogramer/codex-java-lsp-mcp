@@ -19,7 +19,7 @@
 - 跨进程锁和 lease 不得"检查后直接 rm"；回收前必须在锁内重新确认 ownerToken。
 - 偏移和列号必须标明单位（byte / UTF-16 / line），跨单位必须显式换算，并测试非 ASCII 输入。
 - 测试或验证专用行为必须由 `JAVA_LSP_ISOLATED_VALIDATION=1` 或显式选项门控，默认关闭。
-- 不新增被 .gitignore 忽略的跟踪文件。新增脚本须被 package.json、其他脚本或 [scripts/README.md](scripts/README.md) 引用。
+- 不新增被 .gitignore 忽略的跟踪文件；`artifacts/v3-*` 是冻结的历史证据，只读，不在 `artifacts/` 下新增跟踪文件。新增脚本须被 package.json、其他脚本或 [scripts/README.md](scripts/README.md) 引用。
 
 ## 机器门禁
 

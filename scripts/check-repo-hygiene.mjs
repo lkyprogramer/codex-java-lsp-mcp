@@ -2,7 +2,7 @@
 // input: the repository worktree and scripts/repo-hygiene-baseline.json.
 // output: a JSON summary; exit 1 when the tree adds a hygiene violation that the baseline does not hold.
 // pos: docs/code-quality-audit-2026-11-16.md §7.3 (step 1, baseline mode). Existing debt is frozen, never admitted:
-//   1. no new tracked file that .gitignore ignores (E1);
+//   1. no new tracked file that .gitignore ignores, and no new tracked file under artifacts/ (frozen evidence, E1);
 //   2. a new production .ts file stays within 600 lines; a file already over 800 lines does not grow;
 //   3. a new production module is imported directly by at least one src test;
 //   4. a new script is referenced by package.json, scripts/README.md or another script (E4);
@@ -58,6 +58,8 @@ export function unreferencedScripts(scripts, texts) {
 export async function collect(root = repoRoot) {
   const { stdout } = await exec("git", ["ls-files", "-ci", "--exclude-standard"], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
   const ignoredTracked = stdout.split("\n").filter(Boolean).sort();
+  const { stdout: artifacts } = await exec("git", ["ls-files", "--", "artifacts"], { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+  const trackedArtifacts = artifacts.split("\n").filter(Boolean).sort();
   const production = await countProductionTs({ root });
   const productionLoc = Object.fromEntries(production.files.map(file => [file.path, file.loc]).sort(([a], [b]) => a.localeCompare(b)));
   const srcTests = await walk(root, "src", rel => rel.endsWith(".test.ts"));
@@ -80,6 +82,7 @@ export async function collect(root = repoRoot) {
   if (existsSync(path.join(root, "scripts/README.md"))) texts["scripts/README.md"] = await readFile(path.join(root, "scripts/README.md"), "utf8");
   return {
     ignoredTracked,
+    trackedArtifacts,
     productionLoc,
     untestedProduction: Object.keys(productionLoc).filter(file => !imported.has(file)).sort(),
     unreferencedScripts: unreferencedScripts(scriptFiles.filter(file => !file.endsWith(".test.mjs")), texts),
@@ -92,6 +95,8 @@ export function check(baseline, current) {
   const violations = [];
   const known = new Set(baseline.ignoredTracked);
   for (const file of current.ignoredTracked) if (!known.has(file)) violations.push({ rule: "ignored-tracked", file });
+  const frozen = new Set(baseline.trackedArtifacts ?? []);
+  for (const file of current.trackedArtifacts ?? []) if (!frozen.has(file)) violations.push({ rule: "new-tracked-artifact", file });
   for (const [file, loc] of Object.entries(current.productionLoc)) {
     const before = baseline.productionLoc[file];
     if (before === undefined && loc > LIMITS.newProductionLoc) violations.push({ rule: "new-production-size", file, loc, limit: LIMITS.newProductionLoc });
@@ -125,7 +130,7 @@ async function main(args) {
   if (baseline.schema !== SCHEMA) throw new Error(`${BASELINE_FILE} is not ${SCHEMA}`);
   const violations = check(baseline, current);
   console.log(JSON.stringify({ status: violations.length === 0 ? "PASS" : "FAIL", violations,
-    debt: { ignoredTracked: current.ignoredTracked.length, untestedProduction: current.untestedProduction.length,
+    debt: { ignoredTracked: current.ignoredTracked.length, trackedArtifacts: current.trackedArtifacts.length, untestedProduction: current.untestedProduction.length,
       unreferencedScripts: current.unreferencedScripts.length, testTimerFiles: Object.keys(current.testTimers).length } }, null, 2));
   if (violations.length > 0) process.exitCode = 1;
 }

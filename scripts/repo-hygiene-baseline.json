@@ -4,7 +4,8 @@
   "newProductionLoc": 600,
   "frozenProductionLoc": 800
  },
- "ignoredTracked": [
+ "ignoredTracked": [],
+ "trackedArtifacts": [
   "artifacts/v3-baseline/.gitkeep",
   "artifacts/v3-baseline/48e665ba73dc/cipherlink-cold.json",
   "artifacts/v3-baseline/48e665ba73dc/cipherlink-cold.stderr",

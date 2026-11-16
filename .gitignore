@@ -12,6 +12,15 @@ coverage/
 
 # Benchmark and eval dumps stay out of git. Track only manifests under docs/phase-v*/.
 artifacts/v3-*/
+# Frozen V3 evidence: tracked on purpose (docs/phase-v3, docs/deep and verify-v4-sprint0-baseline.mjs cite it).
+# Read-only; check-repo-hygiene.mjs rejects any new tracked file under artifacts/. Audit 2026-11-16 E1, option 1.
+!artifacts/v3-baseline/
+!artifacts/v3-final/
+!artifacts/v3-phase1/
+!artifacts/v3-phase2/
+!artifacts/v3-phase3/
+!artifacts/v3-phase4/
+!artifacts/v3-phase5/
 artifacts/v4-*/
 artifacts/model-eval/
 graphify-out/
