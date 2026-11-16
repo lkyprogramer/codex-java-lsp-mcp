@@ -340,7 +340,11 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
   const previousCache = process.env.JAVA_LSP_CACHE_BASE;
   const previousOwnership = process.env.JAVA_LSP_OWNERSHIP_BASE;
   const previousJdtlsBin = process.env.JDTLS_BIN;
-  const previousProjectJavaHome = process.env.JAVA_LSP_PROJECT_JAVA_HOME;
+  const projectJavaHomes = [
+    "JAVA_LSP_PROJECT_JAVA_HOME_HTTP_WORKTREE_ONE",
+    "JAVA_LSP_PROJECT_JAVA_HOME_HTTP_WORKTREE_TWO"
+  ];
+  const previousProjectJavaHomes = projectJavaHomes.map(key => process.env[key]);
   const previousMaxActiveRepos = process.env.JAVA_LSP_MAX_ACTIVE_REPOS;
   const previousIdleTtl = process.env.JAVA_LSP_IDLE_TTL_MS;
   await mkdir(path.join(fakeJdk, "bin"), { recursive: true });
@@ -351,7 +355,8 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
   process.env.JAVA_LSP_CACHE_BASE = cacheBase;
   process.env.JAVA_LSP_OWNERSHIP_BASE = ownershipBase;
   process.env.JDTLS_BIN = fakeJdtls;
-  process.env.JAVA_LSP_PROJECT_JAVA_HOME = fakeJdk;
+  // Each Maven fixture declares Java 17 and needs an explicit project JDK in isolated validation.
+  for (const key of projectJavaHomes) process.env[key] = fakeJdk;
   process.env.JAVA_LSP_MAX_ACTIVE_REPOS = "2";
   process.env.JAVA_LSP_IDLE_TTL_MS = "60000";
   const restoreFixtureEnvironment = async (): Promise<void> => {
@@ -361,8 +366,11 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
     else process.env.JAVA_LSP_OWNERSHIP_BASE = previousOwnership;
     if (previousJdtlsBin === undefined) delete process.env.JDTLS_BIN;
     else process.env.JDTLS_BIN = previousJdtlsBin;
-    if (previousProjectJavaHome === undefined) delete process.env.JAVA_LSP_PROJECT_JAVA_HOME;
-    else process.env.JAVA_LSP_PROJECT_JAVA_HOME = previousProjectJavaHome;
+    for (const [index, key] of projectJavaHomes.entries()) {
+      const previous = previousProjectJavaHomes[index];
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    }
     if (previousMaxActiveRepos === undefined) delete process.env.JAVA_LSP_MAX_ACTIVE_REPOS;
     else process.env.JAVA_LSP_MAX_ACTIVE_REPOS = previousMaxActiveRepos;
     if (previousIdleTtl === undefined) delete process.env.JAVA_LSP_IDLE_TTL_MS;
