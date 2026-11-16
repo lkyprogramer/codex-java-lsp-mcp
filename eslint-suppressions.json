@@ -1,22 +1,7 @@
 {
-  "src/agent-router/anchor.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/agent-router/anchor.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
-    }
-  },
-  "src/agent-router/candidate-collectors.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    }
-  },
-  "src/agent-router/candidate-helpers.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 11
     }
   },
   "src/agent-router/candidate-helpers.ts": {
@@ -24,20 +9,7 @@
       "count": 4
     }
   },
-  "src/agent-router/evidence-gaps.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    }
-  },
-  "src/agent-router/evidence-ledger.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    }
-  },
   "src/agent-router/evidence-normalizer.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 15
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 15
     },
@@ -45,17 +17,9 @@
       "count": 1
     }
   },
-  "src/agent-router/family-ranker.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 20
-    }
-  },
   "src/agent-router/format.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
-    },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
     },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 16
@@ -72,17 +36,11 @@
     }
   },
   "src/agent-router/framework/lombok-adapter.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "src/agent-router/framework/mapstruct-adapter.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 15
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
     },
@@ -96,9 +54,6 @@
     }
   },
   "src/agent-router/framework/mybatis-adapter.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
     }
@@ -109,9 +64,6 @@
     }
   },
   "src/agent-router/framework/runner.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     },
@@ -120,17 +72,11 @@
     }
   },
   "src/agent-router/framework/shared.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "no-restricted-syntax": {
       "count": 3
     }
   },
   "src/agent-router/framework/spring-adapter.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 28
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 57
     }
@@ -141,9 +87,6 @@
     }
   },
   "src/agent-router/framework/spring-endpoint.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 15
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
@@ -154,24 +97,13 @@
     }
   },
   "src/agent-router/helper-move-k11.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "no-restricted-syntax": {
       "count": 5
     }
   },
   "src/agent-router/impact-metrics.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
-    }
-  },
-  "src/agent-router/index.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
     }
   },
   "src/agent-router/java-index-router.ts": {
@@ -179,49 +111,22 @@
       "count": 7
     }
   },
-  "src/agent-router/lombok-impact.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/agent-router/materialize-candidates.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 16
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 20
     }
   },
   "src/agent-router/output-compact.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     }
   },
-  "src/agent-router/output-v6.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 14
-    }
-  },
-  "src/agent-router/prewarm-metrics.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
   "src/agent-router/providers/framework-provider.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "src/agent-router/providers/lexical-provider.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "no-restricted-syntax": {
       "count": 1
     }
@@ -232,9 +137,6 @@
     }
   },
   "src/agent-router/providers/relationship-provider.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 24
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 20
     },
@@ -248,9 +150,6 @@
     }
   },
   "src/agent-router/providers/semantic-provider.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 15
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     },
@@ -264,9 +163,6 @@
     }
   },
   "src/agent-router/providers/static-provider.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 12
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     },
@@ -275,25 +171,16 @@
     }
   },
   "src/agent-router/providers/support-provider.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "no-restricted-syntax": {
       "count": 2
     }
   },
   "src/agent-router/rank-candidates.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 25
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 9
     }
   },
   "src/agent-router/read-plan-gaps.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 11
     },
@@ -302,9 +189,6 @@
     }
   },
   "src/agent-router/read-plan.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 53
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 9
     },
@@ -318,21 +202,8 @@
     }
   },
   "src/agent-router/reference-ranking.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 12
-    }
-  },
-  "src/agent-router/request-budget.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
-  "src/agent-router/retrieval/cost-model.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
     }
   },
   "src/agent-router/retrieval/evidence-features.ts": {
@@ -341,21 +212,8 @@
     }
   },
   "src/agent-router/retrieval/read-unit.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
-    }
-  },
-  "src/agent-router/rg-attribution.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
-  "src/agent-router/semantic.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
     }
   },
   "src/agent-router/semantic.ts": {
@@ -364,9 +222,6 @@
     }
   },
   "src/agent-router/type-reference.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 16
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
@@ -376,30 +231,7 @@
       "count": 1
     }
   },
-  "src/alias-registry.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    }
-  },
-  "src/application.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    }
-  },
-  "src/atomic-file.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
-  "src/benchmark-agent-impact.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
   "src/benchmark/attribution-v3.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
     }
@@ -409,41 +241,22 @@
       "count": 3
     }
   },
-  "src/benchmark/determinism.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
   "src/benchmark/determinism.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
   "src/benchmark/golden-scenario.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
-  "src/benchmark/identity-token-json.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/benchmark/java-index-idle.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
   },
   "src/benchmark/measure-query-load.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
@@ -451,11 +264,6 @@
   "src/benchmark/measure-query-load.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
-    }
-  },
-  "src/benchmark/measure-request-load.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
     }
   },
   "src/benchmark/measure-request-load.ts": {
@@ -469,9 +277,6 @@
     }
   },
   "src/benchmark/process-resource-observer.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     }
@@ -482,25 +287,16 @@
     }
   },
   "src/benchmark/release-index-contracts.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 5
     }
   },
   "src/benchmark/release-source-contracts.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 50
     }
   },
   "src/benchmark/semantic-first-touch.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 17
-    },
     "no-restricted-syntax": {
       "count": 9
     }
@@ -510,33 +306,17 @@
       "count": 6
     }
   },
-  "src/benchmark/task36-mutation-matrix.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/benchmark/task36-mutation-matrix.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
-  "src/context-engine/compact-bridge.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/context-engine/context-candidates.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 14
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
     }
   },
   "src/context-engine/context-closure.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
@@ -547,16 +327,8 @@
     }
   },
   "src/context-engine/context-planner.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 25
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
-    }
-  },
-  "src/context-engine/context-serializer.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
     }
   },
   "src/context-engine/context-serializer.ts": {
@@ -569,25 +341,12 @@
       "count": 3
     }
   },
-  "src/context-engine/graph-search.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    }
-  },
   "src/context-engine/graph-search.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
   },
-  "src/context-engine/intent-compiler.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
   "src/context-engine/plan-query.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 14
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 34
     }
@@ -597,49 +356,22 @@
       "count": 2
     }
   },
-  "src/context-engine/statement-slicer.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    }
-  },
-  "src/context-engine/token-estimator.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
-  "src/cross-process-lease.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 15
-    }
-  },
   "src/discovery/anchor-windows.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
   },
   "src/discovery/discovery-unsupported.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "src/discovery/evidence-source-reader.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "no-restricted-syntax": {
       "count": 1
     }
   },
   "src/discovery/evidence-unit.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 19
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 21
     },
@@ -647,15 +379,7 @@
       "count": 3
     }
   },
-  "src/discovery/half-up-fixture.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
   "src/discovery/locator-name.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     },
@@ -664,9 +388,6 @@
     }
   },
   "src/discovery/outline.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     },
@@ -680,9 +401,6 @@
     }
   },
   "src/discovery/preview-mode.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
     },
@@ -690,15 +408,7 @@
       "count": 1
     }
   },
-  "src/discovery/query-budget.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
   "src/discovery/query-contract.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 11
     },
@@ -707,9 +417,6 @@
     }
   },
   "src/discovery/query-deadline.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 5
     },
@@ -717,15 +424,7 @@
       "count": 6
     }
   },
-  "src/discovery/query-intent.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    }
-  },
   "src/discovery/query-preview.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 11
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 40
     },
@@ -734,9 +433,6 @@
     }
   },
   "src/discovery/query-scope.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     },
@@ -745,9 +441,6 @@
     }
   },
   "src/discovery/query-worker.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 17
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 25
     },
@@ -766,9 +459,6 @@
     }
   },
   "src/discovery/scope.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     },
@@ -782,45 +472,7 @@
     }
   },
   "src/discovery/vocabulary.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "src/document-lru.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    }
-  },
-  "src/generated-code.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
-  "src/hooks/hook-gate.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
-  "src/http-server-lifecycle.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
-  "src/http-server.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    }
-  },
-  "src/http-server.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
-  "src/http-stateless-compatibility.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
       "count": 1
     }
   },
@@ -836,9 +488,6 @@
     "@typescript-eslint/no-explicit-any": {
       "count": 1
     },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 23
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 24
     },
@@ -847,9 +496,6 @@
     }
   },
   "src/index-builder/builder-liveness.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 7
     },
@@ -863,9 +509,6 @@
     }
   },
   "src/index-builder/content-capture.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 12
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     },
@@ -874,9 +517,6 @@
     }
   },
   "src/index-builder/execution-plan.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 20
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 12
     }
@@ -887,17 +527,11 @@
     }
   },
   "src/index-builder/integrity.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 11
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 5
     }
   },
   "src/index-builder/parse-pool.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
@@ -908,9 +542,6 @@
     }
   },
   "src/index-builder/parse-worker.ts": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     }
@@ -921,9 +552,6 @@
     }
   },
   "src/java-index/ast-extractor.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 17
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 64
     }
@@ -933,28 +561,12 @@
       "count": 10
     }
   },
-  "src/java-index/build-fingerprint.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    }
-  },
-  "src/java-index/builder/cold-build.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
   "src/java-index/builder/incremental.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
   "src/java-index/builder/parse-cache.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
@@ -965,17 +577,11 @@
     }
   },
   "src/java-index/builder/r08-evidence.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 11
     }
   },
   "src/java-index/builder/review-fixes.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 5
     },
@@ -984,9 +590,6 @@
     }
   },
   "src/java-index/edge-builder.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 64
     }
@@ -1001,32 +604,14 @@
       "count": 2
     }
   },
-  "src/java-index/entity-search.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 11
-    }
-  },
   "src/java-index/entity-search.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
   "src/java-index/framework-index-view.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 18
-    }
-  },
-  "src/java-index/java-index-file-parse.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
-  "src/java-index/java-parser-backend.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
     }
   },
   "src/java-index/java-parser-backend.ts": {
@@ -1035,17 +620,11 @@
     }
   },
   "src/java-index/manifest.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
   "src/java-index/mybatis-xml-extractor.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 12
     }
@@ -1056,9 +635,6 @@
     }
   },
   "src/java-index/name-resolver.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 22
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 26
     }
@@ -1068,28 +644,12 @@
       "count": 10
     }
   },
-  "src/java-index/router-facts.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
   "src/java-index/router-integration.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     }
   },
-  "src/java-index/router-java-index-cold.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/java-index/router-java-index.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 27
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 19
     }
@@ -1100,25 +660,16 @@
     }
   },
   "src/java-index/snapshot/owner-gc.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 8
     }
   },
   "src/java-index/snapshot/owner-seed.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 16
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 38
     }
   },
   "src/java-index/snapshot/owner-telemetry.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
@@ -1129,9 +680,6 @@
     }
   },
   "src/java-index/snapshot/query-pool.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 16
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 13
     },
@@ -1150,9 +698,6 @@
     }
   },
   "src/java-index/snapshot/request-view.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 16
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 45
     },
@@ -1166,9 +711,6 @@
     }
   },
   "src/java-index/snapshot/seal-integrity.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 9
     }
@@ -1184,9 +726,6 @@
     }
   },
   "src/java-index/snapshot/snapshot-store.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 30
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 17
     }
@@ -1197,9 +736,6 @@
     }
   },
   "src/java-index/snapshot/workspace-tracker.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 19
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
@@ -1210,51 +746,17 @@
     }
   },
   "src/java-index/snapshot/worktree-idle.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
   },
-  "src/java-index/sql/bounded-cache.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
-  "src/java-index/sql/driver-async.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
-  "src/java-index/sql/driver.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    }
-  },
   "src/java-index/sql/entity-search-bounded.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 19
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
   },
   "src/java-index/sql/entity-search-evidence-determinism.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
-  "src/java-index/sql/entity-search-intent.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
-  "src/java-index/sql/entity-search.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
       "count": 1
     }
   },
@@ -1263,20 +765,12 @@
       "count": 17
     }
   },
-  "src/java-index/sql/entity-tokens.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/java-index/sql/entity-tokens.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
   "src/java-index/sql/facts-store.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 13
     }
@@ -1295,17 +789,11 @@
     }
   },
   "src/java-index/sql/knowledge-graph.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 8
     }
   },
   "src/java-index/sql/logical-export.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 21
     }
@@ -1316,15 +804,7 @@
     }
   },
   "src/java-index/sql/posting-delta.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
-  "src/java-index/sql/registry-view.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
       "count": 1
     }
   },
@@ -1334,9 +814,6 @@
     }
   },
   "src/java-index/sql/rows.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 11
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 43
     },
@@ -1350,9 +827,6 @@
     }
   },
   "src/java-index/sql/search-docs.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
@@ -1362,36 +836,17 @@
       "count": 2
     }
   },
-  "src/java-index/sql/sql-client-incremental.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
   "src/java-index/sql/sql-client-lifecycle.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "no-restricted-syntax": {
       "count": 8
     }
   },
   "src/java-index/sql/sql-client.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
     }
   },
-  "src/java-index/sql/sql-queries.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/java-index/sql/sql-read-ranges.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
@@ -1401,25 +856,7 @@
       "count": 7
     }
   },
-  "src/java-index/sql/sym.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    }
-  },
-  "src/java-index/sql/workspace-stat.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
-  "src/java-index/stable-id.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    }
-  },
   "src/java-index/symbol-identity.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
@@ -1430,9 +867,6 @@
     }
   },
   "src/java-knowledge/call-resolver.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
     }
@@ -1442,25 +876,7 @@
       "count": 3
     }
   },
-  "src/java-knowledge/edge-kinds.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
-  "src/java-knowledge/entity-id.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    }
-  },
-  "src/java-knowledge/framework-edge-builder.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/java-knowledge/graph-builder.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     }
@@ -1476,9 +892,6 @@
     }
   },
   "src/java-knowledge/persistence-edge-builder.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
     }
@@ -1488,22 +901,9 @@
       "count": 2
     }
   },
-  "src/java-knowledge/schema.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/jdt-process-tree.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
-    }
-  },
-  "src/jdt-restart-backoff.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
     }
   },
   "src/jdtls-hierarchy-walk.ts": {
@@ -1511,33 +911,15 @@
       "count": 1
     }
   },
-  "src/jdtls-hierarchy.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
-    }
-  },
-  "src/jdtls-runtime-paths.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    }
-  },
   "src/jdtls-session.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 67
     },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 25
     },
     "no-restricted-syntax": {
       "count": 1
-    }
-  },
-  "src/jdtls-transport.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
     }
   },
   "src/jdtls-transport.ts": {
@@ -1550,24 +932,9 @@
       "count": 3
     }
   },
-  "src/layout-probe.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    }
-  },
   "src/layout-probe.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
-    }
-  },
-  "src/mac-platform/clonefile.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
-  "src/mac-platform/fsevents.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
     }
   },
   "src/mac-platform/fsevents.ts": {
@@ -1575,21 +942,8 @@
       "count": 4
     }
   },
-  "src/mac-platform/gradle-domain.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    }
-  },
   "src/mac-platform/jdt-gradle-home.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
-  "src/mac-platform/native-exec.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
       "count": 1
     }
   },
@@ -1599,9 +953,6 @@
     }
   },
   "src/mcp-server-factory.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 34
     }
@@ -1611,22 +962,9 @@
       "count": 2
     }
   },
-  "src/path-utils.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
-    }
-  },
   "src/process-crash-markers.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
-    }
-  },
-  "src/project-jdk.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
     }
   },
   "src/project-jdk.ts": {
@@ -1635,40 +973,16 @@
     }
   },
   "src/ranking-signals.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 16
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
   },
-  "src/read-plan-budget.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    }
-  },
-  "src/repo-generation.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
-  "src/repo-layout.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
   "src/repo-ownership-lease.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
   "src/repo-resolver.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    },
     "no-restricted-syntax": {
       "count": 3
     }
@@ -1679,9 +993,6 @@
     }
   },
   "src/repo-runtime-manager.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 39
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 16
     },
@@ -1694,15 +1005,7 @@
       "count": 2
     }
   },
-  "src/resource-defaults.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
   "src/routing-policy.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     },
@@ -1710,86 +1013,22 @@
       "count": 1
     }
   },
-  "src/runtime-lifecycle-gate.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    }
-  },
   "src/runtime-lifecycle-gate.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
-  "src/runtime/completion.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
-  "src/runtime/deadline-budget.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    }
-  },
-  "src/runtime/intelligence-error.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
-  "src/search/bounded-line-decoder.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
-    }
-  },
-  "src/search/rg-cache.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    }
-  },
-  "src/search/rg-runner.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 15
-    }
-  },
   "src/semantic-edge-store.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 10
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 19
     }
   },
-  "src/semantic-gateway.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 14
-    }
-  },
-  "src/semantic-gateway.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
-  "src/semantic-location.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 9
-    }
-  },
   "src/server-lifecycle.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     }
   },
-  "src/smoke-http.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    }
-  },
   "src/stdio-owner-proxy.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 14
     },
@@ -1798,9 +1037,6 @@
     }
   },
   "src/telemetry/impact-telemetry.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 18
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     }
@@ -1816,33 +1052,21 @@
     }
   },
   "src/tools/impact.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
-    },
     "no-restricted-syntax": {
       "count": 2
     }
   },
   "src/tools/output-shape.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "no-restricted-syntax": {
       "count": 8
     }
   },
   "src/tools/status.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 6
-    },
     "no-restricted-syntax": {
       "count": 6
     }
   },
   "src/tools/symbol-static.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 11
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
     },
@@ -1851,9 +1075,6 @@
     }
   },
   "src/tools/symbol-target.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 5
-    },
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
     }
@@ -1869,16 +1090,6 @@
     },
     "no-restricted-syntax": {
       "count": 4
-    }
-  },
-  "src/worktree-cache-cleanup.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 29
-    }
-  },
-  "src/worktree-identity.test.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 7
     }
   },
   "src/worktree-identity.ts": {
