@@ -11,6 +11,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { ToolContext } from "./context.js";
 import { javaSymbol, symbolNeedsJdt } from "./symbol.js";
 import { javaImpact } from "./impact.js";
@@ -309,6 +310,25 @@ test("Q03: outline under a held STALE or NOT_READY view is labelled by that view
     assert.deepEqual(stale.indexView, held, "later bindings cannot relabel an earlier outline");
     assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
   } finally { await fixture.cleanup(); }
+});
+
+test("a NOT_READY index fails java_symbol and java_impact with a coded error that keeps its cause and names the caller", async () => {
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  const context = makeContext("/repo-not-ready", new NotReadyJavaIndexClient(), probe);
+  const request = { budget: DeadlineBudget.fromTimeout(15000) } as unknown as Parameters<typeof javaImpact>[2];
+  const notReady = (tool: string) => (error: unknown) => {
+    assert.ok(error instanceof JavaIntelligenceError, String(error));
+    assert.equal(error.code, "INDEX_PARTIAL");
+    assert.ok(error.cause instanceof JavaIntelligenceError, "the index's own refusal is kept as the cause");
+    assert.equal(error.cause.code, "INDEX_PARTIAL");
+    assert.equal(error.message,
+      `${tool} static query requires the on-disk Java index, which is not ready yet (repository still building or index unavailable). Retry once the index is READY.`);
+    return true;
+  };
+  await assert.rejects(javaSymbol(context, args({ operation: "query", query: "OrderService" }), request), notReady("java_symbol"));
+  await assert.rejects(javaImpact(context, { symbol: "com.acme.OrderService" } as unknown as Parameters<typeof javaImpact>[1], request),
+    notReady("java_impact"));
+  assert.deepEqual(probe, { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 });
 });
 
 test("K25: static query succeeds with JDT disabled and zero JDT interactions", async () => {

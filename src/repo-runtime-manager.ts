@@ -797,6 +797,40 @@ export class RepoRuntimeManager {
 
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const ownership = this.ownership?.acquire(resolved.repoRoot);
+    let runtimeLease: LeaseHandle | undefined;
+    let entry: RuntimeEntry;
+    try {
+      entry = await this.createOwnedEntry(resolved, ownership, budget, lease => { runtimeLease = lease; });
+    } catch (error) {
+      // Not registered yet, so shutdownAll cannot reach what was taken here.
+      await runtimeLease?.release().catch(() => undefined);
+      this.releaseUnregisteredOwnership(ownership);
+      throw error;
+    }
+    this.retireOverflow(entry);
+    return entry;
+  }
+
+  /**
+   * A same-process acquire() returns another handle on the one per-repo lock,
+   * and release() removes that lock; keep it while a registered entry holds it.
+   */
+  private releaseUnregisteredOwnership(ownership: RepoOwnershipLease | undefined): void {
+    if (!ownership) return;
+    if ([...this.runtimes.values()].some(entry => entry.ownership?.lockPath === ownership.lockPath)) return;
+    try {
+      ownership.release();
+    } catch {
+      // Best-effort, as in shutdownAll; the creation error is the one to report.
+    }
+  }
+
+  private async createOwnedEntry(
+    resolved: ResolvedRepo,
+    ownership: RepoOwnershipLease | undefined,
+    budget: DeadlineBudget | undefined,
+    onRuntimeLease: (lease: LeaseHandle | undefined) => void
+  ): Promise<RuntimeEntry> {
     const shared: SharedRouterState = {
       // Off the owner thread: the walk is synchronous fs and stalled every request on a busy disk.
       layout: await probeLayoutOffThread(resolved.repoRoot, resolved.layoutProfile),
@@ -823,6 +857,7 @@ export class RepoRuntimeManager {
     const runtimeLease = budget
       ? await budget.race("runtime.lease", leaseOperation, undefined, () => { leaseTimedOut = true; })
       : await leaseOperation;
+    onRuntimeLease(runtimeLease);
     const entry: RuntimeEntry = {
       context,
       generation,
@@ -848,7 +883,6 @@ export class RepoRuntimeManager {
       }
     });
     this.runtimes.set(resolved.repoRoot, entry);
-    this.retireOverflow(entry);
     return entry;
   }
 

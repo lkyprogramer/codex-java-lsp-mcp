@@ -5,7 +5,7 @@
 //      this file only proves the orchestration (id -> file resolution -> queryFiles -> project) is wired right.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
@@ -16,6 +16,7 @@ import { MAX_FRAMEWORK_FACT_FILES } from "./framework-index-view.js";
 import { MAX_FACTS_FOR_FILES } from "./router-facts.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 import { localRouterIndex } from "./local-index.js";
+import { NotReadyJavaIndexClient } from "./snapshot/request-view.js";
 import { javaMethodId, scopedNamedTypeId } from "./stable-id.js";
 
 function write(root: string, relativePath: string, content: string): void {
@@ -738,6 +739,47 @@ test("repositoryMarkers reads a small marker file's content and caches it indepe
     assert.equal(status.coverage, "complete");
   } finally {
     await router.close();
+  }
+});
+
+test("repositoryMarkers caches only a missing marker; any other read error is retried on the next call", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-markers-errors-"));
+  // EISDIR stands in for a transient read error (EMFILE/EACCES) that must not pin the marker as absent.
+  mkdirSync(path.join(repoRoot, "unreadable.marker"));
+  write(repoRoot, "parent.marker", "file, not a directory");
+  const router = new RouterJavaIndex(repoRoot, new NotReadyJavaIndexClient());
+  const markers = ["unreadable.marker", "missing.marker", "parent.marker/child"];
+  try {
+    const first = await router.repositoryMarkers(markers);
+    assert.equal(first.size, 0);
+    rmSync(path.join(repoRoot, "unreadable.marker"), { recursive: true });
+    write(repoRoot, "unreadable.marker", "<project/>");
+    write(repoRoot, "missing.marker", "plugins {}");
+    rmSync(path.join(repoRoot, "parent.marker"));
+    write(repoRoot, "parent.marker/child", "child");
+    const second = await router.repositoryMarkers(markers);
+    assert.equal(second.get("unreadable.marker"), "<project/>", "a non-ENOENT read error is not cached as absent");
+    assert.equal(second.has("missing.marker"), false, "ENOENT stays cached as absent until the caches are reset");
+    assert.equal(second.has("parent.marker/child"), false, "ENOTDIR stays cached as absent until the caches are reset");
+  } finally {
+    await router.close();
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("repositoryMarkers bounds a marker by UTF-8 bytes and never splits a character", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-markers-bytes-"));
+  // 30,000 three-byte characters: 90,000 bytes, but only 30,000 UTF-16 units.
+  write(repoRoot, "large.marker", "依".repeat(30_000));
+  const router = new RouterJavaIndex(repoRoot, new NotReadyJavaIndexClient());
+  try {
+    const marker = (await router.repositoryMarkers(["large.marker"])).get("large.marker");
+    assert.ok(marker !== undefined);
+    assert.ok(Buffer.byteLength(marker, "utf8") <= 65_536, `marker kept ${Buffer.byteLength(marker, "utf8")} bytes`);
+    assert.equal(marker, "依".repeat(Math.floor(65_536 / 3)), "the cut lands on a character boundary");
+  } finally {
+    await router.close();
+    rmSync(repoRoot, { recursive: true, force: true });
   }
 });
 

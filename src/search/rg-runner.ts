@@ -25,7 +25,10 @@ type RgMatchEvent = {
   type: "match";
   data: {
     path: { text?: string };
+    // rg sends `bytes` (base64) instead of `text` when the line is not valid UTF-8.
+    lines?: { text?: string; bytes?: string };
     line_number?: number;
+    // `start` is a byte offset into the matched line.
     submatches?: Array<{ start?: number }>;
   };
 };
@@ -112,12 +115,9 @@ export class RgRunner {
       };
       existing.matchCount += 1;
       totalMatches += 1;
-      const first = event.data.submatches?.[0];
-      if (existing.positions.length < (this.options.maxPositionsPerFile ?? DEFAULT_MAX_POSITIONS_PER_FILE)) {
-        existing.positions.push({
-          line: event.data.line_number ?? 1,
-          column: (first?.start ?? 0) + 1
-        });
+      const position = matchPosition(event);
+      if (position && existing.positions.length < (this.options.maxPositionsPerFile ?? DEFAULT_MAX_POSITIONS_PER_FILE)) {
+        existing.positions.push(position);
       }
       files.set(absolute, existing);
       if (totalMatches >= (this.options.maxMatches ?? DEFAULT_MAX_MATCHES)) {
@@ -186,6 +186,28 @@ export class RgRunner {
           : undefined
     };
   }
+}
+
+/**
+ * The match's 1-based line and 1-based UTF-16 column - the unit the index and
+ * java_symbol(file,line,column) use (runtime/source-range.ts). rg reports the
+ * submatch start as a byte offset into the line, so it is converted through the
+ * line's own bytes. A match whose line number or line bytes are missing gets no
+ * position rather than a guessed one; it still counts as a match.
+ */
+function matchPosition(event: RgMatchEvent): { line: number; column: number } | undefined {
+  const line = event.data.line_number;
+  if (typeof line !== "number" || !Number.isSafeInteger(line) || line < 1) return undefined;
+  const lines = event.data.lines;
+  const bytes = typeof lines?.text === "string"
+    ? Buffer.from(lines.text, "utf8")
+    : typeof lines?.bytes === "string"
+      ? Buffer.from(lines.bytes, "base64")
+      : undefined;
+  if (!bytes) return undefined;
+  const start = event.data.submatches?.[0]?.start ?? 0;
+  if (!Number.isSafeInteger(start) || start < 0 || start > bytes.length) return undefined;
+  return { line, column: bytes.subarray(0, start).toString("utf8").length + 1 };
 }
 
 function safeParseRgJson(line: string): RgMatchEvent | undefined | typeof MALFORMED {

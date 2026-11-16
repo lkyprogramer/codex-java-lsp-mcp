@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { normalizeRepoFile } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
@@ -1296,16 +1297,19 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         continue;
       }
       try {
-        const readOperation = readFile(path.resolve(this.repoRoot, relativePath), "utf8");
+        const readOperation = readFile(path.resolve(this.repoRoot, relativePath));
         const content = requestOptions.budget
           ? await requestOptions.budget.race("java-index.repository-markers", readOperation)
           : await readOperation;
-        const bounded = content.length > REPOSITORY_MARKER_MAX_BYTES ? content.slice(0, REPOSITORY_MARKER_MAX_BYTES) : content;
+        // The bound is in bytes; StringDecoder holds back a character split by the cut.
+        const bounded = new StringDecoder("utf8").write(content.subarray(0, REPOSITORY_MARKER_MAX_BYTES));
         this.repositoryMarkerCache.set(relativePath, bounded);
         result.set(relativePath, bounded);
       } catch (error) {
         if (error instanceof JavaIntelligenceError) throw error;
-        this.repositoryMarkerCache.set(relativePath, null);
+        // Only a missing file is a stable "absent"; a transient error (EMFILE, EACCES, ...) is retried next time.
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ENOTDIR") this.repositoryMarkerCache.set(relativePath, null);
       }
     }
     return result;

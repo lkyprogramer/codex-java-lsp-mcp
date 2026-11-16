@@ -1,0 +1,22 @@
+{
+  "schema": "post-ilv2/audit-static-path-mac-gate/v1",
+  "sourceHead": "023f9aefd084c00156fcc01e0703af493764de79",
+  "platform": "macOS",
+  "command": "npm run gate:pr",
+  "status": "PASS",
+  "exitCode": 0,
+  "startedAt": "2026-11-16T09:02:26.365Z",
+  "endedAt": "2026-11-16T09:07:21.959Z",
+  "tap": {
+    "tests": 1674,
+    "pass": 1673,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1,
+    "todo": 0
+  },
+  "skips": [
+    "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+  ],
+  "logSha256": "552cfb135a4df970a5d5cf6b2c706e9c1b2f66fb33f3d5fef358f4e556198d91"
+}

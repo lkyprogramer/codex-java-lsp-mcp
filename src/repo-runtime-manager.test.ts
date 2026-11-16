@@ -13,6 +13,7 @@ import { repoCacheRoot } from "./repo-layout.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.test.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
+import type { RepoOwnershipLease, RepoOwnershipProvider } from "./repo-ownership-lease.js";
 import {
   defaultLeaseClockDeps,
   FileCrossProcessLeaseStore,
@@ -998,6 +999,76 @@ test("an owner that fails to open leaves requests NOT_READY instead of failing t
   const status = await manager.indexStatus();
   assert.ok(status && "unavailable" in status && /owner lock missing/.test(status.unavailable));
   await manager.shutdownAll();
+});
+
+/** Same-process acquire() hands out another handle on the one per-repo lock, so the stub keys by lockPath. */
+function recordingOwnership(lockPathFor: (repoRoot: string) => string = repoRoot => `${repoRoot}.lock`) {
+  const released: string[] = [];
+  const provider: RepoOwnershipProvider = {
+    acquire(repoRoot) {
+      const lockPath = lockPathFor(repoRoot);
+      return { lockPath, metadata: {} as RepoOwnershipLease["metadata"], release() { released.push(lockPath); } };
+    }
+  };
+  return { provider, released };
+}
+
+test("a runtime creation that fails after taking ownership releases it", async () => {
+  const ownership = recordingOwnership();
+  const manager = new RepoRuntimeManager(fakeResolver(),
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    () => { throw new Error("injected runtime factory failure"); },
+    ownership.provider, new NoopCrossProcessLeaseStore());
+
+  await assert.rejects(manager.contextFor({ repoRoot: "/repo-a" }), /injected runtime factory failure/);
+  assert.deepEqual(ownership.released, ["/repo-a.lock"], "no entry was registered, so shutdownAll could never release it");
+  assert.equal(manager.hasRuntime("/repo-a"), false);
+  await manager.shutdownAll();
+  assert.deepEqual(ownership.released, ["/repo-a.lock"]);
+});
+
+test("a runtime creation that fails after taking its runtime lease releases the lease and ownership", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const ownership = recordingOwnership();
+  let leaseReleases = 0;
+  class CountingLeaseStore extends NoopCrossProcessLeaseStore {
+    override async acquireRuntime(): Promise<LeaseHandle> {
+      const handle = await super.acquireRuntime();
+      return { ...handle, heartbeat: () => handle.heartbeat(), release: async () => { leaseReleases += 1; } };
+    }
+  }
+  const manager = new RepoRuntimeManager(fakeResolver(),
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => {
+      const context = fakeContext(resolved, sessions);
+      (context.session as unknown as FakeSession).onLifecycleChange = () => { throw new Error("injected subscribe failure"); };
+      return context;
+    },
+    ownership.provider, new CountingLeaseStore());
+
+  await assert.rejects(manager.contextFor({ repoRoot: "/repo-a" }), /injected subscribe failure/);
+  assert.equal(leaseReleases, 1);
+  assert.deepEqual(ownership.released, ["/repo-a.lock"]);
+  await manager.shutdownAll();
+});
+
+test("a failed runtime creation keeps an ownership lock that a live runtime shares", async () => {
+  const sessions = new Map<string, FakeSession>();
+  // Two selectors that canonicalise to one repository share one lock file.
+  const ownership = recordingOwnership(() => "/shared.lock");
+  const manager = new RepoRuntimeManager(fakeResolver(),
+    { index: false, maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => {
+      if (resolved.repoRoot === "/repo-b") throw new Error("injected runtime factory failure");
+      return fakeContext(resolved, sessions);
+    },
+    ownership.provider, new NoopCrossProcessLeaseStore());
+
+  await manager.contextFor({ repoRoot: "/repo-a" });
+  await assert.rejects(manager.contextFor({ repoRoot: "/repo-b" }), /injected runtime factory failure/);
+  assert.deepEqual(ownership.released, [], "the live /repo-a runtime still owns the lock");
+  await manager.shutdownAll();
+  assert.deepEqual(ownership.released, ["/shared.lock"]);
 });
 
 async function waitFor(condition: () => boolean): Promise<void> {

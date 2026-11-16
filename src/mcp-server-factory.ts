@@ -7,6 +7,7 @@ import type { JavaLspApplication } from "./application.js";
 import { readRuntimeBuild } from "./build-info.js";
 import type { ManagedToolContext, RequestOptionsInput } from "./repo-runtime-manager.js";
 import type { RepoSelector } from "./repo-resolver.js";
+import { JavaIntelligenceError, type JavaIntelligenceErrorCode } from "./runtime/intelligence-error.js";
 import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
 import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/impact.js";
@@ -48,6 +49,8 @@ export function javaSymbolDescription(experimentalOps: boolean): string {
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
+  // Machine-readable failure code; clients that do not know it ignore _meta.
+  _meta?: { errorCode: JavaIntelligenceErrorCode };
 };
 
 export function createMcpServer(
@@ -328,6 +331,8 @@ function errorResult(error: unknown): ToolResult {
   const message = error instanceof Error ? error.message : String(error);
   return {
     isError: true,
-    content: [{ type: "text", text: message }]
+    content: [{ type: "text", text: message }],
+    // Not structuredContent: some clients show that instead of the text.
+    ...(error instanceof JavaIntelligenceError ? { _meta: { errorCode: error.code } } : {})
   };
 }
