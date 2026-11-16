@@ -9,10 +9,11 @@
 ## 实现规则
 
 - 写新 helper 前先用 rg 找现有实现：
-  - 写事务：`src/java-index/sql/driver.ts` 的 `withTransaction`（总是开新事务）；可能被嵌套调用的写入口沿用 `runInWriteTx` 的"加入已有事务"语义。
-  - 异步原子写文件：`src/java-index/snapshot/seal.ts` 的 `writeFileAtomic`。
-  - 分块绑定：`driver.ts` 的 `bindChunks`，必须把同一语句里的固定参数个数传给 `extraBinds`。
-- catch 先处理终止类错误：`JavaIntelligenceError` 且 code 为 `DEADLINE_EXCEEDED` 或 `CANCELLED` 时重新抛出（参照 `relationship-provider.ts` 的 `rethrowRelationshipTerminal`）；降级处必须注释原因；对外错误用 `JavaIntelligenceError(code, message, cause)`，不得丢失 code 和 cause。
+  - 写事务：`src/java-index/sql/driver.ts` 的 `withTransaction`（总是开新事务）；可能被嵌套调用的写入口用同文件的 `runInWriteTx`（已在事务中就加入）。
+  - SQLite 整数列转 number：`driver.ts` 的 `toSafeInt`（超出安全整数即抛错）。
+  - 原子写文件（tmp 再 rename）：`src/atomic-file.ts` 的 `writeFileAtomic`（async）和 `writeFileAtomicSync`；新代码不得再手写 tmp+rename（lease、ownership、cache 元数据里的 4 处存量待迁移）。
+  - 分块绑定：`driver.ts` 的 `bindChunks`，`extraBinds` 必填，填同一语句里其余 `?` 的个数。
+- 降级的 catch 先调用 `src/runtime/intelligence-error.ts` 的 `rethrowIfTerminal(error)`（`DEADLINE_EXCEEDED`、`CANCELLED` 必须抛到请求边界）；降级处必须注释原因；对外错误用 `JavaIntelligenceError(code, message, cause)`，不得丢失 code 和 cause。
 - 不新增 `any`、`as unknown as`、非空断言 `!`；外部输入用 zod 或类型守卫收窄。
 - 新建的 child、stream、server、worker 必须监听 `error`；timer 和 fd 必须有释放点；close、dispose、shutdown 用 try/finally 和 `Promise.allSettled` 保证异常安全。
 - 跨进程锁和 lease 不得"检查后直接 rm"；回收前必须在锁内重新确认 ownerToken。
