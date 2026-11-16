@@ -208,3 +208,5 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P9 | D18 缺陷复现与形态 | Mac 已运行（[D18-SHAPE](results/D18-SHAPE.json)）。13/13 复现：H3 7、H0 2、C_OWNER_BOUND 4。C_OWNER_BOUND 改判为缺少能力（Q05），H0 待 D19 |
 | P10 | D19 关系后续核查 | Mac 已运行（[D19-FOLLOWUP](results/D19-FOLLOWUP.json)）。H0 2/2 为 `PRIMARY_FILTER`；已命中 callers 受保护 reason 0/7。诊断链收尾，S1 另开分支 |
 | P11 | S1 接口锚点列出全部实现类 | Mac 已运行，已进入 main。S1 门 PASS（[S1-GATE](results/S1-GATE.json)）：新命中 2 个 implementations 目标，丢失 0，接收字节 p50 不变；Mac 全量 `npm test`（2461 通过、0 失败、10 个白名单跳过）与 `gate:pr`（1664 通过、0 失败、1 个既有跳过）通过（[S1-MAC-GATES](results/S1-MAC-GATES.json)）。分支（头 `7f27667`）以快进方式进入 main，无 merge commit。新命中是促成改动的 dev 目标，不算召回收益；最坏情况未覆盖（[S1 §6](s1-implementation-listing.md#6-mac-结果与判读2026-11-16)） |
+| P12 | S3 静态方法级调用方查询 | **关闭（2026-11-16）。**设计稿经独立评审更正（[S3 设计](s3-static-callers-design.md) §7）后只推进到零代码探针。Mac 探针（[S3-PROBE](results/S3-PROBE.json)）触发运行前固定的停止规则：9 个未命中 callers 目标中，直接返回且范围可得分 4 个，其中 3 个受 core 预算限制，可达 1 个、任务组 1 个（门槛均为 2）；另有 4 个方法锚点目标反查无返回（推断为调用边绑定缺口，只记录不立项）。结论：找调用方用原生搜索 |
+| P13 | S2 实现类传递查找 | **关闭（2026-11-16）。**D18 的 7 个 H3 目标只来自 2 道题（5 个已在池、2 个不在池且核心超限），同类探针最多落在"任务组 ≤ 2"的边界，dev 证据不足以采纳；与 S3 同受 C0 core 预算约束。关系类改进线到此收尾 |
