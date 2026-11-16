@@ -207,4 +207,4 @@ Mac 验收（精简）：一次 targeted 隔离运行，编译并跑受影响的
 | P8 | D17 关系文本核查 | Mac 已运行（[D17-LINK](results/D17-LINK.json)）。13 个可判定目标：直接关系 6、间接关系 7、无文本联系 0；R_defect、R_q05 触发 |
 | P9 | D18 缺陷复现与形态 | Mac 已运行（[D18-SHAPE](results/D18-SHAPE.json)）。13/13 复现：H3 7、H0 2、C_OWNER_BOUND 4。C_OWNER_BOUND 改判为缺少能力（Q05），H0 待 D19 |
 | P10 | D19 关系后续核查 | Mac 已运行（[D19-FOLLOWUP](results/D19-FOLLOWUP.json)）。H0 2/2 为 `PRIMARY_FILTER`；已命中 callers 受保护 reason 0/7。诊断链收尾，S1 另开分支 |
-| P11 | S1 接口锚点列出全部实现类 | 实现与门槛已提交（[S1](s1-implementation-listing.md)，分支 `feat/s1-implementation-listing`），Linux 定向测试通过，Mac 未运行 |
+| P11 | S1 接口锚点列出全部实现类 | Mac 已运行，已进入 main。S1 门 PASS（[S1-GATE](results/S1-GATE.json)）：新命中 2 个 implementations 目标，丢失 0，接收字节 p50 不变；Mac 全量 `npm test`（2461 通过、0 失败、10 个白名单跳过）与 `gate:pr`（1664 通过、0 失败、1 个既有跳过）通过（[S1-MAC-GATES](results/S1-MAC-GATES.json)）。分支（头 `7f27667`）以快进方式进入 main，无 merge commit。新命中是促成改动的 dev 目标，不算召回收益；最坏情况未覆盖（[S1 §6](s1-implementation-listing.md#6-mac-结果与判读2026-11-16)） |
