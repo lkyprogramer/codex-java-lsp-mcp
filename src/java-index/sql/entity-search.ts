@@ -23,7 +23,7 @@ import {
   type EntitySearchScope,
   type EntitySearchStopReason
 } from "../entity-search.js";
-import { bindChunks, inClause, prepareCached, withReadSnapshot, type IndexDatabase } from "./driver.js";
+import { bindChunks, inClause, prepareCached, toSafeInt, withReadSnapshot, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { decodeFacts } from "./rows.js";
 import { symId, symText } from "./sym.js";
@@ -36,12 +36,6 @@ const FIELD_CHUNK = 1;
 
 function clampLimit(limit: number): number {
   return Math.min(Math.max(1, limit), ENTITY_SEARCH_MAX_LIMIT);
-}
-
-function asInt(value: SQLOutputValue | undefined): number {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "number") return value;
-  throw new Error(`expected integer, got ${String(value)}`);
 }
 
 type EntityRow = {
@@ -68,7 +62,7 @@ function toHit(entity: EntityRow, layer: EntityLayer, score: number): EntityHit 
 
 function rowPath(db: IndexDatabase, pathSym: SQLOutputValue | null | undefined): string {
   if (pathSym == null) return "";
-  return symText(db, asInt(pathSym));
+  return symText(db, toSafeInt(pathSym));
 }
 
 function loadEntityRow(db: IndexDatabase, row: Record<string, SQLOutputValue>): EntityRow {
@@ -78,8 +72,8 @@ function loadEntityRow(db: IndexDatabase, row: Record<string, SQLOutputValue>): 
     fqn: String(row.fqn),
     simpleName: String(row.simpleName),
     relativePath: rowPath(db, row.pathSym as SQLOutputValue | null | undefined),
-    identLen: asInt(row.identLen),
-    chunkLen: asInt(row.chunkLen)
+    identLen: toSafeInt(row.identLen),
+    chunkLen: toSafeInt(row.chunkLen)
   };
 }
 
@@ -301,7 +295,7 @@ function entityIds(db: IndexDatabase, syms: number[], context: RouteContext): Ma
       db,
       `SELECT e.sym AS sym, s.text AS entityId FROM entity e JOIN sym s ON s.id=e.sym WHERE e.sym IN ${inClause(chunk.length)}`
     ).all(...chunk) as Array<Record<string, SQLOutputValue>>) {
-      cache.set(asInt(row.sym), String(row.entityId));
+      cache.set(toSafeInt(row.sym), String(row.entityId));
     }
   }
   return cache;
@@ -309,10 +303,10 @@ function entityIds(db: IndexDatabase, syms: number[], context: RouteContext): Ma
 
 function entityRows(db: IndexDatabase, syms: number[]): Map<number, EntityRow> {
   const rows = new Map<number, EntityRow>();
-  for (const chunk of bindChunks(syms)) {
+  for (const chunk of bindChunks(syms, 0)) {
     for (const row of prepareCached(db, `${ENTITY_SELECT} WHERE e.sym IN ${inClause(chunk.length)}`)
       .iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
-      rows.set(asInt(row.sym), loadEntityRow(db, row));
+      rows.set(toSafeInt(row.sym), loadEntityRow(db, row));
     }
   }
   return rows;
@@ -345,7 +339,7 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: Sc
   const lexemes = identifierLexemes(task);
   if (lexemes.length === 0) return [];
   const hits: EntityRow[] = [];
-  for (const chunk of bindChunks(lexemes)) {
+  for (const chunk of bindChunks(lexemes, 1 + (scope?.params.length ?? 0))) {
     for (const row of prepareCached(
       db,
       `${ENTITY_SELECT} WHERE e.kind=? AND e.simple_name_lc IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
@@ -425,7 +419,7 @@ function avgLength(db: IndexDatabase, column: "ident_len" | "chunk_len"): { avgd
     | { n: SQLOutputValue; total: SQLOutputValue }
     | undefined;
   const documentCount = asCount(row);
-  const total = row ? asInt(row.total) : 0;
+  const total = row ? toSafeInt(row.total) : 0;
   return { documentCount, avgdl: documentCount === 0 ? 0 : total / documentCount };
 }
 
@@ -474,7 +468,7 @@ function rankBm25(
            FROM entity_token t JOIN entity e ON e.sym=t.entity_sym`;
     const tokens = [...tokenBySym].map(([sym, token]) => ({ sym, df: dfByToken.get(token) ?? 0 }));
     const source: PostingSource = {
-      key: row => asInt(postingValue(row, 0, "entitySym")),
+      key: row => toSafeInt(postingValue(row, 0, "entitySym")),
       batch: (tokenSym, after, limit) => postingStatement(db,
         `${columns} WHERE t.field=? AND t.token_sym=? AND t.entity_sym>? ORDER BY t.entity_sym LIMIT ?`)
         .all(field, tokenSym, after, limit) as PostingRow[],
@@ -483,7 +477,7 @@ function rankBm25(
           db,
           "SELECT entity_sym AS k FROM entity_token WHERE field=? AND token_sym=? AND entity_sym>? ORDER BY entity_sym LIMIT 1 OFFSET ?"
         ).get(field, tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
-        return row ? asInt(row.k) : undefined;
+        return row ? toSafeInt(row.k) : undefined;
       },
       page: (tokenSym, after, upTo) => postingStatement(
         db,
@@ -496,9 +490,9 @@ function rankBm25(
     scanPostings(context, tokens, source, (row, tokenSym) => {
       if (!billPosting(context)) return false;
       visited += 1;
-      const entitySym = asInt(postingValue(row, 0, "entitySym"));
-      const bucket = byEntity.get(entitySym) ?? { length: asInt(postingValue(row, 2, "len")), tf: new Map<string, number>() };
-      bucket.tf.set(tokenBySym.get(tokenSym)!, asInt(postingValue(row, 1, "tf")));
+      const entitySym = toSafeInt(postingValue(row, 0, "entitySym"));
+      const bucket = byEntity.get(entitySym) ?? { length: toSafeInt(postingValue(row, 2, "len")), tf: new Map<string, number>() };
+      bucket.tf.set(tokenBySym.get(tokenSym)!, toSafeInt(postingValue(row, 1, "tf")));
       byEntity.set(entitySym, bucket);
       return true;
     });
@@ -555,7 +549,7 @@ function docHits(
     const columns = `SELECT t.doc_id AS docId, t.tf AS tf, d.token_len AS docLen, d.declaration_sym AS declarationSym
            FROM search_doc_token t JOIN search_doc d ON d.id=t.doc_id`;
     const source: PostingSource = {
-      key: row => asInt(postingValue(row, 0, "docId")),
+      key: row => toSafeInt(postingValue(row, 0, "docId")),
       batch: (tokenSym, after, limit) => postingStatement(db,
         `${columns} WHERE t.token_sym=? AND t.doc_id>? ORDER BY t.doc_id LIMIT ?`)
         .all(tokenSym, after, limit) as PostingRow[],
@@ -564,7 +558,7 @@ function docHits(
           db,
           "SELECT doc_id AS k FROM search_doc_token WHERE token_sym=? AND doc_id>? ORDER BY doc_id LIMIT 1 OFFSET ?"
         ).get(tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
-        return row ? asInt(row.k) : undefined;
+        return row ? toSafeInt(row.k) : undefined;
       },
       // Scope applies to the declaration a document points at (the hit is
       // that declaration), joined before any posting is billed.
@@ -577,9 +571,9 @@ function docHits(
     scanPostings(context, postingTokens, source, (row, tokenSym) => {
       if (!billPosting(context)) return false;
       visited += 1;
-      const docId = asInt(postingValue(row, 0, "docId"));
-      const bucket = byDoc.get(docId) ?? { tf: new Map<string, number>(), docLen: asInt(postingValue(row, 2, "docLen")), declarationSym: asInt(postingValue(row, 3, "declarationSym")) };
-      bucket.tf.set(tokenBySym.get(tokenSym)!, asInt(postingValue(row, 1, "tf")));
+      const docId = toSafeInt(postingValue(row, 0, "docId"));
+      const bucket = byDoc.get(docId) ?? { tf: new Map<string, number>(), docLen: toSafeInt(postingValue(row, 2, "docLen")), declarationSym: toSafeInt(postingValue(row, 3, "declarationSym")) };
+      bucket.tf.set(tokenBySym.get(tokenSym)!, toSafeInt(postingValue(row, 1, "tf")));
       byDoc.set(docId, bucket);
       return true;
     });
@@ -622,7 +616,7 @@ function earlierDocumentIdentity(db: IndexDatabase, candidate: number, current: 
     ORDER BY d.kind COLLATE BINARY, p.text COLLATE BINARY,
       d.start_line, d.end_line LIMIT 1
   `).get(candidate, current) as { id: SQLOutputValue };
-  return asInt(row.id) === candidate;
+  return toSafeInt(row.id) === candidate;
 }
 
 /** The matched document's own source (XML for a MyBatis statement). Its
@@ -640,8 +634,8 @@ function documentEvidence(db: IndexDatabase, docId: number): EntityHitEvidence |
   return {
     relativePath: String(row.sourcePath),
     contentHash: row.contentHash,
-    startLine: asInt(row.startLine),
-    endLine: asInt(row.endLine),
+    startLine: toSafeInt(row.startLine),
+    endLine: toSafeInt(row.endLine),
     sourceKind: String(row.kind)
   };
 }
@@ -673,11 +667,11 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
     }
     if (hit.kind === "method") {
       const arity = (fileRow as { arity?: SQLOutputValue }).arity;
-      if (typeof arity !== "undefined") hit.signature = `${hit.simpleName}(${asInt(arity)} args)`;
+      if (typeof arity !== "undefined") hit.signature = `${hit.simpleName}(${toSafeInt(arity)} args)`;
     } else {
       hit.signature = hit.fqn;
     }
-    const file = prepareCached(db, "SELECT content_hash AS contentHash, source_root AS sourceRoot, module AS module FROM file WHERE id=?").get(asInt(fileRow.fileId)) as
+    const file = prepareCached(db, "SELECT content_hash AS contentHash, source_root AS sourceRoot, module AS module FROM file WHERE id=?").get(toSafeInt(fileRow.fileId)) as
       | { contentHash: SQLOutputValue; sourceRoot: SQLOutputValue; module: SQLOutputValue }
       | undefined;
     if (file) {

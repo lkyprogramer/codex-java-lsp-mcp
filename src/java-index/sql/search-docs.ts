@@ -5,12 +5,7 @@
 // pos: T05 writer; deletion/rename undoes old documents and old df before the
 //      new hash and generation are published.
 import type { IndexDatabase } from "./driver.js";
-import { prepareCached, withTransaction } from "./driver.js";
-
-function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
-  if (db.isTransaction) return fn();
-  return withTransaction(db, fn);
-}
+import { prepareCached, runInWriteTx } from "./driver.js";
 import type { MyBatisBindingFilter, SearchDocument } from "../../discovery/search-document.js";
 import { documentTokens } from "../../discovery/search-document.js";
 import { internSym, internSymNullable, symId } from "./sym.js";

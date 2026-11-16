@@ -5,7 +5,7 @@ import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
 import { graphEdgeOrdinal, type GraphFragment } from "../../java-knowledge/graph-fragment.js";
 import type { KnowledgeGraphStore } from "../../java-knowledge/graph-reader.js";
 import type { GraphEdge, GraphNode, NodeKind } from "../../java-knowledge/schema.js";
-import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { prepareCached, toSafeInt, withTransaction, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { internSym, internSymNullable, symId, symText } from "./sym.js";
 
@@ -32,12 +32,6 @@ function xorBuffers(target: Buffer, item: Buffer): void {
   for (let index = 0; index < target.length; index += 1) {
     target[index] = (target[index] ?? 0) ^ (item[index] ?? 0);
   }
-}
-
-function asInt(value: SQLOutputValue | undefined): number {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "number") return value;
-  throw new Error(`expected integer, got ${String(value)}`);
 }
 
 function readMeta(db: IndexDatabase, key: string): string | undefined {
@@ -70,7 +64,7 @@ function graphNodeFromRow(row: Record<string, SQLOutputValue>): GraphNode {
   return {
     id: String(row.id),
     kind: String(row.kind) as NodeKind,
-    generation: asInt(row.generation),
+    generation: toSafeInt(row.generation),
     ...(relativePath ? { relativePath } : {}),
     ...(simpleName ? { simpleName } : {}),
     ...(javaIndexId ? { javaIndexId } : {})
@@ -82,11 +76,11 @@ function graphEdgeFromRow(row: Record<string, SQLOutputValue>): GraphEdge {
   const fromId = String(row.fromId);
   const toId = String(row.toId);
   return {
-    edgeId: knowledgeEdgeId({ kind, fromId, toId, ordinal: asInt(row.ordinal) }),
+    edgeId: knowledgeEdgeId({ kind, fromId, toId, ordinal: toSafeInt(row.ordinal) }),
     kind,
     fromId,
     toId,
-    generation: asInt(row.generation)
+    generation: toSafeInt(row.generation)
   };
 }
 
@@ -187,11 +181,11 @@ export class SqlKnowledgeGraph implements KnowledgeGraphStore {
       const ownerSym = internSym(this.db, fragment.owner);
       const staleNodes = new Set(
         (prepareCached(this.db, "SELECT node_sym AS id FROM kg_node_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
-          .map(row => asInt(row.id))
+          .map(row => toSafeInt(row.id))
       );
       const staleEdges = new Set(
         (prepareCached(this.db, "SELECT edge_id AS id FROM kg_edge_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
-          .map(row => asInt(row.id))
+          .map(row => toSafeInt(row.id))
       );
       for (const node of fragment.nodes.values()) {
         const nodeSym = this.writeNode(node);
@@ -213,9 +207,9 @@ export class SqlKnowledgeGraph implements KnowledgeGraphStore {
         const ownerSym = symId(this.db, relativePath);
         if (ownerSym === undefined) continue;
         const edges = (prepareCached(this.db, "SELECT edge_id AS id FROM kg_edge_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
-          .map(row => asInt(row.id));
+          .map(row => toSafeInt(row.id));
         const nodes = (prepareCached(this.db, "SELECT node_sym AS id FROM kg_node_owner WHERE owner_sym=?").all(ownerSym) as Array<{ id: SQLOutputValue }>)
-          .map(row => asInt(row.id));
+          .map(row => toSafeInt(row.id));
         this.releaseEdges(ownerSym, edges);
         this.releaseNodes(ownerSym, nodes);
       }
@@ -281,7 +275,7 @@ export class SqlKnowledgeGraph implements KnowledgeGraphStore {
       ).run(nodeSym, kindSym, pathSym, simpleName, jidSym, node.generation);
       return nodeSym;
     }
-    const oldKind = asInt(existing.kindSym);
+    const oldKind = toSafeInt(existing.kindSym);
     if (oldKind !== kindSym) {
       xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${symText(this.db, oldKind)}`));
       xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
@@ -313,7 +307,7 @@ export class SqlKnowledgeGraph implements KnowledgeGraphStore {
     ).get(fromSym, kindSym, toSym, ordinal) as { id: SQLOutputValue } | undefined;
     let id: number;
     if (row) {
-      id = asInt(row.id);
+      id = toSafeInt(row.id);
     } else {
       id = Number(prepareCached(
         this.db,

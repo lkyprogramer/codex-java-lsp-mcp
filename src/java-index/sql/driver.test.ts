@@ -14,7 +14,9 @@ import {
   inClause,
   openIndexDb,
   prepareCached,
+  runInWriteTx,
   SQLITE_MAX_VARIABLE_NUMBER,
+  toSafeInt,
   withTransaction
 } from "./driver.js";
 import { SCHEMA_VERSION, ensureSchema } from "./schema.js";
@@ -223,11 +225,73 @@ test("IN lists above SQLITE_MAX_VARIABLE_NUMBER fail unless chunked", () => {
       /too many SQL variables/
     );
     let seen = 0;
-    for (const chunk of bindChunks(overflow)) {
+    for (const chunk of bindChunks(overflow, 0)) {
       db.prepare(`SELECT 1 AS ok WHERE 1 IN ${inClause(chunk.length)}`).get(...chunk);
       seen += chunk.length;
     }
     assert.equal(seen, overflow.length);
+  } finally {
+    close(db);
+  }
+});
+
+test("bindChunks reserves the statement's other binds (L1)", () => {
+  const extra = 3;
+  const limit = SQLITE_MAX_VARIABLE_NUMBER - extra;
+  assert.deepEqual([...bindChunks([], extra)], []);
+  assert.deepEqual([...bindChunks(Array.from({ length: limit }, (_, i) => i), extra)].map(chunk => chunk.length), [limit]);
+  const sizes = [...bindChunks(Array.from({ length: limit + 1 }, (_, i) => i), extra)].map(chunk => chunk.length);
+  assert.deepEqual(sizes, [limit, 1]);
+  for (const bad of [-1, 1.5, Number.NaN, SQLITE_MAX_VARIABLE_NUMBER]) {
+    assert.throws(() => [...bindChunks([1], bad)], /extraBinds/);
+  }
+});
+
+test("a chunked IN list plus a second IN list stays within the variable limit (L1)", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    const kinds = [1, 2, 3];
+    const values = Array.from({ length: SQLITE_MAX_VARIABLE_NUMBER - kinds.length + 1 }, (_, index) => index + 1);
+    const sql = (n: number) => `SELECT 1 AS ok WHERE 1 IN ${inClause(n)} AND 1 IN ${inClause(kinds.length)}`;
+    assert.throws(() => db.prepare(sql(values.length)).get(...values, ...kinds), /too many SQL variables/);
+    let seen = 0;
+    for (const chunk of bindChunks(values, kinds.length)) {
+      db.prepare(sql(chunk.length)).get(...chunk, ...kinds);
+      seen += chunk.length;
+    }
+    assert.equal(seen, values.length);
+  } finally {
+    close(db);
+  }
+});
+
+test("toSafeInt accepts safe integers including 0 and -1 and rejects precision loss", () => {
+  assert.equal(toSafeInt(0), 0);
+  assert.equal(toSafeInt(-1), -1);
+  assert.equal(toSafeInt(42n), 42);
+  assert.equal(toSafeInt(BigInt(Number.MAX_SAFE_INTEGER)), Number.MAX_SAFE_INTEGER);
+  assert.throws(() => toSafeInt(BigInt(Number.MAX_SAFE_INTEGER) + 1n), /unsafe integer/);
+  assert.throws(() => toSafeInt(BigInt(Number.MIN_SAFE_INTEGER) - 1n), /unsafe integer/);
+  for (const bad of [1.5, "1", null, undefined, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => toSafeInt(bad as never), /expected integer/);
+  }
+});
+
+test("runInWriteTx joins an open transaction and opens one otherwise", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    db.exec("CREATE TABLE t(v INTEGER)");
+    assert.throws(() => withTransaction(db, () => {
+      runInWriteTx(db, () => db.prepare("INSERT INTO t VALUES (1)").run());
+      throw new Error("outer rollback");
+    }), /outer rollback/);
+    assert.equal((db.prepare("SELECT count(*) AS n FROM t").get() as { n: number }).n, 0, "joined: rolled back with the outer transaction");
+    runInWriteTx(db, () => {
+      assert.equal(db.isTransaction, true);
+      db.prepare("INSERT INTO t VALUES (2)").run();
+    });
+    assert.equal(db.isTransaction, false);
+    assert.equal((db.prepare("SELECT count(*) AS n FROM t").get() as { n: number }).n, 1);
   } finally {
     close(db);
   }

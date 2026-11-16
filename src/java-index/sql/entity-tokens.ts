@@ -1,14 +1,9 @@
 import type { EntityKind, EntityRecord } from "../entity-search.js";
-import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { prepareCached, runInWriteTx, type IndexDatabase } from "./driver.js";
 import { internSym, internSymNullable, symText } from "./sym.js";
 
 const FIELD_IDENTIFIER = 0;
 const FIELD_CHUNK = 1;
-
-function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
-  if (db.isTransaction) return fn();
-  return withTransaction(db, fn);
-}
 
 function tokenTf(tokens: readonly string[]): Map<string, number> {
   const tf = new Map<string, number>();

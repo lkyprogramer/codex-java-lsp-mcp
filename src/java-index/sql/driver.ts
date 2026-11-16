@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
-import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { DatabaseSync, type SQLOutputValue, type StatementSync } from "node:sqlite";
 
 export const DEFAULT_SQLITE_CACHE_KB = 32768;
 /** SQLite default; kept explicit so write connections always autocheckpoint. */
@@ -25,12 +25,28 @@ export function inClause(count: number): string {
   return `(${Array.from({ length: count }, () => "?").join(",")})`;
 }
 
-export function* bindChunks<T>(values: readonly T[], extraBinds = 0): Generator<T[]> {
-  const extra = Number.isFinite(extraBinds) && extraBinds > 0 ? Math.floor(extraBinds) : 0;
-  const size = Math.max(1, SQLITE_MAX_VARIABLE_NUMBER - extra);
+/**
+ * Splits `values` for one `IN (...)` list. `extraBinds` is the number of other `?` in the same statement
+ * (required: forgetting it overflows SQLITE_MAX_VARIABLE_NUMBER at prepare time).
+ */
+export function* bindChunks<T>(values: readonly T[], extraBinds: number): Generator<T[]> {
+  if (!Number.isSafeInteger(extraBinds) || extraBinds < 0 || extraBinds >= SQLITE_MAX_VARIABLE_NUMBER) {
+    throw new Error(`bindChunks extraBinds must be an integer in [0, ${SQLITE_MAX_VARIABLE_NUMBER}), got ${String(extraBinds)}`);
+  }
+  const size = SQLITE_MAX_VARIABLE_NUMBER - extraBinds;
   for (let offset = 0; offset < values.length; offset += size) {
     yield values.slice(offset, offset + size);
   }
+}
+
+/** An INTEGER column value as a JS number; throws instead of silently losing precision. Zero and negatives pass. */
+export function toSafeInt(value: SQLOutputValue | undefined): number {
+  if (typeof value === "bigint") {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) throw new Error(`unsafe integer ${value}`);
+    return Number(value);
+  }
+  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+  throw new Error(`expected integer, got ${String(value)}`);
 }
 
 export type OpenIndexDbOptions = {
@@ -157,6 +173,12 @@ export function withTransaction<T>(db: IndexDatabase, fn: () => T): T {
     for (const hook of rollbackHooks.get(db) ?? []) hook();
     throw error;
   }
+}
+
+/** Joins the caller's transaction when there is one, otherwise opens a write transaction (unlike withTransaction). */
+export function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
+  if (db.isTransaction) return fn();
+  return withTransaction(db, fn);
 }
 
 /** Keeps asynchronous capture/stages inside one writer transaction when serving

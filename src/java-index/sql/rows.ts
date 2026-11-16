@@ -15,7 +15,7 @@ import type {
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { javaEdgeId } from "../stable-id.js";
 import { BoundedCache } from "./bounded-cache.js";
-import { onRollback, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { onRollback, prepareCached, runInWriteTx, toSafeInt, type IndexDatabase } from "./driver.js";
 import { internSym, internSymNullable, rememberSyms, symId } from "./sym.js";
 
 export type FileRow = {
@@ -103,27 +103,16 @@ function asRowId(value: number | bigint): number {
   return rowId;
 }
 
-function asInt(value: SQLOutputValue | undefined): number {
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "number") return value;
-  throw new Error(`expected integer, got ${String(value)}`);
-}
-
-function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
-  if (db.isTransaction) return fn();
-  return withTransaction(db, fn);
-}
-
 function rangeColumns(range: SourceRange | undefined): [number, number, number, number] {
   if (!range) return [-1, -1, -1, -1];
   return [range.start.line, range.start.column, range.end.line, range.end.column];
 }
 
 export function staticEdgeFromSqlRow(row: Record<string, SQLOutputValue>): StaticEdge {
-  const sl = asInt(row.sl);
-  const sc = asInt(row.sc);
-  const el = asInt(row.el);
-  const ec = asInt(row.ec);
+  const sl = toSafeInt(row.sl);
+  const sc = toSafeInt(row.sc);
+  const el = toSafeInt(row.el);
+  const ec = toSafeInt(row.ec);
   const range = sl === -1 && sc === -1 && el === -1 && ec === -1
     ? undefined
     : { start: { line: sl, column: sc }, end: { line: el, column: ec } };
@@ -139,7 +128,7 @@ export function staticEdgeFromSqlRow(row: Record<string, SQLOutputValue>): Stati
     confidence: Number(row.confidence),
     ...(range ? { range } : {}),
     sourceFile: String(row.sourceFile),
-    generation: asInt(row.generation),
+    generation: toSafeInt(row.generation),
     resolution: {
       kind: String(row.resKind) as StaticEdgeResolutionKind,
       ...(resStrategy ? { typeStrategy: resStrategy as TypeResolutionStrategy } : {})
