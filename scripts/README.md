@@ -5,5 +5,6 @@
 | 脚本 | 用途 | 入口 |
 |---|---|---|
 | `check-repo-hygiene.mjs` | 仓库卫生门禁（基线模式） | `gate:pr`、AGENTS.md |
+| `ci-runtime-manifest.mjs` | CI 上为 runner 的 Node 生成 runtime manifest | `.github/workflows/gates.yml` |
 
 存量中未被引用的脚本记录在 `repo-hygiene-baseline.json` 的 `unreferencedScripts`，删除或登记后用 `--write-baseline` 收紧。

@@ -1,0 +1,66 @@
+name: gates
+
+# Push-triggered validation on a GitHub-hosted macOS runner (free for public repositories).
+# Every branch push runs gate:pr; pushes to main, the nightly schedule and a manual "release" dispatch
+# run gate:release (isolated full profile plus the HTTP smoke). Production install, the launchd canary,
+# TCC and private-corpus evaluation stay on the owner's Mac.
+on:
+  push:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 Asia/Shanghai
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Gate profile
+        type: choice
+        options: [pr, release]
+        default: pr
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      GATE_PROFILE: ${{ (github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'release' || inputs.profile || 'pr' }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+
+      - name: Install ripgrep
+        run: brew install ripgrep
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Record the runner's Node as the frozen runtime
+        run: |
+          node_bin="$(node -p process.execPath)"
+          "$node_bin" scripts/ci-runtime-manifest.mjs > "$RUNNER_TEMP/runtime.json"
+          echo "ILV2_NODE_BIN=$node_bin" >> "$GITHUB_ENV"
+          echo "ILV2_RUNTIME_MANIFEST=$RUNNER_TEMP/runtime.json" >> "$GITHUB_ENV"
+
+      - name: gate:${{ env.GATE_PROFILE }}
+        run: npm run "gate:$GATE_PROFILE" -- --output "$RUNNER_TEMP/gate-summary.json"
+
+      - name: Upload gate summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-summary-${{ env.GATE_PROFILE }}
+          path: ${{ runner.temp }}/gate-summary.json
+          if-no-files-found: ignore
