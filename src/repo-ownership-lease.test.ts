@@ -36,12 +36,14 @@ test("JDT state updates replace owner.json atomically, owner-only, with no stage
   const baseDir = await mkdtemp(path.join(tmpdir(), "java-lsp-ownership-"));
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-owner-root-"));
   const lease = manager(baseDir, "atomic", 303, () => "alive").acquire(root);
+  const { markJdtlsStarting, clearJdtlsState } = lease;
+  assert.ok(markJdtlsStarting && clearJdtlsState, "the file lease implements JDT state updates");
   try {
-    lease.markJdtlsStarting();
+    markJdtlsStarting.call(lease);
     assert.deepEqual(await readdir(lease.lockPath), ["owner.json"]);
     assert.equal((await stat(path.join(lease.lockPath, "owner.json"))).mode & 0o777, 0o600);
     assert.equal(JSON.parse(await readFile(path.join(lease.lockPath, "owner.json"), "utf8")).jdtls.state, "starting");
-    lease.clearJdtlsState();
+    clearJdtlsState.call(lease);
     assert.deepEqual(await readdir(lease.lockPath), ["owner.json"]);
     assert.equal(JSON.parse(await readFile(path.join(lease.lockPath, "owner.json"), "utf8")).jdtls, undefined);
   } finally {
