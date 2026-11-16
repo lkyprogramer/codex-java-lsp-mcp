@@ -7,11 +7,12 @@
 //      verified/<snapshotId>.json. A full seal still verifies everything and records it at once.
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
-import { chmod, mkdir, open, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
+import { syncDir, syncFile } from "../../atomic-file.js";
 import { OWNER_STORE_DIR } from "../../repo-layout.js";
 import { parseSnapshotManifest, type ContentEntry, type SnapshotManifest } from "../sql/snapshot-manifest.js";
 import type { SealStep, VerificationPlan, VerificationTable, VerificationTask } from "./seal-worker.js";
@@ -36,26 +37,8 @@ export function newSnapshotId(): string {
   return `s-${Date.now().toString(36)}-${randomUUID().replaceAll("-", "")}`;
 }
 
-export async function syncFile(file: string): Promise<void> {
-  const handle = await open(file, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
-export async function syncDir(directory: string): Promise<void> {
-  const handle = await open(directory, "r");
-  try { await handle.sync(); } finally { await handle.close(); }
-}
-
-/** Write `file` atomically: tmp in the same directory, sync, rename, sync the directory. */
-export async function writeFileAtomic(file: string, data: string, mode = 0o644,
-  hooks?: { afterTmp?: () => void | Promise<void>; afterRename?: () => void | Promise<void> }): Promise<void> {
-  const tmp = `${file}.tmp-${process.pid}-${randomUUID()}`;
-  await writeFile(tmp, data, { mode, flag: "wx" });
-  await syncFile(tmp);
-  await hooks?.afterTmp?.();
-  await rename(tmp, file);
-  await hooks?.afterRename?.();
-  await syncDir(path.dirname(file));
-}
+// Moved to src/atomic-file.ts; re-exported so snapshot modules keep one import site.
+export { syncDir, syncFile, writeFileAtomic } from "../../atomic-file.js";
 
 async function fileSha256(file: string, signal?: AbortSignal): Promise<string> {
   const hash = createHash("sha256");
