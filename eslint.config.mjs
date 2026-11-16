@@ -19,7 +19,10 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-non-null-assertion": "error",
-      "@typescript-eslint/no-floating-promises": "error",
+      // node:test's test/describe/it return a promise the runner awaits; an unawaited call there is the idiom.
+      "@typescript-eslint/no-floating-promises": ["error", {
+        allowForKnownSafeCalls: [{ from: "package", package: "node:test", name: ["test", "describe", "it", "suite"] }]
+      }],
       "@typescript-eslint/no-misused-promises": "error",
       "no-restricted-syntax": ["error", {
         selector: "TSAsExpression > TSAsExpression.expression[typeAnnotation.type='TSUnknownKeyword']",
