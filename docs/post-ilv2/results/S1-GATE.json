@@ -1,0 +1,526 @@
+{
+  "taskId": "S1-GATE",
+  "status": "PASS",
+  "sourceHead": "d5843ae7691fb7b657927e5ecc410399989100a4",
+  "failedStage": null,
+  "notRun": [],
+  "firstError": null,
+  "baselineMatchesF": true,
+  "stages": [
+    {
+      "name": "preflight",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:30:18.519Z",
+      "endedAt": "2026-11-16T01:30:18.633Z",
+      "problems": []
+    },
+    {
+      "name": "baseline-build",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:30:18.633Z",
+      "endedAt": "2026-11-16T01:30:34.978Z",
+      "problems": []
+    },
+    {
+      "name": "s1-build-targeted",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:30:34.979Z",
+      "endedAt": "2026-11-16T01:30:53.268Z",
+      "problems": []
+    },
+    {
+      "name": "script-tests",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:30:53.269Z",
+      "endedAt": "2026-11-16T01:30:55.265Z",
+      "problems": []
+    },
+    {
+      "name": "mechanism",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:30:55.266Z",
+      "endedAt": "2026-11-16T01:34:37.180Z",
+      "problems": []
+    },
+    {
+      "name": "main-replay",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:34:37.180Z",
+      "endedAt": "2026-11-16T01:38:46.855Z",
+      "problems": []
+    },
+    {
+      "name": "main-gate",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:38:46.856Z",
+      "endedAt": "2026-11-16T01:38:47.114Z",
+      "problems": []
+    },
+    {
+      "name": "s1-replay",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:38:47.115Z",
+      "endedAt": "2026-11-16T01:42:58.676Z",
+      "problems": []
+    },
+    {
+      "name": "s1-gate",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:42:58.677Z",
+      "endedAt": "2026-11-16T01:42:59.119Z",
+      "problems": []
+    },
+    {
+      "name": "s1-vs-main",
+      "status": "PASS",
+      "exitCode": 0,
+      "startedAt": "2026-11-16T01:42:59.120Z",
+      "endedAt": "2026-11-16T01:42:59.384Z",
+      "problems": []
+    }
+  ],
+  "builds": {
+    "baselineSrcPatchSha256": "22e548b8a91eec9b201b824cd5ad0d75bf1083c86255882873c3b71e07de7526",
+    "baseline": "ee0a7e447156e3e63d5e17ca24dc830d94d90427034ef382776a2d996e86a891",
+    "s1": "ffd57b4a31f0e0d155f58304a6ba3a9ab3e302f6b55293523853a0bfdbea9ba3"
+  },
+  "mechanism": {
+    "pass": true,
+    "problems": []
+  },
+  "mainCalibration": {
+    "tasks": 20,
+    "expected": {
+      "meanRecall": 0.38916666666666666,
+      "fullRecallTasks": 3
+    },
+    "observed": {
+      "meanRecall": 0.3891666666666666,
+      "fullRecallTasks": 3
+    },
+    "status": "PASS",
+    "exitCode": 0
+  },
+  "mainGate": {
+    "schema": "post-ilv2/s1-gate/v1",
+    "identity": {
+      "baselineRowsSha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a",
+      "rowsSha256": "a708656b60124675c92c356f8a9ab1376b6432c9f7e4c8ff355a4193a614afd6"
+    },
+    "status": "PASS",
+    "gates": {
+      "meanRecallNonInferior": true,
+      "lostTargets": true,
+      "receivedBytesP50": true
+    },
+    "thresholds": {
+      "maxLostTargets": 0,
+      "maxReceivedBytesP50Increase": 0.2,
+      "recallTolerance": 1e-9
+    },
+    "receivedBytesP50Increase": 0,
+    "baseline": {
+      "meanRecall": 0.42424242424242425,
+      "fullRecallTasks": 5,
+      "creditedTargets": 52,
+      "creditedByCategory": {
+        "callers": {
+          "targets": 16,
+          "credited": 7
+        },
+        "dto-impact": {
+          "targets": 22,
+          "credited": 18
+        },
+        "implementations": {
+          "targets": 21,
+          "credited": 8
+        },
+        "repair": {
+          "targets": 3,
+          "credited": 0
+        },
+        "spring": {
+          "targets": 26,
+          "credited": 19
+        },
+        "xml": {
+          "targets": 16,
+          "credited": 0
+        }
+      },
+      "receivedBytesPerTask": {
+        "n": 33,
+        "p50": 15154,
+        "p95": 63490,
+        "mean": 23161.81818181818
+      },
+      "payloadBytesPerTask": {
+        "n": 33,
+        "p50": 9931,
+        "p95": 31176,
+        "mean": 10701.424242424242
+      },
+      "impactCallBytes": {
+        "n": 56,
+        "p50": 2325,
+        "p95": 3979,
+        "mean": 2374.6964285714284
+      },
+      "partialCalls": 0,
+      "coreExceededCalls": 11,
+      "calls": 56
+    },
+    "s1": {
+      "meanRecall": 0.42424242424242425,
+      "fullRecallTasks": 5,
+      "creditedTargets": 52,
+      "creditedByCategory": {
+        "callers": {
+          "targets": 16,
+          "credited": 7
+        },
+        "dto-impact": {
+          "targets": 22,
+          "credited": 18
+        },
+        "implementations": {
+          "targets": 21,
+          "credited": 8
+        },
+        "repair": {
+          "targets": 3,
+          "credited": 0
+        },
+        "spring": {
+          "targets": 26,
+          "credited": 19
+        },
+        "xml": {
+          "targets": 16,
+          "credited": 0
+        }
+      },
+      "receivedBytesPerTask": {
+        "n": 33,
+        "p50": 15154,
+        "p95": 63490,
+        "mean": 23161.81818181818
+      },
+      "payloadBytesPerTask": {
+        "n": 33,
+        "p50": 9931,
+        "p95": 31176,
+        "mean": 10705.818181818182
+      },
+      "impactCallBytes": {
+        "n": 56,
+        "p50": 2325,
+        "p95": 3979,
+        "mean": 2377.285714285714
+      },
+      "partialCalls": 0,
+      "coreExceededCalls": 11,
+      "calls": 56
+    },
+    "lostTargets": {
+      "count": 0,
+      "byCategory": {}
+    },
+    "gainedTargets": {
+      "count": 0,
+      "byCategory": {}
+    },
+    "notClaimed": "C0 retrieval recall and received bytes on the seen dev split; an engineering gate, not a sealed evaluation, and no answer quality."
+  },
+  "s1Calibration": {
+    "tasks": 20,
+    "expected": {
+      "meanRecall": 0.38916666666666666,
+      "fullRecallTasks": 3
+    },
+    "observed": {
+      "meanRecall": 0.3891666666666666,
+      "fullRecallTasks": 3
+    },
+    "status": "PASS",
+    "exitCode": 0
+  },
+  "s1Gate": {
+    "schema": "post-ilv2/s1-gate/v1",
+    "identity": {
+      "baselineRowsSha256": "37c8967368fb4414583f21229aefdb979dd929d99491e59b6c0419765f281d7a",
+      "rowsSha256": "18b61c2afd61bbdeed64b3995b370c03847585096ca12bc9f1589367adf51b40"
+    },
+    "status": "PASS",
+    "gates": {
+      "meanRecallNonInferior": true,
+      "lostTargets": true,
+      "receivedBytesP50": true
+    },
+    "thresholds": {
+      "maxLostTargets": 0,
+      "maxReceivedBytesP50Increase": 0.2,
+      "recallTolerance": 1e-9
+    },
+    "receivedBytesP50Increase": 0,
+    "baseline": {
+      "meanRecall": 0.42424242424242425,
+      "fullRecallTasks": 5,
+      "creditedTargets": 52,
+      "creditedByCategory": {
+        "callers": {
+          "targets": 16,
+          "credited": 7
+        },
+        "dto-impact": {
+          "targets": 22,
+          "credited": 18
+        },
+        "implementations": {
+          "targets": 21,
+          "credited": 8
+        },
+        "repair": {
+          "targets": 3,
+          "credited": 0
+        },
+        "spring": {
+          "targets": 26,
+          "credited": 19
+        },
+        "xml": {
+          "targets": 16,
+          "credited": 0
+        }
+      },
+      "receivedBytesPerTask": {
+        "n": 33,
+        "p50": 15154,
+        "p95": 63490,
+        "mean": 23161.81818181818
+      },
+      "payloadBytesPerTask": {
+        "n": 33,
+        "p50": 9931,
+        "p95": 31176,
+        "mean": 10701.424242424242
+      },
+      "impactCallBytes": {
+        "n": 56,
+        "p50": 2325,
+        "p95": 3979,
+        "mean": 2374.6964285714284
+      },
+      "partialCalls": 0,
+      "coreExceededCalls": 11,
+      "calls": 56
+    },
+    "s1": {
+      "meanRecall": 0.4444444444444444,
+      "fullRecallTasks": 6,
+      "creditedTargets": 54,
+      "creditedByCategory": {
+        "callers": {
+          "targets": 16,
+          "credited": 7
+        },
+        "dto-impact": {
+          "targets": 22,
+          "credited": 18
+        },
+        "implementations": {
+          "targets": 21,
+          "credited": 10
+        },
+        "repair": {
+          "targets": 3,
+          "credited": 0
+        },
+        "spring": {
+          "targets": 26,
+          "credited": 19
+        },
+        "xml": {
+          "targets": 16,
+          "credited": 0
+        }
+      },
+      "receivedBytesPerTask": {
+        "n": 33,
+        "p50": 15154,
+        "p95": 63490,
+        "mean": 23196.60606060606
+      },
+      "payloadBytesPerTask": {
+        "n": 33,
+        "p50": 9931,
+        "p95": 31176,
+        "mean": 10710.121212121212
+      },
+      "impactCallBytes": {
+        "n": 56,
+        "p50": 2325,
+        "p95": 3979,
+        "mean": 2379.8214285714284
+      },
+      "partialCalls": 0,
+      "coreExceededCalls": 11,
+      "calls": 56
+    },
+    "lostTargets": {
+      "count": 0,
+      "byCategory": {}
+    },
+    "gainedTargets": {
+      "count": 2,
+      "byCategory": {
+        "implementations": 2
+      }
+    },
+    "notClaimed": "C0 retrieval recall and received bytes on the seen dev split; an engineering gate, not a sealed evaluation, and no answer quality."
+  },
+  "s1VsMain": {
+    "schema": "post-ilv2/s1-gate/v1",
+    "identity": {
+      "baselineRowsSha256": "a708656b60124675c92c356f8a9ab1376b6432c9f7e4c8ff355a4193a614afd6",
+      "rowsSha256": "18b61c2afd61bbdeed64b3995b370c03847585096ca12bc9f1589367adf51b40"
+    },
+    "status": "PASS",
+    "gates": {
+      "meanRecallNonInferior": true,
+      "lostTargets": true,
+      "receivedBytesP50": true
+    },
+    "thresholds": {
+      "maxLostTargets": 0,
+      "maxReceivedBytesP50Increase": 0.2,
+      "recallTolerance": 1e-9
+    },
+    "receivedBytesP50Increase": 0,
+    "baseline": {
+      "meanRecall": 0.42424242424242425,
+      "fullRecallTasks": 5,
+      "creditedTargets": 52,
+      "creditedByCategory": {
+        "callers": {
+          "targets": 16,
+          "credited": 7
+        },
+        "dto-impact": {
+          "targets": 22,
+          "credited": 18
+        },
+        "implementations": {
+          "targets": 21,
+          "credited": 8
+        },
+        "repair": {
+          "targets": 3,
+          "credited": 0
+        },
+        "spring": {
+          "targets": 26,
+          "credited": 19
+        },
+        "xml": {
+          "targets": 16,
+          "credited": 0
+        }
+      },
+      "receivedBytesPerTask": {
+        "n": 33,
+        "p50": 15154,
+        "p95": 63490,
+        "mean": 23161.81818181818
+      },
+      "payloadBytesPerTask": {
+        "n": 33,
+        "p50": 9931,
+        "p95": 31176,
+        "mean": 10705.818181818182
+      },
+      "impactCallBytes": {
+        "n": 56,
+        "p50": 2325,
+        "p95": 3979,
+        "mean": 2377.285714285714
+      },
+      "partialCalls": 0,
+      "coreExceededCalls": 11,
+      "calls": 56
+    },
+    "s1": {
+      "meanRecall": 0.4444444444444444,
+      "fullRecallTasks": 6,
+      "creditedTargets": 54,
+      "creditedByCategory": {
+        "callers": {
+          "targets": 16,
+          "credited": 7
+        },
+        "dto-impact": {
+          "targets": 22,
+          "credited": 18
+        },
+        "implementations": {
+          "targets": 21,
+          "credited": 10
+        },
+        "repair": {
+          "targets": 3,
+          "credited": 0
+        },
+        "spring": {
+          "targets": 26,
+          "credited": 19
+        },
+        "xml": {
+          "targets": 16,
+          "credited": 0
+        }
+      },
+      "receivedBytesPerTask": {
+        "n": 33,
+        "p50": 15154,
+        "p95": 63490,
+        "mean": 23196.60606060606
+      },
+      "payloadBytesPerTask": {
+        "n": 33,
+        "p50": 9931,
+        "p95": 31176,
+        "mean": 10710.121212121212
+      },
+      "impactCallBytes": {
+        "n": 56,
+        "p50": 2325,
+        "p95": 3979,
+        "mean": 2379.8214285714284
+      },
+      "partialCalls": 0,
+      "coreExceededCalls": 11,
+      "calls": 56
+    },
+    "lostTargets": {
+      "count": 0,
+      "byCategory": {}
+    },
+    "gainedTargets": {
+      "count": 2,
+      "byCategory": {
+        "implementations": 2
+      }
+    },
+    "notClaimed": "C0 retrieval recall and received bytes on the seen dev split; an engineering gate, not a sealed evaluation, and no answer quality."
+  }
+}
