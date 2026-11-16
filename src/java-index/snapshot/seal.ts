@@ -12,7 +12,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
-import { syncDir, syncFile } from "../../atomic-file.js";
+import { syncDir, syncFile, writeFileAtomic } from "../../atomic-file.js";
 import { OWNER_STORE_DIR } from "../../repo-layout.js";
 import { parseSnapshotManifest, type ContentEntry, type SnapshotManifest } from "../sql/snapshot-manifest.js";
 import type { SealStep, VerificationPlan, VerificationTable, VerificationTask } from "./seal-worker.js";
