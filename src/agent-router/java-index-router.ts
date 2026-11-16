@@ -217,9 +217,9 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   private readonly freshGenerationByPath = new Map<string, number>();
   /** Router facts are immutable for one generation; retain them across ranking phases. */
   private readonly factsByPath = new Map<string, { generation: number; facts: JavaSourceFacts }>();
-  /** Framework-view projection cache, generation-scoped like factsByPath - cleared alongside it in refresh/reconcile/close so a Slice C/D adapter never reads stale facts across a generation bump. */
+  /** Framework-view projection cache, generation-scoped like factsByPath - cleared alongside it by resetCaches so a Slice C/D adapter never reads stale facts across a generation bump. */
   private readonly frameworkFactsByPath = new Map<string, { generation: number; facts: FrameworkFileFacts }>();
-  /** Build/dependency marker files are cached only until the next observed refresh/reconcile. */
+  /** Build/dependency marker files are cached only until the next observed refresh/reconcile (resetCaches). */
   private readonly repositoryMarkerCache = new Map<string, string | null>();
   /** Store-local import/annotation summary, one worker request per key and generation. */
   private readonly repositoryFactMarkerCache = new Map<string, { generation: number; markers: FrameworkRepositoryFactMarkers }>();
@@ -533,22 +533,30 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const status = await this.client.refresh(generation, changed, deleted, this.currentRequestOptions());
     this.generation = Math.max(this.generation, generation, status.indexedGeneration);
     if (this.isStaleGeneration(generation)) return status;
-    for (const file of changed) {
-      const absolute = normalizeRepoFile(this.repoRoot, file);
-      this.freshGenerationByPath.set(absolute, generation);
-      this.factsByPath.delete(absolute);
-      this.frameworkFactsByPath.delete(absolute);
-    }
-    for (const file of deleted) {
-      const absolute = normalizeRepoFile(this.repoRoot, file);
-      this.freshGenerationByPath.delete(absolute);
-      this.factsByPath.delete(absolute);
-      this.frameworkFactsByPath.delete(absolute);
+    const changedPaths = changed.map(file => normalizeRepoFile(this.repoRoot, file));
+    const deletedPaths = deleted.map(file => normalizeRepoFile(this.repoRoot, file));
+    for (const absolute of changedPaths) this.freshGenerationByPath.set(absolute, generation);
+    for (const absolute of deletedPaths) this.freshGenerationByPath.delete(absolute);
+    this.resetCaches({ paths: [...changedPaths, ...deletedPaths] });
+    return status;
+  }
+
+  /** The only place router caches are cleared: "all" for reconcile/close; a path scope (refresh) keeps
+   * freshGenerationByPath, which refresh maintains. Repository-wide derived caches always go. */
+  private resetCaches(scope: "all" | { paths: readonly string[] }): void {
+    if (scope === "all") {
+      this.freshGenerationByPath.clear();
+      this.factsByPath.clear();
+      this.frameworkFactsByPath.clear();
+    } else {
+      for (const absolute of scope.paths) {
+        this.factsByPath.delete(absolute);
+        this.frameworkFactsByPath.delete(absolute);
+      }
     }
     this.repositoryMarkerCache.clear();
     this.repositoryFactMarkerCache.clear();
     this.foregroundImplementationScans.clear();
-    return status;
   }
 
   async reconcile(generation: number): Promise<JavaIndexStatus> {
@@ -558,24 +566,14 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const status = await this.client.reconcile(generation, this.currentRequestOptions());
     this.generation = Math.max(this.generation, generation, status.indexedGeneration);
     if (this.isStaleGeneration(generation)) return status;
-    this.freshGenerationByPath.clear();
-    this.factsByPath.clear();
-    this.frameworkFactsByPath.clear();
-    this.repositoryMarkerCache.clear();
-    this.repositoryFactMarkerCache.clear();
-    this.foregroundImplementationScans.clear();
+    this.resetCaches("all");
     return status;
   }
 
   async close(): Promise<void> {
     await this.client.close();
     this.opened = false;
-    this.freshGenerationByPath.clear();
-    this.factsByPath.clear();
-    this.frameworkFactsByPath.clear();
-    this.repositoryMarkerCache.clear();
-    this.repositoryFactMarkerCache.clear();
-    this.foregroundImplementationScans.clear();
+    this.resetCaches("all");
   }
 
   async factsFor(inputFile: string, generation = this.generation): Promise<JavaSourceFacts> {
