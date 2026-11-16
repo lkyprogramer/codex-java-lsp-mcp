@@ -24,6 +24,12 @@ test("PR-fast does not run isolated full", () => {
   assert.equal(argv.includes("dist/**/*.test.js"), true);
 });
 
+test("PR-fast runs the hygiene and lint baselines before the unit tests", () => {
+  const firsts = GATE_PROFILES.pr.steps.map(step => step.args[0]);
+  assert.deepEqual(firsts.slice(0, 2), ["scripts/check-repo-hygiene.mjs", "node_modules/eslint/bin/eslint.js"]);
+  assert.equal(GATE_PROFILES.pr.steps.at(-1).args.includes("dist/**/*.test.js"), true);
+});
+
 test("nightly is isolated full without HTTP smoke", () => {
   assert.equal(GATE_PROFILES.nightly.steps.length, 1);
   assert.deepEqual(GATE_PROFILES.nightly.steps[0].args, FULL_ARGV);

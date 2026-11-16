@@ -1,0 +1,47 @@
+{
+  "schema": "post-ilv2/audit-step1-mac-gate/v1",
+  "sourceHead": "f4ceb178fa20c9bf7dedede1cc6f04717ad1998c",
+  "platform": "macOS",
+  "command": "npm run gate:pr",
+  "status": "PASS",
+  "exitCode": 0,
+  "startedAt": "2026-11-16T11:38:39.464Z",
+  "endedAt": "2026-11-16T11:44:05.307Z",
+  "dependencyInstall": {
+    "command": "npm ci",
+    "status": "PASS",
+    "exitCode": 0
+  },
+  "hygiene": {
+    "command": "node scripts/check-repo-hygiene.mjs",
+    "exitCode": 0,
+    "output": {
+      "status": "PASS",
+      "violations": [],
+      "debt": {
+        "ignoredTracked": 742,
+        "untestedProduction": 49,
+        "unreferencedScripts": 54,
+        "testTimerFiles": 46
+      }
+    }
+  },
+  "lint": {
+    "command": "node node_modules/eslint/bin/eslint.js src",
+    "status": "PASS",
+    "exitCode": 0,
+    "output": ""
+  },
+  "tap": {
+    "tests": 1674,
+    "pass": 1673,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1,
+    "todo": 0
+  },
+  "skips": [
+    "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+  ],
+  "logSha256": "6197a2050f427c290864c7c5aae742ecac9eb3ccf07a0b823cc4a7a1648f8ce1"
+}

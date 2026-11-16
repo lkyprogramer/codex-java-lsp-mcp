@@ -17,10 +17,10 @@
     "benchmark:three-repo-matrix": "sh scripts/run-isolated-node.sh scripts/run-three-repo-cold-matrix.mjs",
     "benchmark:three-repo-verify": "sh scripts/run-isolated-node.sh scripts/verify-three-repo-cold-matrix.mjs",
     "benchmark:v32-matrix": "sh scripts/run-isolated-node.sh scripts/run-v32-optimization-matrix.mjs",
-    "benchmark:impact-attribution": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs",
+    "benchmark:impact-attribution": "npm run benchmark:agent-impact --",
     "benchmark:resources": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-java-runtime-resource-benchmark.mjs",
-    "benchmark:lsp-performance": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs",
-    "benchmark:semantic-first-touch": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs",
+    "benchmark:lsp-performance": "npm run benchmark:agent-impact --",
+    "benchmark:semantic-first-touch": "npm run benchmark:agent-impact --",
     "benchmark:verify-determinism": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node dist/benchmark/verify-determinism.js",
     "benchmark:task36-mutation": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node dist/benchmark/task36-mutation-matrix.js",
     "benchmark:edit-to-visible": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/edit-to-visible-benchmark.mjs",
@@ -34,9 +34,12 @@
     "measure:tool-schema": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/measure-tool-schema.mjs",
     "trace:mcp-local": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/record-mcp-trace-matrix.mjs",
     "measure:production-ts": "node scripts/count-production-ts.mjs",
+    "lint": "eslint src",
+    "lint:prune": "eslint src --prune-suppressions",
+    "check:hygiene": "node scripts/check-repo-hygiene.mjs",
     "test:three-repo-matrix": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/run-three-repo-cold-matrix.test.mjs scripts/verify-three-repo-cold-matrix.test.mjs",
     "test:v32-matrix": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/count-production-ts.test.mjs scripts/run-v32-optimization-matrix.test.mjs",
-    "test:isolated": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full",
+    "test:isolated": "npm run test --",
     "test:mcp-trace": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/record-mcp-trace-matrix.test.mjs",
     "test:determinism": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test dist/benchmark/determinism.test.js",
     "test:progressive-index": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test dist/benchmark/progressive-index.test.js scripts/run-progressive-index.test.mjs scripts/run-progressive-index-three-repo.test.mjs scripts/verify-progressive-index.test.mjs",
@@ -67,7 +70,9 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^22.19.1",
-    "typescript": "^5.9.3"
+    "eslint": "9.39.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "8.72.1"
   },
   "engines": {
     "node": ">=22"

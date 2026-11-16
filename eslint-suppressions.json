@@ -1,0 +1,1100 @@
+{
+  "src/agent-router/anchor.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/agent-router/candidate-helpers.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/agent-router/evidence-normalizer.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 15
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/format.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 16
+    }
+  },
+  "src/agent-router/format.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/agent-router/framework/adapter.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/agent-router/framework/lombok-adapter.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/framework/mapstruct-adapter.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/framework/mapstruct-adapter.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/agent-router/framework/mybatis-adapter.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/agent-router/framework/mybatis-adapter.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/agent-router/framework/runner.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/agent-router/framework/shared.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/agent-router/framework/spring-adapter.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 57
+    }
+  },
+  "src/agent-router/framework/spring-adapter.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/agent-router/framework/spring-endpoint.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/agent-router/framework/spring-endpoint.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/agent-router/helper-move-k11.test.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/agent-router/impact-metrics.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/agent-router/java-index-router.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "src/agent-router/materialize-candidates.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 20
+    }
+  },
+  "src/agent-router/output-compact.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/agent-router/providers/framework-provider.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/providers/lexical-provider.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/providers/lexical-provider.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/agent-router/providers/relationship-provider.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 20
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/providers/relationship-provider.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 14
+    }
+  },
+  "src/agent-router/providers/semantic-provider.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    },
+    "no-restricted-syntax": {
+      "count": 16
+    }
+  },
+  "src/agent-router/providers/semantic-provider.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/agent-router/providers/static-provider.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/providers/support-provider.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/agent-router/rank-candidates.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 9
+    }
+  },
+  "src/agent-router/read-plan-gaps.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/read-plan.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 9
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/read-plan.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/agent-router/reference-ranking.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    }
+  },
+  "src/agent-router/retrieval/evidence-features.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/agent-router/retrieval/read-unit.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "src/agent-router/semantic.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/agent-router/type-reference.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/agent-router/type-reference.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/benchmark/attribution-v3.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/benchmark/attribution-v3.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/benchmark/determinism.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/benchmark/golden-scenario.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/benchmark/java-index-idle.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/benchmark/measure-query-load.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/benchmark/measure-query-load.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/benchmark/measure-request-load.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/benchmark/measure-wire-bytes.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/benchmark/process-resource-observer.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/benchmark/process-resource-observer.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/benchmark/release-index-contracts.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/benchmark/release-source-contracts.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 50
+    }
+  },
+  "src/benchmark/semantic-first-touch.test.ts": {
+    "no-restricted-syntax": {
+      "count": 9
+    }
+  },
+  "src/benchmark/semantic-first-touch.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/benchmark/task36-mutation-matrix.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/context-engine/context-candidates.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/context-engine/context-closure.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/context-engine/context-closure.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/context-engine/context-planner.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/context-engine/context-serializer.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/context-engine/evidence-bundle.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/context-engine/graph-search.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/context-engine/plan-query.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 34
+    }
+  },
+  "src/context-engine/plan-query.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/discovery/anchor-windows.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/discovery/discovery-unsupported.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/evidence-source-reader.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/evidence-unit.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 21
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/discovery/locator-name.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/outline.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/discovery/outline.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/discovery/preview-mode.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/query-contract.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/query-deadline.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/discovery/query-preview.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 40
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/query-scope.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/query-worker.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 25
+    },
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/discovery/query-worker.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/discovery/query.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/discovery/scope.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/discovery/scope.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/discovery/vocabulary.test.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/index-builder/build-process.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/index-builder/build-scheduler.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 24
+    },
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/index-builder/builder-liveness.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/index-builder/cold-build.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/index-builder/content-capture.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/index-builder/execution-plan.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    }
+  },
+  "src/index-builder/incremental.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/index-builder/integrity.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/index-builder/parse-pool.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/index-builder/parse-pool.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/index-builder/parse-worker.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/index-builder/progress.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/java-index/ast-extractor.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 64
+    }
+  },
+  "src/java-index/ast-extractor.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/java-index/builder/incremental.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/builder/parse-cache.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-index/builder/parse-cache.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/builder/r08-evidence.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "src/java-index/builder/review-fixes.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/java-index/edge-builder.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 64
+    }
+  },
+  "src/java-index/edge-builder.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "src/java-index/entity-scoring.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/entity-search.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/framework-index-view.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 18
+    }
+  },
+  "src/java-index/java-parser-backend.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/java-index/manifest.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/mybatis-xml-extractor.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    }
+  },
+  "src/java-index/mybatis-xml-extractor.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-index/name-resolver.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 26
+    }
+  },
+  "src/java-index/name-resolver.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/java-index/router-integration.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/java-index/router-java-index.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 19
+    }
+  },
+  "src/java-index/snapshot/index-owner.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 12
+    }
+  },
+  "src/java-index/snapshot/owner-gc.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "src/java-index/snapshot/owner-seed.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 38
+    }
+  },
+  "src/java-index/snapshot/owner-telemetry.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/snapshot/publish-crash-child.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/snapshot/query-pool.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 13
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/java-index/snapshot/query-pool.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/snapshot/query-process.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/snapshot/request-view.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 45
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/java-index/snapshot/request-view.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-index/snapshot/seal-integrity.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 9
+    }
+  },
+  "src/java-index/snapshot/seal-worker.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/snapshot/seal.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/java-index/snapshot/snapshot-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 17
+    }
+  },
+  "src/java-index/snapshot/snapshot-store.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-index/snapshot/workspace-tracker.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/java-index/snapshot/workspace-tracker.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/java-index/snapshot/worktree-idle.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-index/sql/entity-search-bounded.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/java-index/sql/entity-search-evidence-determinism.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/sql/entity-search.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 17
+    }
+  },
+  "src/java-index/sql/entity-tokens.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/sql/facts-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 13
+    }
+  },
+  "src/java-index/sql/facts-store.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/java-index/sql/index-invariants.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/sql/knowledge-graph.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "src/java-index/sql/logical-export.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 21
+    }
+  },
+  "src/java-index/sql/logical-export.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/java-index/sql/posting-delta.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/sql/registry-view.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/java-index/sql/rows.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 43
+    },
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/java-index/sql/rows.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/sql/search-docs.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/java-index/sql/search-docs.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/sql/sql-client-lifecycle.test.ts": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "src/java-index/sql/sql-client.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/java-index/sql/sql-read-ranges.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-index/sql/sql-read-ranges.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "src/java-index/symbol-identity.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-index/symbol-identity.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/java-knowledge/call-resolver.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/java-knowledge/call-resolver.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-knowledge/graph-builder.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/java-knowledge/graph-builder.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-knowledge/graph-walk.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-knowledge/persistence-edge-builder.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/java-knowledge/persistence-edge-builder.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/jdt-process-tree.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/jdtls-hierarchy-walk.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/jdtls-session.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 25
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/jdtls-transport.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/layout-probe-worker.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/layout-probe.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/mac-platform/fsevents.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/mac-platform/jdt-gradle-home.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/mac-platform/native-exec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/mcp-server-factory.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 34
+    }
+  },
+  "src/mcp-server-factory.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/process-crash-markers.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/project-jdk.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/ranking-signals.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/repo-ownership-lease.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/repo-resolver.test.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/repo-resolver.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/repo-runtime-manager.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 16
+    },
+    "no-restricted-syntax": {
+      "count": 20
+    }
+  },
+  "src/repo-runtime-manager.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/routing-policy.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/runtime-lifecycle-gate.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/semantic-edge-store.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 19
+    }
+  },
+  "src/server-lifecycle.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/stdio-owner-proxy.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 14
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/telemetry/impact-telemetry.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/telemetry/impact-telemetry.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/test-support/fake-jdtls.test.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    }
+  },
+  "src/tools/impact.test.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/tools/output-shape.test.ts": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "src/tools/status.test.ts": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/tools/symbol-static.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/tools/symbol-target.test.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/tools/symbol-target.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "src/tools/symbol.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/worktree-identity.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  }
+}
