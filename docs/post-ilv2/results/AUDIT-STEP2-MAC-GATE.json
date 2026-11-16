@@ -1,0 +1,55 @@
+{
+  "schema": "post-ilv2/audit-step2-mac-gate/v1",
+  "sourceHead": "6b01ff7da33923eee394f9d2486fe5a29780d7bc",
+  "platform": "macOS",
+  "command": "npm run gate:pr",
+  "status": "FAIL",
+  "exitCode": 1,
+  "startedAt": "2026-11-16T11:56:12.555Z",
+  "endedAt": "2026-11-16T11:56:33.651Z",
+  "dependencyInstall": {
+    "command": "npm ci",
+    "status": "NOT_RUN",
+    "reason": "No dependency changes; reused the installed dependencies."
+  },
+  "hygiene": {
+    "command": "node scripts/check-repo-hygiene.mjs",
+    "exitCode": 0,
+    "output": {
+      "status": "PASS",
+      "violations": [],
+      "debt": {
+        "ignoredTracked": 742,
+        "untestedProduction": 49,
+        "unreferencedScripts": 54,
+        "testTimerFiles": 46
+      }
+    }
+  },
+  "lint": {
+    "command": "node node_modules/eslint/bin/eslint.js src",
+    "status": "PASS",
+    "exitCode": 0,
+    "output": ""
+  },
+  "compile": {
+    "status": "FAIL",
+    "exitCode": 2,
+    "errors": [
+      "src/java-index/snapshot/seal.ts(280,9): error TS2304: Cannot find name 'writeFileAtomic'."
+    ]
+  },
+  "testStatus": "NOT_RUN",
+  "tap": null,
+  "skips": [],
+  "expectedTap": {
+    "tests": 1682,
+    "pass": 1681,
+    "fail": 0,
+    "skipped": 1
+  },
+  "expectedSkips": [
+    "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+  ],
+  "logSha256": "dc02b1b3e1e68bdda277346bd2195bd565c9d68a6bb8ea982fe41f441f1570e3"
+}
