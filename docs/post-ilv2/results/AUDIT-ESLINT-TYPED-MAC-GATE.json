@@ -1,0 +1,65 @@
+{
+  "schema": "post-ilv2/audit-eslint-typed-mac-gate/v1",
+  "sourceHead": "e2034dd9414978d967507a560be8f2021632a30c",
+  "platform": "macOS",
+  "nodeVersion": "v22.16.0",
+  "suppressions": {
+    "exitCode": 0,
+    "preservedViolations": 1587,
+    "newRules": {
+      "@typescript-eslint/no-floating-promises": {
+        "files": 202,
+        "count": 1665
+      },
+      "@typescript-eslint/no-misused-promises": {
+        "files": 1,
+        "count": 1
+      }
+    },
+    "sha256": "8c5856ab9987e5f3c7d2f347dea59623d8f656ca8545db484f6a8dca6ce96546"
+  },
+  "command": "npm run gate:pr",
+  "status": "PASS",
+  "exitCode": 0,
+  "startedAt": "2026-11-16T13:25:21.459Z",
+  "endedAt": "2026-11-16T13:30:40.643Z",
+  "testedPatchSha256": "378684558a26ec155c032789990df6062795424bb17555c10216cb19bd171bba",
+  "hygiene": {
+    "command": "node scripts/check-repo-hygiene.mjs",
+    "exitCode": 0,
+    "output": {
+      "status": "PASS",
+      "violations": [],
+      "debt": {
+        "ignoredTracked": 0,
+        "trackedArtifacts": 742,
+        "untestedProduction": 49,
+        "unreferencedScripts": 54,
+        "testTimerFiles": 46
+      }
+    }
+  },
+  "lint": {
+    "command": "node node_modules/eslint/bin/eslint.js src",
+    "status": "PASS",
+    "exitCode": 0,
+    "output": "",
+    "timing": {
+      "measurement": "standalone invocation of the same lint command immediately before gate:pr",
+      "elapsedMs": 12102,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "tap": {
+    "tests": 1683,
+    "pass": 1682,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1,
+    "todo": 0
+  },
+  "skips": [
+    "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+  ],
+  "logSha256": "a806daac3560e3d0e19bdbfd8f66db71aa4f589d68b055c6b9bc3d04eedf8a17"
+}
