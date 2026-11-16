@@ -154,8 +154,14 @@ test("targeted-pr-release-k-descendants-ignore-host-path", async t => {
   const hostile = path.join(directory, "bin"); await mkdir(hostile); await symlink(await foreignNode(directory), path.join(hostile, "node"));
   const env = { ...process.env, PATH: `${hostile}:${process.env.PATH}`, ILV2_NODE_BIN: process.execPath };
   const expected = await verifyRuntime();
+  // Rebuild hygiene facts and prune stale lint suppressions in the synthetic clone.
+  await execute(process.execPath, ["scripts/check-repo-hygiene.mjs", "--write-baseline"], { cwd: fixture, env });
+  await execute(process.execPath, ["node_modules/eslint/bin/eslint.js", "src", "--prune-suppressions"], { cwd: fixture, env });
   for (const profile of ["pr", "release"]) {
-    const result = await execute(process.execPath, ["scripts/run-v4-gates.mjs", "--profile", profile], { cwd: fixture, env, maxBuffer: 8 * 1024 * 1024, timeout: 120000 });
+    const result = await execute(process.execPath, ["scripts/run-v4-gates.mjs", "--profile", profile], { cwd: fixture, env, maxBuffer: 8 * 1024 * 1024, timeout: 120000 }).catch(error => {
+      t.diagnostic([error.stdout, error.stderr].filter(Boolean).join("\n"));
+      throw error;
+    });
     const rows = [];
     function collect(value) { if (!value || typeof value !== "object") return; if (value.fixtureRuntime) rows.push(value); else for (const child of Object.values(value)) collect(child); }
     for (const line of result.stdout.split('\n')) { try { collect(JSON.parse(line.replace(/^# /,''))); } catch { /* TAP prose */ } }

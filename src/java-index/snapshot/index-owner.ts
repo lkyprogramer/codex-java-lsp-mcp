@@ -835,7 +835,7 @@ export class WorkspaceIndex {
       round = await this.tracker.dispatch({ bindingVersion: store.bindingVersionOf(this.workspaceId) });
     } catch (error) {
       store.track(this.workspaceId, this.tracker.trackedState());
-      if (error instanceof Error && /event stream lost/.test(error.message)) await this.tracker.restartStream().catch(() => undefined);
+      if (error instanceof Error && /event stream lost/.test(error.message)) await this.tracker.restartStream().catch(e => console.error("[codex-java-lsp] tracker stream restart failed", e));
       this.finish("failed", mode, started, error);
       return;
     }
@@ -988,7 +988,7 @@ export class WorkspaceIndex {
       } finally {
         this.prepared = undefined;
         if (job.state !== "FINISHED") store.finishJob(job);
-        void store.tryReclaim({ jobId: job.jobId }).catch(() => undefined);
+        void store.tryReclaim({ jobId: job.jobId }).catch(e => console.error(`[codex-java-lsp] job ${job.jobId} cleanup failed (sweep retries)`, e));
       }
     } catch (error) {
       // Nothing is cleared: the old binding keeps serving, every hint stays owed.
@@ -1091,6 +1091,6 @@ export class WorkspaceIndex {
     if (this.hashTimer) clearTimeout(this.hashTimer);
     for (const done of [...this.settled]) done();
     await this.round?.catch(() => undefined);
-    await this.tracker.stop(5000).catch(() => undefined);
+    await this.tracker.stop(5000).catch(e => console.error("[codex-java-lsp] index tracker stop failed during shutdown", e));
   }
 }

@@ -13,7 +13,7 @@ MAC-17 完整 launcher bundle 位于 `<runtime>/launcher/`；launchd Program 指
 ## 当前任务与证据边界
 
 - **改进线**：post-ILV2 的评测与关系类改进线已收尾，S2、S3 关闭（[decisions.md](docs/post-ilv2/decisions.md) P12、P13）。产品方向和封存集 v2 暂不投入。
-- **进行中**：代码质量审计（[审计](docs/code-quality-audit-2026-11-16.md) §6）。第 1、2、4 步已进入 main，各步 Mac 门禁结果在 `docs/post-ilv2/results/AUDIT-*-MAC-GATE.json`。第 3 步（JDT 路径 H1/H2/C-M3/C-M4）暂缓，第 5 步进行中。
+- **审计**：代码质量审计已收尾，逐项处理状态见[审计](docs/code-quality-audit-2026-11-16.md) §9；JDT 路径各项（第 3 步）只登记、暂缓。各步 Mac 门禁结果在 `docs/post-ilv2/results/AUDIT-*-MAC-GATE.json`。
 - **验证**：开发机内存不足，不在本地跑测试、tsc 或 eslint；分支推送后由用户在 Mac 上跑 `npm run gate:pr`，结果提交为 JSON 后再决定合入。合入用 merge commit，须用户明确同意。
 - **边界**：不动生产 runtime、cache 与固定路径；生产部署、首次业务仓读取和升级复验须另行批准。不得新增第四个 live daemon；常驻测试只用已授权 `:38457`，fixture 全机最多 2 个。Mac 长时间验证按 `docs/deep/ilv2-mac-manual/` 执行。
 - **历史**：2026-11-16 之前的任务边界与日志见 [docs/archive/handoff-history-2026-11-16.md](docs/archive/handoff-history-2026-11-16.md)，只作背景。

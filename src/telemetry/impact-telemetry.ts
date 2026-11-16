@@ -170,7 +170,8 @@ function defaultSinkFor(env: NodeJS.ProcessEnv): TelemetrySink {
     defaultSink = createImpactTelemetry({ env });
     if (!beforeExitBound) {
       beforeExitBound = true;
-      process.once("beforeExit", () => defaultSink?.flush());
+      // "exit", not "beforeExit": the daemon ends with process.exit, which skips beforeExit; append is sync.
+      process.once("exit", () => defaultSink?.flush());
     }
   }
   return defaultSink;

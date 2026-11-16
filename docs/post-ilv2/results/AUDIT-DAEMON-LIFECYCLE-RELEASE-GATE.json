@@ -1,0 +1,69 @@
+{
+  "schema": "post-ilv2/audit-daemon-lifecycle-release-gate/v1",
+  "sourceHead": "50cbd9c53c2ad14d6313e53727801e8c94bc8b26",
+  "mainHead": "e2fe46826d7f569892fddc5bb8a037e62fbca624",
+  "platform": "macOS",
+  "command": "npm run gate:release",
+  "status": "PASS",
+  "exitCode": 0,
+  "previousFailureReportCommit": "7ec6064b",
+  "startedAt": "2026-11-16T15:29:50.518Z",
+  "endedAt": "2026-11-16T16:00:43.953Z",
+  "unitTap": {
+    "tests": 1686,
+    "pass": 1685,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 1,
+    "todo": 0,
+    "skipNames": [
+      "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
+    ],
+    "stdoutSha256": "dcf1d4c011b603a1fb4293cfddb970dd905ca80e4b5e2b9e04ab22964946beab"
+  },
+  "scriptsTap": {
+    "tests": 835,
+    "pass": 826,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 9,
+    "todo": 0,
+    "skipNames": [
+      "MAC12 actual seal worker task timeline",
+      "MAC12 facts decoder allocation costs on a registered database",
+      "MAC12 bounded verification compares actual complete seal publication",
+      "MAC12 complete integrity partition costs on a registered database",
+      "MAC12 posting reference validation alternatives",
+      "MAC12 remaining seal validation check costs",
+      "MAC12 seal validation preserves data checks without an unused logical manifest",
+      "G11 recorded evidence completes the gate only after verified supplementation",
+      "G11 system loop on isolated lishu-v2 run copies"
+    ],
+    "stdoutSha256": "3a410e376f66b675eb8589120f3595d47977cf85d1acf2ae75408fa89fcc2b5c"
+  },
+  "stdioSmoke": {
+    "status": "PASS",
+    "exitCode": 0,
+    "stdoutSha256": "d7e738e40e9e16fce601d10cb9a5c393cb8a7632ba27f35bf5f580c3df1f2417",
+    "stderrSha256": "9f4c20d9ef3facc35008ba786c7513b37fb41515e754046ae8d3a7a86d6824d0"
+  },
+  "httpSmoke": {
+    "status": "PASS",
+    "exitCode": 0,
+    "stdoutSha256": "9abc02874a2d77e19f0352c173c9673f05a88b4a13564cb7218c9a43fed9ecdf",
+    "stderrSha256": "7efce01543bc16f48fec1a968ed5c7fd412a2e7b5a3598ef5617414d71f9142d"
+  },
+  "builds": {
+    "full": "b426c6874d2a75f6f6a83792b2a35338e10eab894a93a685e01f9ab8c40e0723",
+    "http": "ee4f648bd565d53adda2b9c51f527dcd17cec18b7c1ef2138af004281fb59786"
+  },
+  "logSha256": "65a4c504426f2ec852e00bf5e1f087326308f9bc15471b87204a26a4fccfc6e6",
+  "totalTap": {
+    "tests": 2521,
+    "pass": 2511,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 10,
+    "todo": 0
+  }
+}

@@ -42,7 +42,8 @@ export const LEDGER = [
     replacement: "one scheduler in IndexOwner; builders only via build-process.ts under the owner",
     explain: {
       "src/java-index/local-builder.ts": "test-only", "src/java-index/local-index.ts": "test-only", "src/java-index/sql/sql-client.ts": "test-only",
-      "src/README.md": "comment", "scripts/release-k-contract-matrix.json": "comment"
+      "src/README.md": "comment", "scripts/release-k-contract-matrix.json": "comment",
+      "scripts/ilv2-s3-callers-probe.mjs": "offline-driver"
     },
     explainPattern: [[/^src\/benchmark\//, "offline-driver"], [/^scripts\/(run-jin-|run-fsr|run-memory-benchmark|attribute-impact-payload|diff-index-impl|replay-entity-entry|verify-facts-digest)/, "offline-driver"]] },
   { id: "D05", type: "CODE", owner: "MAC-08, MAC-17", names: ["extract-stdio-project-jdk-env", "verify-stdio-ownership-handoff", "write-mcp-rollback", "verify-http-activation-attestation"],

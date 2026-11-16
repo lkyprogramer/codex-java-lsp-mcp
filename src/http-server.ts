@@ -119,7 +119,7 @@ export class JavaLspHttpServer {
     await this.application.initialize();
     const app = this.createExpressApp();
     try {
-      this.nodeServer = await listen(app, this.configuredPort);
+      this.nodeServer = await listenLoopback(app, this.configuredPort, this.reportError);
       this.lifecycle.markReady();
       // Prewarm runs in the background and logs its own failures; startup must not wait for it.
       void this.application.startPinnedRepoPrewarm();
@@ -136,6 +136,14 @@ export class JavaLspHttpServer {
       });
       return { host: HTTP_LOOPBACK_HOST, port, url };
     } catch (error) {
+      // A listener left open would keep this failed process alive and block launchd's restart.
+      const server = this.nodeServer;
+      this.nodeServer = undefined;
+      if (server) {
+        await closeServer(server).catch(closeError => {
+          this.reportError("[codex-java-lsp] failed to close HTTP listener after startup failure", closeError);
+        });
+      }
       await this.application.close({ releaseOwnership: true }).catch(closeError => {
         this.reportError("[codex-java-lsp] failed to close application after HTTP startup failure", closeError);
       });
@@ -380,10 +388,16 @@ function normalizeDeadline(value: number): number {
   return Math.floor(value);
 }
 
-function listen(app: express.Express, port: number): Promise<Server> {
+/** Listen on loopback. Errors after listening (e.g. EMFILE on accept) are reported, not thrown as uncaught. */
+export function listenLoopback(
+  app: express.Express,
+  port: number,
+  reportError: (message: string, error?: unknown) => void
+): Promise<Server> {
   return new Promise((resolve, reject) => {
     const server = app.listen(port, HTTP_LOOPBACK_HOST, () => {
       server.off("error", reject);
+      server.on("error", error => reportError("[codex-java-lsp] HTTP listener error", error));
       resolve(server);
     });
     server.once("error", reject);
@@ -458,6 +472,8 @@ export function installDaemonSignalHandling(
 if (process.argv[1]?.endsWith("/http-server.js")) {
   main().catch(error => {
     console.error("[codex-java-lsp] HTTP daemon startup failed", error);
-    process.exitCode = 1;
+    // Exit now: a leftover handle (timer, child, socket) must not keep a failed daemon resident,
+    // since launchd restarts it only once the process is gone.
+    process.exit(1);
   });
 }

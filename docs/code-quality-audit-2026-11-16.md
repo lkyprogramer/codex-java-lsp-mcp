@@ -362,6 +362,43 @@
 - **启发式结果：** 孤儿脚本清单是启发式得出的，删除前需要人工确认。
 - **未运行任何验证：** 编译、测试、复现都没有运行。
 
+## 9. 处理状态（2026-11-16 收尾）
+
+本轮审计到此收尾。每项的 Mac 门禁结果在 `docs/post-ilv2/results/AUDIT-*-MAC-GATE.json`。"暂缓"指只登记、不排期；用户主要使用静态路径，JDT 类问题按此处理。
+
+| 编号 | 状态 | 提交 / 理由 |
+|---|---|---|
+| H1 | 暂缓 | JDT 路径（第 3 步） |
+| H2 | 暂缓 | JDT 路径（第 3 步） |
+| M1 | 已修 | `023f9ae` |
+| M2 | 已修 | `c94aad4` |
+| M3 | 已修 | `5fb0dbd` |
+| C-M2 | 已修 | `a8beeb5` |
+| C-M3、C-M4 | 暂缓 | JDT 路径（第 3 步） |
+| L1 | 已修 | `fef4e04`：`extraBinds` 必填，补齐 3 处漏传 |
+| L2 | 已修 | `fef4e04`：`runInWriteTx`、`toSafeInt` 收到 `driver.ts` |
+| L3 | 已修 | `58fe1de`（`writeFileAtomicSync`）、`fc5ded4`（4 处同步写迁移）。`snapshot-store` observations 与 `publication-history` 故意保留固定 tmp 名：崩溃最多残留一个文件 |
+| L4 | 已修 | `f9fd13c`：`resetCaches(scope)` |
+| L5 | 不做 | 缓存随连接释放，未观察到增长问题 |
+| L6 | 已修 | `4bb2fd2`：3 处改为记录日志；请求路径的 fence flush 和 round 等待保留原有静默处理（已有注释） |
+| L7 | 不做 | 测试钩子，默认关闭 |
+| L8 | 存量冻结 | eslint 基线冻结，新增即失败；改到相关文件时顺手清 |
+| L9、L17 | 暂缓 | JDT 路径 |
+| C-M1→L10 | 暂缓 | 竞态窗口极小，与 lease 回收（H2）一起处理 |
+| L11 | 已修 | `3894ca2`：监听后保留 `error` 监听并上报 |
+| L12 | 已决策 | `e6a436b`：用户选 B，`unhandledRejection` 不退出，标记行带累计计数；promise lint 规则拦新增 |
+| L13 | 已修 | `3894ca2`：启动失败关闭监听，`main` 以 exit(1) 退出 |
+| L14 | 已修 | `4bb2fd2`：记录日志 |
+| L15 | 已修 | `4cd071a`：改为在 `exit` 时 flush |
+| L16 | 暂缓 | 推断项，未复现 |
+| E1 | 已修 | `bab1c75`：方案一，`artifacts/v3-*` 认定为冻结证据，卫生检查拦新增 |
+| E2 | 已修 | `58a57a5`（eslint 与基线）、`e2034dd`/`b1fe31d`（类型感知 promise 规则，存量 0）。`noUncheckedIndexedAccess` 实测 235 处，不做 |
+| E3 | 不做 | scripts 类型检查需改大量真实代码，投入产出不足 |
+| E4 | 存量冻结 | 卫生检查拦新增未引用脚本；索引见 `scripts/README.md` |
+| E5 | 已修 | `58a57a5` |
+| E6 | 已修 | `6777a9f`（HANDOFF 76 KB→2.6 KB）、README 历史叙述移至 `docs/archive/` |
+| E7 | 存量冻结 | 卫生检查拦测试新增 `setTimeout` |
+
 ## 附录：v2 修订记录（依据独立评审）
 
 - 撤回原 L4、L6。

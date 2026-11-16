@@ -10,10 +10,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { JavaLspApplication } from "./application.js";
+import { createServer } from "node:net";
+import express from "express";
 import {
   HTTP_BODY_LIMIT_BYTES,
   installDaemonSignalHandling,
   JavaLspHttpServer,
+  listenLoopback,
   type JavaLspHttpServerAddress
 } from "./http-server.js";
 
@@ -148,6 +151,41 @@ test("HTTP drain returns 503 for new MCP calls and lets entered calls finish", a
   await drain;
   await daemon.shutdown();
   assert.equal(daemon.state().state, "closed");
+});
+
+test("a startup failure after listen closes the listener so the failed daemon can exit (L13)", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-http-start-fail-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(path.join(root, "projects.json"), JSON.stringify({ aliases: [] }));
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: path.join(root, "projects.json"),
+    resolverOptions: { cwdFallback: "reject" },
+    cacheJanitorIntervalMs: 0,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }),
+    runtimes: {
+      initialize: async () => undefined,
+      shutdownAll: async () => undefined,
+      forceTerminateOwnedJdtls: async () => undefined,
+      prewarmRepo: async () => undefined
+    } as never
+  });
+  application.startPinnedRepoPrewarm = () => {
+    throw new Error("injected failure after listen");
+  };
+  const port = await freePort();
+  const daemon = new JavaLspHttpServer({ application, port, reportError: () => undefined });
+  await assert.rejects(daemon.start(), /injected failure after listen/);
+  await assert.rejects(fetch(`http://127.0.0.1:${port}/readyz`), "the listener must be closed");
+});
+
+test("a listener error after listen is reported, not thrown as uncaught (L11)", async t => {
+  const reported: string[] = [];
+  const server = await listenLoopback(express(), 0, message => reported.push(message));
+  t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+  assert.equal(server.emit("error", Object.assign(new Error("accept failed"), { code: "EMFILE" })), true);
+  assert.deepEqual(reported, ["[codex-java-lsp] HTTP listener error"]);
+  assert.equal(server.listening, true);
 });
 
 test("HTTP readyz does not wait for pinned repo prewarm", async t => {
@@ -577,4 +615,16 @@ process.stdin.on("data", chunk => {
 });
 process.stdin.on("end", () => process.exit(0));
 `;
+}
+
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      const port = address && typeof address === "object" ? address.port : 0;
+      probe.close(() => (port > 0 ? resolve(port) : reject(new Error("no free port"))));
+    });
+  });
 }
