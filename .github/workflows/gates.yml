@@ -53,10 +53,15 @@ jobs:
           "$node_bin" scripts/ci-runtime-manifest.mjs > "$RUNNER_TEMP/runtime.json"
           echo "ILV2_NODE_BIN=$node_bin" >> "$GITHUB_ENV"
           echo "ILV2_RUNTIME_MANIFEST=$RUNNER_TEMP/runtime.json" >> "$GITHUB_ENV"
-          # The default TMPDIR is under /var, a symlink to /private/var. Scripts in the isolated clone compare
-          # argv[1] with their symlink-resolved module URL (isMain), so they would silently no-op there.
-          mkdir -p "$RUNNER_TEMP/tmp"
-          echo "TMPDIR=$(cd "$RUNNER_TEMP/tmp" && pwd -P)" >> "$GITHUB_ENV"
+          # A registered run root, as on the owner's Mac (docs/deep/ilv2-mac-manual/verification.md): evidence is
+          # kept under it and the broker does not delete its validation root at exit. TMPDIR must sit inside it,
+          # and must not be the default under /var, a symlink to /private/var: scripts in the isolated clone
+          # compare argv[1] with their symlink-resolved module URL (isMain) and would silently no-op.
+          mkdir -p "$RUNNER_TEMP/ilv2-run/tmp"
+          run_root="$(cd "$RUNNER_TEMP/ilv2-run" && pwd -P)"
+          printf '%s\n' "$run_root" > "$run_root/run-root.txt"
+          echo "ILV2_RUN_ROOT=$run_root" >> "$GITHUB_ENV"
+          echo "TMPDIR=$run_root/tmp" >> "$GITHUB_ENV"
 
       - name: gate:${{ env.GATE_PROFILE }}
         run: npm run "gate:$GATE_PROFILE" -- --output "$RUNNER_TEMP/gate-summary.json"
@@ -66,5 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gate-summary-${{ env.GATE_PROFILE }}
-          path: ${{ runner.temp }}/gate-summary.json
+          path: |
+            ${{ runner.temp }}/gate-summary.json
+            ${{ runner.temp }}/ilv2-run/raw/validation/*/result.json
           if-no-files-found: ignore
