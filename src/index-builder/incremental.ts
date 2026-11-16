@@ -121,7 +121,7 @@ function dependentPaths(db: IndexDatabase, ids: readonly string[], exclude: Read
   const syms = ids.map(id => symId(db, id)).filter((sym): sym is number => sym !== undefined);
   if (syms.length === 0) return [];
   const paths = new Set<string>();
-  for (const chunk of bindChunks(syms)) {
+  for (const chunk of bindChunks(syms, 0)) {
     const rows = prepareCached(
       db,
       `SELECT DISTINCT f.path AS path FROM edge e JOIN file f ON f.id=e.file_id WHERE e.to_sym IN ${inClause(chunk.length)}`
@@ -241,7 +241,7 @@ function descendantPaths(db: IndexDatabase, typeIds: readonly string[]): string[
   const paths = new Set<string>();
   while (frontier.length > 0) {
     const next: number[] = [];
-    for (const chunk of bindChunks(frontier)) {
+    for (const chunk of bindChunks(frontier, kinds.length)) {
       const rows = prepareCached(db,
         `SELECT e.from_sym AS sym, f.path AS path FROM edge e JOIN file f ON f.id=e.file_id
          WHERE e.to_sym IN ${inClause(chunk.length)} AND e.kind_sym IN ${inClause(kinds.length)}`
@@ -265,7 +265,7 @@ function callerPaths(db: IndexDatabase, typeId: string, names: ReadonlySet<strin
   const collect = (rows: Array<{ path: string }>) => { for (const row of rows) if (!exclude.has(row.path)) paths.add(row.path); };
   const sql = "SELECT DISTINCT f.path AS path FROM method m JOIN edge e ON e.to_sym=m.sym JOIN file f ON f.id=e.file_id WHERE m.owner_sym=?";
   if (names === "*") collect(prepareCached(db, sql).all(owner) as Array<{ path: string }>);
-  else for (const chunk of bindChunks([...names])) collect(prepareCached(db, `${sql} AND m.name IN ${inClause(chunk.length)}`).all(owner, ...chunk) as Array<{ path: string }>);
+  else for (const chunk of bindChunks([...names], 1)) collect(prepareCached(db, `${sql} AND m.name IN ${inClause(chunk.length)}`).all(owner, ...chunk) as Array<{ path: string }>);
   return [...paths];
 }
 

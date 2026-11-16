@@ -30,6 +30,19 @@ export class JavaIntelligenceError extends Error {
   }
 }
 
+export type TerminalErrorCode = "DEADLINE_EXCEEDED" | "CANCELLED";
+
+/** The request-level stop codes a degrading catch must never swallow. */
+export function terminalErrorCode(error: unknown): TerminalErrorCode | undefined {
+  if (!(error instanceof JavaIntelligenceError)) return undefined;
+  return error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED" ? error.code : undefined;
+}
+
+/** Call first in a catch that degrades: deadline and cancellation must reach the request boundary. */
+export function rethrowIfTerminal(error: unknown): void {
+  if (terminalErrorCode(error)) throw error;
+}
+
 /**
  * Classifies a semantic failure. Every caught error used to be reported as a
  * timeout, which hid genuine JDT faults and made backoff decisions wrong.

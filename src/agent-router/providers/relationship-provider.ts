@@ -11,7 +11,7 @@ import {
   type JavaSourceFacts
 } from "../../java-index/router-facts.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
-import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
+import { JavaIntelligenceError, rethrowIfTerminal, terminalErrorCode } from "../../runtime/intelligence-error.js";
 import { candidateFromFacts } from "../candidate-helpers.js";
 import {
   methodRelationDelta,
@@ -153,7 +153,7 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
           break;
         }
       } catch (error) {
-        const terminal = relationshipTerminalCode(error);
+        const terminal = terminalErrorCode(error);
         if (terminal) {
           legacyTerminal = terminal;
           break;
@@ -254,10 +254,7 @@ function factsBatchFromQueryFailure(
 ): RelationshipFactsBatch {
   const cache = new Map<string, JavaSourceFacts | undefined>();
   for (const absolutePath of selectedPaths) cache.set(absolutePath, undefined);
-  const reason = error instanceof JavaIntelligenceError
-    && (error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED")
-    ? error.code
-    : "QUERY_FAILED";
+  const reason = terminalErrorCode(error) ?? "QUERY_FAILED";
   return {
     cache,
     degradedReasons: [...extraReasons, `relationship facts ${reason}`],
@@ -265,15 +262,6 @@ function factsBatchFromQueryFailure(
     cancelled: reason === "CANCELLED",
     partial: true
   };
-}
-
-function relationshipTerminalCode(error: unknown): "DEADLINE_EXCEEDED" | "CANCELLED" | undefined {
-  if (!(error instanceof JavaIntelligenceError)) return undefined;
-  return error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED" ? error.code : undefined;
-}
-
-function rethrowRelationshipTerminal(error: unknown): void {
-  if (relationshipTerminalCode(error)) throw error;
 }
 
 function throwIfRelationshipBudgetExpired(input: RelationshipProviderInput): void {
@@ -295,7 +283,7 @@ async function collectRelationshipEvidenceForAnchor(
     try {
       anchorFacts = await input.javaIndex.factsFor(anchor.absolutePath, input.generation);
     } catch (error) {
-      rethrowRelationshipTerminal(error);
+      rethrowIfTerminal(error);
       anchorFacts = undefined;
     }
   }
@@ -416,7 +404,7 @@ async function loadAnchoredFrameworkMethod(
     const method = anchoredMethod(facts, anchor);
     return method ? { facts, method } : undefined;
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return undefined;
   }
 }
@@ -449,7 +437,7 @@ async function resolvedSignatureCandidates(
       available: true
     };
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     // The anchor facts remain authoritative; failure to hydrate optional
     // collaborators should not reinstate the older, wrapper-only relation.
     return { candidates: new Map(), available: true };
@@ -505,7 +493,7 @@ async function resolvedDirectCallCandidates(
       false
     );
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return new Map();
   }
   if (input.budget?.expired() || definitions.length === 0) return new Map();
@@ -517,7 +505,7 @@ async function resolvedDirectCallCandidates(
       input.generation
     );
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return new Map();
   }
   if (input.budget?.expired()) return new Map();
@@ -584,7 +572,7 @@ async function resolvedImplementationCallCandidates(
   try {
     implementationFacts = await input.frameworkIndex.frameworkFactsForFiles(sourcePaths, input.generation);
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return new Map();
   }
   if (input.budget?.expired()) return new Map();
@@ -651,7 +639,7 @@ async function resolveContinuationCallCandidates(
       false
     );
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return new Map();
   }
   if (definitions.length === 0 || input.budget?.expired()) return new Map();
@@ -663,7 +651,7 @@ async function resolveContinuationCallCandidates(
       input.generation
     );
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return new Map();
   }
   if (input.budget?.expired()) return new Map();
@@ -1063,7 +1051,7 @@ async function resolvedAnchorCallTargets(
       method = await input.javaIndex.methodAt(anchor.absolutePath, anchor.line, input.generation);
       methodCache.set(key, method);
     } catch (error) {
-      rethrowRelationshipTerminal(error);
+      rethrowIfTerminal(error);
       method = undefined;
       methodCache.set(key, method);
     }
@@ -1080,7 +1068,7 @@ async function resolvedAnchorCallTargets(
       .filter(edge => edge.kind === "CALLS")
       .map(edge => edge.targetId));
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     return new Set();
   }
 }
@@ -1099,7 +1087,7 @@ async function cachedFacts(
     cache.set(absolutePath, facts);
     return facts;
   } catch (error) {
-    rethrowRelationshipTerminal(error);
+    rethrowIfTerminal(error);
     cache.set(absolutePath, undefined);
     return undefined;
   }
