@@ -1070,8 +1070,8 @@ export class RepoRuntimeManager {
           return;
         }
         await this.shutdownEntry(entry);
-      } catch {
-        // Idle retirement must not throw into the timer.
+      } catch (error) { // must not throw into the timer, but a failure may leave a JDT or lease behind
+        console.error(`[codex-java-lsp] idle runtime retirement failed for ${entry.context.repoRoot}`, error);
       }
     });
   }
