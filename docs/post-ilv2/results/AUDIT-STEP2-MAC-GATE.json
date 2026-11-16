@@ -1,12 +1,12 @@
 {
   "schema": "post-ilv2/audit-step2-mac-gate/v1",
-  "sourceHead": "6b01ff7da33923eee394f9d2486fe5a29780d7bc",
+  "sourceHead": "d964c107c7a0d24f7ad490c817e0896a7b702ba4",
   "platform": "macOS",
   "command": "npm run gate:pr",
-  "status": "FAIL",
-  "exitCode": 1,
-  "startedAt": "2026-11-16T11:56:12.555Z",
-  "endedAt": "2026-11-16T11:56:33.651Z",
+  "status": "PASS",
+  "exitCode": 0,
+  "startedAt": "2026-11-16T11:58:54.765Z",
+  "endedAt": "2026-11-16T12:04:06.119Z",
   "dependencyInstall": {
     "command": "npm ci",
     "status": "NOT_RUN",
@@ -32,24 +32,16 @@
     "exitCode": 0,
     "output": ""
   },
-  "compile": {
-    "status": "FAIL",
-    "exitCode": 2,
-    "errors": [
-      "src/java-index/snapshot/seal.ts(280,9): error TS2304: Cannot find name 'writeFileAtomic'."
-    ]
-  },
-  "testStatus": "NOT_RUN",
-  "tap": null,
-  "skips": [],
-  "expectedTap": {
+  "tap": {
     "tests": 1682,
     "pass": 1681,
     "fail": 0,
-    "skipped": 1
+    "cancelled": 0,
+    "skipped": 1,
+    "todo": 0
   },
-  "expectedSkips": [
+  "skips": [
     "48-hour GC unbinds one real linked worktree and its next static MCP query reuses the shared snapshot"
   ],
-  "logSha256": "dc02b1b3e1e68bdda277346bd2195bd565c9d68a6bb8ea982fe41f441f1570e3"
+  "logSha256": "edfcba50f3a54d382f8576fe76e7b14d4f9ec93a4f69a08569de52e12fdd90db"
 }
