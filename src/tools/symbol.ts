@@ -328,7 +328,11 @@ function throwIfJdtImporting(context: ToolContext, cause?: unknown): void {
   }
 }
 
-export async function waitStaticIndexReady(client: JavaIndexClientApi, budget?: DeadlineBudget): Promise<void> {
+export async function waitStaticIndexReady(
+  client: JavaIndexClientApi,
+  budget?: DeadlineBudget,
+  tool: "java_symbol" | "java_impact" = "java_symbol"
+): Promise<void> {
   try {
     const status = await client.status();
     if (status.state !== "BUILDING") return; // READY/DEGRADED serve the current snapshot; discovery reports its coverage
@@ -337,8 +341,11 @@ export async function waitStaticIndexReady(client: JavaIndexClientApi, budget?: 
   }
   try {
     await client.awaitPrewarmReady(budget ? { budget } : undefined);
-  } catch {
-    throw new Error("java_symbol static query requires the on-disk Java index, which is not ready yet (repository still building or index unavailable). Retry once the index is READY.");
+  } catch (error) {
+    // Keep the classified code (NOT_READY is INDEX_PARTIAL; a request deadline stays DEADLINE_EXCEEDED) and the cause.
+    throw new JavaIntelligenceError(error instanceof JavaIntelligenceError ? error.code : "INDEX_PARTIAL",
+      `${tool} static query requires the on-disk Java index, which is not ready yet (repository still building or index unavailable). Retry once the index is READY.`,
+      error);
   }
 }
 

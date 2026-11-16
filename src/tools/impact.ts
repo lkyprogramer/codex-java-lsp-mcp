@@ -91,7 +91,7 @@ export async function javaImpact(
     if (parsed.anchors?.length || parsed.file !== undefined || parsed.line !== undefined || parsed.column !== undefined) {
       throw new JavaIntelligenceError("INVALID_INPUT", `java_impact takes symbol or anchors/file, not both. ${IMPACT_TARGET_EXAMPLE}`);
     }
-    if (context.javaIndexClient) await waitStaticIndexReady(context.javaIndexClient, request?.budget);
+    if (context.javaIndexClient) await waitStaticIndexReady(context.javaIndexClient, request?.budget, "java_impact");
     const located = await locateSymbol(context, parsed.symbol, request);
     // No single declaration: report it with the candidates; impact never runs on a guess.
     if (!located.ok) return { ...located.miss, ...(context.indexView ? { indexView: context.indexView } : {}) };
