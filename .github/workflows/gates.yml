@@ -1,0 +1,68 @@
+name: gates
+
+# Push-triggered gate:pr (hygiene, lint, isolated compile, dist unit tests) on a GitHub-hosted macOS runner,
+# free for public repositories. gate:release stays on the owner's Mac: its script suite needs the frozen
+# JDT/Gradle/JDK toolchain INPUT and the private launchd work root under ~/Developer/ilv2-work, which a hosted
+# runner does not have. Production install, the launchd canary, TCC and private-corpus evaluation stay there too.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+
+      - name: Install ripgrep
+        run: brew install ripgrep
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Record the runner's Node as the frozen runtime
+        run: |
+          node_bin="$(node -p process.execPath)"
+          "$node_bin" scripts/ci-runtime-manifest.mjs > "$RUNNER_TEMP/runtime.json"
+          echo "ILV2_NODE_BIN=$node_bin" >> "$GITHUB_ENV"
+          echo "ILV2_RUNTIME_MANIFEST=$RUNNER_TEMP/runtime.json" >> "$GITHUB_ENV"
+          # A registered run root, as on the owner's Mac (docs/deep/ilv2-mac-manual/verification.md): evidence is
+          # kept under it and the broker does not delete its validation root at exit. TMPDIR must sit inside it,
+          # and must not be the default under /var, a symlink to /private/var: scripts in the isolated clone
+          # compare argv[1] with their symlink-resolved module URL (isMain) and would silently no-op.
+          mkdir -p "$RUNNER_TEMP/ilv2-run/tmp"
+          run_root="$(cd "$RUNNER_TEMP/ilv2-run" && pwd -P)"
+          printf '%s\n' "$run_root" > "$run_root/run-root.txt"
+          echo "ILV2_RUN_ROOT=$run_root" >> "$GITHUB_ENV"
+          echo "TMPDIR=$run_root/tmp" >> "$GITHUB_ENV"
+
+      - name: gate:pr
+        run: npm run gate:pr -- --output "$RUNNER_TEMP/gate-summary.json"
+
+      - name: Upload gate summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-summary-pr
+          path: |
+            ${{ runner.temp }}/gate-summary.json
+            ${{ runner.temp }}/ilv2-run/raw/validation/*/result.json
+          if-no-files-found: ignore

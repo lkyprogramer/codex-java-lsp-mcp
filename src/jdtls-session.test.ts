@@ -810,7 +810,10 @@ for (const stage of ["initialize", "project.import"] as const) {
     const factory = fakeTransportFactory(stage === "initialize"
       ? { initialize: deferred<unknown>() }
       : { initializeResult: { capabilities: {} }, autoServiceReady: false });
-    const { session } = harness(factory, { startHardCapMs: 300, leaseStore });
+    // The cap is wall time from start. initialize never resolves in its case, so any cap lands there; for
+    // project.import the immediate fake initialize must finish first, which took over 300 ms on a loaded
+    // 3-vCPU CI runner and moved the expiry to the wrong stage.
+    const { session } = harness(factory, { startHardCapMs: stage === "initialize" ? 300 : 2000, leaseStore });
     let failure: JavaIntelligenceError | undefined;
     try {
       await assert.rejects(session.ensureStarted(DeadlineBudget.fromTimeout(5000)), error => {
