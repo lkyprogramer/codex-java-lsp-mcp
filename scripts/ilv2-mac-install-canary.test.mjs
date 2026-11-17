@@ -37,6 +37,13 @@ test('formal admission rejects production attachment, reused hierarchy and reduc
   assert.throws(()=>validateConfig({...c.plan,label:'com.lky.codex-java-lsp-mcp'},c.options,c.runRoot,now),/label/);
   assert.throws(()=>validateConfig({...c.plan,oracle:{...oracle,relativePath:'../outside.java'}},c.options,c.runRoot,now),/relative/);
 });
+test('canary accepts a new window and rejects stale, invalid or short deadlines',()=>{
+  const c=config(), start=Date.parse('2026-11-17T00:00:00Z');
+  validateConfig({...c.plan,deadline:'2026-11-17T03:00:00Z'},c.options,c.runRoot,start);
+  for(const deadline of [c.plan.deadline,'invalid',new Date(start+c.plan.durationMs+660000).toISOString()]){
+    assert.throws(()=>validateConfig({...c.plan,deadline},c.options,c.runRoot,start),/deadline cannot cover canary/);
+  }
+});
 function phases(){
   const original='package sample; public class Example {}\n';
   const main={repoRoot:'/private/tmp/main',workspaceId:'w-main',sourceHash:sha256(original)};
