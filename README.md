@@ -4,11 +4,13 @@
 ![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-43853c.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)
 
-`codex-java-lsp-mcp` 是面向 coding agent 的 Java-only 本地代码智能服务：Tree-sitter 增量事实 + 有界 JDT 精确语义 + 面向任务、受 token 预算约束的 `readPlan`。
+`codex-java-lsp-mcp` 是面向 coding agent 的 Java-only 本地代码智能服务。定位是**不需要构建、不需要 IDE 的 Java 结构事实与框架关系**：符号在哪、长什么样，改它会碰到哪些 Spring 装配、DTO/字段映射和配置，并给出受 token 预算约束的 `readPlan`。事实来自 Tree-sitter 增量索引；JDT 是可选增强。找调用方、实现类和精确引用时，原生搜索（`rg`）或宿主的 LSP 通常更合适，本项目不在这些方向上继续投入。
+
+**单用户项目。** 只为作者本人在自己的 Mac 上使用而维护：不做多用户、鉴权、跨平台或版本兼容承诺，不提供安装支持。代码按 Apache-2.0 公开，欢迎阅读和自行改用。
 
 它不是完整 IDE，也不是通用语言平台。项目边界以 canonical `repoRoot` 和 `repoHash` 为准，`projectId` 只作为 alias/display name；所有请求都受绝对 deadline、仓库边界和完整性状态约束。
 
-当前开发主线是 ILV2 单 owner 与不可变 workspace snapshot。固定签名 native launcher 持有 canonical cache root 的 fd4 锁后直接 exec 冻结 Node；stdio 只转发到同一 owner。2026-10-11 的生产发布记录是历史证据，不代表当前生产状态或安装授权。本轮仅交付 MAC-16 收尾、MAC-17 候选与隔离 `:38457` canary，不 push、不动生产。操作边界见 [生产操作](docs/phase-f/production-operations.md)，门状态见 `docs/index-lifecycle-v2/mac/status.json`。
+生产运行 ILV2 单 owner 与不可变 workspace snapshot。固定签名 native launcher 持有 canonical cache root 的 fd4 锁后直接 exec 冻结 Node；stdio 只转发到同一 owner。当前部署版本和任务边界只看 [HANDOFF](HANDOFF.md) 开头两节。
 
 ## 目录
 
@@ -400,7 +402,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 
 运维入口：
 
-- [生产操作（IOD 现行）](docs/phase-f/production-operations.md)
+- 安装、升级与回滚：见上文 [MAC-17 安装合同](#mac-17-安装合同) 和 `daemonctl.sh`；`docs/phase-f/production-operations.md` 是 IOD 时期的历史文档。
 - 三仓 paired gate：[three-repo-cold-matrix-runbook](docs/three-repo-cold-matrix-runbook.md)
 
 ## 故障排查
@@ -428,6 +430,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 
 ## 贡献规范
 
+- 这是单用户项目，不接受外部功能需求；以下规范约束作者自己的改动。
 - 保持改动小而可审阅；不要为单次需求提前抽象。
 - 不要扩大 5 个 public tools 的工具面，除非 issue 或设计说明给出明确需求。
 - 优先补定向测试：repo 解析、worktree 继承、资源限制、JDK 解析、JavaIndex coverage/freshness、tool handler 行为。
