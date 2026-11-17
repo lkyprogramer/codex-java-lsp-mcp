@@ -31,12 +31,16 @@ const COLD_MS = 2000;
 export type ToolCounterRecord = {
   ts: string; tool: string; elapsedMs: number; ok: boolean;
   repoHash?: string; start?: boolean; errorCode?: string;
+  /** java_symbol operation as resolved by the tool (explicit, else query/position by `query`). */
+  operation?: string;
+  /** indexView.state of the answer (FRESH|STALE|NOT_READY) when the tool reported one. */
+  indexState?: string;
 };
 export type ImpactDetailRecord = {
   ts: string; tool: string; repoHash: string; mode?: string; verbosity?: string;
   anchorsCount: number; readPlanItems: number; plannedSourceBytes: number; estimatedTokens: number;
   elapsedMs: number; coldPath: boolean; coldPathHeuristic?: boolean; error: boolean;
-  errorCode?: string;
+  errorCode?: string; indexState?: string;
 };
 export type TelemetrySink = { record(row: Record<string, unknown>): void; flush(): void };
 export type ImpactTelemetryOptions = {
@@ -55,7 +59,7 @@ export function telemetryDir(env: NodeJS.ProcessEnv = process.env): string {
 
 export function buildToolCounter(input: {
   tool: string; elapsedMs: number; ok: boolean; now?: Date;
-  repoHash?: string; start?: boolean; errorCode?: string;
+  repoHash?: string; start?: boolean; errorCode?: string; operation?: string; indexState?: string;
 }): ToolCounterRecord {
   return {
     ts: (input.now ?? new Date()).toISOString(),
@@ -64,7 +68,9 @@ export function buildToolCounter(input: {
     ok: input.ok,
     ...(input.repoHash ? { repoHash: input.repoHash } : {}),
     ...(input.start !== undefined ? { start: input.start } : {}),
-    ...(input.errorCode ? { errorCode: input.errorCode } : {})
+    ...(input.errorCode ? { errorCode: input.errorCode } : {}),
+    ...(input.operation ? { operation: input.operation } : {}),
+    ...(input.indexState ? { indexState: input.indexState } : {})
   };
 }
 
@@ -83,6 +89,7 @@ export function buildImpactDetail(input: {
     /hydrate|coldbuild|cold-build|cold_build|siblingcopy|reconcilewait/i.test(key)
   );
   const coldPathHeuristic = !phaseCold && elapsedMs > COLD_MS;
+  const indexState = indexStateOf(value);
   return {
     ts: (input.now ?? new Date()).toISOString(),
     tool: "java_impact",
@@ -97,7 +104,8 @@ export function buildImpactDetail(input: {
     coldPath: phaseCold || coldPathHeuristic,
     ...(coldPathHeuristic ? { coldPathHeuristic: true } : {}),
     error: input.error,
-    ...(input.errorCode ? { errorCode: input.errorCode } : {})
+    ...(input.errorCode ? { errorCode: input.errorCode } : {}),
+    ...(indexState ? { indexState } : {})
   };
 }
 
@@ -160,6 +168,9 @@ export function recordToolInvocation(input: {
         now: input.now,
         repoHash: requestScope.getStore()?.repoHash,
         ...(input.tool === "java_status" ? { start: args.start === true } : {}),
+        // Same default as tools/symbol.ts: no explicit operation means query when `query` is given.
+        ...(input.tool === "java_symbol" ? { operation: str(args.operation) ?? (args.query ? "query" : "position") } : {}),
+        indexState: indexStateOf(obj(input.value)),
         errorCode
       }));
   } catch { /* drop */ }
@@ -222,6 +233,10 @@ function toolErrorCode(failure: unknown, value: unknown): string | undefined {
   const record = obj(value);
   if (typeof record.errorCode === "string" && record.errorCode) return record.errorCode;
   return message ? "QUERY_FAILED" : undefined;
+}
+
+function indexStateOf(value: Record<string, unknown>): string | undefined {
+  return str(obj(value.indexView).state);
 }
 
 function pad(value: number): string { return String(value).padStart(2, "0"); }

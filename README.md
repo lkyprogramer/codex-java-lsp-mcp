@@ -131,7 +131,7 @@ launchd Program 直接指向固定 `launcher/dist/native/ilv2-mac`；HTTP entry 
 
 安装先构建并校验候选、完成隔离 smoke 和配置检查，再备份前序状态、停止旧 job、替换完整 bundle/env/plist/current，最后启动并 smoke。`daemonctl.sh rollback-release` 在停服前核验备份，恢复完整 bundle、immutable release、env/plist、稳定入口和 predecessor pointer；cache/state 数据目录保留。首次安装没有完整前序备份时不能执行 release rollback。
 
-控制器还支持 `status`、`start`、`stop`、`restart`、`wait-ready`、`smoke`。stdio 是 owner relay，不创建另一套 runtime。HTTP 只绑定 loopback，提供 `/mcp`、`/healthz`、`/readyz`；浏览器 Origin 默认拒绝。不要把 token、业务源码或完整 tool payload 写入公共材料。
+控制器还支持 `status`、`start`、`stop`、`restart`、`wait-ready`、`smoke`、`stats`。`stats [--since 7d] [--json]` 只读本地工具遥测，按工具和 operation 汇总调用数、成功率、p50/p95、错误码和索引状态。stdio 是 owner relay，不创建另一套 runtime。HTTP 只绑定 loopback，提供 `/mcp`、`/healthz`、`/readyz`；浏览器 Origin 默认拒绝。不要把 token、业务源码或完整 tool payload 写入公共材料。
 
 定向单测不能替代真实签名、launchd、TCC 和实际安装验收。历史两小时 canary 只覆盖原候选身份。每次验收以对应的结果记录与候选清单为准。
 
