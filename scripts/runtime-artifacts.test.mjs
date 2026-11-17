@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { chmod, mkdtemp, mkdir, readFile, realpath, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -653,3 +653,27 @@ async function waitForHttp(url) {
   }
   throw new Error(`Timed out waiting for ${url}`);
 }
+
+test("sealed upgrade presents the installed runtime manifest path unless given a different one", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-upgrade-manifest-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  const start = installer.indexOf("upgrade_runtime_manifest() {");
+  const end = installer.indexOf("\n}\n", start);
+  assert.ok(start >= 0 && end > start);
+  const fn = installer.slice(start, end + "\n}".length);
+  const runtime = path.join(root, "runtime");
+  const installed = path.join(runtime, "state", "runtime.json");
+  await mkdir(path.dirname(installed), { recursive: true });
+  await writeFile(installed, '{"schema":"ilv2-mac-runtime/v1"}\n');
+  const frozenCopy = path.join(root, "frozen.json");
+  await writeFile(frozenCopy, '{"schema":"ilv2-mac-runtime/v1"}\n');
+  const other = path.join(root, "other.json");
+  await writeFile(other, '{"schema":"ilv2-mac-runtime/v1","execPath":"/elsewhere"}\n');
+  const resolve = async (dir, given) => execFileSync("/bin/bash", ["-c", `set -euo pipefail\n${fn}\nupgrade_runtime_manifest "$1" "$2"`, "_", dir, given], { encoding: "utf8" }).trim();
+  assert.equal(await resolve(runtime, ""), installed, "unset defaults to the installed copy");
+  assert.equal(await resolve(runtime, installed), installed);
+  assert.equal(await resolve(runtime, frozenCopy), installed, "a byte-identical frozen manifest maps to the installed path");
+  assert.equal(await resolve(runtime, other), other, "a different manifest is kept, so the state check rejects it");
+  assert.equal(await resolve(path.join(root, "absent"), frozenCopy), frozenCopy, "no installed copy: nothing to map to");
+});

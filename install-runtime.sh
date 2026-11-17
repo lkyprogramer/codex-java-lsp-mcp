@@ -94,6 +94,17 @@ if [[ "$OS_NAME" != "Darwin" ]]; then
   exit 1
 fi
 
+# daemon.env records <runtime>/state/runtime.json, the installer's copy of the frozen manifest, and an
+# upgrade must present that exact path. Default to it, and accept a byte-identical copy from elsewhere.
+upgrade_runtime_manifest() {
+  local installed="$1/state/runtime.json" given="${2:-}"
+  if [[ -z "$given" ]] || { [[ "$given" != "$installed" && -f "$installed" ]] && cmp -s "$given" "$installed"; }; then
+    printf '%s\n' "$installed"
+  else
+    printf '%s\n' "$given"
+  fi
+}
+
 if [[ "$SEALED_UPGRADE" == "true" ]]; then
   if [[ "$PREFLIGHT_RUNTIME" == "true" || "$FORMAL_INSTALL" == "true" || -n "$GRADLE_PREPARATION_PLAN" || -z "$SEALED_RELEASE" ]]; then
     echo "Sealed upgrade requires a seal and an existing managed runtime." >&2
@@ -104,6 +115,7 @@ if [[ "$SEALED_UPGRADE" == "true" ]]; then
     LOG_DIR="${CODEX_JAVA_LSP_LOG_DIR:-$HOME/Library/Logs/codex-java-lsp-ilv2}"
     LAUNCH_AGENT_LABEL="${CODEX_JAVA_LSP_LAUNCH_AGENT_LABEL:-com.lky.codex-java-lsp-ilv2}"
   fi
+  ILV2_RUNTIME_MANIFEST="$(upgrade_runtime_manifest "$RUNTIME_DIR" "${ILV2_RUNTIME_MANIFEST:-}")"
 fi
 if [[ -n "$SEALED_RELEASE" && "$INSTALL_WITH_GRADLE" != "true" && "$SEALED_UPGRADE" != "true" ]]; then
   echo "Sealed release installation requires --install-with-gradle or --upgrade." >&2

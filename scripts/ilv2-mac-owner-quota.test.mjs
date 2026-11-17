@@ -5,7 +5,9 @@ import path from "node:path";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
-import { acquireFixtureSlot, acquireLaunchdFixtureSlot, fixtureQuotaFile, inspectFixtureSlots } from "./ilv2-mac-fixture-quota.mjs";
+import { acquireFixtureSlot, acquireLaunchdFixtureSlot, fixtureQuotaFile, inspectFixtureSlots, reclaimAbandonedExternalFixtures } from "./ilv2-mac-fixture-quota.mjs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { isolatedJdtBenchmarkEnvironment } from "./run-isolated-jdt-benchmark.mjs";
 import { isolatedValidationEnvironment } from "./run-isolated-validation.mjs";
 import { matrixRuntimeEnvironment } from "./run-three-repo-cold-matrix.mjs";
@@ -70,5 +72,60 @@ test("external reservation pins the pre-bootstrap window against legacy delete a
     finally { await other.release(); }
     assert.equal(inspectFixtureSlots(root).length, 1);
   } finally { await lease.close(); }
+  assert.equal(inspectFixtureSlots(root).length, 0);
+});
+
+async function deadPid() {
+  const child = execFile(process.execPath, ["-e", ""]);
+  await new Promise(resolve => child.once("exit", resolve));
+  return child.pid;
+}
+async function abandonedExternal(t) {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "abandoned-quota-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  assert.deepEqual(await reclaimAbandonedExternalFixtures(root, { probe: () => assert.fail("no candidates") }), []);
+  const insert = (slot, pid) => {
+    const token = randomUUID();
+    const db = new DatabaseSync(fixtureQuotaFile(root));
+    try {
+      db.prepare("INSERT INTO fixture_slots(slot,token,pid) VALUES(?,?,?)").run(slot, token, pid);
+      db.prepare("INSERT INTO external_fixture_jobs VALUES(?,?,?,?)").run(token, `gui/${process.getuid()}`, `com.lky.ilv2-mac-test.${token}`, path.join(root, "runs", token));
+    } finally { db.close(); }
+    return token;
+  };
+  return { root, insert };
+}
+
+test("an abandoned external fixture is reclaimed only with a dead controller, no launchd job and no process", async t => {
+  const { root, insert } = await abandonedExternal(t);
+  insert(0, await deadPid());
+  insert(1, process.pid);
+  const probed = [];
+  const reclaimed = await reclaimAbandonedExternalFixtures(root, { probe: async row => { probed.push(row.slot); return { absent: true, processes: 0 }; } });
+  assert.deepEqual(probed, [0], "a live controller is never probed");
+  assert.deepEqual(reclaimed.map(row => row.slot), [0]);
+  assert.deepEqual(inspectFixtureSlots(root).map(row => row.slot), [1]);
+  const db = new DatabaseSync(fixtureQuotaFile(root), { readOnly: true });
+  try { assert.equal(db.prepare("SELECT COUNT(*) AS n FROM external_fixture_jobs").get().n, 1, "only the reclaimed marker is removed"); }
+  finally { db.close(); }
+});
+
+test("an external fixture still known to launchd, still running, or unprovable keeps its slot", async t => {
+  const { root, insert } = await abandonedExternal(t);
+  insert(0, await deadPid());
+  for (const probe of [async () => ({ absent: false, processes: 0 }), async () => ({ absent: true, processes: 1 }), async () => { throw new Error("launchctl timed out"); }, async () => undefined]) {
+    assert.deepEqual(await reclaimAbandonedExternalFixtures(root, { probe }), []);
+    assert.equal(inspectFixtureSlots(root).length, 1);
+  }
+});
+
+test("acquisition frees a slot left by an aborted launchd fixture run", async t => {
+  const { root, insert } = await abandonedExternal(t);
+  insert(0, await deadPid());
+  // Real probe: the random label was never bootstrapped and nothing references its run root.
+  const first = await acquireFixtureSlot(root, { timeoutMs: 5000 });
+  const second = await acquireFixtureSlot(root, { timeoutMs: 5000 });
+  try { assert.deepEqual(inspectFixtureSlots(root).map(row => row.slot).sort(), [0, 1]); }
+  finally { await first.release(); await second.release(); }
   assert.equal(inspectFixtureSlots(root).length, 0);
 });
