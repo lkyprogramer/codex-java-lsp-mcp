@@ -128,10 +128,11 @@ export async function verifyFrozenInput(record, { signal } = {}) {
   const manifest = JSON.parse(bytes);
   requireValue(manifest.schema === "ilv2-mac-input/v1" && record.repoRoot === manifest.repoRoot && record.head === manifest.head, "input identity mismatch");
   const git = args => execute("git", ["--no-optional-locks", "-C", record.repoRoot, ...args], { maxBuffer: 32 * 1024 * 1024, signal });
+  // Check objects first: rev-parse and status read them too and would fail with git's own message.
+  try { await git(["fsck", "--full"]); } catch { throw new Error("frozen objects failed fsck"); }
   const head = (await git(["rev-parse", "HEAD^{commit}"])).stdout.trim();
   requireValue(head === record.head, "frozen HEAD mismatch");
   requireValue((await git(["status", "--porcelain=v1", "--untracked-files=all"])).stdout === "", "frozen worktree changed");
-  try { await git(["fsck", "--full"]); } catch { throw new Error("frozen objects failed fsck"); }
   const paths = [];
   const requiredPaths = new Set(manifest.files.map(row => row.path));
   async function walk(directory, relative = "") {
