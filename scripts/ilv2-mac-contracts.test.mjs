@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir, realpath } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile, mkdir, realpath, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -26,6 +26,18 @@ async function gitRepository(t) {
   await writeJson(manifestFile, { schema: "ilv2-mac-input/v1", repoRoot: root, head, files: [{ path: "Fixture.java", size: bytes.length, sha256: sha256(bytes) }] });
   return { root, git, record: { repoRoot: root, head, manifest: manifestFile, manifestSha256: sha256(await readFile(manifestFile)) } };
 }
+test("isMain runs a script started through a symlinked directory and stays false for importers", async t => {
+  const root = await directory(t, "ilv2-is-main-test-");
+  const real = path.join(root, "real");
+  await mkdir(real);
+  const contracts = pathToFileURL(fileURLToPath(new URL("./ilv2-mac-contracts.mjs", import.meta.url))).href;
+  await writeFile(path.join(real, "entry.mjs"), `import { isMain } from ${JSON.stringify(contracts)};\nprocess.stdout.write(String(isMain(import.meta.url)));\n`);
+  await writeFile(path.join(real, "importer.mjs"), `import "./entry.mjs";\n`);
+  await symlink(real, path.join(root, "link"));
+  for (const [file, expected] of [[path.join(real, "entry.mjs"), "true"], [path.join(root, "link", "entry.mjs"), "true"], [path.join(root, "link", "importer.mjs"), "false"]]) {
+    assert.equal((await execute(process.execPath, [file])).stdout, expected, file);
+  }
+});
 test("actual executable, versions, binary and OS identity are checked", async t => {
   const root = await directory(t, "ilv2-runtime-test-");
   const file = path.join(root, "runtime.json");

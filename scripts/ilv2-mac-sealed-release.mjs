@@ -103,7 +103,7 @@ async function materialize(file, digest, destination, formal) {
   return verifySealedRelease(file, digest, destination, formal);
 }
 
-async function validateUpgradeTarget([runtime, plist, logs, cache, ownership, label, port, candidatePort]) {
+export async function validateUpgradeTarget([runtime, plist, logs, cache, ownership, label, port, candidatePort]) {
   const root = process.env.ILV2_RUN_ROOT;
   requireValue(root && await realpath(root) === root
     && (await readFile(path.join(root, "run-root.txt"), "utf8")).trim() === root, "registered upgrade run required");
@@ -129,13 +129,14 @@ async function validateUpgradeTarget([runtime, plist, logs, cache, ownership, la
     requireValue(stat.isFile() && stat.uid === process.getuid() && !(stat.mode & 0o022)
       && await realpath(file) === file, "invalid installed upgrade state");
   }
-  console.log(release);
+  return release;
 }
 
 if (isMain(import.meta.url)) runCli(async () => {
   if (process.argv[2] === "--validate-upgrade-target") {
     requireValue(process.argv.length === 11, "invalid upgrade target arguments");
-    return validateUpgradeTarget(process.argv.slice(3));
+    console.log(await validateUpgradeTarget(process.argv.slice(3)));
+    return;
   }
   const [option, file, digest, destination, ...rest] = process.argv.slice(2);
   const formal = ["--verify-formal", "--materialize-formal"].includes(option);

@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { realpathSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -26,7 +27,17 @@ export const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 export const readJson = async file => JSON.parse(await readFile(file, "utf8"));
 export const writeJson = (file, value) => writeFile(file, `${JSON.stringify(value, null, 2)}\n`);
 export function requireValue(condition, message) { if (!condition) throw new Error(message); }
-export function isMain(meta) { return process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(meta); }
+// Node resolves symlinks in the entry module's URL but not in argv[1] (/var -> /private/var on macOS),
+// so compare real paths; otherwise a script started through a link silently does nothing.
+export function isMain(meta) {
+  if (!process.argv[1]) return false;
+  const entry = path.resolve(process.argv[1]);
+  try { return realpathSync(entry) === realpathSync(fileURLToPath(meta)); }
+  catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return entry === fileURLToPath(meta);
+  }
+}
 export function cliOptions(args, names) {
   const options = {};
   for (let index = 0; index < args.length; index += 2) {
@@ -117,10 +128,11 @@ export async function verifyFrozenInput(record, { signal } = {}) {
   const manifest = JSON.parse(bytes);
   requireValue(manifest.schema === "ilv2-mac-input/v1" && record.repoRoot === manifest.repoRoot && record.head === manifest.head, "input identity mismatch");
   const git = args => execute("git", ["--no-optional-locks", "-C", record.repoRoot, ...args], { maxBuffer: 32 * 1024 * 1024, signal });
+  // Check objects first: rev-parse and status read them too and would fail with git's own message.
+  try { await git(["fsck", "--full"]); } catch { throw new Error("frozen objects failed fsck"); }
   const head = (await git(["rev-parse", "HEAD^{commit}"])).stdout.trim();
   requireValue(head === record.head, "frozen HEAD mismatch");
   requireValue((await git(["status", "--porcelain=v1", "--untracked-files=all"])).stdout === "", "frozen worktree changed");
-  try { await git(["fsck", "--full"]); } catch { throw new Error("frozen objects failed fsck"); }
   const paths = [];
   const requiredPaths = new Set(manifest.files.map(row => row.path));
   async function walk(directory, relative = "") {
