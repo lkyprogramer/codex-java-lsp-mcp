@@ -356,3 +356,24 @@ function appendViaFs(file: string, data: string): void {
   mkdirSync(path.dirname(file), { recursive: true });
   appendFileSync(file, data);
 }
+
+test("tool counters record the resolved java_symbol operation and the answer's index state", () => {
+  const rows: Array<Record<string, unknown>> = [];
+  const sink = { record: (row: Record<string, unknown>) => { rows.push(row); }, flush: () => undefined };
+  const call = (tool: string, args: Record<string, unknown>, value: unknown) =>
+    recordToolInvocation({ tool, args, value, elapsedMs: 1, error: false, sink });
+  call("java_symbol", { operation: "references" }, { indexView: { state: "STALE" } });
+  call("java_symbol", { query: "PayService" }, { indexView: { state: "FRESH" } });
+  call("java_symbol", { file: "A.java", line: 1, column: 1 }, {});
+  call("java_status", {}, { indexView: { state: "NOT_READY" } });
+  call("java_impact", { repoRoot: "/tmp/x" }, { repoHash: "h", indexView: { state: "FRESH" } });
+  assert.deepEqual(rows.map(row => [row.tool, row.operation, row.indexState]), [
+    ["java_symbol", "references", "STALE"],
+    ["java_symbol", "query", "FRESH"],
+    ["java_symbol", "position", undefined],
+    ["java_status", undefined, "NOT_READY"],
+    ["java_impact", undefined, "FRESH"]
+  ]);
+  assert.ok(rows.every(row => !("operation" in row) || row.tool === "java_symbol"));
+  assert.ok(!("indexState" in (rows[2] ?? {})), "absent state is omitted, not written as undefined");
+});

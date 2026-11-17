@@ -46,7 +46,7 @@ READY_URL="http://127.0.0.1:$JAVA_LSP_HTTP_PORT/readyz"
 
 usage() {
   cat <<'EOF'
-Usage: daemonctl.sh <status|start|stop|restart|wait-ready|smoke|rollback-release>
+Usage: daemonctl.sh <status|start|stop|restart|wait-ready|smoke|stats|rollback-release>
 
 Commands:
   status            Print LaunchAgent and health status without starting a daemon.
@@ -55,6 +55,8 @@ Commands:
   restart           stop, then start the current immutable release.
   wait-ready        Wait for the already managed daemon; never starts a process.
   smoke             Connect to the already managed daemon and validate HTTP MCP tools.
+  stats [--since 7d] [--json]
+                    Summarize local tool telemetry; read-only, works whether or not the daemon runs.
   rollback-release  Stop, atomically restore the previous release and its managed config, then start it.
 EOF
 }
@@ -396,6 +398,11 @@ case "$command_name" in
   restart) stop_daemon; start_daemon ;;
   wait-ready) wait_ready ;;
   smoke) smoke ;;
+  stats)
+    shift
+    "$NODE_BIN" "$RUNTIME_DIR/current/dist/telemetry/telemetry-stats.js" \
+      --dir "${JAVA_LSP_TELEMETRY_DIR:-$JAVA_LSP_CACHE_BASE/telemetry}" "$@"
+    ;;
   rollback-release) rollback_release ;;
   --help|-h|"") usage ;;
   *) usage >&2; exit 2 ;;
