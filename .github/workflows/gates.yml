@@ -1,11 +1,15 @@
 name: gates
 
-# Push-triggered gate:pr (hygiene, lint, isolated compile, dist unit tests) on a GitHub-hosted macOS runner,
+# gate:pr (hygiene, lint, isolated compile, dist unit tests) on a GitHub-hosted macOS runner for pull requests
+# to main and pushes to main, plus manual dispatch; work-branch pushes alone do not run it. It is
 # free for public repositories. gate:release stays on the owner's Mac: its script suite needs the frozen
 # JDT/Gradle/JDK toolchain INPUT and the private launchd work root under ~/Developer/ilv2-work, which a hosted
 # runner does not have. Production install, the launchd canary, TCC and private-corpus evaluation stay there too.
 on:
   push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
