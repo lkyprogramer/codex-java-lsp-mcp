@@ -100,7 +100,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile co
 
 ### MAC-17 安装合同
 
-已有 ILV2 owner 可用 `./install-runtime.sh --upgrade --sealed-release <seal.json> <sha256>` 原地升级。安装器先校验封存候选，再用隔离端口 smoke，通过后切换固定端口。升级与回滚保留缓存和私有 Gradle home。[2026-11-17 生产切换与 JDT 冷启动记录](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-17.md)。
+已有 ILV2 owner 可用 `./install-runtime.sh --upgrade --sealed-release <seal.json> <sha256>` 原地升级。安装器先校验封存候选，再用隔离端口 smoke，通过后切换固定端口。升级与回滚保留缓存和私有 Gradle home。[2026-11-18 生产升级与 stats 验收](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-18.md) · [2026-11-17 生产切换与 JDT 冷启动记录](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-17.md)。
 
 历史[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY（历史验收口径；`07c6ccf` 起索引屏障改为导入后独立的 600 秒预算，见上文设计边界）。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
 
