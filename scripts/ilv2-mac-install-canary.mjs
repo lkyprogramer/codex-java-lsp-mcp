@@ -21,7 +21,8 @@ export function validateConfig(plan, options, runRoot, now = Date.now()) {
   requireValue(ISOLATED_LAUNCHD_LABEL.test(plan.label), 'isolated label required');
   requireValue(Number.isFinite(plan.durationMs) && plan.durationMs >= 7200000 && plan.durationMs <= 9000000, 'two-hour minimum duration required');
   requireValue(Number.isInteger(plan.normalRequests) && plan.normalRequests >= 1000, '1000 normal requests required');
-  requireValue(Date.parse(plan.deadline) <= Date.parse('2026-11-03T18:00:00+08:00') && Date.parse(plan.deadline) > now + plan.durationMs + 660000, 'deadline cannot cover canary');
+  const deadline = Date.parse(plan.deadline);
+  requireValue(Number.isFinite(deadline) && deadline > now + plan.durationMs + 660000, 'deadline cannot cover canary');
   for (const [key, dir] of [['out', 'raw'], ['work', 'tmp']]) requireValue(path.isAbsolute(options[key]) && contains(path.join(runRoot, dir), options[key]) && options[key] !== path.join(runRoot, dir), `private ${key} required`);
   requireValue(!contains(options.work, options.out) && !contains(options.out, options.work), 'disjoint output/work required');
   requireValue(path.isAbsolute(options.candidate) && !contains(options.work, options.candidate) && !contains(options.candidate, options.work), 'immutable candidate required');

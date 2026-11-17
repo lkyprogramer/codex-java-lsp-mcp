@@ -98,13 +98,15 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile co
 
 ### MAC-17 安装合同
 
-最新[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY（历史验收口径；`07c6ccf` 起索引屏障改为导入后独立的 600 秒预算，见上文设计边界）。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
+已有 ILV2 owner 可用 `./install-runtime.sh --upgrade --sealed-release <seal.json> <sha256>` 原地升级。安装器先校验封存候选，再用隔离端口 smoke，通过后切换固定端口。升级与回滚保留缓存和私有 Gradle home。[2026-11-17 生产切换与 JDT 冷启动记录](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-17.md)。
+
+历史[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY（历史验收口径；`07c6ccf` 起索引屏障改为导入后独立的 600 秒预算，见上文设计边界）。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
 
 此前隔离失败见 [安装期恢复与准备后语义验收](docs/index-lifecycle-v2/mac/mac-17/install-prepared-acceptance.md)。依赖恢复通过。JDT 在原 120 秒内 READY。精确定义通过，首次引用超时，完整验收仍失败。
 
 隔离安装增加 `--prepare-gradle <plan>`。该计划绑定同一私有 repo、HOME、Gradle home 和冻结工具链。恢复 Eclipse 与 APT 模型后，Gradle 先退出，再固定依赖清单。真实 JDT 验收使用准备后的缓存。该入口要求隔离标记和注册运行根，不切换服务。
 
-本轮不执行生产安装。安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 Node/runtime manifest 和 `ILV2_CODESIGN_IDENTITY` 稳定签名，不修改 Codex MCP registration。隔离构建还需显式 `ILV2_CODESIGN_KEYCHAIN`；仅 codesign 签名子进程使用账户 HOME 查找该身份，其他构建与运行进程保持隔离。
+安装器支持 `--port`、`--canary-port`、`--preflight-runtime`，要求冻结 Node/runtime manifest 和 `ILV2_CODESIGN_IDENTITY` 稳定签名，不修改 Codex MCP registration。隔离构建还需显式 `ILV2_CODESIGN_KEYCHAIN`；仅 codesign 签名子进程使用账户 HOME 查找该身份，其他构建与运行进程保持隔离。
 
 首次 ILV2 安装必须显式设置 `CODEX_JAVA_LSP_RUNTIME_DIR` 为新的 runtime 目录。脚本默认仍为历史 runtime 路径；已有 daemon.env/current 却没有 verified launcher bundle 时，在停服前拒绝。旧生产 runtime、cache 和 state 保留。未来生产切换须另行批准具体 SHA/digest、固定 launcher 路径、label、端口和停用步骤。
 
@@ -131,7 +133,7 @@ launchd Program 直接指向固定 `launcher/dist/native/ilv2-mac`；HTTP entry 
 
 控制器还支持 `status`、`start`、`stop`、`restart`、`wait-ready`、`smoke`。stdio 是 owner relay，不创建另一套 runtime。HTTP 只绑定 loopback，提供 `/mcp`、`/healthz`、`/readyz`；浏览器 Origin 默认拒绝。不要把 token、业务源码或完整 tool payload 写入公共材料。
 
-定向单测不能替代真实签名、launchd、TCC 和实际安装验收。兼容与回滚按用户要求不再验收，有问题停用。历史两小时 canary 只覆盖原候选身份。实际结果以 MAC-17 task-result 与候选清单为准；生产固定路径 TCC 授权和业务仓读取未包含在本轮授权中。
+定向单测不能替代真实签名、launchd、TCC 和实际安装验收。历史两小时 canary 只覆盖原候选身份。每次验收以对应的结果记录与候选清单为准。
 
 ## 项目启用
 

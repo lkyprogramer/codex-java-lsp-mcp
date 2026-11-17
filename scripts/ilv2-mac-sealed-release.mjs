@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Bind installation to the exact tree accepted by the validation broker.
-import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execute, isMain, managedPath, readJson, requireUnprotectedRoot, requireValue, runCli, sha256, verifyRuntime } from "./ilv2-mac-contracts.mjs";
 import { dependencyTreeInventory, sameDependencyInventory } from "./isolation-utils.mjs";
 import { NATIVE_PROTOCOL, SIGNING_IDENTIFIER } from "./build-macos-native.mjs";
 import { verifySignature } from "./managed-owner-launcher.mjs";
+import { ISOLATED_LAUNCHD_LABEL } from "./ilv2-mac-fixture-quota.mjs";
 import { formalTarget, requireFormalPath } from "./ilv2-mac-formal-target.mjs";
 
 export async function releaseInventory(candidate) {
@@ -102,7 +103,40 @@ async function materialize(file, digest, destination, formal) {
   return verifySealedRelease(file, digest, destination, formal);
 }
 
+async function validateUpgradeTarget([runtime, plist, logs, cache, ownership, label, port, candidatePort]) {
+  const root = process.env.ILV2_RUN_ROOT;
+  requireValue(root && await realpath(root) === root
+    && (await readFile(path.join(root, "run-root.txt"), "utf8")).trim() === root, "registered upgrade run required");
+  requireUnprotectedRoot(root, "sealed upgrade");
+  const paths = { runtime, plist, logs, cache, ownership };
+  const isolated = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1";
+  if (isolated) {
+    requireValue(ISOLATED_LAUNCHD_LABEL.test(label) && ![port, candidatePort].some(value => [38456,38457].includes(Number(value))),
+      "isolated upgrade label and ports required");
+    for (const target of Object.values(paths)) requireValue(target !== root && await managedPath(root, target) === target, "isolated upgrade path escapes run");
+  } else {
+    const target = formalTarget();
+    requireValue(!process.env.JAVA_LSP_ISOLATED_VALIDATION && label === target.label && port === target.port, "formal upgrade label or port mismatch");
+    for (const [key, value] of Object.entries(paths)) await requireFormalPath(target[key], value);
+  }
+  const current = path.join(runtime, "current");
+  requireValue((await lstat(current)).isSymbolicLink(), "installed current release link required");
+  const release = await realpath(current);
+  requireValue(path.dirname(release) === path.join(runtime, "releases")
+    && /^[0-9a-f]{12}-\d{8}T\d{6}Z$/.test(path.basename(release)), "installed current release is outside the immutable releases");
+  for (const file of [plist, path.join(runtime,"state/daemon.env"), path.join(runtime,"daemonctl.sh")]) {
+    const stat = await lstat(file);
+    requireValue(stat.isFile() && stat.uid === process.getuid() && !(stat.mode & 0o022)
+      && await realpath(file) === file, "invalid installed upgrade state");
+  }
+  console.log(release);
+}
+
 if (isMain(import.meta.url)) runCli(async () => {
+  if (process.argv[2] === "--validate-upgrade-target") {
+    requireValue(process.argv.length === 11, "invalid upgrade target arguments");
+    return validateUpgradeTarget(process.argv.slice(3));
+  }
   const [option, file, digest, destination, ...rest] = process.argv.slice(2);
   const formal = ["--verify-formal", "--materialize-formal"].includes(option);
   const command = formal ? option.slice(0, -"-formal".length) : option;
