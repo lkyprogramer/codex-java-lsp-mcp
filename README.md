@@ -370,7 +370,6 @@ benchmark 入口：
 
 ```bash
 sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs --repo-root /source/java-repo --revision <exact-sha> -- node dist/benchmark-agent-impact.js --repo-root {repo} --project-id <id> --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic
-sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs --repo-root /source/java-repo --revision <exact-sha> -- node scripts/attribute-impact-payload.mjs --repo-root {repo} --project-id <id>
 sh scripts/run-isolated-node.sh scripts/run-three-repo-cold-matrix.mjs --baseline <approved-baseline-sha> --output-dir /tmp/java-v32-matrix-<id> --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root>
 sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/run-three-repo-cold-matrix.test.mjs scripts/verify-three-repo-cold-matrix.test.mjs
 ```
