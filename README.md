@@ -102,6 +102,13 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile co
 
 已有 ILV2 owner 可用 `./install-runtime.sh --upgrade --sealed-release <seal.json> <sha256>` 原地升级。安装器先校验封存候选，再用隔离端口 smoke，通过后切换固定端口。升级与回滚保留缓存和私有 Gradle home。[2026-11-18 生产升级与 stats 验收](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-18.md) · [2026-11-17 生产切换与 JDT 冷启动记录](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-17.md)。
 
+升级步骤（每次相同）：
+
+1. 在干净的 main checkout 上用冻结 Node 执行 `npm ci --include=dev`（scripts 套件需要 ESLint）。
+2. 在新登记的运行根子 shell 中（见 `docs/deep/ilv2-mac-manual/verification.md`；设置 `ILV2_TOOLCHAINS`、`ILV2_CODESIGN_IDENTITY`、`ILV2_CODESIGN_KEYCHAIN`，不设 `JAVA_LSP_ISOLATED_VALIDATION`）运行 `scripts/run-isolated-validation.mjs --seal-release --name upgrade --profile full`，取输出 `sealedRelease` 的 `path` 和 `sha256`。
+3. 同一子 shell 中运行 `./install-runtime.sh --upgrade --sealed-release <path> <sha256>`。`ILV2_RUNTIME_MANIFEST` 可不设：升级默认使用 `<runtime>/state/runtime.json`，传入字节相同的冻结 manifest 也会映射到该路径。
+4. `daemonctl.sh status`、`smoke`、`stats --since 1d`；给该提交打 `prod-YYYY-MM-DD` tag。回滚用 `daemonctl.sh rollback-release`。
+
 历史[索引就绪修复与单次真实验收](docs/index-lifecycle-v2/mac/mac-17/index-ready-fix-acceptance.md)通过：启动事务在原 120 秒预算内等待只读索引屏障，再提交 READY（历史验收口径；`07c6ccf` 起索引屏障改为导入后独立的 600 秒预算，见上文设计边界）。17 项定向检查和唯一真实语义验收通过。客户端 106.150 秒 READY，首次引用 430.448 ms。历史正式 G17 FAIL 保留，候选供本地审查，尚未部署。
 
 此前隔离失败见 [安装期恢复与准备后语义验收](docs/index-lifecycle-v2/mac/mac-17/install-prepared-acceptance.md)。依赖恢复通过。JDT 在原 120 秒内 READY。精确定义通过，首次引用超时，完整验收仍失败。

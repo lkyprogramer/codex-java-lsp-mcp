@@ -48,7 +48,7 @@ async function retryTransaction(file, operation, { timeoutMs, signal } = {}) {
 async function acquireSlot(workRoot, { signal, timeoutMs = 30000, externalJob } = {}) {
   requireValue(path.isAbsolute(workRoot) && Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= 30000, "bounded shared quota required");
   const file = fixtureQuotaFile(workRoot);
-  await mkdir(path.dirname(file), { recursive: true });
+  await reclaimAbandonedExternalFixtures(workRoot);
   const started = performance.now();
   const token = randomUUID();
   let slot;
@@ -174,6 +174,42 @@ async function acquireSlot(workRoot, { signal, timeoutMs = 30000, externalJob } 
 }
 const execute = promisify(execFile);
 const executeLaunchctl = (args, timeoutMs = 5000) => execute("/bin/launchctl", args, { timeout: timeoutMs, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 });
+/** launchd and ps evidence that an external fixture left nothing behind. */
+async function probeExternalJob(job) {
+  let absent = false;
+  try { await executeLaunchctl(["print", `${job.domain}/${job.label}`]); }
+  catch (error) { absent = error.code === 113 && String(error.stderr).includes(`Could not find service \"${job.label}\"`); }
+  const { stdout } = await execute("/bin/ps", ["-axo", "pid=,command="], { timeout: 5000, killSignal: "SIGKILL", maxBuffer: 16 * 1024 * 1024 });
+  return { absent, processes: stdout.split("\n").filter(line => line.includes(job.run_root)).length };
+}
+/**
+ * An external fixture whose controller died before closeout (an aborted test run) keeps its slot forever:
+ * the trigger blocks the ordinary dead-controller delete. Reclaim it only when its controller is dead,
+ * launchd no longer has the job and no process references its run root; recheck the token under the write lock.
+ */
+export async function reclaimAbandonedExternalFixtures(workRoot, { probe = probeExternalJob } = {}) {
+  const file = fixtureQuotaFile(workRoot);
+  await mkdir(path.dirname(file), { recursive: true });
+  const candidates = await retryTransaction(file, db => db.prepare(
+    "SELECT s.slot, s.token, s.pid, j.domain, j.label, j.run_root FROM fixture_slots s JOIN external_fixture_jobs j ON j.token = s.token"
+  ).all().filter(row => !alive(row.pid)), { timeoutMs: 5000 });
+  const reclaimed = [];
+  for (const row of candidates) {
+    let evidence;
+    // Unproven absence keeps the slot: a probe failure must never free a job that may still run.
+    try { evidence = await probe(row); } catch { continue; }
+    if (evidence?.absent !== true || evidence.processes !== 0) continue;
+    const freed = await retryTransaction(file, db => {
+      const current = db.prepare("SELECT pid FROM fixture_slots WHERE slot=? AND token=?").get(row.slot, row.token);
+      if (!current || alive(current.pid)) return false;
+      db.prepare("DELETE FROM external_fixture_jobs WHERE token=?").run(row.token);
+      db.prepare("DELETE FROM fixture_slots WHERE slot=? AND token=?").run(row.slot, row.token);
+      return true;
+    }, { timeoutMs: 5000 });
+    if (freed) reclaimed.push({ slot: row.slot, label: row.label });
+  }
+  return reclaimed;
+}
 export function acquireFixtureSlot(workRoot, options = {}) {
   requireValue(!Object.hasOwn(options, "externalJob"), "use registered launchd fixture adapter");
   return acquireSlot(workRoot, options);
