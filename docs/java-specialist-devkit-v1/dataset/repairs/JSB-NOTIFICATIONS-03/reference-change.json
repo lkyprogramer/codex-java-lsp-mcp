@@ -1,6 +1,0 @@
-{
-  "task_id": "JSB-NOTIFICATIONS-03",
-  "path": "src/main/java/lab/notifications/DispatchBus.java",
-  "before": "s.channel.equals(target.channel)",
-  "after": "s.id.equals(target.id)"
-}

@@ -2,16 +2,12 @@
 // input:  冻结计划行 + AttemptOutcome 行（含 provider usage、SOURCE_RECEIVED
 //         事件、严格解析后的答案对象）。
 // output: R02 回归锁——唯一评分语义（严格类型/extra/重复键/无 source 不通过）、
-//         完整 scheduled 分母（失败/缺失都进入）、usage null 语义、以及
-//         adapter 输出能被原冻结 kit scorer 直接复算（端到端，python3 可用时）。
-// pos:    纯离线；kit 端到端只跑本地 bundle 语料，无任何网络/模型调用。
+//         完整 scheduled 分母（失败/缺失都进入）、usage null 语义。冻结 kit 端到端
+//         复算随 kit 一起归档（tag archive/evidence-2026-11-17）。
+// pos:    纯离线，无任何网络/模型调用。
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync } from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import { fileURLToPath } from "node:url";
 import {
   buildFrozenResultsPack,
   usageToKitRow,
@@ -28,9 +24,6 @@ import {
   receivedLineCoverage,
   usageOrNull
 } from "./evaluate-java-task.mjs";
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const kitRoot = path.join(repoRoot, "docs", "java-specialist-devkit-v1");
 
 test("E01: strict QA types do not coerce string to boolean or number", () => {
   assert.equal(scoreQaAnswer({ ok: true }, '{"ok":"true"}').correct, false);
@@ -274,70 +267,4 @@ test("adapter: scheduled denominator summary matches the gate metric", () => {
   assert.throws(() => scheduledDenominatorSummary({ plan, attempts: [{ ...attempts[0], taskSuccess: { truthy: true } }] }), /must be true\/false\/null/);
   // an attempt outside the plan can never inflate the rate above 1
   assert.throws(() => scheduledDenominatorSummary({ plan: [plan[0]], attempts }), /outside the frozen plan/);
-});
-
-// The authoritative check: the pack the ADAPTER builds (from received
-// slices produced by the real read tool + model-boundary serializer) is
-// scored by the ORIGINAL frozen kit CLI. A required line that the budget cut
-// out of the model payload must not be credited. Needs python3 (else
-// BLOCKED_ENV skip).
-test("adapter end-to-end: frozen kit CLI scores the adapter's own pack", async t => {
-  try {
-    execFileSync("python3", ["--version"], { stdio: "ignore" });
-  } catch {
-    t.skip("python3 unavailable (BLOCKED_ENV)");
-    return;
-  }
-  const { buildToolSet, createAttemptWorkspace } = await import("./eval-native-tools.mjs");
-  const { serializeModelToolResult } = await import("./eval-tool-wire.mjs");
-  const { createRecorder, loadTaskFile, loadGoldFile } = await import("./evaluate-java-task.mjs");
-  const { writeFileSync, rmSync } = await import("node:fs");
-  const dataset = path.join(kitRoot, "dataset");
-  const task = loadTaskFile(path.join(dataset, "prompts", "dev.jsonl")).find(row => row.id === "JSB-PAYMENTS-01");
-  const gold = loadGoldFile(path.join(dataset, "gold", "dev.jsonl")).get(task.id);
-  const tmp = mkdtempSync(path.join(os.tmpdir(), "eval-frozen-adapter-"));
-  try {
-    const candidate = createAttemptWorkspace(path.join(dataset, "corpora", task.corpus), "e2e", tmp);
-    const tools = buildToolSet("control", "qa", { candidateRoot: candidate });
-    const evidencePath = gold.required_evidence[0].path;
-    const lastRequired = Math.max(...gold.required_evidence.map(item => item.end_line));
-    const read = await tools.invoke("read", { path: evidencePath, startLine: 1, maxLines: lastRequired });
-    const attemptFor = (repeat, maxBytes) => {
-      const recorder = createRecorder();
-      const serialized = serializeModelToolResult("read", read, { maxBytes });
-      recorder.recordModelDelivery({ callId: `c${repeat}`, toolName: "read", contentHash: serialized.modelPayloadHash, payloadBytes: 0, slices: serialized.slices });
-      return {
-        key: { taskId: task.id, variant: "primary", arm: "control", repeat },
-        state: "COMPLETED",
-        answer: gold.answer,
-        usage: null,
-        sourceReceived: recorder.events()
-      };
-    };
-    const hashes = JSON.parse(execFileSync("python3", ["-c",
-      "import json,sys;from pathlib import Path;from harness.dataset import dataset_digest;from harness.cli import corpus_fingerprint;d=Path(sys.argv[1]);print(json.dumps({'dataset':dataset_digest(d),'corpus':corpus_fingerprint(d/'corpora')}))",
-      dataset], { cwd: kitRoot, encoding: "utf8", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } }));
-    // repeat 0: whole window delivered; repeat 1: a budget that cuts the tail.
-    const pack = buildFrozenResultsPack({
-      plan: [{ taskId: task.id, variant: "primary", repeat: 0 }, { taskId: task.id, variant: "primary", repeat: 1 }],
-      attempts: [attemptFor(0, 32768), attemptFor(1, 600)],
-      arm: "control",
-      datasetHash: hashes.dataset,
-      runProfile: runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats: 2 })
-    });
-    const packPath = path.join(tmp, "pack.json");
-    const reportPath = path.join(tmp, "report.json");
-    writeFileSync(packPath, JSON.stringify(pack), "utf8");
-    execFileSync("python3", ["-m", "harness", "--dataset", dataset, "score", "--input", packPath, "--split", "dev", "--output", reportPath], { cwd: kitRoot, env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } });
-    const report = JSON.parse(readFileSync(reportPath, "utf8"));
-    const row = repeat => report.rows.find(r => r.task_id === task.id && r.repeat === repeat);
-    assert.deepEqual(row(0).errors, [], "kit must accept the adapter's read receipts byte-exactly");
-    assert.equal(row(0).qa_contract_pass, true);
-    assert.equal(row(1).received_evidence_complete, false, "lines cut from the model payload are not received");
-    assert.equal(row(1).qa_contract_pass, false);
-    assert.equal(report.rows.filter(r => r.status === "MISSING").length, 2 * 23, "the rest of the dev split stays in the denominator");
-    assert.match(report.scorer_hash, /^[0-9a-f]{64}$/);
-  } finally {
-    rmSync(tmp, { recursive: true, force: true });
-  }
 });

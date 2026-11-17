@@ -360,7 +360,6 @@
   "scripts/run-memory-benchmark.mjs",
   "scripts/run-v324-import-concurrency-experiment.mjs",
   "scripts/run-v329-framework-ablation.mjs",
-  "scripts/run-v4-sprint0-baseline.mjs",
   "scripts/run-v409-jdt-datadir-experiment.mjs",
   "scripts/task36-fault-suite.mjs",
   "scripts/v5r-release-attestation.mjs",

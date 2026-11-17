@@ -1,6 +1,0 @@
-{
-  "task_id": "JSB-INVENTORY-03",
-  "path": "src/main/java/lab/inventory/StockService.java",
-  "before": "available+=r.quantity;",
-  "after": "if (!r.active) return;\n    available+=r.quantity;"
-}
