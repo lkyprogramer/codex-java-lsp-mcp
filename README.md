@@ -206,9 +206,9 @@ hook 行为：
 
 `java_symbol(operation=outline, file, nearLine?, limit?)`（需开启实验开关）从静态索引投影单个文件的类型、构造器、方法和字段（`java-outline/v1`），不启动 JDT。默认 8 条、最多 20 条，超出直接拒绝。给了 nearLine 时，先取包含该行的声明，其余按距离选，输出恢复源码顺序。每条带 `symbolId`、行范围和紧凑签名，整个响应不超过 4096 字节，放不下时先省略签名、再省略整条，并标 `SOURCE_BUDGET`。文件解析不完整或源码已变时为 `PARTIAL`；不在快照中时为 `PARTIAL`（索引未就绪时为 `NOT_READY`），不会显示成"没有声明"。
 
-`java_symbol(operation=evidence, file, line, column | symbolId)`（`java-evidence-unit/v2`，需开启实验开关；默认配置下 main 曾有的 v1 实验操作也不再暴露）对已定位的 Java 类型或方法，先给声明本身的源码：方法放得下就整段给，放不下就给签名头加请求行附近的窗口，并标 `BODY_PARTIAL`；类型只给声明头。之后再给已有的 MyBatis XML 关联：类型路径用 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源。不启动 JDT，所有片段都是 `proof=SOURCE_FACT`，即源码读取属实，但不代表调用目标已精确绑定。每次最多 8 个片段、80 行、16000 源码字节；Java 片段先计费：整段方法最多 40 行 / 8000 字节；放不下时窗口按剩余行数选，字节和签名头只受全局上限约束。`complete` 只说明该片段范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 [实验计划](docs/next-stage/evidence-protocol-experiment-plan.md)。
+`java_symbol(operation=evidence, file, line, column | symbolId)`（`java-evidence-unit/v2`，需开启实验开关；默认配置下 main 曾有的 v1 实验操作也不再暴露）对已定位的 Java 类型或方法，先给声明本身的源码：方法放得下就整段给，放不下就给签名头加请求行附近的窗口，并标 `BODY_PARTIAL`；类型只给声明头。之后再给已有的 MyBatis XML 关联：类型路径用 `resultMap.type` 事实，方法路径保留独立的 XML 文档来源。不启动 JDT，所有片段都是 `proof=SOURCE_FACT`，即源码读取属实，但不代表调用目标已精确绑定。每次最多 8 个片段、80 行、16000 源码字节；Java 片段先计费：整段方法最多 40 行 / 8000 字节；放不下时窗口按剩余行数选，字节和签名头只受全局上限约束。`complete` 只说明该片段范围是否完整，未解析、过期或截断结果仍为 `PARTIAL`。普通 query 的默认预览和排名不变。分阶段验证与配置边界见 实验计划（`git show archive/evidence-2026-11-17:docs/next-stage/evidence-protocol-experiment-plan.md`）。
 
-生产 daemon 的静态查询由最多 2 个共享只读 worker 承担（`MAX_QUERY_WORKERS`，所有仓库共用），等待队列上限 32，满时请求返回 `INDEX_PARTIAL`；HTTP daemon 无选择器的 `java_status` 在 `index.queryCounters` 里给出启动以来的 `queueFull` 与因 deadline/取消被杀的查询数。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 1|2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见[实验评审](docs/next-stage/evidence-protocol-experiment-review.md)。
+生产 daemon 的静态查询由最多 2 个共享只读 worker 承担（`MAX_QUERY_WORKERS`，所有仓库共用），等待队列上限 32，满时请求返回 `INDEX_PARTIAL`；HTTP daemon 无选择器的 `java_status` 在 `index.queryCounters` 里给出启动以来的 `queueFull` 与因 deadline/取消被杀的查询数。隔离容量测量 `measure-query-load` 可显式传入 `--worker-count 1|2`；两种配置共用最多 32 个等待请求的队列，报告逐请求排队、执行时间及进程 CPU/RSS。该参数只用于实验，不改变生产默认配置。容量与模型对照结论见实验评审（`git show archive/evidence-2026-11-17:docs/next-stage/evidence-protocol-experiment-review.md`）。
 
 推荐默认调用（直接调用目标工具；名称有歧义时从返回的候选里取 `symbolId` 再调用）：
 
