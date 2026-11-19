@@ -35,12 +35,18 @@ export type ToolCounterRecord = {
   operation?: string;
   /** indexView.state of the answer (FRESH|STALE|NOT_READY) when the tool reported one. */
   indexState?: string;
+  /** java_symbol backend the request needs: static index or live JDT (tools/symbol.ts symbolNeedsJdt). */
+  backend?: "static" | "jdt";
 };
 export type ImpactDetailRecord = {
   ts: string; tool: string; repoHash: string; mode?: string; verbosity?: string;
-  anchorsCount: number; readPlanItems: number; plannedSourceBytes: number; estimatedTokens: number;
+  /** Absent when the answer carried no cost (a failure, or no real impact run): unknown, never zero. */
+  anchorsCount: number; readPlanItems: number; plannedSourceBytes?: number; estimatedTokens?: number;
+  /** coldPath is true for phase-evidenced cold work and, flagged by coldPathHeuristic, for a slow call without it. */
   elapsedMs: number; coldPath: boolean; coldPathHeuristic?: boolean; error: boolean;
   errorCode?: string; indexState?: string;
+  /** Requested semanticPolicy (default auto) and whether live JDT actually took part in the answer. */
+  semanticPolicy: string; semanticUsed?: boolean;
 };
 export type TelemetrySink = { record(row: Record<string, unknown>): void; flush(): void };
 export type ImpactTelemetryOptions = {
@@ -60,6 +66,7 @@ export function telemetryDir(env: NodeJS.ProcessEnv = process.env): string {
 export function buildToolCounter(input: {
   tool: string; elapsedMs: number; ok: boolean; now?: Date;
   repoHash?: string; start?: boolean; errorCode?: string; operation?: string; indexState?: string;
+  backend?: "static" | "jdt";
 }): ToolCounterRecord {
   return {
     ts: (input.now ?? new Date()).toISOString(),
@@ -70,7 +77,8 @@ export function buildToolCounter(input: {
     ...(input.start !== undefined ? { start: input.start } : {}),
     ...(input.errorCode ? { errorCode: input.errorCode } : {}),
     ...(input.operation ? { operation: input.operation } : {}),
-    ...(input.indexState ? { indexState: input.indexState } : {})
+    ...(input.indexState ? { indexState: input.indexState } : {}),
+    ...(input.backend ? { backend: input.backend } : {})
   };
 }
 
@@ -90,6 +98,9 @@ export function buildImpactDetail(input: {
   );
   const coldPathHeuristic = !phaseCold && elapsedMs > COLD_MS;
   const indexState = indexStateOf(value);
+  const plannedSourceBytes = known(cost.readBytes ?? cost.plannedSourceBytes);
+  const estimatedTokens = known(cost.estimatedTokens);
+  const semanticUsed = obj(value.semantic).used;
   return {
     ts: (input.now ?? new Date()).toISOString(),
     tool: "java_impact",
@@ -98,14 +109,16 @@ export function buildImpactDetail(input: {
     verbosity: str(args.verbosity),
     anchorsCount: Array.isArray(args.anchors) ? args.anchors.length : typeof args.file === "string" && args.line != null ? 1 : 0,
     readPlanItems: readPlanItemCount(value),
-    plannedSourceBytes: num(cost.readBytes ?? cost.plannedSourceBytes),
-    estimatedTokens: num(cost.estimatedTokens),
+    ...(plannedSourceBytes !== undefined ? { plannedSourceBytes } : {}),
+    ...(estimatedTokens !== undefined ? { estimatedTokens } : {}),
     elapsedMs,
     coldPath: phaseCold || coldPathHeuristic,
     ...(coldPathHeuristic ? { coldPathHeuristic: true } : {}),
     error: input.error,
     ...(input.errorCode ? { errorCode: input.errorCode } : {}),
-    ...(indexState ? { indexState } : {})
+    ...(indexState ? { indexState } : {}),
+    semanticPolicy: str(args.semanticPolicy) ?? "auto",
+    ...(typeof semanticUsed === "boolean" ? { semanticUsed } : {})
   };
 }
 
@@ -169,7 +182,7 @@ export function recordToolInvocation(input: {
         repoHash: requestScope.getStore()?.repoHash,
         ...(input.tool === "java_status" ? { start: args.start === true } : {}),
         // Same default as tools/symbol.ts: no explicit operation means query when `query` is given.
-        ...(input.tool === "java_symbol" ? { operation: str(args.operation) ?? (args.query ? "query" : "position") } : {}),
+        ...(input.tool === "java_symbol" ? { operation: str(args.operation) ?? (args.query ? "query" : "position"), backend: symbolBackend(args) } : {}),
         indexState: indexStateOf(obj(input.value)),
         errorCode
       }));
@@ -235,6 +248,14 @@ function toolErrorCode(failure: unknown, value: unknown): string | undefined {
   return message ? "QUERY_FAILED" : undefined;
 }
 
+/** Mirrors tools/symbol.ts symbolNeedsJdt (kept local so telemetry does not import the tool layer; a test pins them). */
+export function symbolBackend(args: Record<string, unknown>): "static" | "jdt" {
+  const operation = str(args.operation) ?? (args.query ? "query" : "position");
+  if (operation === "evidence" || operation === "outline") return "static";
+  const backend = str(args.backend) ?? (operation === "query" ? "static" : "jdt");
+  return operation !== "query" || backend === "jdt" ? "jdt" : "static";
+}
+
 function indexStateOf(value: Record<string, unknown>): string | undefined {
   return str(obj(value.indexView).state);
 }
@@ -245,4 +266,4 @@ function obj(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 function str(value: unknown): string | undefined { return typeof value === "string" && value ? value : undefined; }
-function num(value: unknown): number { return typeof value === "number" && Number.isFinite(value) ? value : 0; }
+function known(value: unknown): number | undefined { return typeof value === "number" && Number.isFinite(value) ? value : undefined; }
