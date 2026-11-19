@@ -26,7 +26,7 @@ function contextWith(references: ReturnType<typeof at>[], calls: string[] = []):
         return { items: references, totalReferences: references.length, truncated: false };
       }
     }
-  } as unknown as ToolContext;
+  } as never;
 }
 
 test("the root module is \".\" in public locations, matching the scope a caller passes back", () => {
