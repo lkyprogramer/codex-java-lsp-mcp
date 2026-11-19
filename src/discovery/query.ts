@@ -13,6 +13,7 @@ import { classifyQuery } from "./query-intent.js";
 import { QueryTrace, type QueryStageTrace } from "./query-budget.js";
 import { redactPreviewLine } from "./search-document.js";
 import { resolveSearchScope, sourceRootRecordFromPath, type ModuleAliases, type ResolvedSearchScope, type SourceRootRecord } from "./scope.js";
+import { publicModule } from "../repo-layout.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import {
   DISCOVERY_DEFAULT_LIMIT,
@@ -548,7 +549,8 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
       name: hit.simpleName,
       relativePath: hit.relativePath,
       contentHash: hit.contentHash,
-      module: hit.module ?? "",
+      // "." for the root module, matching the module a caller passes back in a scoped query.
+      module: publicModule(hit.module, hit.relativePath) ?? "",
       sourceRoot: hit.sourceRoot ?? "",
       kind: hit.kind,
       fqn: hit.fqn,

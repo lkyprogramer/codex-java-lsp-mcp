@@ -115,6 +115,16 @@ export function normalizeRepoFile(repoRoot: string, inputFile: string): string {
   return absolutePath;
 }
 
+/**
+ * The public module of a repo-relative path: "." for the repository root module (`src/...` at the top level, which
+ * classifyPath and the facts leave empty), else the given module, else undefined (no module layout recognised).
+ * Matches the static scope contract, where "." names the root module.
+ */
+export function publicModule(module: string | undefined, relativePath: string | undefined): string | undefined {
+  if (module) return module;
+  return relativePath?.replaceAll("\\", "/").split("/")[0] === "src" ? "." : undefined;
+}
+
 export function classifyPath(repoRoot: string, filePath: string): PathContext {
   const absolutePath = path.normalize(filePath);
   const relativePath = path.relative(repoRoot, absolutePath);

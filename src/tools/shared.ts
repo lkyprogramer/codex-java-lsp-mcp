@@ -2,7 +2,7 @@
 // output: Compact JSON-safe descriptions for MCP tools.
 // pos: Shared response formatting helpers for V6 tools.
 import { z } from "zod";
-import { classifyPath, sourcePreview } from "../repo-layout.js";
+import { classifyPath, publicModule, sourcePreview } from "../repo-layout.js";
 import { normalizeRepoLocation } from "../semantic-location.js";
 import type { LspLocation, LspLocationLink, LspRange } from "../jdtls-session.js";
 
@@ -45,7 +45,7 @@ export async function describeLocation(
       }
     : {
         path: normalized.relativePath,
-        module: pathContext.module,
+        module: publicModule(pathContext.module, normalized.relativePath),
         projectPath: pathContext.projectPath,
         layer: pathContext.layer,
         sourceSet: pathContext.sourceSet,

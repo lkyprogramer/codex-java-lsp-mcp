@@ -143,6 +143,15 @@ export async function javaSymbol(
       throw new Error("java_symbol operation=query requires query.");
     }
     const backend = args.backend ?? "static";
+    // Scope is a static-index contract: refuse what a backend would silently ignore.
+    if (backend === "jdt" && (args.module !== undefined || args.layer !== undefined || args.sourceSet !== undefined)) {
+      throw new JavaIntelligenceError("INVALID_INPUT",
+        "java_symbol operation=query backend=jdt searches JDT workspace symbols and does not apply module/layer/sourceSet; drop them or use the default static backend.");
+    }
+    if (backend !== "jdt" && args.layer !== undefined) {
+      throw new JavaIntelligenceError("INVALID_INPUT",
+        "java_symbol operation=query (static) scopes by module and sourceSet only; layer filters operation=references.");
+    }
     if (backend !== "jdt") {
       const client = context.javaIndexClient;
       if (!client) {
