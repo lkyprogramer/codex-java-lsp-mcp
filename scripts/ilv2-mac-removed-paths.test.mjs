@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { LEDGER, removedPaths } from "./ilv2-mac-removed-paths.mjs";
+import { LEDGER, productionReachable, removedPaths } from "./ilv2-mac-removed-paths.mjs";
 
 function repo(t, files) {
   const root = mkdtempSync(path.join(os.tmpdir(), "ilv2-removed-paths-"));
@@ -49,6 +49,24 @@ test("a comment in production code that names a removed path is explained, not a
   const d07 = item(removedPaths(root), "D07");
   assert.equal(d07.status, "PASS");
   assert.deepEqual(d07.occurrences.map(entry => [entry.kind, entry.productionReachable]), [["comment", true]]);
+});
+
+test("re-exports are production edges, in every export-from form", t => {
+  const files = {
+    "src/server.ts": 'import { a } from "./barrel.js";\nexport const local = 1;\n',
+    "src/barrel.ts": [
+      'export * from "./star.js";',
+      'export * as ns from "./namespace.js";',
+      'export { b, c as d } from "./named.js";',
+      'export {\n  e\n} from "./multiline.js";',
+      'export type { T } from "./types.js";',
+      'export const notAnEdge = "./decoy.js";'
+    ].join("\n") + "\n",
+    "src/star.ts": "", "src/namespace.ts": "", "src/named.ts": "", "src/multiline.ts": "", "src/types.ts": "", "src/decoy.ts": "", "src/orphan.ts": ""
+  };
+  const root = repo(t, files);
+  const reachable = productionReachable(root, Object.keys(files));
+  assert.deepEqual([...reachable].sort(), ["src/barrel.ts", "src/multiline.ts", "src/named.ts", "src/namespace.ts", "src/server.ts", "src/star.ts", "src/types.ts"]);
 });
 
 test("the candidate itself has every remaining historical name explained and no production caller", () => {

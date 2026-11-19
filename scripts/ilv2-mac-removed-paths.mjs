@@ -75,8 +75,8 @@ function candidateFiles(root) {
   return [...new Set(result.stdout.split("\0").filter(Boolean))].filter(file => SCANNED.test(file) && existsSync(path.join(root, file))).sort();
 }
 
-const IMPORT = /(?:\bimport\s*(?:[^'"()]*?\bfrom\s*)?|\bimport\s*\(\s*|\bnew URL\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
-/** Files reachable from the production entries through relative static/dynamic imports and worker URLs. */
+const IMPORT = /(?:\bimport\s*(?:[^'"()]*?\bfrom\s*)?|\bexport\s*(?:type\s*)?(?:\*(?:\s*as\s+[\w$]+)?|\{[^}]*\})\s*from\s*|\bimport\s*\(\s*|\bnew URL\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
+/** Files reachable from the production entries through relative static/dynamic imports, re-exports and worker URLs. */
 export function productionReachable(root, files) {
   const known = new Set(files);
   const resolve = (from, spec) => {
