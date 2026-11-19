@@ -1,6 +1,7 @@
 // input: The tool telemetry directory (impact-YYYYMMDD.jsonl written by impact-telemetry.ts) and a window.
-// output: Per tool/operation call counts, success rate, latency percentiles, error codes, index states,
-//         java_impact cold-path share and token cost, and the slowest calls; as text or JSON.
+// output: Per tool/operation/backend call counts, success rate, latency percentiles, error codes, index states,
+//         java_impact cold paths (phase evidence) apart from merely slow calls, live JDT use, and token cost over
+//         the calls that reported one; plus the slowest calls; as text or JSON.
 // pos: Read-only owner diagnostics behind `daemonctl.sh stats`. Never touches the daemon or the index.
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -11,13 +12,16 @@ const SLOWEST = 10;
 
 export type TelemetryRow = {
   ts: number; tool: string; operation: string; elapsedMs: number; ok: boolean;
-  errorCode?: string; indexState?: string; start?: boolean; coldPath?: boolean; estimatedTokens?: number;
+  errorCode?: string; indexState?: string; start?: boolean; backend?: string;
+  /** coldPath: phase-evidenced cold work only; slow: over the recorder's threshold without that evidence. */
+  coldPath?: boolean; slow?: boolean; semanticUsed?: boolean; estimatedTokens?: number;
 };
 export type GroupStats = {
-  tool: string; operation: string; calls: number; ok: number; okRate: number;
+  tool: string; operation: string; backend?: string; calls: number; ok: number; okRate: number;
   p50Ms: number; p95Ms: number; maxMs: number;
   errorCodes: Record<string, number>; indexStates: Record<string, number>;
-  startCalls?: number; coldPath?: number; tokensP50?: number;
+  /** tokensKnown: calls that reported a cost; tokensP50 is over those only (unknown is not zero). */
+  startCalls?: number; coldPath?: number; slow?: number; semanticUsed?: number; tokensKnown?: number; tokensP50?: number;
 };
 export type TelemetrySummary = {
   since: string; until: string; rows: number; malformed: number; firstTs?: string; lastTs?: string;
@@ -25,7 +29,11 @@ export type TelemetrySummary = {
   slowest: Array<{ ts: string; tool: string; operation: string; elapsedMs: number; errorCode?: string }>;
 };
 
-/** Older rows have no operation: java_symbol becomes "unknown", other tools have none ("-"). */
+/**
+ * Older rows have no operation: java_symbol becomes "unknown", other tools have none ("-").
+ * Rows before 2026-11-19 folded slow calls into coldPath (flagged coldPathHeuristic) and wrote a failed
+ * java_impact's missing cost as 0; both are read back as slow / unknown.
+ */
 export function parseTelemetryRow(line: string): TelemetryRow | undefined {
   let value: unknown;
   // A torn or foreign line is counted as malformed by the caller, never fatal.
@@ -49,9 +57,19 @@ export function parseTelemetryRow(line: string): TelemetryRow | undefined {
     ...(text("errorCode") ? { errorCode: text("errorCode") } : {}),
     ...(text("indexState") ? { indexState: text("indexState") } : {}),
     ...(typeof row.start === "boolean" ? { start: row.start } : {}),
-    ...(typeof row.coldPath === "boolean" ? { coldPath: row.coldPath } : {}),
-    ...(typeof row.estimatedTokens === "number" && Number.isFinite(row.estimatedTokens) ? { estimatedTokens: row.estimatedTokens } : {})
+    ...(text("backend") ? { backend: text("backend") } : {}),
+    ...(typeof row.coldPath === "boolean" ? { coldPath: row.coldPath && row.coldPathHeuristic !== true } : {}),
+    ...(row.coldPathHeuristic === true ? { slow: true } : {}),
+    ...(typeof row.semanticUsed === "boolean" ? { semanticUsed: row.semanticUsed } : {}),
+    ...(knownTokens(row) !== undefined ? { estimatedTokens: knownTokens(row) } : {})
   };
+}
+
+function knownTokens(row: Record<string, unknown>): number | undefined {
+  const value = row.estimatedTokens;
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  // Legacy: a failed impact without a cost was written as 0.
+  return value === 0 && row.error === true ? undefined : value;
 }
 
 /** Nearest-rank percentile of an ascending array; 0 for an empty one. */
@@ -65,11 +83,12 @@ export function summarizeTelemetry(rows: readonly TelemetryRow[], window: { sinc
   const inWindow = rows.filter(row => row.ts >= window.since && row.ts <= window.until).sort((a, b) => a.ts - b.ts);
   const byGroup = new Map<string, TelemetryRow[]>();
   for (const row of inWindow) {
-    const key = `${row.tool}\u0000${row.operation}`;
+    const key = `${row.tool}\u0000${row.operation}\u0000${row.backend ?? ""}`;
     const bucket = byGroup.get(key);
     if (bucket) bucket.push(row); else byGroup.set(key, [row]);
   }
-  const groups = [...byGroup.values()].map(groupStats).sort((a, b) => b.calls - a.calls || a.tool.localeCompare(b.tool) || a.operation.localeCompare(b.operation));
+  const groups = [...byGroup.values()].map(groupStats).sort((a, b) => b.calls - a.calls || a.tool.localeCompare(b.tool)
+    || a.operation.localeCompare(b.operation) || (a.backend ?? "").localeCompare(b.backend ?? ""));
   const slowest = [...inWindow].sort((a, b) => b.elapsedMs - a.elapsedMs).slice(0, SLOWEST)
     .map(row => ({ ts: new Date(row.ts).toISOString(), tool: row.tool, operation: row.operation, elapsedMs: row.elapsedMs, ...(row.errorCode ? { errorCode: row.errorCode } : {}) }));
   const first = inWindow[0];
@@ -89,15 +108,23 @@ function groupStats(rows: TelemetryRow[]): GroupStats {
   const ok = rows.filter(row => row.ok).length;
   const stats: GroupStats = {
     tool: first?.tool ?? "", operation: first?.operation ?? "",
+    ...(first?.backend ? { backend: first.backend } : {}),
     calls: rows.length, ok, okRate: rows.length === 0 ? 0 : ok / rows.length,
     p50Ms: percentile(latencies, 0.5), p95Ms: percentile(latencies, 0.95), maxMs: latencies[latencies.length - 1] ?? 0,
     errorCodes: count(rows.map(row => row.errorCode)), indexStates: count(rows.map(row => row.indexState))
   };
   const starts = rows.filter(row => row.start === true).length;
   if (starts > 0) stats.startCalls = starts;
-  if (rows.some(row => row.coldPath !== undefined)) stats.coldPath = rows.filter(row => row.coldPath === true).length;
+  if (rows.some(row => row.coldPath !== undefined)) {
+    stats.coldPath = rows.filter(row => row.coldPath === true).length;
+    stats.slow = rows.filter(row => row.slow === true).length;
+  }
+  if (rows.some(row => row.semanticUsed !== undefined)) stats.semanticUsed = rows.filter(row => row.semanticUsed === true).length;
   const tokens = rows.flatMap(row => row.estimatedTokens === undefined ? [] : [row.estimatedTokens]).sort((a, b) => a - b);
-  if (tokens.length > 0) stats.tokensP50 = percentile(tokens, 0.5);
+  if (tokens.length > 0) {
+    stats.tokensKnown = tokens.length;
+    stats.tokensP50 = percentile(tokens, 0.5);
+  }
   return stats;
 }
 
@@ -135,10 +162,11 @@ export function formatSummary(summary: TelemetrySummary): string {
   for (const group of summary.groups) {
     const extra = [
       group.startCalls !== undefined ? `start=${group.startCalls}` : "",
-      group.coldPath !== undefined ? `cold=${group.coldPath}` : "",
-      group.tokensP50 !== undefined ? `tokensP50=${group.tokensP50}` : ""
+      group.coldPath !== undefined ? `cold=${group.coldPath} slow=${group.slow ?? 0}` : "",
+      group.semanticUsed !== undefined ? `jdtUsed=${group.semanticUsed}` : "",
+      group.tokensP50 !== undefined ? `tokensP50=${group.tokensP50}(n=${group.tokensKnown ?? 0})` : ""
     ].filter(Boolean).join(" ");
-    lines.push([group.tool, group.operation, group.calls, (group.okRate * 100).toFixed(1), group.p50Ms, group.p95Ms, group.maxMs,
+    lines.push([group.tool, group.backend ? `${group.operation}/${group.backend}` : group.operation, group.calls, (group.okRate * 100).toFixed(1), group.p50Ms, group.p95Ms, group.maxMs,
       pairs(group.errorCodes), pairs(group.indexStates), extra || "-"].join("\t"));
   }
   lines.push("", `slowest ${summary.slowest.length}:`);

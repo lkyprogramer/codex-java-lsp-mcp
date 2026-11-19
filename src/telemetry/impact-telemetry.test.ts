@@ -6,6 +6,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import test from "node:test";
 import { repoHash } from "../path-utils.js";
+import { symbolNeedsJdt } from "../tools/symbol.js";
 import {
   buildImpactDetail,
   buildToolCounter,
@@ -14,6 +15,7 @@ import {
   noteTelemetryRepoHash,
   recordToolInvocation,
   resetImpactTelemetryForTests,
+  symbolBackend,
   telemetryEnabled,
   withTelemetryRequestScope
 } from "./impact-telemetry.js";
@@ -376,4 +378,35 @@ test("tool counters record the resolved java_symbol operation and the answer's i
   ]);
   assert.ok(rows.every(row => !("operation" in row) || row.tool === "java_symbol"));
   assert.ok(!("indexState" in (rows[2] ?? {})), "absent state is omitted, not written as undefined");
+});
+
+test("a missing impact cost stays unknown instead of zero; semantic policy and use are recorded", () => {
+  const failed = buildImpactDetail({ args: { repoRoot: "/tmp/x" }, value: undefined, elapsedMs: 40, error: true, errorCode: "INDEX_PARTIAL" });
+  assert.equal("estimatedTokens" in failed, false);
+  assert.equal("plannedSourceBytes" in failed, false);
+  assert.equal(failed.semanticPolicy, "auto");
+  assert.equal("semanticUsed" in failed, false);
+  const zero = buildImpactDetail({ args: { semanticPolicy: "fast" }, value: { cost: { estimatedTokens: 0, readBytes: 0 }, semantic: { used: false } }, elapsedMs: 5, error: false });
+  assert.equal(zero.estimatedTokens, 0, "a measured zero is kept");
+  assert.equal(zero.plannedSourceBytes, 0);
+  assert.equal(zero.semanticPolicy, "fast");
+  assert.equal(zero.semanticUsed, false);
+  const used = buildImpactDetail({ args: { semanticPolicy: "required" }, value: { semantic: { used: true } }, elapsedMs: 5, error: false });
+  assert.equal(used.semanticUsed, true);
+  assert.equal("estimatedTokens" in used, false);
+});
+
+test("java_symbol counters record the backend the request needs, matching the tool's admission predicate", () => {
+  const operations = [undefined, "query", "position", "references", "evidence", "outline"];
+  for (const operation of operations) for (const backend of [undefined, "static", "jdt"]) for (const query of [undefined, "Pay"]) {
+    const args = { ...(operation ? { operation } : {}), ...(backend ? { backend } : {}), ...(query ? { query } : {}) };
+    const expected = symbolNeedsJdt(args as Parameters<typeof symbolNeedsJdt>[0]) ? "jdt" : "static";
+    assert.equal(symbolBackend(args), expected, JSON.stringify(args));
+  }
+  const rows: Array<Record<string, unknown>> = [];
+  const sink = { record: (row: Record<string, unknown>) => { rows.push(row); }, flush: () => undefined };
+  recordToolInvocation({ tool: "java_symbol", args: { query: "Pay" }, value: {}, elapsedMs: 1, error: false, sink });
+  recordToolInvocation({ tool: "java_symbol", args: { query: "Pay", backend: "jdt" }, value: undefined, elapsedMs: 1, error: true, sink, failure: new Error("x") });
+  recordToolInvocation({ tool: "java_status", args: {}, value: {}, elapsedMs: 1, error: false, sink });
+  assert.deepEqual(rows.map(row => row.backend), ["static", "jdt", undefined]);
 });

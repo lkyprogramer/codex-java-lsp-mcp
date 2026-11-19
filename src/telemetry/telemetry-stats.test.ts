@@ -61,7 +61,7 @@ test("summary groups by tool and operation, keeps the window, and counts errors,
   assert.deepEqual(summary.slowest.map(item => item.elapsedMs), [5000, 30, 10, 10, 10, 10]);
   const text = formatSummary(summary);
   assert.match(text, /java_symbol\treferences\t1\t100\.0\t5000\t5000\t5000/);
-  assert.match(text, /java_impact\t-\t2\t100\.0\t.*cold=1 tokensP50=400/);
+  assert.match(text, /java_impact\t-\t2\t100\.0\t.*cold=1 slow=0 tokensP50=400\(n=2\)/);
 });
 
 test("empty window summarizes to zero without first/last timestamps", () => {
@@ -91,4 +91,31 @@ test("arguments require an absolute directory and a bounded day window", () => {
   assert.throws(() => parseStatsArgs(["--dir", "relative"]), /--dir/);
   for (const since of ["0d", "366d", "7", "7h", ""]) assert.throws(() => parseStatsArgs(["--dir", "/x", "--since", since]), /--since/, since);
   assert.throws(() => parseStatsArgs(["--dir", "/x", "--bogus"]), /unknown argument/);
+});
+
+test("slow calls are not cold, an unknown cost is not zero, and query rows split by backend", () => {
+  const line = (extra: Record<string, unknown>) => JSON.stringify({ ts: "2026-11-19T00:00:00.000Z", elapsedMs: 3000, ...extra });
+  const legacySlow = parseTelemetryRow(line({ tool: "java_impact", error: false, coldPath: true, coldPathHeuristic: true, estimatedTokens: 50 }));
+  assert.equal(legacySlow?.coldPath, false);
+  assert.equal(legacySlow?.slow, true);
+  const legacyFailed = parseTelemetryRow(line({ tool: "java_impact", error: true, coldPath: false, estimatedTokens: 0 }));
+  assert.equal(legacyFailed?.estimatedTokens, undefined, "a failed impact's 0 was a missing cost");
+  const measuredZero = parseTelemetryRow(line({ tool: "java_impact", error: false, coldPath: false, estimatedTokens: 0, semanticUsed: true }));
+  assert.equal(measuredZero?.estimatedTokens, 0);
+  const rows = [
+    legacySlow, legacyFailed, measuredZero,
+    parseTelemetryRow(line({ tool: "java_impact", error: false, coldPath: true, estimatedTokens: 90 })),
+    parseTelemetryRow(line({ tool: "java_symbol", operation: "query", backend: "static", ok: true })),
+    parseTelemetryRow(line({ tool: "java_symbol", operation: "query", backend: "jdt", ok: false, errorCode: "DEADLINE_EXCEEDED" })),
+    parseTelemetryRow(line({ tool: "java_symbol", operation: "query", ok: true }))
+  ].flatMap(row => row ? [row] : []);
+  assert.equal(rows.length, 7);
+  const summary = summarizeTelemetry(rows, { since: 0, until: Date.parse("2026-11-20T00:00:00.000Z") });
+  const impact = summary.groups.find(group => group.tool === "java_impact");
+  assert.deepEqual([impact?.calls, impact?.coldPath, impact?.slow, impact?.semanticUsed, impact?.tokensKnown, impact?.tokensP50], [4, 1, 1, 1, 3, 50]);
+  const query = summary.groups.filter(group => group.tool === "java_symbol").map(group => [group.backend ?? "-", group.calls, group.ok]);
+  assert.deepEqual(query.sort(), [["-", 1, 1], ["jdt", 1, 0], ["static", 1, 1]]);
+  const text = formatSummary(summary);
+  assert.match(text, /java_symbol\tquery\/jdt\t1\t0\.0/);
+  assert.match(text, /cold=1 slow=1 jdtUsed=1 tokensP50=50\(n=3\)/);
 });
