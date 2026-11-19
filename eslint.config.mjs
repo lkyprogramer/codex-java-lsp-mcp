@@ -29,5 +29,17 @@ export default tseslint.config(
         message: "Do not launder types with `as unknown as`; narrow with a type guard or a schema."
       }]
     }
+  },
+  // Function size and complexity (production code only): existing outliers are frozen like the rules above,
+  // so a function that is already over a limit may not get worse and a new one may not cross it.
+  {
+    files: ["src/**/*.ts"],
+    ignores: ["src/**/*.test.ts"],
+    rules: {
+      complexity: ["error", 25],
+      "max-lines-per-function": ["error", { max: 120, skipBlankLines: true, skipComments: true }],
+      "max-depth": ["error", 5],
+      "max-params": ["error", 6]
+    }
   }
 );

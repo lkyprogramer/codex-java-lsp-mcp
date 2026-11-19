@@ -23,7 +23,7 @@
 
 ## 机器门禁
 
-- `npm run lint`（eslint，基线 `eslint-suppressions.json`）和 `npm run check:hygiene`（基线 `scripts/repo-hygiene-baseline.json`）都在 `gate:pr` 里，只拦新增问题。
+- `npm run lint`（eslint，基线 `eslint-suppressions.json`）和 `npm run check:hygiene`（基线 `scripts/repo-hygiene-baseline.json`）都在 `gate:pr` 里，只拦新增问题。lint 对生产代码另有函数体量规则：圈复杂度 ≤25、函数 ≤120 行（不计空行和注释）、嵌套 ≤5 层、参数 ≤6 个；已超标的函数冻结在基线里，不得变差。
 - 基线只减不增：修掉存量后用 `npm run lint:prune` 收紧；`check-repo-hygiene.mjs --write-baseline` 只用于经评审的重置，不得用来放行新问题。
 
 ## 测试
