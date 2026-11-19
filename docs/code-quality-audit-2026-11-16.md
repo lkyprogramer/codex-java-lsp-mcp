@@ -398,6 +398,9 @@
 | E5 | 已修 | `58a57a5` |
 | E6 | 已修 | `6777a9f`（HANDOFF 76 KB→2.6 KB）、README 历史叙述移至 `docs/archive/` |
 | E7 | 存量冻结 | 卫生检查拦测试新增 `setTimeout` |
+| 函数体量（2026-11-19 补） | 已加 | eslint 对生产代码开 `complexity` 25、`max-lines-per-function` 120、`max-depth` 5、`max-params` 6；存量 46 个文件（复杂度 40、行数 17、参数 20、嵌套 1 处）冻结在 `eslint-suppressions.json` |
+| §7.1 加严 tsconfig、§7.2 自定义 lint 规则与格式化、§7.5 PR 模板 | 不做 | 维护模式下 `src/` 改动少，投入回不了本；对应约束保留在 AGENTS.md 文字规则 |
+| `src/benchmark/` 退役 | 暂缓 | 仍被现行发布合同（K29 负载、K26/K28 JDT）、隔离工具和 ILV2 脚本测试引用，与 JDT 绑在一起；随 JDT 去留决定一并处理 |
 
 ## 附录：v2 修订记录（依据独立评审）
 

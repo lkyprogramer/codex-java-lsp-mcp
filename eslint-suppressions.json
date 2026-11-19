@@ -2,6 +2,9 @@
   "src/agent-router/anchor.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/agent-router/candidate-helpers.ts": {
@@ -51,6 +54,12 @@
   "src/agent-router/framework/mapstruct-adapter.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-depth": {
+      "count": 1
     }
   },
   "src/agent-router/framework/mybatis-adapter.test.ts": {
@@ -61,6 +70,12 @@
   "src/agent-router/framework/mybatis-adapter.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/agent-router/framework/runner.test.ts": {
@@ -84,6 +99,12 @@
   "src/agent-router/framework/spring-adapter.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/agent-router/framework/spring-endpoint.test.ts": {
@@ -104,6 +125,14 @@
   "src/agent-router/impact-metrics.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    }
+  },
+  "src/agent-router/index.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "src/agent-router/java-index-router.ts": {
@@ -147,6 +176,12 @@
   "src/agent-router/providers/relationship-provider.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 14
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "src/agent-router/providers/semantic-provider.test.ts": {
@@ -167,6 +202,11 @@
       "count": 1
     },
     "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/agent-router/providers/static-provider.ts": {
+    "complexity": {
       "count": 1
     }
   },
@@ -199,6 +239,12 @@
   "src/agent-router/read-plan.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/agent-router/reference-ranking.test.ts": {
@@ -216,8 +262,19 @@
       "count": 7
     }
   },
+  "src/agent-router/router-facts.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "src/agent-router/semantic.ts": {
     "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 2
     }
   },
@@ -229,6 +286,20 @@
   "src/agent-router/type-reference.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
+  "src/benchmark-agent-impact.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
+      "count": 2
     }
   },
   "src/benchmark/attribution-v3.test.ts": {
@@ -264,6 +335,12 @@
   "src/benchmark/measure-query-load.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/benchmark/measure-request-load.ts": {
@@ -274,6 +351,12 @@
   "src/benchmark/measure-wire-bytes.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/benchmark/process-resource-observer.test.ts": {
@@ -283,6 +366,14 @@
   },
   "src/benchmark/process-resource-observer.ts": {
     "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/benchmark/progressive-index.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -309,11 +400,19 @@
   "src/benchmark/task36-mutation-matrix.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/context-engine/context-candidates.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
+    }
+  },
+  "src/context-engine/context-candidates.ts": {
+    "max-params": {
+      "count": 1
     }
   },
   "src/context-engine/context-closure.test.ts": {
@@ -331,6 +430,11 @@
       "count": 1
     }
   },
+  "src/context-engine/context-planner.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "src/context-engine/context-serializer.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
@@ -344,6 +448,9 @@
   "src/context-engine/graph-search.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/context-engine/plan-query.test.ts": {
@@ -353,6 +460,12 @@
   },
   "src/context-engine/plan-query.ts": {
     "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-params": {
       "count": 2
     }
   },
@@ -377,6 +490,11 @@
     },
     "no-restricted-syntax": {
       "count": 3
+    }
+  },
+  "src/discovery/evidence-unit.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "src/discovery/locator-name.test.ts": {
@@ -456,6 +574,12 @@
   "src/discovery/query.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/discovery/scope.test.ts": {
@@ -506,6 +630,12 @@
   "src/index-builder/cold-build.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/index-builder/content-capture.test.ts": {
@@ -524,6 +654,12 @@
   "src/index-builder/incremental.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
+    },
+    "complexity": {
+      "count": 3
+    },
+    "max-params": {
+      "count": 5
     }
   },
   "src/index-builder/integrity.test.ts": {
@@ -549,6 +685,9 @@
   "src/index-builder/progress.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/java-index/ast-extractor.test.ts": {
@@ -559,6 +698,9 @@
   "src/java-index/ast-extractor.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/java-index/builder/incremental.test.ts": {
@@ -597,6 +739,9 @@
   "src/java-index/edge-builder.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 11
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "src/java-index/entity-scoring.ts": {
@@ -642,6 +787,9 @@
   "src/java-index/name-resolver.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 10
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/java-index/router-integration.test.ts": {
@@ -657,6 +805,12 @@
   "src/java-index/snapshot/index-owner.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 12
+    },
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/java-index/snapshot/owner-gc.test.ts": {
@@ -708,6 +862,9 @@
   "src/java-index/snapshot/request-view.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "src/java-index/snapshot/seal-integrity.test.ts": {
@@ -733,6 +890,9 @@
   "src/java-index/snapshot/snapshot-store.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 3
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/java-index/snapshot/workspace-tracker.test.ts": {
@@ -743,6 +903,9 @@
   "src/java-index/snapshot/workspace-tracker.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 6
+    },
+    "complexity": {
+      "count": 1
     }
   },
   "src/java-index/snapshot/worktree-idle.test.ts": {
@@ -767,6 +930,11 @@
   },
   "src/java-index/sql/entity-tokens.ts": {
     "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/java-index/sql/evidence-sources.ts": {
+    "complexity": {
       "count": 1
     }
   },
@@ -876,6 +1044,11 @@
       "count": 3
     }
   },
+  "src/java-knowledge/framework-edge-builder.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "src/java-knowledge/graph-builder.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 4
@@ -899,6 +1072,9 @@
   "src/java-knowledge/persistence-edge-builder.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "src/jdt-process-tree.test.ts": {
@@ -911,6 +1087,11 @@
       "count": 1
     }
   },
+  "src/jdtls-lsp-io.ts": {
+    "max-params": {
+      "count": 4
+    }
+  },
   "src/jdtls-session.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
@@ -919,6 +1100,14 @@
       "count": 25
     },
     "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/jdtls-session.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
       "count": 1
     }
   },
@@ -938,6 +1127,9 @@
     }
   },
   "src/mac-platform/fsevents.ts": {
+    "complexity": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 4
     }
@@ -960,6 +1152,9 @@
   "src/mcp-server-factory.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
+    },
+    "max-lines-per-function": {
+      "count": 1
     }
   },
   "src/process-crash-markers.test.ts": {
@@ -1003,6 +1198,9 @@
   "src/repo-runtime-manager.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2
+    },
+    "max-params": {
+      "count": 1
     }
   },
   "src/routing-policy.test.ts": {
@@ -1018,6 +1216,11 @@
       "count": 1
     }
   },
+  "src/search/rg-runner.ts": {
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "src/semantic-edge-store.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 19
@@ -1028,12 +1231,22 @@
       "count": 1
     }
   },
+  "src/smoke-http.ts": {
+    "complexity": {
+      "count": 1
+    }
+  },
   "src/stdio-owner-proxy.test.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 14
     },
     "no-restricted-syntax": {
       "count": 3
+    }
+  },
+  "src/stdio-owner-proxy.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "src/telemetry/impact-telemetry.test.ts": {
@@ -1082,14 +1295,25 @@
   "src/tools/symbol-target.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 11
+    },
+    "complexity": {
+      "count": 2
     }
   },
   "src/tools/symbol.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 1
     },
+    "complexity": {
+      "count": 1
+    },
     "no-restricted-syntax": {
       "count": 4
+    }
+  },
+  "src/worktree-cache-cleanup.ts": {
+    "complexity": {
+      "count": 1
     }
   },
   "src/worktree-identity.ts": {
