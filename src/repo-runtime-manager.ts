@@ -47,16 +47,17 @@ import {
 import { resolveRoutingPolicy } from "./routing-policy.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import {
+  createRequestBudget,
   createRequestContext,
   defaultDeadlineMs,
   MAX_REQUEST_DEADLINE_MS,
   type RequestContext,
   type RequestFreshnessMode,
-  type RequestMode,
-  type SemanticPolicy
+  type RequestOptionsInput,
 } from "./runtime/request-context.js";
 import { RgRunner } from "./search/rg-runner.js";
 import { FileSemanticEdgeStoreV2, type SemanticEdgeStoreV2 } from "./semantic-edge-store.js";
+import { noteTelemetryRepoHash, noteTelemetryRequest } from "./telemetry/impact-telemetry.js";
 import type { ToolContext } from "./tools/context.js";
 import { touchRepoCache, type RepoCacheTouch } from "./worktree-cache-cleanup.js";
 import { RuntimeLifecycleGate } from "./runtime-lifecycle-gate.js";
@@ -68,11 +69,6 @@ import {
 import { forceTerminateJdtlsChild } from "./jdtls-session.js";
 import { idlePrewarmTracker } from "./agent-router/prewarm-metrics.js";
 
-export type RequestOptionsInput = {
-  mode: RequestMode;
-  semanticPolicy: SemanticPolicy;
-  deadlineMs?: number;
-};
 
 /** Per pinned repo: cover one cold full build (lishuedu ~106s) plus sealing. */
 const PREWARM_INDEX_MS = 300_000;
@@ -372,14 +368,18 @@ export class RepoRuntimeManager {
     options: { mayStartLsp?: boolean; observeStaticRead?: boolean; requestOptions?: RequestOptionsInput; signal?: AbortSignal } = {}
   ): Promise<T> {
     const requestOptions = options.requestOptions;
-    const budget = this.createRequestBudget(requestOptions);
+    const budget = createRequestBudget(requestOptions);
+    noteTelemetryRequest({ scope: "repo", stage: "runtime.repo-resolve" });
     const resolved = await budget.race("runtime.repo-resolve", this.resolver.resolve(selector));
+    noteTelemetryRepoHash(resolved.repoHash);
+    noteTelemetryRequest({ stage: "runtime.context" });
     let entry = await this.getOrCreate(resolved, budget);
     while (entry.retiring || entry.stoppedAt !== undefined) entry = await this.getOrCreate(resolved, budget);
     this.refreshResource(entry);
     entry.refCount += 1;
     this.clearIdleTimers(entry);
     try {
+      noteTelemetryRequest({ stage: "runtime.index-owner" });
       const owner = await budget.race("runtime.index-owner", this.indexOwner());
       return await this.withView(entry, owner, budget, options.signal, true, async (context, view) => {
         const request = this.requestContextFor(entry, view, requestOptions, budget);
@@ -408,8 +408,11 @@ export class RepoRuntimeManager {
     handler: (state: { resolved: ResolvedRepo; context?: ManagedToolContext; labels: ViewLabels; javaIndex?: JavaIndexStatus; layout?: LayoutContext }) => Promise<T>,
     options: { deadlineMs?: number; signal?: AbortSignal } = {}
   ): Promise<T> {
-    const budget = DeadlineBudget.fromTimeout(Math.min(MAX_REQUEST_DEADLINE_MS, options.deadlineMs ?? defaultDeadlineMs("balanced", "auto")));
+    const budget = createRequestBudget({ mode: "balanced", semanticPolicy: "auto", deadlineMs: options.deadlineMs });
+    noteTelemetryRequest({ scope: "repo", stage: "status.resolve" });
     const resolved = await budget.race("status.resolve", this.resolver.resolve(selector));
+    noteTelemetryRepoHash(resolved.repoHash);
+    noteTelemetryRequest({ stage: "status.view" });
     const entry = this.runtimes.get(resolved.repoRoot);
     const owner = await this.openedOwner();
     if (!entry || entry.stoppedAt !== undefined || !owner?.peek(resolved.repoRoot)) {
@@ -487,7 +490,10 @@ export class RepoRuntimeManager {
     handler: (context: ManagedToolContext, view: RequestView | undefined) => Promise<T>,
     observeStaticRead?: boolean
   ): Promise<T> {
-    if (!owner) return handler(entry.context, undefined);
+    if (!owner) {
+      noteTelemetryRequest({ stage: "request.handler", handlerRemainingMs: budget.remainingMs() });
+      return handler(entry.context, undefined);
+    }
     return withRequestView({
       owner, budget, signal, start, resolve: async () => entry.context.repoRoot,
       handler: async view => {
@@ -594,16 +600,6 @@ export class RepoRuntimeManager {
     (runtimes.find(runtime => runtime.snapshotId === event.snapshotId) ?? runtimes[0])?.router.onRepoChanged(batch);
     for (const runtime of runtimes) runtime.router.invalidateGeneration(generation);
     entry.context.router.invalidateGeneration(generation);
-  }
-
-  private createRequestBudget(requestOptions?: RequestOptionsInput): DeadlineBudget {
-    const mode = requestOptions?.mode ?? "balanced";
-    const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
-    const deadlineMs = Math.min(
-      MAX_REQUEST_DEADLINE_MS,
-      requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
-    );
-    return DeadlineBudget.fromTimeout(deadlineMs);
   }
 
   reservedCount(): number {

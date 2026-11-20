@@ -6,8 +6,15 @@ import { appendFileSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { repoCacheBase } from "../repo-layout.js";
 import { repoHash } from "../path-utils.js";
+import type { ViewState } from "../java-index/snapshot/index-owner.js";
+import { IMPACT_RESULT_KINDS, type RequestDiagnostics, type RequestStage } from "./request-diagnostics.js";
 
-type TelemetryRequestScope = { repoHash?: string; hydratePhases?: Record<string, number> };
+type TelemetryRequestScope = Omit<RequestDiagnostics, "failureStage" | "resultKind"> & {
+  repoHash?: string;
+  hydratePhases?: Record<string, number>;
+  stage?: RequestStage;
+  indexState?: ViewState;
+};
 const requestScope = new AsyncLocalStorage<TelemetryRequestScope>();
 
 export function withTelemetryRequestScope<T>(fn: () => T): T {
@@ -19,6 +26,11 @@ export function noteTelemetryRepoHash(repoHashValue: string): void {
   if (store && repoHashValue) store.repoHash = repoHashValue;
 }
 
+export function noteTelemetryRequest(fields: Omit<TelemetryRequestScope, "repoHash" | "hydratePhases">): void {
+  const store = requestScope.getStore();
+  if (store) Object.assign(store, fields);
+}
+
 export function noteTelemetryHydratePhases(phases: Record<string, number>): void {
   const store = requestScope.getStore();
   if (!store || !phases) return;
@@ -28,7 +40,7 @@ export function noteTelemetryHydratePhases(phases: Record<string, number>): void
 const DAY_MS = 86400000;
 const COLD_MS = 2000;
 
-export type ToolCounterRecord = {
+export type ToolCounterRecord = RequestDiagnostics & {
   ts: string; tool: string; elapsedMs: number; ok: boolean;
   repoHash?: string; start?: boolean; errorCode?: string;
   /** java_symbol operation as resolved by the tool (explicit, else query/position by `query`). */
@@ -38,7 +50,7 @@ export type ToolCounterRecord = {
   /** java_symbol backend the request needs: static index or live JDT (tools/symbol.ts symbolNeedsJdt). */
   backend?: "static" | "jdt";
 };
-export type ImpactDetailRecord = {
+export type ImpactDetailRecord = RequestDiagnostics & {
   ts: string; tool: string; repoHash: string; mode?: string; verbosity?: string;
   /** Absent when the answer carried no cost (a failure, or no real impact run): unknown, never zero. */
   anchorsCount: number; readPlanItems: number; plannedSourceBytes?: number; estimatedTokens?: number;
@@ -97,13 +109,18 @@ export function buildImpactDetail(input: {
     /hydrate|coldbuild|cold-build|cold_build|siblingcopy|reconcilewait/i.test(key)
   );
   const coldPathHeuristic = !phaseCold && elapsedMs > COLD_MS;
-  const indexState = indexStateOf(value);
+  const request = requestDiagnosticFields(input.error);
+  const indexState = indexStateOf(value) ?? request.indexState;
+  const resultKind = input.error ? undefined : IMPACT_RESULT_KINDS.find(kind => kind === value.status)
+    ?? (value.version === 6 || value.version === 7 ? "PLAN" : undefined);
   const plannedSourceBytes = known(cost.readBytes ?? cost.plannedSourceBytes);
   const estimatedTokens = known(cost.estimatedTokens);
   const semanticUsed = obj(value.semantic).used;
   return {
     ts: (input.now ?? new Date()).toISOString(),
     tool: "java_impact",
+    ...request,
+    ...(resultKind ? { resultKind } : {}),
     repoHash: resolveRepoHash(args, value),
     mode: str(args.mode),
     verbosity: str(args.verbosity),
@@ -174,7 +191,7 @@ export function recordToolInvocation(input: {
     const args = obj(input.args);
     sink.record(input.tool === "java_impact"
       ? buildImpactDetail({ ...input, errorCode })
-      : buildToolCounter({
+      : { ...requestDiagnosticFields(input.error), ...buildToolCounter({
         tool: input.tool,
         elapsedMs: input.elapsedMs,
         ok: !input.error,
@@ -185,7 +202,7 @@ export function recordToolInvocation(input: {
         ...(input.tool === "java_symbol" ? { operation: str(args.operation) ?? (args.query ? "query" : "position"), backend: symbolBackend(args) } : {}),
         indexState: indexStateOf(obj(input.value)),
         errorCode
-      }));
+      }) });
   } catch { /* drop */ }
 }
 
@@ -215,11 +232,18 @@ function gcOldFiles(dir: string, now: Date): void {
   } catch { /* drop */ }
 }
 
+function requestDiagnosticFields(error: boolean): RequestDiagnostics & { indexState?: ViewState } {
+  const { repoHash: _repoHash, hydratePhases: _hydratePhases, stage, ...fields } = requestScope.getStore() ?? {};
+  return error && stage ? { ...fields, failureStage: stage } : fields;
+}
+
 function resolveRepoHash(args: Record<string, unknown>, value: Record<string, unknown>): string {
+  const scope = requestScope.getStore();
+  if (scope?.repoHash) return scope.repoHash;
+  if (scope?.scope === "repo") return "";
   if (typeof value.repoHash === "string" && value.repoHash) return value.repoHash;
   const repoRoot = typeof args.repoRoot === "string" ? args.repoRoot : "";
-  if (repoRoot) return repoHash(repoRoot);
-  return requestScope.getStore()?.repoHash ?? "";
+  return repoRoot ? repoHash(repoRoot) : "";
 }
 
 function readPlanItemCount(value: Record<string, unknown>): number {

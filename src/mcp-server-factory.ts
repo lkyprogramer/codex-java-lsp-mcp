@@ -5,7 +5,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { JavaLspApplication } from "./application.js";
 import { readRuntimeBuild } from "./build-info.js";
-import type { ManagedToolContext, RequestOptionsInput } from "./repo-runtime-manager.js";
+import type { ManagedToolContext } from "./repo-runtime-manager.js";
+import type { RequestOptionsInput } from "./runtime/request-context.js";
 import type { RepoSelector } from "./repo-resolver.js";
 import { JavaIntelligenceError, type JavaIntelligenceErrorCode } from "./runtime/intelligence-error.js";
 import type { RequestContext } from "./runtime/request-context.js";
@@ -16,7 +17,7 @@ import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, javaStatusFromMemory, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { experimentalSymbolOpsFromEnvironment, javaSymbol, STATIC_QUERY_LIMIT_DESCRIPTION, symbolNeedsJdt, symbolSchemaFor } from "./tools/symbol.js";
 import { logToolFailure } from "./log.js";
-import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
+import { noteTelemetryRequest, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
@@ -95,7 +96,8 @@ export function createMcpServer(
     requestOptions: {
       mode: args.mode,
       semanticPolicy: args.semanticPolicy,
-      deadlineMs: args.deadlineMs
+      deadlineMs: args.deadlineMs,
+      deadlineSource: args.deadlineMs === undefined ? undefined : "explicit"
     },
     signal
   }));
@@ -148,6 +150,7 @@ export function createMcpServer(
   async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>, signal?: AbortSignal): Promise<unknown> {
     const hasSelector = Boolean(args.projectId || args.repoRoot || args.file);
     if (!hasSelector && !args.start) {
+      noteTelemetryRequest({ scope: "daemon" });
       if (transportMode === "streamable_http") {
         return daemonStatus(application, await application.runtimes.indexStatus());
       }
@@ -188,6 +191,7 @@ export function createMcpServer(
 
   async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>, signal?: AbortSignal): Promise<unknown> {
     if (args.action === "shutdown" && args.all) {
+      noteTelemetryRequest({ scope: "daemon" });
       if (transportMode === "streamable_http") {
         throw new Error("java_runtime(all=true) is not available on the shared daemon; select one worktree.");
       }
@@ -217,7 +221,6 @@ export function createMcpServer(
   ): Promise<T> {
     const route = contextOptions.control ? "withControl" : contextOptions.mayStartLsp ? "withQuery" : "withContext";
     return application.runtimes[route](args, async (context, request) => {
-      noteTelemetryRepoHash(context.repoHash);
       if (contextOptions.requireLspEnabled && !context.lsp.enabled) {
         throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
       }
@@ -237,14 +240,16 @@ export function createMcpServer(
         try {
           // The signal reaches the request view: cancelling stops its waits and kills its query worker.
           const value = await handler(args as z.infer<z.ZodObject<T>>, extra.signal);
+          const elapsedMs = performance.now() - started;
+          const result = jsonResult(value);
           recordToolInvocation({
             tool: name,
             args,
             value,
-            elapsedMs: performance.now() - started,
+            elapsedMs,
             error: false
           });
-          return jsonResult(value);
+          return result;
         } catch (error) {
           recordToolInvocation({
             tool: name,

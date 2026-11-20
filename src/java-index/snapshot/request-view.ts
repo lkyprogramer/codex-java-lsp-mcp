@@ -7,6 +7,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { LayoutContext } from "../../layout-probe.js";
 import type { DeadlineBudget } from "../../runtime/deadline-budget.js";
+import { noteTelemetryRequest } from "../../telemetry/impact-telemetry.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import type { DetailedEntitySearchResult, EntityHit, EntitySearchOptions } from "../entity-search.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT } from "../entity-search.js";
@@ -176,9 +177,11 @@ export async function withRequestView<T>(input: {
     if (signal?.aborted) return Promise.reject(new JavaIntelligenceError("CANCELLED", `Cancelled before ${stage}`));
     return budget.race(stage, signal ? abortable(operation, signal, stage) : operation);
   };
+  noteTelemetryRequest({ stage: "request.resolve" });
   const canonicalRoot = await guard("request.resolve", input.resolve());
   let release: (() => void) | undefined;
   if (input.start !== false) {
+    noteTelemetryRequest({ stage: "request.admit" });
     for (;;) {
       if (signal?.aborted) throw new JavaIntelligenceError("CANCELLED", "Cancelled before request.admit");
       budget.throwIfExpired("request.admit");
@@ -194,17 +197,35 @@ export async function withRequestView<T>(input: {
   try {
     let view: RequestView;
     if (input.start === false) {
+      noteTelemetryRequest({ stage: "request.acquire" });
       const running = owner.peek(canonicalRoot);
       view = running ? RequestView.acquire(owner, running, budget, signal) : RequestView.notReady(owner, canonicalRoot, budget, signal);
     } else {
+      noteTelemetryRequest({ stage: "request.create" });
       // An expired or cancelled request never starts a workspace it cannot use.
       if (signal?.aborted) throw new JavaIntelligenceError("CANCELLED", "Cancelled before request.create");
       budget.throwIfExpired("request.create");
       const workspace = await guard("request.create", owner.workspace(canonicalRoot));
-      if (input.prepare !== false) await guard("request.prepare", workspace.prepare(budget, signal));
+      if (input.prepare !== false) {
+        noteTelemetryRequest({ stage: "request.prepare" });
+        const started = performance.now();
+        try {
+          const prepared = await guard("request.prepare", workspace.prepare(budget, signal));
+          noteTelemetryRequest({ prepareCapMs: prepared.capMs, prepareOutcome: prepared.outcome });
+        } finally {
+          noteTelemetryRequest({ prepareMs: Math.round(performance.now() - started) });
+        }
+      }
+      noteTelemetryRequest({ stage: "request.acquire" });
       budget.throwIfExpired("request.acquire");
       view = RequestView.acquire(owner, workspace, budget, signal);
     }
+    noteTelemetryRequest({
+      indexState: view.labels.state,
+      bindingVersion: view.labels.bindingVersion,
+      handlerRemainingMs: budget.remainingMs(),
+      stage: "request.handler"
+    });
     let work: Promise<T>;
     try { work = input.handler(view); }
     catch (error) { view.close(); throw error; }

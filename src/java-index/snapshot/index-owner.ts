@@ -5,6 +5,7 @@
 //      verify → noop-confirm or build → publish → complete; requests never build,
 //      they prepare for at most min(1000 ms, remaining) and then hold one snapshot. MAC-09: the
 //      owner's GC runs one sweep at open (recovery of a dead incarnation) and then every cycle.
+import type { PrepareOutcome } from "../../telemetry/request-diagnostics.js";
 import type { ChildProcess } from "node:child_process";
 import { stat, statfs } from "node:fs/promises";
 import path from "node:path";
@@ -64,7 +65,7 @@ export type RoundDetail = {
 export type OwnerEvent =
   | ({ type: "round"; workspaceId: string; mode: string; outcome: "noop" | "published" | "failed"; elapsedMs: number; error?: string } & RoundDetail)
   /** One request's freshness prepare: `none` when nothing was owed at entry; `covered` once the entry-time hints are committed. */
-  | { type: "prepare"; workspaceId: string; waitedMs: number; outcome: "none" | "covered" | "capped" | "backoff" | "aborted" | "stopped" }
+  | { type: "prepare"; workspaceId: string; waitedMs: number; outcome: PrepareOutcome }
   | { type: "reclaimed"; snapshotId: string }
   /** One GC cycle; `error` when the cycle stopped early (its deletions so far stand). */
   | { type: "sweep"; report?: SweepReport; elapsedMs: number; error?: string }
@@ -692,14 +693,12 @@ export class WorkspaceIndex {
       ...(this.setbacks ? { setbacks: this.setbacks, retryInMs: this.timer ? Math.max(0, Math.round(this.timerDueAt - performance.now())) : undefined } : {}) };
   }
 
-  /**
-   * Bounded freshness prepare (before the request's one acquire): wait for rounds that cover the
-   * hints known at entry for at most min(1000 ms, remaining). It never cancels the shared round.
-   */
-  async prepare(budget: DeadlineBudget, signal?: AbortSignal): Promise<void> {
+  /** Before the one acquire, wait for hints known at entry without cancelling the shared round. */
+  async prepare(budget: DeadlineBudget, signal?: AbortSignal): Promise<{ outcome: PrepareOutcome; capMs: number }> {
     const started = performance.now();
     // Half the remaining time at most: a short request still answers from its binding (STALE) instead of timing out in prepare.
-    const cap = budget.forStage(Math.max(1, Math.min(PREPARE_CAP_MS, Math.floor(budget.remainingMs() / 2))));
+    const capMs = Math.max(1, Math.min(PREPARE_CAP_MS, Math.floor(budget.remainingMs() / 2)));
+    const cap = budget.forStage(capMs);
     // A save just before this request may still sit in FSEvents' latency window: flushed first, so a
     // FRESH label is never frozen over a change the stream already holds. Bounded by the same cap.
     if (this.tracker.status() === "FRESH" && !this.round) await this.flushSignals(cap, signal);
@@ -715,9 +714,10 @@ export class WorkspaceIndex {
     // this request may still be in the latency window. A signal it delivers makes the view STALE.
     if (outcome === "covered" && this.tracker.status() === "FRESH" && !this.round) await this.flushSignals(cap, signal);
     this.owner.options.onEvent?.({ type: "prepare", workspaceId: this.workspaceId, waitedMs: performance.now() - started, outcome });
+    return { outcome, capMs };
   }
 
-  private async waitFor(owed: () => boolean, cap: DeadlineBudget, signal?: AbortSignal): Promise<"covered" | "capped" | "backoff" | "aborted" | "stopped"> {
+  private async waitFor(owed: () => boolean, cap: DeadlineBudget, signal?: AbortSignal): Promise<Exclude<PrepareOutcome, "none">> {
     for (;;) {
       if (this.stopped) return "stopped";
       if (signal?.aborted) return "aborted";
