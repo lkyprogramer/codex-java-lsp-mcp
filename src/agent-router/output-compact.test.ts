@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildImpactDetail } from "../telemetry/impact-telemetry.js";
 import type { ImpactResultV6 } from "../agent-types.js";
 import { toCompactImpact, viewDistinctReadFiles, viewImpactFiles, viewSelectedRangesByFile } from "./output-compact.js";
 import { roleOf } from "./output-v6.js";
@@ -143,4 +144,16 @@ test("explicit compact preserves ranges, unreadable anchors and request gaps wit
   assert.deepEqual(compact.unresolved, source.evidenceGaps);
   assert.equal(compact.metrics?.generatedSemantics, "INCOMPLETE");
   assert.equal(compact.cost.resultBytes, Buffer.byteLength(JSON.stringify(compact), "utf8"));
+});
+
+test("complete compact and standard wire responses are counted as impact plans", () => {
+  for (const verbosity of ["compact", "standard"] as const) {
+    const value = toCompactImpact(v6(), verbosity);
+    const row = buildImpactDetail({ args: { verbosity }, value, elapsedMs: 1, error: false });
+    assert.equal(row.resultKind, "PLAN", verbosity);
+    assert.equal(row.estimatedTokens, value.cost.estimatedTokens);
+    assert.ok(row.readPlanItems > 0);
+  }
+  const unrelated = buildImpactDetail({ args: {}, value: { version: 1 }, elapsedMs: 1, error: false });
+  assert.equal(unrelated.resultKind, undefined);
 });

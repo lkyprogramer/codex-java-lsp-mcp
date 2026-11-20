@@ -4,6 +4,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
+import { isCompactImpact } from "../agent-router/output-compact.js";
 import { repoCacheBase } from "../repo-layout.js";
 import { repoHash } from "../path-utils.js";
 import type { ViewState } from "../java-index/snapshot/index-owner.js";
@@ -112,7 +113,7 @@ export function buildImpactDetail(input: {
   const request = requestDiagnosticFields(input.error);
   const indexState = indexStateOf(value) ?? request.indexState;
   const resultKind = input.error ? undefined : IMPACT_RESULT_KINDS.find(kind => kind === value.status)
-    ?? (value.version === 6 || value.version === 7 ? "PLAN" : undefined);
+    ?? (isCompactImpact(value) || value.version === 6 || value.version === 7 ? "PLAN" : undefined);
   const plannedSourceBytes = known(cost.readBytes ?? cost.plannedSourceBytes);
   const estimatedTokens = known(cost.estimatedTokens);
   const semanticUsed = obj(value.semantic).used;
