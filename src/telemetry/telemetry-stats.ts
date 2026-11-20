@@ -5,21 +5,37 @@
 // pos: Read-only owner diagnostics behind `daemonctl.sh stats`. Never touches the daemon or the index.
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { parseRequestDiagnostics, type RequestDiagnostics } from "./request-diagnostics.js";
 
 const DAY_MS = 86400000;
 const FILE_PATTERN = /^impact-(\d{4})(\d{2})(\d{2})\.jsonl$/;
 const SLOWEST = 10;
 
-export type TelemetryRow = {
+export type TelemetryRow = RequestDiagnostics & {
   ts: number; tool: string; operation: string; elapsedMs: number; ok: boolean;
-  errorCode?: string; indexState?: string; start?: boolean; backend?: string;
+  errorCode?: string; indexState?: string; start?: boolean; backend?: string; repoHash?: string;
   /** coldPath: phase-evidenced cold work only; slow: over the recorder's threshold without that evidence. */
   coldPath?: boolean; slow?: boolean; semanticUsed?: boolean; estimatedTokens?: number;
+};
+type RequestDiagnosticsSummary = {
+  scopes?: Record<string, number>;
+  repoHashKnown?: number;
+  deadlineSources?: Record<string, number>;
+  failureStages?: Record<string, number>;
+  resultKinds?: Record<string, number>;
+  prepareOutcomes?: Record<string, number>;
+  prepareP95Ms?: number;
+  prepareKnown?: number;
+  deadlineP50Ms?: number;
+  deadlineKnown?: number;
+  handlerRemainingP50Ms?: number;
+  handlerRemainingKnown?: number;
 };
 export type GroupStats = {
   tool: string; operation: string; backend?: string; calls: number; ok: number; okRate: number;
   p50Ms: number; p95Ms: number; maxMs: number;
   errorCodes: Record<string, number>; indexStates: Record<string, number>;
+  requestDiagnostics?: RequestDiagnosticsSummary;
   /** tokensKnown: calls that reported a cost; tokensP50 is over those only (unknown is not zero). */
   startCalls?: number; coldPath?: number; slow?: number; semanticUsed?: number; tokensKnown?: number; tokensP50?: number;
 };
@@ -53,6 +69,7 @@ export function parseTelemetryRow(line: string): TelemetryRow | undefined {
   };
   return {
     ts, tool: row.tool, elapsedMs, ok,
+    ...parseRequestDiagnostics(row),
     operation: text("operation") ?? (row.tool === "java_symbol" ? "unknown" : "-"),
     ...(text("errorCode") ? { errorCode: text("errorCode") } : {}),
     ...(text("indexState") ? { indexState: text("indexState") } : {}),
@@ -113,6 +130,8 @@ function groupStats(rows: TelemetryRow[]): GroupStats {
     p50Ms: percentile(latencies, 0.5), p95Ms: percentile(latencies, 0.95), maxMs: latencies[latencies.length - 1] ?? 0,
     errorCodes: count(rows.map(row => row.errorCode)), indexStates: count(rows.map(row => row.indexState))
   };
+  const requestDiagnostics = summarizeRequestDiagnostics(rows);
+  if (Object.keys(requestDiagnostics).length > 0) stats.requestDiagnostics = requestDiagnostics;
   const starts = rows.filter(row => row.start === true).length;
   if (starts > 0) stats.startCalls = starts;
   if (rows.some(row => row.coldPath !== undefined)) {
@@ -126,6 +145,32 @@ function groupStats(rows: TelemetryRow[]): GroupStats {
     stats.tokensP50 = percentile(tokens, 0.5);
   }
   return stats;
+}
+
+function summarizeRequestDiagnostics(rows: TelemetryRow[]): RequestDiagnosticsSummary {
+  const samples = (key: "prepareMs" | "effectiveDeadlineMs" | "handlerRemainingMs") =>
+    rows.map(row => row[key]).filter(value => value !== undefined).sort((a, b) => a - b);
+  const prepare = samples("prepareMs");
+  const deadline = samples("effectiveDeadlineMs");
+  const handlerRemaining = samples("handlerRemainingMs");
+  const scopes = count(rows.map(row => row.scope));
+  const deadlineSources = count(rows.map(row => row.deadlineSource));
+  const failureStages = count(rows.map(row => row.failureStage));
+  const resultKinds = count(rows.map(row => row.resultKind));
+  const prepareOutcomes = count(rows.map(row => row.prepareOutcome));
+  return {
+    ...(Object.keys(scopes).length ? { scopes } : {}),
+    ...(scopes.repo ? { repoHashKnown: rows.filter(row => row.scope === "repo" && row.repoHash).length } : {}),
+    ...(Object.keys(deadlineSources).length ? { deadlineSources } : {}),
+    ...(Object.keys(failureStages).length ? { failureStages } : {}),
+    ...(Object.keys(resultKinds).length ? { resultKinds } : {}),
+    ...(Object.keys(prepareOutcomes).length ? { prepareOutcomes } : {}),
+    ...(prepare.length ? { prepareKnown: prepare.length, prepareP95Ms: percentile(prepare, 0.95) } : {}),
+    ...(deadline.length ? { deadlineKnown: deadline.length, deadlineP50Ms: percentile(deadline, 0.5) } : {}),
+    ...(handlerRemaining.length ? {
+      handlerRemainingKnown: handlerRemaining.length, handlerRemainingP50Ms: percentile(handlerRemaining, 0.5)
+    } : {})
+  };
 }
 
 function count(values: ReadonlyArray<string | undefined>): Record<string, number> {
@@ -164,7 +209,8 @@ export function formatSummary(summary: TelemetrySummary): string {
       group.startCalls !== undefined ? `start=${group.startCalls}` : "",
       group.coldPath !== undefined ? `cold=${group.coldPath} slow=${group.slow ?? 0}` : "",
       group.semanticUsed !== undefined ? `jdtUsed=${group.semanticUsed}` : "",
-      group.tokensP50 !== undefined ? `tokensP50=${group.tokensP50}(n=${group.tokensKnown ?? 0})` : ""
+      group.tokensP50 !== undefined ? `tokensP50=${group.tokensP50}(n=${group.tokensKnown ?? 0})` : "",
+      formatRequestDiagnostics(group.requestDiagnostics)
     ].filter(Boolean).join(" ");
     lines.push([group.tool, group.backend ? `${group.operation}/${group.backend}` : group.operation, group.calls, (group.okRate * 100).toFixed(1), group.p50Ms, group.p95Ms, group.maxMs,
       pairs(group.errorCodes), pairs(group.indexStates), extra || "-"].join("\t"));
@@ -172,6 +218,27 @@ export function formatSummary(summary: TelemetrySummary): string {
   lines.push("", `slowest ${summary.slowest.length}:`);
   for (const row of summary.slowest) lines.push(`  ${row.ts}\t${row.tool}\t${row.operation}\t${row.elapsedMs}ms${row.errorCode ? `\t${row.errorCode}` : ""}`);
   return `${lines.join("\n")}\n`;
+}
+
+function formatRequestDiagnostics(diagnostics?: RequestDiagnosticsSummary): string {
+  if (!diagnostics) return "";
+  const categories = [
+    ["scope", diagnostics.scopes],
+    ["deadline", diagnostics.deadlineSources],
+    ["prepare", diagnostics.prepareOutcomes],
+    ["failureStage", diagnostics.failureStages],
+    ["result", diagnostics.resultKinds]
+  ] as const;
+  const metrics = [
+    ["prepareP95ms", diagnostics.prepareP95Ms, diagnostics.prepareKnown],
+    ["deadlineP50ms", diagnostics.deadlineP50Ms, diagnostics.deadlineKnown],
+    ["handlerRemainingP50ms", diagnostics.handlerRemainingP50Ms, diagnostics.handlerRemainingKnown]
+  ] as const;
+  return [
+    ...categories.flatMap(([name, counts]) => counts ? [`${name}=${pairs(counts)}`] : []),
+    ...metrics.flatMap(([name, value, samples]) => value === undefined ? [] : [`${name}=${value}(n=${samples})`]),
+    diagnostics.repoHashKnown === undefined ? "" : `repoHashKnown=${diagnostics.repoHashKnown}`
+  ].filter(Boolean).join(" ");
 }
 
 function pairs(counts: Record<string, number>): string {

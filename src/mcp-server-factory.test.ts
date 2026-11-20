@@ -14,6 +14,7 @@ import { createMcpServer, javaSymbolDescription, PUBLIC_JAVA_TOOLS } from "./mcp
 import { experimentalSymbolOpsFromEnvironment } from "./tools/symbol.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
+import { repoHash } from "./path-utils.js";
 import { resetImpactTelemetryForTests } from "./telemetry/impact-telemetry.js";
 import { IndexOwner } from "./java-index/snapshot/index-owner.js";
 import { parseEvidenceHandle } from "./java-index/symbol-identity.js";
@@ -43,7 +44,8 @@ test("production MCP factory, java_impact, and java_context do not read JAVA_LSP
 test("withContext notes repoHash for telemetry without putting it on the wire", () => {
   const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
   assert.match(source, /withTelemetryRequestScope/);
-  assert.match(source, /noteTelemetryRepoHash\(context\.repoHash\)/);
+  const manager = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "repo-runtime-manager.ts"), "utf8");
+  assert.match(manager, /noteTelemetryRepoHash\(resolved\.repoHash\)/);
 });
 
 test("repo-scoped java_status reads memory only without start and keeps the 15s budget with start", () => {
@@ -315,15 +317,41 @@ test("register wrapper records a counter line without changing java_status bytes
   try {
     const on = await session.client.callTool({ name: "java_status", arguments: {} });
     const onText = toolText(on);
+    const scoped = await session.client.callTool({ name: "java_status", arguments: { repoRoot: root } });
+    assert.notEqual(scoped.isError, true);
+    assert.equal(toolJson(scoped).repoHash, repoHash(root));
+    const unresolved = await session.client.callTool({ name: "java_status", arguments: { projectId: "未知" } });
+    assert.equal(unresolved.isError, true);
+    const unresolvedImpact = await session.client.callTool({ name: "java_impact", arguments: {
+      projectId: "未知", symbol: "私有符号", mode: "minimal", semanticPolicy: "fast", deadlineMs: 15_000
+    } });
+    assert.equal(unresolvedImpact.isError, true);
     resetImpactTelemetryForTests();
     const files = await readdir(telemetryDir);
     assert.equal(files.length, 1);
-    const line = JSON.parse((await readFile(path.join(telemetryDir, files[0]!), "utf8")).trim());
+    const [line, scopedLine, unresolvedLine, impactLine, extra] = (await readFile(path.join(telemetryDir, files[0]!), "utf8")).trim().split("\n").map(row => JSON.parse(row));
+    assert.equal(extra, undefined);
     assert.equal(line.tool, "java_status");
     assert.equal(typeof line.elapsedMs, "number");
     assert.equal(line.ok, true);
-    assert.deepEqual(Object.keys(line).sort(), ["elapsedMs", "ok", "start", "tool", "ts"]);
     assert.equal(line.start, false);
+    assert.equal(scopedLine.repoHash, repoHash(root));
+    assert.equal(line.scope, "daemon");
+    assert.equal(line.repoHash, undefined);
+    assert.equal(scopedLine.scope, "repo");
+    assert.equal(scopedLine.indexState, "NOT_READY");
+    assert.equal(scopedLine.effectiveDeadlineMs, 3000);
+    assert.equal(scopedLine.deadlineSource, "default");
+    assert.equal(unresolvedLine.scope, "repo");
+    assert.equal(unresolvedLine.repoHash, undefined);
+    assert.equal(unresolvedLine.indexState, undefined);
+    assert.equal(unresolvedLine.failureStage, "status.resolve");
+    assert.equal(impactLine.scope, "repo");
+    assert.equal(impactLine.repoHash, "");
+    assert.equal(impactLine.effectiveDeadlineMs, 15_000);
+    assert.equal(impactLine.deadlineSource, "explicit");
+    assert.equal(impactLine.failureStage, "runtime.repo-resolve");
+    assert.doesNotMatch(JSON.stringify([line, scopedLine, unresolvedLine, impactLine]), /未知|私有符号/);
 
     process.env.JAVA_LSP_TELEMETRY = "0";
     resetImpactTelemetryForTests();

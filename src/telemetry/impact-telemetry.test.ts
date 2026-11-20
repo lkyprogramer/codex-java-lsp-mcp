@@ -13,6 +13,7 @@ import {
   createImpactTelemetry,
   noteTelemetryHydratePhases,
   noteTelemetryRepoHash,
+  noteTelemetryRequest,
   recordToolInvocation,
   resetImpactTelemetryForTests,
   symbolBackend,
@@ -409,4 +410,33 @@ test("java_symbol counters record the backend the request needs, matching the to
   recordToolInvocation({ tool: "java_symbol", args: { query: "Pay", backend: "jdt" }, value: undefined, elapsedMs: 1, error: true, sink, failure: new Error("x") });
   recordToolInvocation({ tool: "java_status", args: {}, value: {}, elapsedMs: 1, error: false, sink });
   assert.deepEqual(rows.map(row => row.backend), ["static", "jdt", undefined]);
+});
+
+test("concurrent request telemetry snapshots failures and distinguishes impact plans from early returns", async () => {
+  const rows: Array<Record<string, unknown>> = [];
+  const sink = { record: (row: Record<string, unknown>) => { rows.push(row); }, flush: () => undefined };
+  await Promise.all([
+    withTelemetryRequestScope(async () => {
+      noteTelemetryRepoHash("111111111111");
+      noteTelemetryRequest({ scope: "repo", indexState: "STALE", bindingVersion: 4, stage: "request.handler" });
+      await Promise.resolve();
+      recordToolInvocation({ tool: "java_symbol", args: { query: "私有符号" }, value: undefined, elapsedMs: 1,
+        error: true, failure: new Error("deadline exceeded in /private/path"), sink });
+      noteTelemetryRequest({ indexState: "FRESH", bindingVersion: 5 });
+    }),
+    withTelemetryRequestScope(async () => {
+      noteTelemetryRepoHash("222222222222");
+      noteTelemetryRequest({ scope: "repo", indexState: "FRESH", bindingVersion: 1 });
+      await Promise.resolve();
+      recordToolInvocation({ tool: "java_impact", args: { repoRoot: "/wrong/repo/selector" },
+        value: { status: "NOT_FOUND", symbol: "私有符号" }, elapsedMs: 1, error: false, sink });
+    })
+  ]);
+  assert.deepEqual(rows.map(row => [row.repoHash, row.indexState, row.bindingVersion, row.failureStage, row.resultKind]),
+    [["111111111111", "STALE", 4, "request.handler", undefined], ["222222222222", "FRESH", 1, undefined, "NOT_FOUND"]]);
+  assert.equal(rows[0]?.errorCode, "DEADLINE_EXCEEDED");
+  assert.equal(rows[1]?.estimatedTokens, undefined);
+  assert.doesNotMatch(JSON.stringify(rows), /私有符号|private\/path|wrong\/repo/);
+  assert.equal(buildImpactDetail({ args: {}, value: { version: 6, cost: { estimatedTokens: 15 } },
+    elapsedMs: 1, error: false }).resultKind, "PLAN");
 });

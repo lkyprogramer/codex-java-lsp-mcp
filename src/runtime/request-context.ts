@@ -5,10 +5,18 @@
 //      never rebuilt inside a provider and never stored on shared runtime state.
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
+import { noteTelemetryRequest } from "../telemetry/impact-telemetry.js";
 import { DeadlineBudget } from "./deadline-budget.js";
 
 export type RequestMode = "minimal" | "balanced" | "precision" | "recall";
 export type SemanticPolicy = "fast" | "auto" | "required";
+
+export type RequestOptionsInput = {
+  deadlineSource?: "explicit";
+  mode: RequestMode;
+  semanticPolicy: SemanticPolicy;
+  deadlineMs?: number;
+};
 
 export type RequestFreshnessMode =
   | "NORMAL"
@@ -42,6 +50,21 @@ export function defaultDeadlineMs(mode: RequestMode, policy: SemanticPolicy): nu
   if (policy === "auto") return 3000;
   if (mode === "minimal") return 1500;
   return 2000;
+}
+
+export function createRequestBudget(requestOptions?: RequestOptionsInput): DeadlineBudget {
+  const mode = requestOptions?.mode ?? "balanced";
+  const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
+  const deadlineMs = Math.min(
+    MAX_REQUEST_DEADLINE_MS,
+    requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
+  );
+  const budget = DeadlineBudget.fromTimeout(deadlineMs);
+  noteTelemetryRequest({
+    effectiveDeadlineMs: deadlineMs,
+    deadlineSource: requestOptions?.deadlineMs === undefined ? "default" : requestOptions.deadlineSource ?? "route"
+  });
+  return budget;
 }
 
 export function createRequestContext(input: {

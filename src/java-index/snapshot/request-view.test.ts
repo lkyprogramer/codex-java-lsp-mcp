@@ -15,6 +15,7 @@ import { probeLayout } from "../../layout-probe.js";
 import { ownerChildStdio } from "../../mac-platform/owner-lock.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
+import { buildImpactDetail, withTelemetryRequestScope } from "../../telemetry/impact-telemetry.js";
 import { deferred } from "../../test-support/fake-jdtls.test.js";
 import { idleWorktreeBatch, IndexOwner, type IndexOwnerOptions, type OwnerEvent } from "./index-owner.js";
 import type { QueryRequest } from "./query-ops.js";
@@ -130,10 +131,17 @@ test("worktree retirement protects requests during prepare and gates reopen unti
     const retiring = ctx.owner.retire(ctx.repo);
     await enteringStop.promise;
     const abort = new AbortController();
-    const cancelled = request(ctx, ctx.repo, 10_000, async () => assert.fail("aborted request entered"), { signal: abort.signal }).run;
+    const cancelled = withTelemetryRequestScope(async () => {
+      const call = request(ctx, ctx.repo, 10_000, async () => assert.fail("aborted request entered"), { signal: abort.signal });
+      await assert.rejects(call.run, /Cancel/);
+      return buildImpactDetail({ args: {}, value: undefined, elapsedMs: 0, error: true, errorCode: "CANCELLED" });
+    });
     const next = request(ctx, ctx.repo, 10_000, async view => view.snapshotId).run;
     abort.abort();
-    await assert.rejects(cancelled, /Cancel/);
+    const cancelledTelemetry = await cancelled;
+    assert.equal(cancelledTelemetry.failureStage, "request.resolve");
+    assert.equal(cancelledTelemetry.indexState, undefined);
+    assert.equal(cancelledTelemetry.prepareMs, undefined);
     assert.equal(ctx.owner.peek(ctx.repo), undefined);
     finishStop.resolve();
     await retiring;
@@ -411,10 +419,20 @@ test("a workspace without its own verified binding is NOT_READY, never a sibling
   await bound(ctx, ctx.roots[0]);
   hold = true;
   const sibling = ctx.roots[1]!;
-  const outcome = await request(ctx, sibling, 2000, async view => {
-    const refused = await view.query({ op: "type", args: { typeText: "demospring.OrderService" } }).then(() => "served", error => (error as JavaIntelligenceError).code);
-    return { labels: view.labels, refused };
-  }).run;
+  const outcome = await withTelemetryRequestScope(async () => {
+    const result = await request(ctx, sibling, 2000, async view => {
+      const refused = await view.query({ op: "type", args: { typeText: "demospring.OrderService" } }).then(() => "served", error => (error as JavaIntelligenceError).code);
+      return { labels: view.labels, refused };
+    }).run;
+    const row = buildImpactDetail({ args: {}, value: undefined, elapsedMs: 0, error: true, errorCode: result.refused });
+    assert.equal(row.indexState, "NOT_READY");
+    assert.equal(row.bindingVersion, undefined);
+    assert.equal(row.failureStage, "request.handler");
+    assert.equal(row.prepareOutcome, "capped");
+    assert.ok(typeof row.prepareMs === "number" && row.prepareMs >= 0);
+    assert.ok(typeof row.prepareCapMs === "number" && row.prepareCapMs > 0 && row.prepareCapMs <= 1_000);
+    return result;
+  });
   assert.equal(outcome.labels.state, "NOT_READY");
   assert.equal(outcome.labels.snapshotId, undefined);
   assert.equal(outcome.refused, "INDEX_PARTIAL");
@@ -443,7 +461,14 @@ test("requests during a failed round's retry backoff answer STALE without forcin
   const roundsBefore = workspace.status().rounds;
   const started = performance.now();
   const states: string[] = [];
-  for (let index = 0; index < 5; index += 1) states.push(await request(ctx, ctx.repo, 3000, async view => view.labels.state).run);
+  for (let index = 0; index < 5; index += 1) {
+    await withTelemetryRequestScope(async () => {
+      states.push(await request(ctx, ctx.repo, 3000, async view => view.labels.state).run);
+      const row = buildImpactDetail({ args: {}, value: undefined, elapsedMs: 0, error: false });
+      assert.equal(row.prepareOutcome, "backoff");
+      assert.equal(row.bindingVersion, binding.bindingVersion);
+    });
+  }
   const elapsedMs = performance.now() - started;
   const roundsAfter = workspace.status().rounds;
   evidence.push({ test: "retry-backoff", states, elapsedMs, roundsBefore, roundsAfter, failedRounds: failedRounds() });
@@ -658,19 +683,27 @@ test("a handler that outlives its deadline loses its view and its snapshot lease
   const { workspace, binding: first } = await bound(ctx);
   let held: RequestView | undefined;
   let leasedWhileHeld = -1;
-  const call = request(ctx, ctx.repo, 1_500, async view => {
-    held = view;
-    await view.snapshotStatus();
-    // The request's own lease is one more than the workers' connection leases.
-    leasedWhileHeld = ctx.owner.store.leaseCount(first.snapshotId) - ctx.owner.pool.status().leases;
-    return new Promise<never>(() => {});
+  const outcome = await withTelemetryRequestScope(async () => {
+    const call = request(ctx, ctx.repo, 1_500, async view => {
+      held = view;
+      await view.snapshotStatus();
+      // The request's own lease is one more than the workers' connection leases.
+      leasedWhileHeld = ctx.owner.store.leaseCount(first.snapshotId) - ctx.owner.pool.status().leases;
+      return new Promise<never>(() => {});
+    });
+    const result = await settledWithin(call, "never-settling-handler");
+    const row = buildImpactDetail({ args: {}, value: undefined, elapsedMs: 1500, error: true, errorCode: code(result) });
+    assert.equal(row.indexState, "FRESH");
+    assert.equal(row.bindingVersion, first.bindingVersion);
+    assert.equal(row.failureStage, "request.handler");
+    assert.ok(typeof row.handlerRemainingMs === "number" && row.handlerRemainingMs > 0 && row.handlerRemainingMs <= 1500);
+    return { ...result, deadlineAtMs: call.budget.deadlineAtMs };
   });
-  const outcome = await settledWithin(call, "never-settling-handler");
   assert.equal(code(outcome), "DEADLINE_EXCEEDED");
   assert.equal(leasedWhileHeld, 1, "the handler held exactly one request lease");
   // No request lease remains by deadline + 2 s although the handler never settles.
   await until(() => ctx.owner.store.leaseCount(first.snapshotId) === ctx.owner.pool.status().leases, "request lease released",
-    Math.max(1, call.budget.deadlineAtMs + 2000 - performance.now()));
+    Math.max(1, outcome.deadlineAtMs + 2000 - performance.now()));
   assert.ok(held?.closed, "the view closes when the request returns at its deadline");
   await assert.rejects(held!.query({ op: "status", args: {} }), /already released/);
   await edit(ctx, ctx.repo, serviceRel, text => text.replace("class OrderService {", "class OrderService {\n  void afterAbandon() {}"));
