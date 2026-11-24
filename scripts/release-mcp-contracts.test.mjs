@@ -32,6 +32,19 @@ function observedCapture(contract, before, after) {
 }
 
 const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { stdio: "pipe", env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } });
+
+function assertColdRecovery(result, repoRoot) {
+  assert.equal(result.isError, true);
+  assert.equal(result._meta?.errorCode, "INDEX_PARTIAL");
+  const value = JSON.parse(result.content.filter(item => item.type === "text").map(item => item.text).join(""));
+  assert.equal(value.status, "INDEX_NOT_READY");
+  assert.equal(value.repoRoot, repoRoot);
+  assert.equal(value.indexView.state, "NOT_READY");
+  assert.equal(value.retryable, true);
+  assert.ok(value.retryAfterMs >= 1000);
+  assert.deepEqual(value.nextAction, { tool: "java_status", arguments: { repoRoot, start: false } });
+}
+
 async function writeTree(root, files) {
   for (const [relative, text] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
@@ -298,7 +311,14 @@ test("K27: the shipped disabled provider boundary keeps lexical MCP queries usab
 test("K03: a main/test duplicate FQN stays ambiguous until the sourceSet scope selects one", { timeout: 45000 }, async t => {
   const main = "src/main/java/demo/Shared.java", testPath = "src/test/java/demo/Shared.java";
   await owned(t, "k03", { roots: { repo: { "pom.xml": pom("k03"), [main]: "package demo; public class Shared { void production() {} }\n", [testPath]: "package demo; public class Shared { void fixtureOnly() {} }\n" } } }, async ({ roots: { repo } }) => {
-    const all = await repo.wait(() => repo.query({ query: "demo.Shared", searchMode: "exact" }), value => value.indexView?.state === "FRESH" && value.scopeState === "READY", "fresh");
+    const all = await repo.wait(async () => {
+      const response = await repo.raw("java_symbol", { query: "demo.Shared", searchMode: "exact", preview: "none" });
+      if (response.isError) {
+        assertColdRecovery(response, repo.root);
+        return undefined;
+      }
+      return JSON.parse(response.content.filter(item => item.type === "text").map(item => item.text).join(""));
+    }, value => value?.indexView?.state === "FRESH" && value.scopeState === "READY", "fresh");
     assert.equal(all.exact, "ambiguous");
     assert.deepEqual(new Set(all.candidates.map(c => c.declaration.relativePath)), new Set([main, testPath]));
     for (const [sourceSet, expected] of [["main", main], ["test", testPath]]) {
@@ -330,7 +350,7 @@ test("K06: six linked worktrees answer concurrently, each only from its own Java
       const text = result.content?.filter(item => item.type === "text").map(item => item.text).join("") ?? "";
       if (result.isError) {
         // Before its own verified binding, the static query refuses explicitly instead of answering.
-        assert.match(text, /not ready/i, `${id}: ${text}`);
+        assertColdRecovery(result, clients[id].root);
         observations.push({ id, state: "NOT_READY", refused: true, atMs: performance.now() - started });
         return undefined;
       }

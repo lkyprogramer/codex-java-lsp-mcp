@@ -112,7 +112,13 @@ test("MAC11 concurrent public deadlines across a real cache stamp refresh", { ti
       record.calls.push(row);
       assert.ok(row.elapsedMs <= deadlineMs + 1000, `${tool} took ${row.elapsedMs} ms`);
       if (stage === "warm" && value.error) {
-        assert.match(value.error, /on-disk Java index, which is not ready yet/);
+        const recovery = JSON.parse(value.error);
+        assert.equal(recovery.status, "INDEX_NOT_READY");
+        assert.equal(recovery.repoRoot, repo);
+        assert.equal(recovery.indexView.state, "NOT_READY");
+        assert.equal(recovery.retryable, true);
+        assert.ok(recovery.retryAfterMs >= 1000);
+        assert.deepEqual(recovery.nextAction, { tool: "java_status", arguments: { repoRoot: repo, start: false } });
         return value; // The cold request starts the workspace; fresh() must still observe its publication.
       }
       assert.equal(value.error, undefined, value.error);
