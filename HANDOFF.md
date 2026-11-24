@@ -12,7 +12,7 @@ MAC-17 完整 launcher bundle 位于 `<runtime>/launcher/`；launchd Program 指
 
 ## 当前任务与证据边界
 
-- **生产升级**：2026-11-19 已升级到 tag `prod-2026-11-19`（`6f99a85`，含 PR #16 遥测计量与 PR #17 scope 合同；与 main `860f5f2` 只差 PR #18 的扫描脚本，不影响 runtime）。该 tag 的提交不在任何分支上，勿删 tag。封存版本、smoke 结果与回滚指针未在仓库登记。上一次升级（2026-11-18，`cd6b96ff84ac`）见[生产升级与 stats 验收](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-18.md)。
+- **生产升级**：2026-11-24 已部署 `23546737bcbf`（tag `prod-2026-11-24`），包含首次索引未就绪的恢复提示及原生产 `950fd6ae87ae` 的统计修复。CI、完整封存、首次调用恢复链路和六仓静态查询均通过，28 个既有索引绑定保留。回滚记录指向 `950fd6ae87ae`。源码在 `codex/index-readiness-recovery-20261124`，本次未合并 main。见[生产升级与恢复提示验收](docs/index-lifecycle-v2/mac/mac-17/production-upgrade-2026-11-24.md)。历史 tag `prod-2026-11-19` 仍须保留。
 - **使用数据**：`daemonctl.sh stats` 读工具遥测（11-18 起带 `java_symbol` operation 与 indexState；11-19 起另带 `java_symbol` 后端 static/jdt、impact 的 semanticPolicy 与 JDT 是否实际参与。后端在写入时记录，11-19 之前的行不带后端；读取时缺失成本记为未知，冷启动与慢调用分开）；日常失败记入 [failure-ledger](docs/failure-ledger.md)。约 2026-12-19 用 `stats --since 30d`（只含 11-19 之后带后端的数据）决定 JDT 去留与 `kg_*`。发布 tag 为 `prod-YYYY-MM-DD`。
 - **改进线**：post-ILV2 的评测与关系类改进线已收尾，S2、S3 关闭（[decisions.md](docs/post-ilv2/decisions.md) P12、P13）。产品方向和封存集 v2 暂不投入。
 - **审计**：代码质量审计已收尾，逐项处理状态见[审计](docs/code-quality-audit-2026-11-16.md) §9；JDT 路径各项（第 3 步）只登记、暂缓。各步 Mac 门禁结果在 `docs/post-ilv2/results/AUDIT-*-MAC-GATE.json`。
