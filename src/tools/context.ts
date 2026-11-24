@@ -7,6 +7,7 @@ import type { ViewLabels } from "../java-index/snapshot/request-view.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import { JdtlsSession } from "../jdtls-session.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
+import type { IndexPreparation } from "../runtime/index-readiness.js";
 
 export type ToolContext = {
   repoRoot: string;
@@ -38,6 +39,8 @@ export type ToolContext = {
   };
   /** The labels this request's one snapshot acquire froze (FRESH/STALE/NOT_READY). */
   indexView?: ViewLabels;
+  /** In-memory preparation state when this request has no usable static snapshot. */
+  indexPreparation?: IndexPreparation;
   runBackgroundTask?: (operation: () => Promise<void>) => boolean;
   session: JdtlsSession;
   /** Router-facing JavaIndex V2 facts used by AgentRouter. */

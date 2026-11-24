@@ -199,10 +199,10 @@ test("protocol factory creates independent servers over one shared application",
   }
 });
 
-test("a coded tool error keeps its text and carries the code in _meta; an uncoded one adds nothing", { timeout: 20000 }, async t => {
+test("cold-index errors carry actionable recovery and preserve the code; uncoded errors add no metadata", { timeout: 20000 }, async t => {
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "java-lsp-factory-codes-")));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const repoRoot = path.join(root, "repo");
+  const repoRoot = path.join(root, "试卷 repo");
   await mkdir(repoRoot);
   await writeFile(path.join(repoRoot, "pom.xml"), "<project></project>");
   const config = path.join(root, "projects.json");
@@ -219,14 +219,22 @@ test("a coded tool error keeps its text and carries the code in _meta; an uncode
   try {
     const symbol = await client.callTool({ name: "java_symbol", arguments: { projectId: "sample", query: "Sample" } });
     assert.equal(symbol.isError, true);
-    assert.equal(toolText(symbol), "java_symbol static query requires the on-disk Java index, which is not ready yet (repository still building or index unavailable). Retry once the index is READY.");
+    const symbolRecovery = JSON.parse(toolText(symbol));
+    assert.equal(symbolRecovery.status, "INDEX_NOT_READY");
+    assert.equal(symbolRecovery.repoRoot, repoRoot);
+    assert.equal(symbolRecovery.preparation.state, "UNAVAILABLE");
+    assert.equal(symbolRecovery.retryable, false);
+    assert.deepEqual(symbolRecovery.nextAction, { tool: "java_status", arguments: { repoRoot, start: false } });
     assert.deepEqual(symbol._meta, { errorCode: "INDEX_PARTIAL" });
 
     const impact = await client.callTool({ name: "java_impact", arguments: { projectId: "sample", symbol: "demo.Sample" } });
     assert.equal(impact.isError, true);
-    assert.match(toolText(impact), /^java_impact static query requires the on-disk Java index, which is not ready yet/);
-    assert.equal(toolText(impact).includes("java_symbol"), false, "java_impact does not report java_symbol wording");
+    assert.deepEqual(JSON.parse(toolText(impact)), symbolRecovery);
     assert.deepEqual(impact._meta, { errorCode: "INDEX_PARTIAL" });
+
+    const status = await client.callTool({ name: "java_status", arguments: { repoRoot, start: false } });
+    assert.equal(status.isError, undefined);
+    assert.equal(JSON.parse(toolText(status)).indexPreparation.state, "UNAVAILABLE");
 
     const uncoded = await client.callTool({ name: "java_symbol", arguments: { query: "Sample" } });
     assert.equal(uncoded.isError, true);

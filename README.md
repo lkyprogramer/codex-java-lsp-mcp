@@ -199,7 +199,7 @@ hook 行为：
 
 | Tool | 用途 | 是否要求 LSP |
 | --- | --- | --- |
-| `java_status` | 查看 server、repo、JDT LS、RepoChangeCoordinator、JavaIndex coverage/generation、lease 和 resource 摘要。`start=false` 仍会为该仓 create runtime（不拉 JDT）；repo 级请求预算 15s。`start=true` 才启动 JDT LS。`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
+| `java_status` | 查看 server、repo、JDT LS、RepoChangeCoordinator、JavaIndex coverage/generation、lease 和 resource 摘要。`start=false` 只读内存，不创建 runtime、不启动静态索引或 JDT；索引未就绪时附 `indexPreparation`。repo 级请求预算 15s。`start=true` 启动 JDT LS。`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
 | `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。目标三选一：`symbol`（`java_symbol` 返回的 `declaration.symbolId`，或 `Type#method`、`Type#method(ParamType, ...)` 这类名称；参数表按解析出的参数类型比较（数组维数、varargs、类型变量的 erasure；部分限定的外部类型无法确认时列为候选），包含 `String a[]` 声明符数组维度和带注解 varargs；旧 method ID 须重新定位；歧义返回 `status=AMBIGUOUS` 候选、不跑分析；ID 失效返回 `NOT_FOUND`/`REJECTED` 和重新定位提示）、`file`/`line`/`column` 或 `anchors[]`；参数错误附合法示例。**省略** `readPlanMaxItems`（最大 30）和 `deadlineMs`（最大 15000）；不要用旧记忆里的 80 / 120000。 | `semanticPolicy=fast` 不要求；`required` 要求 |
 | `java_symbol` | `operation=query`（默认，给了 query）走静态 discovery：消费磁盘 Java 索引（`java-discovery/v1`：显式 name、1-based UTF-16 locator、按 contentHash 校验的源码 preview），**不需要 JDT**；`backend=jdt` 保留旧 workspace-symbol 通道。`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references（两者始终走 JDT）。默认返回 repo-relative 位置、隐藏 raw URI/range。静态结果用 mac1 `symbolId`（workspace 身份 + 声明键，跨无关发布有效；局部/匿名声明只有 `stability=SNAPSHOT` 和 `evidenceHandle`）命名声明，可作为 `symbolId` 入参代替 `file`/`line`/`column`；`indexView.state` 是索引新鲜度（FRESH/STALE/NOT_READY），`scopeState` 为 PARTIAL/NOT_READY 时未命中不代表不存在。 | query 默认否（`backend=jdt`、position、references 是） |
 | `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
@@ -225,6 +225,10 @@ hook 行为：
 ```
 
 只要 JDT 时再 `java_status({start:true})`。静态索引是 owner 管理的不可变 snapshot：仓库首次被请求时由 builder 子进程全量构建（大仓可能 1–3 分钟 `BUILDING`），之后按 FSEvents 增量发布新 snapshot；daemon 重启后直接复用已发布的 snapshot。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
+
+首次静态查询的准备等待上限为 1 秒。暂时没有可用快照时，`java_impact` 和 `java_symbol` 的错误正文返回 JSON，含 `status=INDEX_NOT_READY`、仓库绝对路径、`preparation` 和可直接执行的 `nextAction`，保留 `isError=true` 与 `_meta.errorCode=INDEX_PARTIAL`。`preparation.state` 区分 `BUILDING`、`SCHEDULED`、失败退避的 `RETRYING` 和 owner 不可用的 `UNAVAILABLE`；退避时附 `lastError` 与已知的 `retryInMs`。
+
+AI 应按响应的 `retryAfterMs` 等待，再执行 `nextAction` 指定的 `java_status({repoRoot,start:false})`。当 `indexView.snapshotId` 存在且状态为 `FRESH` 或 `STALE` 时，重试原工具和原参数。仍未就绪时用原生搜索继续任务，结合 `indexPreparation.lastError` 和 `retryInMs` 判断后续检查时机。`NOT_STARTED` 表示尚未启动准备，单独查询状态不会触发构建；`UNAVAILABLE` 不承诺自动恢复。轮询状态不需要启动 JDT。
 
 排查 runtime、watcher roots、JDK candidates、raw LSP URI/range 或完整 diagnostics 时显式打开诊断字段：
 

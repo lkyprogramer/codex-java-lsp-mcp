@@ -819,6 +819,7 @@ test("status without start on an unknown repo opens no owner, creates no runtime
   const manager = managerWith({}, sessions, {}, owner.source());
   const state = await manager.statusOnly({ repoRoot: "/repo-a" }, async value => value);
   assert.equal(state.labels.state, "NOT_READY");
+  assert.deepEqual(state.indexPreparation, { state: "NOT_STARTED" });
   assert.equal(state.context, undefined);
   assert.equal(manager.hasRuntime("/repo-a"), false, "status-only never creates a runtime entry");
   assert.equal(sessions.size, 0, "no JDT session object exists");
