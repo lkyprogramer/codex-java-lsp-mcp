@@ -8,6 +8,7 @@
 //      the private Gradle domain's cleanup (at start, and again at a normal stop).
 import os from "node:os";
 import path from "node:path";
+import { describeIndexPreparation, readMemoryIndexStatus, type MemoryIndexState } from "./runtime/index-readiness.js";
 import { AgentRouter } from "./agent-router/index.js";
 import {
   defaultLeaseClockDeps,
@@ -405,7 +406,7 @@ export class RepoRuntimeManager {
    */
   async statusOnly<T>(
     selector: RepoSelector,
-    handler: (state: { resolved: ResolvedRepo; context?: ManagedToolContext; labels: ViewLabels; javaIndex?: JavaIndexStatus; layout?: LayoutContext }) => Promise<T>,
+    handler: (state: MemoryIndexState) => Promise<T>,
     options: { deadlineMs?: number; signal?: AbortSignal } = {}
   ): Promise<T> {
     const budget = createRequestBudget({ mode: "balanced", semanticPolicy: "auto", deadlineMs: options.deadlineMs });
@@ -415,18 +416,8 @@ export class RepoRuntimeManager {
     noteTelemetryRequest({ stage: "status.view" });
     const entry = this.runtimes.get(resolved.repoRoot);
     const owner = await this.openedOwner();
-    if (!entry || entry.stoppedAt !== undefined || !owner?.peek(resolved.repoRoot)) {
-      return handler({ resolved, context: entry?.stoppedAt === undefined ? entry?.context : undefined, labels: { state: "NOT_READY" } });
-    }
-    // Memory only: no cache stamp (meta file I/O); status is not use for the janitor.
-    entry.context.resource = this.resourceStatus();
-    return withRequestView({
-      owner, budget, signal: options.signal, start: false, resolve: async () => resolved.repoRoot,
-      handler: async view => {
-        const runtime = view.snapshotId ? entry.snapshots.get(view.snapshotId) : undefined;
-        return handler({ resolved, context: entry.context, labels: view.labels, javaIndex: runtime?.status, layout: entry.shared.layout });
-      }
-    });
+    return readMemoryIndexStatus({ resolved, entry, owner, budget, signal: options.signal, resource: this.resourceStatus(),
+      unavailable: this.ownerError ?? (this.options.index === false ? "Static index is disabled." : undefined) }, handler);
   }
 
   async withQuery<T>(
@@ -492,13 +483,15 @@ export class RepoRuntimeManager {
   ): Promise<T> {
     if (!owner) {
       noteTelemetryRequest({ stage: "request.handler", handlerRemainingMs: budget.remainingMs() });
-      return handler(entry.context, undefined);
+      return handler({ ...entry.context, indexView: { state: "NOT_READY" },
+        indexPreparation: describeIndexPreparation(undefined, this.ownerError ?? "Static index is unavailable.") }, undefined);
     }
     return withRequestView({
       owner, budget, signal, start, resolve: async () => entry.context.repoRoot,
       handler: async view => {
         const runtime = view.snapshotId ? await this.snapshotRuntime(entry, view) : undefined;
-        if (!runtime) return handler({ ...entry.context, indexView: view.labels }, view);
+        if (!runtime) return handler({ ...entry.context, indexView: view.labels,
+          ...(view.labels.state === "NOT_READY" ? { indexPreparation: describeIndexPreparation(owner.peek(entry.context.repoRoot)?.status()) } : {}) }, view);
         runtime.users += 1;
         runtime.lastUsedAt = Date.now();
         try {

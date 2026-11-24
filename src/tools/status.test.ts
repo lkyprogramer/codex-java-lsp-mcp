@@ -2,8 +2,28 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
-import { javaStatus } from "./status.js";
+import { javaStatus, javaStatusFromMemory } from "./status.js";
+import type { ResolvedRepo } from "../repo-resolver.js";
 import type { ToolContext } from "./context.js";
+
+test("status summary and diagnostics expose cold-index preparation without probing the repo", () => {
+  const repoRoot = "/repos/试卷 cold workspace";
+  const resolved: ResolvedRepo = {
+    repoRoot, repoHash: "cold", rootSource: "explicit", aliases: [], layoutProfile: "generic-java",
+    lsp: { enabled: true, matchedBy: "direct-root", effectiveRepoRoot: repoRoot },
+    worktree: { repoRoot, repoHash: "cold", isLinkedWorktree: false }
+  };
+  const preparation = { state: "RETRYING" as const, lastError: "capture failed", retryInMs: 5000 };
+  for (const detail of [undefined, "diagnostic"] as const) {
+    const result = javaStatusFromMemory({ resolved, labels: { state: "NOT_READY" }, indexPreparation: preparation }, { start: false, detail });
+    assert.deepEqual(result.indexPreparation, preparation);
+    assert.equal(result.repoRoot, repoRoot);
+    assert.equal(result.runtime, "NONE");
+    assert.deepEqual(result.indexView, { state: "NOT_READY" });
+  }
+  const ready = javaStatusFromMemory({ resolved, labels: { state: "FRESH", snapshotId: "snapshot-held" } }, { start: false });
+  assert.equal(Object.hasOwn(ready, "indexPreparation"), false);
+});
 
 test("java_status exposes runtime build and root source metadata", async () => {
   const context = {

@@ -9,6 +9,7 @@ import type { ManagedToolContext } from "./repo-runtime-manager.js";
 import type { RequestOptionsInput } from "./runtime/request-context.js";
 import type { RepoSelector } from "./repo-resolver.js";
 import { JavaIntelligenceError, type JavaIntelligenceErrorCode } from "./runtime/intelligence-error.js";
+import { IndexNotReadyError, withIndexReadiness } from "./runtime/index-readiness.js";
 import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
 import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/impact.js";
@@ -70,7 +71,7 @@ export function createMcpServer(
     name: "codex-java-lsp",
     version: "0.1.0"
   }, {
-    instructions: "java_impact is the compact Java impact plan. Tools are read-only. Default semanticPolicy=auto uses live JDT only for service-profile anchors; pass required or use java_symbol for exact implementations/references."
+    instructions: "java_impact is the compact Java impact plan. Tools are read-only. Default semanticPolicy=auto uses live JDT only for service-profile anchors; pass required or use java_symbol for exact implementations/references. If a tool returns INDEX_NOT_READY, follow nextAction/retryAfterMs and retry the original query once its workspace has a usable snapshot."
   });
 
   const registered: string[] = [];
@@ -81,7 +82,7 @@ export function createMcpServer(
 
   register(track("java_status"), {
     title: "Java Status",
-    description: "Return repo, JDT LS, watcher, JavaIndex, and router cache status; pass start=true to start JDT LS.",
+    description: "Return repo, JDT LS, watcher, JavaIndex, and router cache status. start=false is read-only and does not start indexing. For INDEX_NOT_READY, check indexPreparation and retry the original query once indexView.snapshotId exists and state is FRESH or STALE. start=true starts JDT LS.",
     inputSchema: statusSchema
   }, (args, signal) => javaStatusFor(args, signal));
 
@@ -224,7 +225,7 @@ export function createMcpServer(
       if (contextOptions.requireLspEnabled && !context.lsp.enabled) {
         throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
       }
-      return handler(context, request);
+      return withIndexReadiness(context, () => handler(context, request));
     }, { mayStartLsp: contextOptions.mayStartLsp, observeStaticRead: contextOptions.observeStaticRead,
       requestOptions: contextOptions.requestOptions, signal: contextOptions.signal });
   }
@@ -333,7 +334,7 @@ function jsonResult(value: unknown): ToolResult {
 }
 
 function errorResult(error: unknown): ToolResult {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = error instanceof IndexNotReadyError ? JSON.stringify(error.recovery) : error instanceof Error ? error.message : String(error);
   return {
     isError: true,
     content: [{ type: "text", text: message }],

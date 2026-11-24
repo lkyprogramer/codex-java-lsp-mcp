@@ -15,6 +15,7 @@ import type { ResolvedRepo } from "../repo-resolver.js";
 import type { ViewLabels } from "../java-index/snapshot/request-view.js";
 import type { RequestContext } from "../runtime/request-context.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import type { IndexPreparation } from "../runtime/index-readiness.js";
 import type { ToolContext } from "./context.js";
 import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
@@ -191,7 +192,7 @@ function statusSummary(input: StatusSummaryInput): Record<string, unknown> {
  * unknown repo is NOT_READY with no runtime; nothing is probed, scanned, read from an index or started.
  */
 export function javaStatusFromMemory(
-  state: { resolved: ResolvedRepo; context?: ToolContext; labels: ViewLabels; javaIndex?: JavaIndexStatus; layout?: LayoutContext },
+  state: { resolved: ResolvedRepo; context?: ToolContext; labels: ViewLabels; javaIndex?: JavaIndexStatus; layout?: LayoutContext; indexPreparation?: IndexPreparation },
   args: z.infer<z.ZodObject<typeof statusSchema>>
 ): Record<string, unknown> {
   const { resolved, context } = state;
@@ -207,6 +208,7 @@ export function javaStatusFromMemory(
     lsp: resolved.lsp,
     runtime: context ? "ACTIVE" : "NONE",
     indexView: state.labels,
+    indexPreparation: state.indexPreparation,
     javaIndex: state.javaIndex,
     note: "Status without start reads memory only; it does not start a workspace index or JDT LS."
   });
@@ -222,6 +224,7 @@ export function javaStatusFromMemory(
     lsp: resolved.lsp,
     runtime: context ? "ACTIVE" : "NONE",
     indexView: summarizeView(state.labels),
+    indexPreparation: state.indexPreparation,
     javaIndex: state.javaIndex && summarizeJavaIndex(state.javaIndex)
   });
 }
