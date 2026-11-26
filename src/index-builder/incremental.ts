@@ -2,7 +2,7 @@ import { computeExtractorVersion, computeInputFingerprints, DELTA_DEPTH_META, EX
 import { currentBuildKey } from "../java-index/sql/snapshot-manifest.js";
 import { sqlStage, compatibleDeltaBase, pipelineMetrics, type PipelineMetrics } from "./execution-plan.js";
 import { runSqlColdBuild } from "./cold-build.js";
-import { DELTA_CLOSURE_LIMIT } from "./build-scheduler.js";
+import { DELTA_CLOSURE_LIMIT, DELTA_INPUT_LIMIT } from "./build-scheduler.js";
 import { captureSource, type SourceCapture } from "../java-index/source-capture.js";
 import { captureCensus, finishCaptureCensus, type CaptureCensusEntry } from "./capture-census.js";
 import { realpath, stat } from "node:fs/promises";
@@ -64,9 +64,9 @@ const MAX_RESOLVE_ROUNDS = 16;
 class DeltaEscalation extends Error {
   constructor(readonly reason: string) { super(reason); }
 }
-/** The closure holds at least the inputs themselves: past the limit, escalate before any parse or write. */
+/** Reject oversized batches before parsing or writing their inputs. */
 function escalateOversizedInputs(inputs: number): void {
-  if (inputs > DELTA_CLOSURE_LIMIT) throw new DeltaEscalation(`${inputs} changed/deleted inputs > ${DELTA_CLOSURE_LIMIT} files`);
+  if (inputs > DELTA_INPUT_LIMIT) throw new DeltaEscalation(`${inputs} changed/deleted inputs > ${DELTA_INPUT_LIMIT} files`);
 }
 /** escalation "report": unwinds the delta's transaction so the scheduler can queue the full. */
 class ReportedEscalation extends Error {

@@ -613,7 +613,7 @@
       "count": 1
     },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 24
+      "count": 23
     },
     "no-restricted-syntax": {
       "count": 4

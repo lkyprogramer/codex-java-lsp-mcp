@@ -273,3 +273,28 @@ test("full reconcile resolves all inheritance facts before building caller edges
     assert.deepEqual(calls(), expected);
   } finally { close(f.db); await rm(f.repo, { recursive: true, force: true }); }
 });
+
+for (const closureFiles of [800, 801]) {
+  test(`one changed declaration can expand to a dependency closure of ${closureFiles} files`, async () => {
+    const { repo, db } = await fixture();
+    try {
+      const folder = path.join(repo, "src/main/java");
+      await Promise.all(Array.from({ length: closureFiles - 1 }, (_, index) =>
+        writeFile(path.join(folder, `Consumer${index}.java`), `class Consumer${index} { A value; }`)));
+      await runSqlColdBuild({ repoRoot: repo, db });
+      await writeFile(path.join(folder, "A.java"), "class Renamed {}");
+      const result = await applyBuilderJob({
+        repoRoot: repo, db, escalation: "report",
+        job: { kind: "refresh", changed: ["src/main/java/A.java"] }
+      });
+      if (closureFiles === 800) {
+        assert.equal(result.ok, true, result.escalation ?? result.error);
+        assert.equal(result.stages?.resolve?.files, closureFiles);
+      } else {
+        assert.equal(result.ok, false);
+        assert.match(result.escalation ?? "", /dependency closure 801 > 800 files/);
+        assert.equal(readMeta(db, "buildState"), "READY");
+      }
+    } finally { close(db); await rm(repo, { recursive: true, force: true }); }
+  });
+}

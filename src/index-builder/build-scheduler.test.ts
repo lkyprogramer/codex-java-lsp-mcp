@@ -759,7 +759,7 @@ test("a real builder's liveness lines reach onHeartbeat through the scheduler's 
   assert.ok(beats.every((beat, index) => index === 0 || beat.work >= beats[index - 1]!.work), "work never moves backwards");
 });
 
-test("a delta whose own inputs exceed the closure limit reports escalation before parsing any of them", { timeout: 120_000 }, async t => {
+test("a delta accepts 400 input paths and rejects 401 before parsing", { timeout: 120_000 }, async t => {
   const base = await realpath(await mkdtemp(path.join(tmpdir(), "ilv2-early-escalation-")));
   let scheduler: BuildScheduler | undefined;
   t.after(async () => {
@@ -771,10 +771,17 @@ test("a delta whose own inputs exceed the closure limit reports escalation befor
   scheduler = new BuildScheduler({ onEvent: event => events.push(event), select: hint => ({ kind: hint.kind, start: grant =>
     startBuildProcess({ repoRoot: root!.repo, dbPath: root!.db, job: builderJobFor(hint), grant }) }) });
   assert.equal((await scheduler.submit({ workspaceId: "wide", kind: "full", generation: 1 })).ok, true);
-  const changed = root!.files.slice(0, 401);
+  assert.ok(root);
+  const changed = root.files.slice(0, 400);
   for (const file of changed) await writeFile(file, `${await readFile(file, "utf8")}// wide edit\n`);
+  const boundary = await scheduler.submit({ workspaceId: "wide", kind: "delta", generation: 2, changed });
+  assert.equal(boundary.ok, true, boundary.error);
+  assert.equal(boundary.buildKind, "delta");
+  const deleted = root.files.slice(400, 401);
+  assert.equal(deleted.length, 1);
+  for (const file of deleted) await rm(file);
   events.length = 0;
-  const outcome = await scheduler.submit({ workspaceId: "wide", kind: "delta", generation: 2, changed });
+  const outcome = await scheduler.submit({ workspaceId: "wide", kind: "delta", generation: 3, changed, deleted });
   assert.equal(outcome.ok, true, outcome.error);
   assert.equal(outcome.buildKind, "full");
   assert.match(outcome.escalationReason ?? "", /401 changed\/deleted inputs > 400 files/);

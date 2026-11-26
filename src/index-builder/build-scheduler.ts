@@ -90,8 +90,10 @@ type Entry = {
   queuedAt: number;
 };
 
-/** ILV2 §6.1: a closure above this many files is published as an explicit full, never a delta. */
-export const DELTA_CLOSURE_LIMIT = 400;
+/** Maximum changed plus deleted input paths eligible for incremental indexing. */
+export const DELTA_INPUT_LIMIT = 400;
+/** Maximum dependency closure computed by an incremental builder. */
+export const DELTA_CLOSURE_LIMIT = 800;
 export const MAX_BUILDERS = 2;
 export const PARSERS_PER_BUILDER = 2;
 const JOB_MS = { delta: 60_000, full: 1_230_000 };
