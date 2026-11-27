@@ -932,7 +932,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     // precede wider task-named imports).  Sorting before the limit used to
     // discard a direct interface such as PositionService, which also meant
     // its implementation lookup never ran in a large controller import set.
-    return (await this.typesToFacts(found, true, hydrate)).slice(0, limit);
+    return this.typesToFacts(found.slice(0, limit), true, hydrate);
   }
 
   private async retryColdExactTypeLookups(
