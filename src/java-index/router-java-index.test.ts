@@ -823,3 +823,33 @@ test("myBatisResourcesByNamespaces omits a namespace collision rather than retur
     await router.close();
   }
 });
+
+test("type definitions hydrate only the requested prefix of distinct files", async t => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-definition-limit-"));
+  t.after(() => rmSync(repoRoot, { recursive: true, force: true }));
+  const a = "src/main/java/demo/A.java";
+  const b = "src/main/java/demo/B.java";
+  const c = "src/main/java/demo/课程.java";
+  write(repoRoot, a, "package demo; class A {} class Other {}\n");
+  write(repoRoot, b, "package demo; class B {}\n");
+  write(repoRoot, c, "package demo; class 课程 {}\n");
+
+  const router = await readyRouter(repoRoot);
+  t.after(() => router.close());
+  const queryFiles = t.mock.method(router, "queryFiles");
+  const names = ["demo.课程", "demo.A", "demo.Other", "demo.B"];
+  const absolute = [c, a, b].map(file => path.join(repoRoot, file));
+
+  const limited = await router.findTypeDefinitions(names, 2);
+  assert.deepEqual(limited.map(facts => facts.absolutePath), absolute.slice(0, 2));
+  assert.deepEqual(limited.map(facts => facts.typeName), ["课程", "A"]);
+  assert.deepEqual(queryFiles.mock.calls.map(call => call.arguments[0]), [absolute.slice(0, 2)]);
+
+  assert.deepEqual(await router.findTypeDefinitions(names, 0), []);
+  assert.deepEqual(await router.findTypeDefinitions([], 2), []);
+  assert.deepEqual((await router.findTypeDefinitions(names, 2, false)).map(facts => facts.absolutePath), absolute.slice(0, 2));
+  assert.equal(queryFiles.mock.callCount(), 1);
+
+  assert.deepEqual((await router.findTypeDefinitions(names, 3)).map(facts => facts.absolutePath), absolute);
+  assert.deepEqual(queryFiles.mock.calls[1]?.arguments, [absolute]);
+});
