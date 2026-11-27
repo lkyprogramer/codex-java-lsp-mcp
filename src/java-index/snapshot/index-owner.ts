@@ -10,7 +10,7 @@ import type { ChildProcess } from "node:child_process";
 import { stat, statfs } from "node:fs/promises";
 import path from "node:path";
 import { builderJobFor, startBuildProcess, type BuilderHeartbeat } from "../../index-builder/build-process.js";
-import { BuildScheduler, DELTA_CLOSURE_LIMIT, type BuildAttempt, type BuildGrant, type BuildHint, type BuildSelection } from "../../index-builder/build-scheduler.js";
+import { BuildScheduler, DELTA_INPUT_LIMIT, type BuildAttempt, type BuildGrant, type BuildHint, type BuildSelection } from "../../index-builder/build-scheduler.js";
 import type { BuilderJob } from "../../index-builder/incremental.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -860,11 +860,11 @@ export class WorkspaceIndex {
       const ownDiff = againstOwn.changed.length + againstOwn.deleted.length;
       // A difference the own base cannot take as a delta (a branch switch) may be small against a
       // sibling's or a retained snapshot: judged by hash like any seed, used only if it is smaller.
-      const tooFar = Boolean(bound) && !keyChanged && !this.fullNext && ownDiff > DELTA_CLOSURE_LIMIT;
+      const tooFar = Boolean(bound) && !keyChanged && !this.fullNext && ownDiff > DELTA_INPUT_LIMIT;
       // A switch of that size (a checkout, whose branches often differ in build files too): the snapshot
       // left behind is retained as a seed under its own buildKey, so switching back binds or deltas from
       // it. An ordinary edit's superseded snapshot is deleted as before.
-      const switched = Boolean(bound) && ownDiff > DELTA_CLOSURE_LIMIT;
+      const switched = Boolean(bound) && ownDiff > DELTA_INPUT_LIMIT;
       if (!bound || keyChanged || tooFar) {
         seed = await timed("seedMs", () => this.owner.seedFor(this.workspaceId, verification));
         if (seed) {
@@ -906,13 +906,13 @@ export class WorkspaceIndex {
       // dependency bump, a comment), decided here so a full is not first cloned, warmed and escalated.
       // The builder re-checks the same record and escalates if it no longer holds.
       let inputsRebuilt = false;
-      if (keyChanged && !seed && baseId && !this.fullNext && files <= DELTA_CLOSURE_LIMIT) {
+      if (keyChanged && !seed && baseId && !this.fullNext && files <= DELTA_INPUT_LIMIT) {
         const recorded = own!.inputs;
         inputsRebuilt = !recorded.schemaCompatible || recorded.layoutFingerprint !== round.layoutFingerprint
           || recorded.extractorVersion !== computeExtractorVersion();
       }
-      // An explicit full on an empty job: no base; a difference above the delta closure limit (a seed's or the
-      // workspace's own: the closure holds at least the changed files); build inputs the base's facts depend
+      // An explicit full on an empty job: no base; an input diff above the delta input limit (a seed's or the
+      // workspace's own); build inputs the base's facts depend
       // on changed (above); or the previous delta ran out its job deadline (a misjudged small job goes to the
       // full queue, never back into a delta slot).
       // A long delta lineage on the own base is rebuilt in full: no runtime check proves a delta equals a
@@ -924,7 +924,7 @@ export class WorkspaceIndex {
       const lineageCapped = !seed && Boolean(own) && maxDeltaLineage() > 0 && own!.inputs.deltaDepth >= maxDeltaLineage()
         && await this.owner.hasDiskHeadroom(2 * baseBytes);
       const fullReason: FullBuildReason | undefined = this.fullNext ?? (!baseId ? "no-base"
-        : files > DELTA_CLOSURE_LIMIT ? "input-limit" : inputsRebuilt ? "build-key-changed" : lineageCapped ? "lineage-limit" : undefined);
+        : files > DELTA_INPUT_LIMIT ? "input-limit" : inputsRebuilt ? "build-key-changed" : lineageCapped ? "lineage-limit" : undefined);
       const chosen: BuildHint = fullReason ? { workspaceId: this.workspaceId, kind: "full", generation }
         : (seed || round.mode === "paths") && pathsOnly
           ? { workspaceId: this.workspaceId, kind: "delta", generation, changed: verification.changed, deleted: verification.deleted }

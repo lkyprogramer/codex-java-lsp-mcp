@@ -837,9 +837,10 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
   const telemetry = new Telemetry(telemetryFile);
   const state = { calls: [], edits: [], seeds: [], physical: [], fulls: [], statusSamples: [], loads: {}, versions: {}, injectedPids: [], negatives: [], faults: [],
     restart: undefined, lifecycle: undefined, phases: [], loadSamples: [], notes: [] };
+  const { DELTA_INPUT_LIMIT, DELTA_CLOSURE_LIMIT } = await import("../dist/index-builder/build-scheduler.js");
   const plan = { schema: "ilv2-mac11-run-plan/v1", quick: QUICK, phases: [...PHASES], input: { name: record.name, head: record.head, manifestSha256: record.manifestSha256 },
     limits: LIMITS, pollMs: POLL_MS, stopMs: STOP_MS, requestDeadlines: { status: STATUS_DEADLINE_MS, query: QUERY_DEADLINE_MS }, worktrees: [], seedPlan, editRounds, supplement: supplementIdentity, idleWaits: [],
-    deltaClosureLimit: (await import("../dist/index-builder/build-scheduler.js")).DELTA_CLOSURE_LIMIT, gcCycleMs: GC_CYCLE_MS,
+    deltaInputLimit: DELTA_INPUT_LIMIT, deltaClosureLimit: DELTA_CLOSURE_LIMIT, gcCycleMs: GC_CYCLE_MS,
     disclosed: ["seed samples are APFS-cloned plain directories of the main copy patched to first-parent commits (no .git), not git worktrees",
       "the six worktrees are real `git worktree add` checkouts in the run copy", "only lishu-v2 is in scope for MAC-11 (the other repos are G08C/G14)"] };
   const waitForIdle = async label => {
@@ -1196,7 +1197,7 @@ test("G11 system loop on isolated lishu-v2 run copies", { skip: !INPUTS && "ILV2
         if (!target) target = { relativePath: R.relativePath, shape: R.shape, token: `ilv2Mac11W${name.slice(1)}`, text: await readFile(path.join(ws.root, R.relativePath), "utf8") };
         const hash = await write(ws, target.relativePath, withMethod(target.text, target.token), [target.token]);
         ws.unique = { ...target, hash };
-        plan.worktrees.push({ name, depth, commit, diff, expectedBuildKind: diff.build > 0 || diff.java + diff.xml > plan.deltaClosureLimit ? "full" : "seed-delta",
+        plan.worktrees.push({ name, depth, commit, diff, expectedBuildKind: diff.build > 0 || diff.java + diff.xml > plan.deltaInputLimit ? "full" : "seed-delta",
           unique: { relativePath: target.relativePath, token: target.token, sha256: hash } });
       }
       await waitForIdle("worktree-registration");
